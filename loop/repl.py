@@ -51,6 +51,7 @@ class Session:
     steps: int = 6
     seed: int = 1
     accepted: List[str] = field(default_factory=list)   # source log
+    _revision: bool = False          # next accept REPLACES the base
 
     # -- verbs ---------------------------------------------------------
 
@@ -88,7 +89,7 @@ class Session:
         rep = admit_text_pack(self.text, self.cand, base=base,
                               scenarios=(self.init,) if self.init else (),
                               steps=self.steps)
-        self.report = rep
+        self.report, self._revision = rep, False
         out = {"ok": rep.ok, "classification": rep.classification,
                "findings": rep.findings, "warnings": rep.warnings,
                "rules": [list(r) for r in rep.rules]}
@@ -103,16 +104,67 @@ class Session:
         rep = self.report
         if not (rep and rep.ok):
             return {"ok": False, "error": "nothing admitted — :gate first"}
-        self.world = rep.merged if rep.merged is not None \
-            else rep.doc.catalog
-        # source log: tabula rasa's first accept IS the base; later
-        # accepts append the pack source (packs only ADD).
-        if not self.base_llp.strip():
-            self.base_llp = self.cand
+        out = {"ok": True}
+        if self._revision:
+            # BASE EDIT: the candidate REPLACES the world. Packs
+            # admitted against the old base are dropped (they must
+            # be re-proposed against the new one), the canonical key
+            # changes, and the before/after measure diff on the
+            # current scene is the consistency instrument.
+            out["diffs"] = self._revision_diff(rep)
+            out["dropped_packs"] = len(self.accepted)
+            self.world = rep.doc.catalog
+            self.base_llp, self.accepted = self.cand, []
+            self._revision = False
         else:
-            self.accepted.append(self.cand)
+            self.world = rep.merged if rep.merged is not None \
+                else rep.doc.catalog
+            # tabula rasa's first accept IS the base; later accepts
+            # append the pack source (packs only ADD).
+            if not self.base_llp.strip():
+                self.base_llp = self.cand
+            else:
+                self.accepted.append(self.cand)
         self.cand, self.report = "", None
-        return {"ok": True, "accepted": len(self.accepted) + 1}
+        out["accepted"] = len(self.accepted) + 1
+        return out
+
+    def cmd_revise(self, arg):
+        """Gate the candidate as a NEW WORLD (a base edit, the
+        doctrine's human-approved catalog diff) instead of a pack.
+        `:accept` then REPLACES the base; extension stays `:gate`."""
+        if not self.cand.strip():
+            return {"ok": False, "error": "no candidate — :llp first"}
+        rep = admit_text_pack(self.text, self.cand, base=None,
+                              scenarios=(self.init,) if self.init else (),
+                              steps=self.steps)
+        self.report, self._revision = rep, rep.ok
+        out = {"ok": rep.ok, "revision": True,
+               "classification": rep.classification,
+               "findings": rep.findings, "warnings": rep.warnings,
+               "rules": [list(r) for r in rep.rules]}
+        if rep.ok and self.world is not None:
+            out["diff_preview"] = self._revision_diff(rep)
+        return out
+
+    def _revision_diff(self, rep):
+        """Old world vs revised world, exact final marginals on the
+        current scene — what the base edit CHANGED."""
+        if self.world is None or not self.init:
+            return []
+        def marg(cat):
+            pr = ForwardProjection(cat.ground(dict(self.init)),
+                                   self.steps)
+            m: Dict[str, float] = {}
+            for (_, kappa), p in pr.final.items():
+                for a, n in kappa:
+                    if n > 0:
+                        m[a] = m.get(a, 0.0) + p
+            return m
+        old, new = marg(self.world), marg(rep.doc.catalog)
+        return [[a, round(old.get(a, 0.0), 12), round(new.get(a, 0.0), 12)]
+                for a in sorted(set(old) | set(new))
+                if abs(old.get(a, 0.0) - new.get(a, 0.0)) > 1e-12]
 
     def _ground(self):
         cat = self.world
@@ -212,7 +264,7 @@ HELP = """\
 :llp <<EOF ... EOF      set/edit the candidate LLP source
 :formalize CMD...       draft the candidate via a backend command
 :gate                   run the full gate cascade (findings on fail)
-:accept                 admitted candidate joins the world
+:accept                 admitted candidate joins the world\n:revise                 gate the candidate as a BASE EDIT (accept replaces the world)
 :init a=1,b=2   :steps N
 :trace [seed]           one synthetic trajectory (seeded sampler)
 :map                    the modal derivation (Viterbi) + final state

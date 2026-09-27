@@ -134,3 +134,57 @@ def test_repl_tabula_rasa_cycle():
     assert any(e.startswith("rest/") for e in tr2["events"]), tr2
     # the REPL kernel refuses nonsense instead of guessing
     assert not s.dispatch("nosuch", "")["ok"]
+
+
+def test_repl_revise_replaces_world_with_diff():
+    """A base edit goes through :revise — the world is REPLACED,
+    packs drop, and the before/after exact diff is the instrument."""
+    from loop.repl import Session
+    s = Session()
+    s.dispatch("init", "wolf=1,sheep=1,night=1,tally=1")
+    s.dispatch("steps", "4")
+    s.dispatch("text", "%% base"); s.dispatch("llp", MEADOW)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    s.dispatch("text", "%% tally"); s.dispatch("llp", SHEPHERD)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    # revision: a catch now yields DOUBLE fed
+    rev = MEADOW.replace("-o wolf * fed ", "-o wolf * fed * fed ")
+    s.dispatch("text", "%% revised: a catch gorges the wolf")
+    s.dispatch("llp", rev)
+    g = s.dispatch("revise", "")
+    assert g["ok"] and g["revision"], g
+    a = s.dispatch("accept", "")
+    assert a["ok"] and a["dropped_packs"] == 1, a
+    # the diff surfaces the dropped pack: its vocabulary vanishes
+    # from the measure and its consumed trigger comes back.
+    d = {x[0]: (x[1], x[2]) for x in a["diffs"]}
+    assert d["loss"][1] == 0.0 and d["tally"] == (0.0, 1.0), a
+    # the shepherd pack must be RE-proposed against the new base
+    s.dispatch("text", "%% tally again"); s.dispatch("llp", SHEPHERD)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+
+
+def test_short_name_collision_warned():
+    """A pack reusing a base rule's SHORT name admits (entry names
+    stay layer-qualified) but must WARN — traces and the debug
+    sidecar read short names."""
+    collide = """catalog p 1.
+extends meadow.
+provenance text "t" "2026-09-27".
+namespace px produce (pack).
+pred mark : px.
+stage rest {
+  %% shadow name.
+  catch [pack] : mark * $fed -o mark.
+}
+"""
+    from loop.repl import Session
+    s = Session()
+    s.dispatch("init", "wolf=1,sheep=1,night=1,mark=1")
+    s.dispatch("steps", "4")
+    s.dispatch("text", "%% base"); s.dispatch("llp", MEADOW)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    s.dispatch("text", "%% name collision"); s.dispatch("llp", collide)
+    g = s.dispatch("gate", "")
+    assert g["ok"] and any("catch" in w and "short" in w
+                           for w in g["warnings"]), g
