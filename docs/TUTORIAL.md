@@ -18,7 +18,9 @@ disagree, because they are readings of the same object.
 
 ## World 1 — a coin and a market (resources, stages, packs)
 
-The smallest complete catalog (`metis-lang/corpus/packbase.llp`):
+The smallest complete catalog (`metis-lang/corpus/packbase.llp`).
+It introduces the three primitives everything else builds on: linear
+rules, stages with quiescence, and weight ports.
 
     catalog packbase 1.
     layers (dyn pack).
@@ -70,7 +72,7 @@ The session:
       scenarios: [{ key: "060bc3b3…", support: 2, … }] }
     μ> :accept
 
-`:gate` is the proof-theory reading: parse, roundtrip
+**`:gate` is the proof-theory reading.** Parse, roundtrip
 (`parse(pretty(a)) = a` — the catalog IS its own presentation),
 typecheck, and the canonical `program_key` (`060bc3…`) — the same
 key any toolchain (python, OCaml `metisc`) computes for this ground
@@ -86,14 +88,17 @@ reorder rules, split files with `include` — the key is unchanged.
     μ> :map
     { prob: 0.5, events: ["roll/h", "roll/rn", "(quiesce)", …] }
 
-`:trace` samples ONE future (seeded, portable — the same seed gives
-the same trajectory in the python and C++ samplers). `:marginals` is
-not sampling: it is the **exact measure**, every reachable future
-weighted and summed (support: 2 — this world has two futures).
+**`:trace` samples ONE future; `:marginals` prices them ALL.** The
+trace is seeded and portable — the same seed gives the same
+trajectory in the python and C++ samplers. The marginals are not
+sampling: they are the exact measure, every reachable future
+weighted and summed (`support: 2` — this world has two futures).
 Ceptre, the ancestor system, could only run traces; metis prices
-them: that is the denotational reading.
+them: that is the denotational reading. `:map` is the third readout
+on the same object — the single most probable derivation.
 
-**Now the market — a pack** (`packmark.llp`):
+**A pack extends the world without touching it**
+(`metis-lang/corpus/packmark.llp`):
 
     catalog packmark 1.
     extends packbase.
@@ -112,13 +117,14 @@ them: that is the denotational reading.
     μ> :marginals seen unseen
     { marginals: {seen: 0.5, unseen: 0.5} }
 
-`$heads` is a **persist premise**: read without consuming. And note
-what the pack may NOT do: produce or consume base atoms. That is
-**containment admission** — the type system, not a lint. Try it:
-change `obs` to produce `heads` and `:gate` answers
-`layer 'pack' may not produce 'heads' (namespace 'st')`. Packs
-observe and constrain; they can never enable base behavior. This is
-what makes learned/formalized extensions safe by construction.
+**`$` reads without consuming; containment does the rest.**
+`$heads` is a persist premise. What the pack may NOT do is produce
+or consume base atoms — that is **containment admission**, the type
+system rather than a lint. Try it: change `obs` to produce `heads`
+and `:gate` answers `layer 'pack' may not produce 'heads'
+(namespace 'st')`. Packs observe and constrain; they can never
+enable base behavior. This is what makes learned and formalized
+extensions safe by construction.
 
 ---
 
@@ -126,7 +132,29 @@ what makes learned/formalized extensions safe by construction.
 
 The Ceptre lineage: Martens' A-Midsummer-Night's-Dream tutorial
 program, ported rule-for-rule (`metis-catalog/domains/fiction/
-love_triangle.llp`, with the original `.cep` beside it).
+love_triangle.llp`, the original `.cep` committed beside it). It
+introduces first-order rules, grounding, and the pricing of
+multiplicity — on a story instead of a machine.
+
+    stage go {
+      %% A loves B while C loves A: the rival C seethes at beloved
+      %% and rival both.
+      jealousy [story] : $eros(A,B) * $eros(C,A) * C <> A
+        -o anger(C,A) * anger(C,B).
+      %% three angers at the beloved and the love dies (multiplicity-3
+      %% premise: 3!=6 transition tokens — the falling-factorial gate).
+      move_on [story] : eros(A,B) * anger(A,B) * anger(A,B) * anger(A,B)
+        -o one.
+    }
+
+**Rules are first-order schemas; grounding makes them concrete.**
+`jealousy` speaks of any A, B, C; `C <> A` is the distinctness
+guard (the original's hand-written `neq` fact table, now sugar);
+`-o one` is the linear unit — produce nothing. Given a cast, the
+Π-grounding instantiates every consistent substitution, and from
+then on everything is the ground machinery of World 1.
+
+The session:
 
     μ> :init eros(helena,hermia)=1,eros(hermia,helena)=1,eros(helena,lysander)=1,eros(lysander,hermia)=1
     μ> :steps 1
@@ -135,40 +163,39 @@ love_triangle.llp`, with the original `.cep` beside it).
     { ok: true, classification: "counterexample: jealousy[A=helena,
       B=helena,C=hermia]: multiplicity 2 …", … }
     μ> :accept
-
-Two new things. First, rules here are **first-order schemas**:
-`jealousy` speaks of any lovers A, B, C with distinctness (`<>`)
-guards — and grounding instantiates them over the declared cast.
-Trace labels show the substitution explicitly:
-
     μ> :trace 5
     { events: ["go/jealousy[A=lysander,B=hermia,C=helena]"], … }
     μ> :trace 9
     { events: ["go/jealousy[A=helena,B=lysander,C=hermia]"], … }
 
-Second, **multiplicity is priced, not merely possible**. The exact
-measure over act one:
+**Trace labels carry the substitution.** Every event names its rule
+AND its cast — the derivation reading stays legible after
+grounding. (The `:load` verb splices `include`s; the canonical key
+is invariant under file splits, so loading the one-file or the
+split form is the same program.)
 
     μ> :marginals anger(hermia,helena) anger(hermia,hermia)
     { support: 5, marginals: {anger(hermia,helena): 0.4,
                               anger(hermia,hermia): 0.2} }
 
-Five ground events are enabled; at parity weights each fires 1/5.
-The 0.4 is 2/5 because TWO distinct instantiations produce that
-same atom — the falling-factorial semantics counts token-level
-instances, which is bit-exactly the choice rule of the original
-interpreter (Theorem 1). Where the origin could sample and eyeball,
-metis states P = 2/5 as a theorem about the same program.
+**Multiplicity is priced, not merely possible.** Five ground events
+are enabled in act one; at parity weights each fires 1/5. The 0.4
+is 2/5 because TWO distinct instantiations produce that same atom —
+the falling-factorial semantics counts token-level instances,
+bit-exactly the choice rule of the original interpreter (Theorem 1).
+Where the origin could sample and eyeball, metis states P = 2/5 as
+a theorem about the same program. The same pricing runs through
+`move_on`: its triple premise on a count-3 atom is 3! = 6
+transition tokens, and the measure charges all six.
 
     μ> :map
     { prob: 0.2, events: ["go/jealousy[A=helena,B=hermia,C=hermia]"], … }
 
-`:map` is the Viterbi reading: the modal derivation — in a story
-domain, the most probable plot. The gate's classification line
+**`:map` is the modal derivation — in a story domain, the most
+probable plot.** And the gate's classification line
 ("counterexample: … multiplicity 2") is the factored-statics report
 being honest: this program is exact-filter territory, not
 clique-tree territory; nothing is rejected, the boundary is named.
-
 The origin's `#interactive` (a human picks the next step) maps to
 the policy hook: the same measure, reweighted — inference stays
 exact under direction.
@@ -178,9 +205,37 @@ exact under direction.
 ## World 3 — the road handles (guards, ports, decisions)
 
 The production encoding pattern, on the corpus fixture
-(`metis-catalog/scenes/road_close_instance.llp` — an INSTANCE that
-`include`s the handles domain; `:load` splices includes and the
-canonical key is invariant under the split).
+(`metis-catalog/scenes/road_close_instance.llp`, an instance that
+`include`s the handles domain). It introduces Horn guards,
+reads-scoped ports, and the tick — the shape the vehicle runtime
+actually serves.
+
+    stages (ego world check).
+    weight rss reads {gclose, on(ego,L) if islane(L),
+                      on(alfa,L) if islane(L)}.
+    stage check {
+      %% same lane and close at decision time: the hazard fires with
+      %% the rss-priced probability (the port reads gap + lane
+      %% occupancy and the GEOMETRY behind the handles).
+      hit [dyn] : ck * $gclose * $on(ego,L) * $on(alfa,L)
+        -o crash * ckd  @w rss.
+      %% the tick passes clean (complement mass of the same port).
+      ok [dyn] : ck -o ckd  @w ~rss.
+    }
+
+**Horn guards prune at ground time.** `if islane(L)` is
+backward-chaining: lane adjacency is derived, not enumerated, and
+impossible instantiations never enter the program.
+
+**Ports carry the continuous world — under contract.** The `reads`
+clause declares exactly which atoms the `rss` binding may consult;
+the geometry (real gaps, speeds) stays behind the port. This is not
+style: the declared scope is what makes the encoding factorizable
+(class-F) and therefore compilable to the IR artifact the vehicle
+interprets. The measure lives on qualitative classes
+(`gclose`/`gsafe`); exact quantities ride as metadata.
+
+The session:
 
     μ> :init emvt=1,cmd(keep)=1,gclose=1,on(ego,l2)=1,on(alfa,l2)=1
     μ> :steps 6
@@ -195,23 +250,18 @@ canonical key is invariant under the split).
     { prob: 0.5, events: ["ego/mkeep", "ego/ew", "world/abo",
                           "world/wc", "check/ok", "check/cb"], … }
 
-What this world adds:
+**The stages ARE the tick, and `:map` narrates it.** Ego commits a
+command, the world moves, the check stage prices the outcome — read
+the MAP events left to right and that is the tick pipeline.
+`crash: 0.25` under `keep` behind a close lead IS the decision
+input: the planner scores candidate commands by exactly these
+hazard marginals, lexicographically (safety, then progress). A
+decision is explained by the same numbers that made it.
 
-- **Horn guards** prune instantiations at ground time (lane
-  adjacency is derived, not enumerated).
-- **Ports with `reads` contracts** (`rss`, gap classes): the
-  continuous world enters ONLY through declared, scope-checked
-  ports — which is exactly what makes the encoding factorizable
-  (class-F) and therefore IR-compilable for the vehicle runtime.
-- **The tick as stages**: the MAP narrates it — ego commits a
-  command, the world moves, the check stage prices the outcome.
-  `crash: 0.25` under `keep` behind a close lead IS the decision
-  input: the planner scores candidate commands by exactly these
-  hazard marginals, lexicographically (safety, then progress).
-- **The surprise doctrine**: at runtime the same program scores each
-  observed transition; likelihood 0 means no rule covers what
-  happened — the loop's trigger. A missing behavior is a missing
-  rule, never a bad number.
+**The same program scores what actually happens.** At runtime each
+observed transition is evaluated against the measure; likelihood 0
+means no rule covers it — the surprise record that triggers the
+loop. A missing behavior is a missing rule, never a bad number.
 
 ---
 
@@ -219,16 +269,16 @@ What this world adds:
 
 Two verbs, two doctrines (SPEC.md §4):
 
-- `:gate` + `:accept` — a PACK: only adds, containment-checked;
+- **`:gate` + `:accept` — a pack.** Only adds, containment-checked;
   base state readable via `$`, never producible or consumable
   without an explicit namespace grant.
-- `:revise` + `:accept` — a BASE EDIT: the candidate replaces the
-  world; accepted packs drop (re-propose them), the key moves, and
-  the before/after exact measure diff on the current scene is
+- **`:revise` + `:accept` — a base edit.** The candidate replaces
+  the world; accepted packs drop (re-propose them), the key moves,
+  and the before/after exact measure diff on the current scene is
   printed — the consistency instrument.
 
 From here: `:formalize CMD` puts a model in the drafting seat with
 the gates as referee (the loop), and `:save` writes the world out.
 The same worlds, keys and numbers appear in the Loop Console and in
-the metis-catalog corpus gates — one program, three readings,
-every surface a wrapper.
+the metis-catalog corpus gates — one program, three readings, every
+surface a wrapper.
