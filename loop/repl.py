@@ -27,11 +27,20 @@ from .core import formalize_loop
 
 
 def _kv(s: str) -> Dict[str, int]:
+    """a=1,b=2 — commas INSIDE parentheses belong to the atom
+    (eros(helena,hermia)=1), so split at depth 0 only."""
     out: Dict[str, int] = {}
-    for part in s.split(","):
-        if part.strip():
-            k, _, v = part.partition("=")
-            out[k.strip()] = int(v or 1)
+    part, depth = "", 0
+    for ch in s + ",":
+        if ch == "," and depth == 0:
+            if part.strip():
+                k, _, v = part.partition("=")
+                out[k.strip()] = int(v or 1)
+            part = ""
+            continue
+        depth += ch == "("
+        depth -= ch == ")"
+        part += ch
     return out
 
 
@@ -62,6 +71,19 @@ class Session:
     def cmd_llp(self, arg):
         self.cand = arg
         return {"ok": True, "lines": arg.count("\n") + 1}
+
+    def cmd_load(self, arg):
+        """Load a candidate from a .llp FILE, splicing its includes
+        against the file's own directory into canonical source (the
+        roundtrip contract makes the splice identity-preserving)."""
+        from pathlib import Path
+        from metis.lang import parse as _parse, resolve_includes
+        from metis.lang.ast import pretty
+        p = Path(arg.strip()).expanduser()
+        cat = resolve_includes(_parse(p.read_text()), p.parent)
+        self.cand = pretty(cat)
+        return {"ok": True, "file": str(p),
+                "lines": self.cand.count("\n") + 1}
 
     def cmd_formalize(self, arg):
         if not self.text.strip():
@@ -265,6 +287,7 @@ HELP = """\
 :formalize CMD...       draft the candidate via a backend command
 :gate                   run the full gate cascade (findings on fail)
 :accept                 admitted candidate joins the world\n:revise                 gate the candidate as a BASE EDIT (accept replaces the world)
+:load FILE.llp          load a candidate file (includes spliced)
 :init a=1,b=2   :steps N
 :trace [seed]           one synthetic trajectory (seeded sampler)
 :map                    the modal derivation (Viterbi) + final state
