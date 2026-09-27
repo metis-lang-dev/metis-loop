@@ -45,7 +45,14 @@ URL is in the project memory; sync it with the ArtifactData tool
    history. Push the final report (ok, findings, warnings, rules,
    classification, scenarios with measure diffs) as a `candidates`
    doc, `status: pending`.
-5. **Approval**: never approve yourself. The human approves in the
+5. **Console edits**: a candidate with `status: regate` was edited by
+   a human in the console editor. Its `llp` field is the new source:
+   re-run the gate cascade on it exactly as in step 4 (the text stays
+   the approved unit), push the fresh report, set `status: pending`.
+   Also keep the console's `catalogs` collection in sync with
+   metis-catalog after every catalog commit (one doc per .llp:
+   name/path/group/kind/note/llp).
+6. **Approval**: never approve yourself. The human approves in the
    console (or in chat). On `status: approved`: commit text + pack
    to metis-catalog (packs/, with the text as the commit body),
    re-run the catalog gates (`ci/check.sh`), and replay the record
