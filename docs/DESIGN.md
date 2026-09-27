@@ -90,3 +90,16 @@ Language: python (it orchestrates metispy and talks HTTP; there is
 no compiler-grade component here). If a runtime explanation library
 (D) materializes, its in-process half lands in metis-lang/runtime as
 ordinary headers, not here.
+
+## Decision progressed (2026-09-27): the kernel is a REPL
+
+The Lean/Coq reading, adopted: the loop's canonical surface is
+`metis-loop repl` — a stateful session (world, text, candidate,
+report, scene) over the metispy primitives, spoken two ways: an
+interactive prompt (`:text :llp :formalize :gate :accept :trace
+:map :marginals :show :save`) and a JSON-lines wire (`--json`, one
+`{op, arg}` per line). EVERY UI is a wrapper over this wire — the
+web console, the Claude Code plugin, an editor panel — and nothing
+semantic lives in any wrapper. Tabula rasa is the ground state: the
+world is empty until the first `:accept`; packs then only ADD.
+Shapes A–E stand, but they are now all bindings of the REPL.

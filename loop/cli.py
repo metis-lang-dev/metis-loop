@@ -60,6 +60,11 @@ def main(argv=None):
     f.add_argument("--scenario", action="append", default=[])
     f.add_argument("--max-rounds", type=int, default=4)
 
+    rp = sub.add_parser("repl")
+    rp.add_argument("--json", action="store_true",
+                    help="JSON-lines wire (one {op, arg} per line) — "
+                         "the protocol every UI wraps")
+
     r = sub.add_parser("replay")
     r.add_argument("records"), r.add_argument("catalog")
     r.add_argument("--init", required=True)
@@ -67,6 +72,10 @@ def main(argv=None):
     r.add_argument("--steps", type=int)
 
     ns = ap.parse_args(argv)
+    if ns.cmd == "repl":
+        from .repl import run_repl
+        return run_repl(json_mode=ns.json)
+
     if ns.cmd == "admit":
         rep = admit(Path(ns.text).read_text(), Path(ns.llp).read_text(),
                     base_path=ns.base,
