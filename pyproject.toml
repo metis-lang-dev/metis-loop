@@ -1,0 +1,12 @@
+[project]
+name = "metis-loop"
+version = "0.1.0"
+description = "The metis formalization/explanation loop: surprise records -> text -> gated candidate packs (deployment shape deferred; library + CLI)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+metis-loop = "loop.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
