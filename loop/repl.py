@@ -28,6 +28,38 @@ from metis.kernel.record import recover
 from .core import formalize_loop, load_records
 
 
+# -- intents: chat-suggested REPL steps, ONE policy for every ferry --
+#
+# The console's chat window may queue an intent (a single REPL line)
+# for execution; whoever ferries it (a loop session draining the
+# artifact db) runs it ONLY through run_intent, so the whitelist
+# lives here and no wrapper invents its own. Excluded by design:
+# :accept (approval is human, and a session accept must be a
+# deliberate prompt action), :save/:load/:sink (file paths from page
+# viewers), :formalize with an arbitrary external command (shell
+# execution — only the built-in ollama backend may be named).
+INTENT_VERBS = frozenset(
+    ["records", "record", "replay", "mine", "text", "init", "steps",
+     "seed", "gate", "revise", "trace", "map", "marginals", "show",
+     "formalize", "help"])
+
+
+def parse_intent(line: str):
+    """One chat-suggested REPL line -> (op, arg), or None if the
+    policy refuses it."""
+    line = (line or "").strip()
+    if not line.startswith(":"):
+        return None
+    op, _, arg = line[1:].partition(" ")
+    if op not in INTENT_VERBS:
+        return None
+    if op == "formalize":
+        a = arg.strip()
+        if a and a != "ollama" and not a.startswith("ollama:"):
+            return None
+    return op, arg
+
+
 def _kv(s: str) -> Dict[str, int]:
     """a=1,b=2 — commas INSIDE parentheses belong to the atom
     (eros(helena,hermia)=1), so split at depth 0 only."""
@@ -134,10 +166,26 @@ class Session:
         else:
             backend = shlex.split(arg)
             label = arg
-        res = formalize_loop(self.text, self.base_llp or "(empty world)",
-                             backend, base_path=None,
-                             scenarios=[self.init] if self.init else (),
-                             steps=self.steps)
+        base_path = None
+        if self.base_llp.strip():
+            # gate each round against the ACCEPTED world, exactly as
+            # :gate does — a drafted pack must admit as a pack
+            import tempfile
+            f = tempfile.NamedTemporaryFile(
+                "w", suffix=".llp", delete=False)
+            f.write(self.base_llp)
+            f.close()
+            base_path = f.name
+        try:
+            res = formalize_loop(
+                self.text, self.base_llp or "(empty world)",
+                backend, base_path=base_path,
+                scenarios=[self.init] if self.init else (),
+                steps=self.steps)
+        finally:
+            if base_path:
+                import os
+                os.unlink(base_path)
         self.cand, self.report = res.llp, res.report
         return {"ok": res.ok, "backend": label, "rounds": res.rounds,
                 "findings": res.report.findings if res.report else []}
@@ -402,6 +450,16 @@ class Session:
         if self.cand:
             (d / "candidate.llp").write_text(self.cand)
         return {"ok": True, "dir": str(d)}
+
+    def run_intent(self, line: str):
+        """Execute one chat-queued intent under the module policy."""
+        p = parse_intent(line)
+        if p is None:
+            return {"ok": False, "cmd": line,
+                    "error": "intent refused — allowed verbs: " +
+                             " ".join(sorted(INTENT_VERBS)) +
+                             " (:formalize only bare or ollama[:model])"}
+        return self.dispatch(*p)
 
     def dispatch(self, op: str, arg: str = ""):
         fn = getattr(self, "cmd_" + op, None)

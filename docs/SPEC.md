@@ -135,7 +135,14 @@ measure, never an explosion. The layered checks, in order:
   llp — read-only mirror of metis-catalog, resynced after commits).
   Console edits set `status: regate`; a loop session re-runs the
   cascade and posts the fresh report. Approvals are human, in the
-  console or in chat — a loop session NEVER approves.
+  console or in chat — a loop session NEVER approves. The console's
+  REPL window queues `intents` docs ({cmd, record_id, status:
+  queued}) — one REPL line each, typed by the viewer; a loop session
+  drains them ONLY through `loop.repl.run_intent` (the single
+  whitelist: drafting and instrument verbs; never :accept, file
+  paths, or arbitrary backend commands) and posts {status:
+  done|refused, result}. The console holds NO model integration of
+  its own: the only LLM in the loop is the REPL's ollama backend.
 - **Loop -> catalog**: approved candidates become metis-catalog
   commits (the text is the commit body), then recompile + corpus
   replay.
@@ -160,11 +167,16 @@ scene (verified: meadow, IR PARITY + marginal equality at 1e-12).
   console, no external command required.
 - Claude Code plugin: BUILT (skills/metis-loop) — OPTIONAL; a
   conversational seat over the same wire, never a dependency.
-- Web console: BUILT (queue, gates, diffs, editor->regate, catalog
-  browser, in-page analyst). Direction: SIMPLIFY toward the thinnest
-  wrapper the doctrine needs — the human approval surface (queue +
-  report + approve/reject) — since everything else now lives in the
-  REPL.
+- Web console: A REPL WRAPPER (2026-09-29). The page follows the
+  REPL verb by verb — :record (scene) / :replay (trace &
+  explanation) / :mine (text) / :gate (report) / :accept
+  (approve/reject, the page's only decision write) — plus a REPL
+  window (viewer-typed commands queue as intents; results stream
+  back) and a separate Δ-rules window when a module (pack candidate)
+  is loaded. LLP sources render through the in-page colorizer
+  (lexer's token classes). Sources are READ-ONLY everywhere (edits
+  go file -> reload); the in-page editor, edit->regate path and the
+  Claude analyst are gone — no model integration in the page.
 - Service (daemon watching sink + console): build when the metrics
   say the loop is mostly-automatic (repair counts, gate pass-rate,
   human-edit rate).

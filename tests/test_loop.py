@@ -289,3 +289,27 @@ def test_ollama_adapter_is_the_formalizer_seam():
             == "catalog x 1.\n"
     finally:
         srv.shutdown()
+
+
+def test_intent_policy_is_the_single_gate():
+    """Chat-suggested REPL lines execute only through run_intent's
+    whitelist: drafting and instrument verbs pass, approval, file
+    paths and arbitrary backend commands are refused."""
+    from loop.repl import Session, parse_intent
+    assert parse_intent(":marginals fed hungry") == ("marginals",
+                                                    "fed hungry")
+    assert parse_intent(":formalize ollama:llama3.1") is not None
+    for bad in (":accept", ":save /tmp/x", ":load /etc/passwd",
+                ":sink /etc/passwd", ":formalize rm -rf /",
+                ":quit", "marginals fed", ""):
+        assert parse_intent(bad) is None, bad
+    s = Session()
+    s.dispatch("init", "wolf=1,sheep=3,night=2,tally=2")
+    s.dispatch("steps", "6")
+    s.dispatch("text", "%% meadow world")
+    s.dispatch("llp", MEADOW)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    r = s.run_intent(":marginals hungry")
+    assert r["ok"] and abs(r["marginals"]["hungry"] - 0.5) < 1e-12
+    r = s.run_intent(":accept")
+    assert not r["ok"] and "refused" in r["error"]
