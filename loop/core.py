@@ -62,8 +62,12 @@ def render_prompt(text: str, vocabulary: str,
     return PROMPT.format(vocabulary=vocabulary, text=text, findings=f)
 
 
-def run_backend(command: Sequence[str], prompt: str,
-                timeout: int = 600) -> str:
+def run_backend(command, prompt: str, timeout: int = 600) -> str:
+    """The seam takes an external COMMAND (argv list; prompt on
+    stdin, LLP on stdout) or a CALLABLE(prompt) -> LLP — the
+    in-process shape the Ollama adapter uses."""
+    if callable(command):
+        return command(prompt)
     r = subprocess.run(list(command), input=prompt, text=True,
                        capture_output=True, timeout=timeout)
     if r.returncode != 0:

@@ -39,21 +39,43 @@ NO semantics:
 
 ## 3. REPL verbs (the protocol)
 
+    :sink FILE.jsonl            load surprise records (the runtime's sink)
+    :records  :record [N]       list them; select one — its init/steps
+                                become the scene, its mined_text the TEXT
+    :mine [TEXT]                bare: the observed-vs-modeled gap; with
+                                TEXT: set the approved unit + stamp the record
+    :replay                     recover() the record against the world:
+                                the explanation before a fix, the
+                                verification after (`fixed` = likelihood
+                                moved positive)
     :text  :llp                 the approved unit; the candidate source
-    :formalize CMD...           draft via a backend command (stdin: prompt,
-                                stdout: LLP) — `claude -p --model opus`
-                                and a local-model wrapper are interchangeable
+    :formalize [BACKEND]        draft the candidate. Default: the local
+                                model through the OLLAMA ADAPTER
+                                (loop/ollama.py, stdlib urllib; $OLLAMA_HOST
+                                / $OLLAMA_MODEL; `ollama:MODEL` picks one) —
+                                no plugins in the path. Anything else is an
+                                external command (stdin: prompt, stdout:
+                                LLP); `python -m loop.ollama` is that same
+                                adapter as a command
     :gate                       EXTENSION: full cascade against the world
     :revise                     BASE EDIT: gate the candidate standalone;
                                 the next :accept REPLACES the world
     :accept                     admitted candidate joins (or replaces) the world
-    :init a=1,b=2  :steps N     the scene
+    :load FILE.llp              candidate from a file, includes spliced;
+                                its '#'-directives (metis-lang spec §8)
+                                seed the scene, and its leading comment
+                                block the TEXT, where still unset
+    :init a=1,b=2  :steps N  :seed N        the scene
     :trace [seed]               one synthetic trajectory (the seeded
                                 reference sampler; 06-sampler-wire)
     :map                        the modal derivation (Viterbi), events
                                 labeled stage/rule
     :marginals [atoms]          exact final marginals (the measure)
-    :show :save                 state; world.llp + text.md out
+    :show :save :help           state; world.llp + text.md out; verbs
+
+The interactive prompt wraps the same dispatcher with readline (line
+editing, tab-completed verbs, history at $XDG_STATE_HOME/metis-loop/
+history); piped stdin and the JSON wire stay byte-clean.
 
 ## 4. Extension vs revision (the redefinition doctrine)
 
@@ -132,10 +154,17 @@ scene (verified: meadow, IR PARITY + marginal equality at 1e-12).
 
 ## 8. Deployment shapes (status)
 
-- REPL kernel + CLI: BUILT (this repo).
-- Claude Code plugin: BUILT (skills/metis-loop).
+- REPL kernel + CLI: BUILT (this repo) — and since the surprise /
+  refinement verbs (:sink/:record/:mine/:replay) and the built-in
+  Ollama backend landed, the REPL alone IS the loop: no plugin, no
+  console, no external command required.
+- Claude Code plugin: BUILT (skills/metis-loop) — OPTIONAL; a
+  conversational seat over the same wire, never a dependency.
 - Web console: BUILT (queue, gates, diffs, editor->regate, catalog
-  browser, in-page analyst).
+  browser, in-page analyst). Direction: SIMPLIFY toward the thinnest
+  wrapper the doctrine needs — the human approval surface (queue +
+  report + approve/reject) — since everything else now lives in the
+  REPL.
 - Service (daemon watching sink + console): build when the metrics
   say the loop is mostly-automatic (repair counts, gate pass-rate,
   human-edit rate).

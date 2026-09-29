@@ -188,3 +188,104 @@ stage rest {
     g = s.dispatch("gate", "")
     assert g["ok"] and any("catch" in w and "short" in w
                            for w in g["warnings"]), g
+
+
+def test_repl_scene_verbs_and_directive_adoption():
+    """:seed sets the scene's third coordinate; :load adopts a file's
+    embedded '#'-directives where the scene is unset (explicit verbs
+    win); :help answers on the wire."""
+    from loop.repl import Session
+    fiction = (ROOT.parent
+               / "metis-catalog/domains/fiction/love_triangle.llp")
+    s = Session()
+    assert s.dispatch("seed", "5")["ok"] and s.seed == 5
+    r = s.dispatch("load", str(fiction))
+    assert r["ok"] and "init" in r["adopted_directives"]
+    assert s.init["eros(helena,hermia)"] == 1 and s.steps == 6
+    assert r["adopted_text_chars"] and s.text.startswith("%")
+    assert s.dispatch("gate", "")["ok"]    # the adopted text suffices
+    tr = s.dispatch("trace", "")           # starts from :seed
+    assert tr["ok"] and tr["seed"] == 5
+    assert ":sink" in s.dispatch("help", "")["help"]
+    # explicit scene wins over the file's directives
+    s2 = Session()
+    s2.dispatch("init", "eros(helena,hermia)=1")
+    r2 = s2.dispatch("load", str(fiction))
+    assert "adopted_directives" not in r2 or \
+        "init" not in r2.get("adopted_directives", {})
+    assert s2.init == {"eros(helena,hermia)": 1}
+
+
+def test_repl_surprise_refinement_loop(tmp_path):
+    """The loop, entirely in the REPL: sink -> record (scene adopted)
+    -> replay (likelihood 0, the explanation gap) -> mine -> candidate
+    -> gate -> accept -> replay again (likelihood moved positive =
+    fixed, with the MAP explanation naming the new rule)."""
+    import json
+    from loop.repl import Session
+    rec = {"format": "metis-surprise", "version": 1,
+           "program_key": "(demo)", "steps": 6,
+           "init": {"wolf": 1, "sheep": 3, "night": 2, "tally": 2},
+           "observed": {"safe": 1}, "likelihood": 0.0,
+           "kind": "unmodeled", "meta": {"source": "test:meadow"}}
+    sink = tmp_path / "sink.jsonl"
+    sink.write_text(json.dumps(rec) + "\n")
+    s = Session()
+    r = s.dispatch("sink", str(sink))
+    assert r["ok"] and r["records"][0]["kind"] == "unmodeled"
+    r = s.dispatch("record", "")
+    assert r["ok"] and s.init["wolf"] == 1 and s.steps == 6
+    s.dispatch("text", "%% meadow world")
+    s.dispatch("llp", MEADOW)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    r = s.dispatch("replay", "")
+    assert r["ok"] and r["likelihood"] == 0.0 and not r["fixed"]
+    assert "hint" in s.dispatch("mine", "")
+    s.dispatch("mine", "%% the shepherd tallies the flock at rest: "
+                       "a fed wolf means a loss, a hungry one safety.")
+    assert s.records[0]["mined_text"].startswith("%% the shepherd")
+    assert s.text.startswith("%% the shepherd")
+    s.dispatch("llp", SHEPHERD)
+    assert s.dispatch("gate", "")["ok"] and s.dispatch("accept", "")["ok"]
+    r = s.dispatch("replay", "")
+    assert r["ok"] and r["likelihood"] > 0 and r["fixed"] and r["explains"]
+    assert any("n2" in e for e in r["explanation_events"])
+
+
+def test_ollama_adapter_is_the_formalizer_seam():
+    """generate() speaks the Ollama wire (temperature 0, no stream),
+    strips the fences models add anyway, and backend() satisfies
+    run_backend's callable shape."""
+    import http.server
+    import json
+    import threading
+    from loop import ollama
+    from loop.core import run_backend
+    seen = {}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers["Content-Length"])
+            seen.update(json.loads(self.rfile.read(n)))
+            body = json.dumps(
+                {"response": "```llp\ncatalog x 1.\n```"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        host = f"http://127.0.0.1:{srv.server_port}"
+        assert ollama.generate("p", model="m", host=host) \
+            == "catalog x 1.\n"
+        assert seen["model"] == "m" and seen["stream"] is False
+        assert seen["options"] == {"temperature": 0}
+        assert run_backend(ollama.backend("m", host), "p") \
+            == "catalog x 1.\n"
+    finally:
+        srv.shutdown()

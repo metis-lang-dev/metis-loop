@@ -23,7 +23,9 @@ from metis.kernel.refsample import canonical_events, run_trace
 from metis.lang import compile_catalog, parse
 from metis.lang.formalize import admit_text_pack
 
-from .core import formalize_loop
+from metis.kernel.record import recover
+
+from .core import formalize_loop, load_records
 
 
 def _kv(s: str) -> Dict[str, int]:
@@ -60,6 +62,8 @@ class Session:
     steps: int = 6
     seed: int = 1
     accepted: List[str] = field(default_factory=list)   # source log
+    records: List[dict] = field(default_factory=list)   # surprise sink
+    rec_idx: Optional[int] = None
     _revision: bool = False          # next accept REPLACES the base
 
     # -- verbs ---------------------------------------------------------
@@ -75,31 +79,67 @@ class Session:
     def cmd_load(self, arg):
         """Load a candidate from a .llp FILE, splicing its includes
         against the file's own directory into canonical source (the
-        roundtrip contract makes the splice identity-preserving)."""
+        roundtrip contract makes the splice identity-preserving).
+        A file carrying embedded '#'-directives (metis-lang spec §8)
+        donates them to the SCENE where it is still unset: #init when
+        no :init was given, #steps when :steps is at its default —
+        explicit verbs always win. Likewise the file's leading
+        comment block (its own doc, the approved unit of a committed
+        catalog) becomes the TEXT when none was set."""
         from pathlib import Path
         from metis.lang import parse as _parse, resolve_includes
         from metis.lang.ast import pretty
+        from metis.lang.directives import embedded_case
         p = Path(arg.strip()).expanduser()
-        cat = resolve_includes(_parse(p.read_text()), p.parent)
+        text = p.read_text()
+        cat = resolve_includes(_parse(text), p.parent)
         self.cand = pretty(cat)
-        return {"ok": True, "file": str(p),
-                "lines": self.cand.count("\n") + 1}
+        out = {"ok": True, "file": str(p),
+               "lines": self.cand.count("\n") + 1}
+        case = embedded_case(text)
+        adopted = {}
+        if case["init"] and not self.init:
+            self.init = {a: n for a, n in case["init"].items() if n > 0}
+            adopted["init"] = self.init
+        if case["steps"] and self.steps == 6:
+            self.steps = case["steps"]
+            adopted["steps"] = self.steps
+        if adopted:
+            out["adopted_directives"] = adopted
+        if not self.text.strip():
+            head = []
+            for line in text.splitlines():
+                if line.startswith("%"):
+                    head.append(line)
+                elif line.strip():
+                    break
+            if head:
+                self.text = "\n".join(head)
+                out["adopted_text_chars"] = len(self.text)
+        return out
 
     def cmd_formalize(self, arg):
+        """Draft the candidate from the text. Default backend: the
+        local model via the Ollama adapter (no plugins) — bare
+        `:formalize`, or `:formalize ollama:MODEL`; any other arg is
+        an external command (prompt on stdin, LLP on stdout)."""
         if not self.text.strip():
             return {"ok": False, "error": "no text — :text first"}
-        backend = shlex.split(arg) if arg else None
-        if not backend:
-            return {"ok": False,
-                    "error": "formalize needs a backend command "
-                             "(:formalize claude -p --model opus), or "
-                             "write the candidate yourself with :llp"}
+        arg = arg.strip()
+        if not arg or arg == "ollama" or arg.startswith("ollama:"):
+            from .ollama import backend as ollama, default_model
+            model = arg.partition(":")[2] or None
+            backend = ollama(model)
+            label = f"ollama:{model or default_model()}"
+        else:
+            backend = shlex.split(arg)
+            label = arg
         res = formalize_loop(self.text, self.base_llp or "(empty world)",
                              backend, base_path=None,
                              scenarios=[self.init] if self.init else (),
                              steps=self.steps)
         self.cand, self.report = res.llp, res.report
-        return {"ok": res.ok, "rounds": res.rounds,
+        return {"ok": res.ok, "backend": label, "rounds": res.rounds,
                 "findings": res.report.findings if res.report else []}
 
     def cmd_gate(self, arg):
@@ -198,6 +238,91 @@ class Session:
                              "(or :gate to inspect the candidate)")
         return cat.ground(dict(self.init))
 
+    # -- the surprise / refinement loop --------------------------------
+
+    def _rec_line(self, i, r):
+        return {"idx": i, "kind": r.get("kind"),
+                "likelihood": r.get("likelihood"),
+                "steps": r.get("steps"),
+                "observed": r.get("observed", {}),
+                "source": (r.get("meta") or {}).get("source", ""),
+                "mined": bool(r.get("mined_text"))}
+
+    def cmd_sink(self, arg):
+        """Load surprise records from a JSONL sink (kernel/record.py
+        wire; pointers, not traces — :replay re-derives everything)."""
+        if not arg.strip():
+            return {"ok": False, "error": "usage: :sink FILE.jsonl"}
+        self.records = load_records(arg.strip())
+        self.rec_idx = None
+        return {"ok": True, "file": arg.strip(),
+                "records": [self._rec_line(i, r)
+                            for i, r in enumerate(self.records)]}
+
+    def cmd_records(self, arg):
+        return {"ok": True,
+                "records": [self._rec_line(i, r)
+                            for i, r in enumerate(self.records)]}
+
+    def cmd_record(self, arg):
+        """Select a record (default: the newest); its init/steps
+        become the scene, so :replay, :marginals and the gate's
+        scenario all speak about the record's tick."""
+        if not self.records:
+            return {"ok": False, "error": "no records — :sink first"}
+        i = int(arg) if arg.strip() else len(self.records) - 1
+        if not 0 <= i < len(self.records):
+            return {"ok": False,
+                    "error": f"record {i} out of 0..{len(self.records)-1}"}
+        self.rec_idx = i
+        r = self.records[i]
+        self.init = {a: n for a, n in r.get("init", {}).items() if n > 0}
+        if r.get("steps"):
+            self.steps = r["steps"]
+        if r.get("mined_text"):
+            self.text = r["mined_text"]
+        return {"ok": True, **self._rec_line(i, r),
+                "init": self.init,
+                "program_key": r.get("program_key", "")}
+
+    def cmd_replay(self, arg):
+        """recover() the selected record against the current world
+        (or the gated candidate) — the explanation before a fix, the
+        verification after one: an accepted fix must move the
+        record's likelihood positive."""
+        if self.rec_idx is None:
+            return {"ok": False, "error": "no record — :record first"}
+        r = self.records[self.rec_idx]
+        prog = self._ground()
+        out = recover(r, prog, steps=r.get("steps"))
+        logged = r.get("likelihood", 0.0)
+        now = out["likelihood"]
+        return {"ok": True, "logged_likelihood": logged,
+                "likelihood": now, "explains": out["explains"],
+                "explanation_events": out.get("explanation_events"),
+                "fixed": bool(now > 0 >= logged)}
+
+    def cmd_mine(self, arg):
+        """With TEXT: set it as the approved unit AND stamp it on the
+        selected record (mined_text). Bare: show what there is to
+        mine — the observed-vs-modeled gap."""
+        if self.rec_idx is None:
+            return {"ok": False, "error": "no record — :record first"}
+        r = self.records[self.rec_idx]
+        if arg.strip():
+            self.text = arg
+            r["mined_text"] = arg
+            return {"ok": True, "chars": len(arg)}
+        return {"ok": True, "kind": r.get("kind"),
+                "likelihood": r.get("likelihood"),
+                "init": r.get("init", {}),
+                "observed": r.get("observed", {}),
+                "hint": "state what happened that the world cannot "
+                        "derive; quote atoms; that text is the "
+                        "approved unit (:mine <text>)"}
+
+    # -- the scene -----------------------------------------------------
+
     def cmd_init(self, arg):
         self.init = _kv(arg)
         return {"ok": True, "init": self.init}
@@ -205,6 +330,15 @@ class Session:
     def cmd_steps(self, arg):
         self.steps = int(arg)
         return {"ok": True, "steps": self.steps}
+
+    def cmd_seed(self, arg):
+        """Set the sampler seed :trace starts from (the scene's third
+        coordinate; a bare :trace then walks seed, seed+1, ...)."""
+        self.seed = int(arg)
+        return {"ok": True, "seed": self.seed}
+
+    def cmd_help(self, arg):
+        return {"ok": True, "help": HELP}
 
     def cmd_trace(self, arg):
         prog = self._ground()
@@ -282,30 +416,86 @@ class Session:
 
 
 HELP = """\
+the surprise / refinement loop:
+:sink FILE.jsonl        load surprise records (the runtime's sink)
+:records                list them (kind, likelihood, observed)
+:record [N]             select one (default newest); its init/steps
+                        become the scene
+:mine [TEXT]            bare: the observed-vs-modeled gap to mine;
+                        with TEXT: set the approved unit + stamp it
+:replay                 recover() the record against the world —
+                        explanation before a fix, verification after
+                        (fixed: likelihood moved positive)
+
+the candidate:
 :text <<EOF ... EOF     set the doc text (the approved unit)
 :llp <<EOF ... EOF      set/edit the candidate LLP source
-:formalize CMD...       draft the candidate via a backend command
+:formalize [BACKEND]    draft via the local model (default: the
+                        Ollama adapter; ollama:MODEL picks a model;
+                        anything else is an external command)
 :gate                   run the full gate cascade (findings on fail)
-:accept                 admitted candidate joins the world\n:revise                 gate the candidate as a BASE EDIT (accept replaces the world)
-:load FILE.llp          load a candidate file (includes spliced)
-:init a=1,b=2   :steps N
+:accept                 admitted candidate joins the world
+:revise                 gate the candidate as a BASE EDIT (accept
+                        then REPLACES the world; measure diff shown)
+:load FILE.llp          load a candidate file (includes spliced; its
+                        '#'-directives seed the scene where unset)
+:init a=1,b=2   :steps N   :seed N        the scene
 :trace [seed]           one synthetic trajectory (seeded sampler)
 :map                    the modal derivation (Viterbi) + final state
 :marginals [atoms]      exact final marginals (the measure)
-:show [state|text|base|llp]      :save DIR       :quit"""
+:show [state|text|base|llp]      :save DIR      :help      :quit"""
 
 
-def _read_block(first_arg, stdin):
+def _read_block(first_arg, next_line):
     """`<<EOF` heredoc convention for multi-line text/llp."""
     if not first_arg.startswith("<<"):
         return first_arg
     tag = first_arg[2:].strip() or "EOF"
     lines = []
-    for line in stdin:
-        if line.rstrip("\n") == tag:
+    while True:
+        line = next_line()
+        if line is None or line.rstrip("\n") == tag:
             break
-        lines.append(line)
+        lines.append(line if line.endswith("\n") else line + "\n")
     return "".join(lines)
+
+
+def _wire_readline(session):
+    """Line editing, persistent history and verb completion for the
+    interactive prompt — degrades silently where readline is absent.
+    Only wired when stdin is the real tty (piped transcripts and the
+    JSON wire stay byte-clean)."""
+    try:
+        import atexit
+        import os
+        import readline
+    except ImportError:
+        return
+    from pathlib import Path
+    verbs = sorted(":" + n[4:] for n in dir(session)
+                   if n.startswith("cmd_")) + [":quit"]
+
+    def complete(text, state):
+        hits = [v + " " for v in verbs if v.startswith(text or ":")]
+        return hits[state] if state < len(hits) else None
+
+    readline.set_completer_delims(" \t\n")
+    readline.set_completer(complete)
+    readline.parse_and_bind("tab: complete")
+    base = Path(os.environ.get("XDG_STATE_HOME",
+                               Path.home() / ".local/state"))
+    try:
+        d = base / "metis-loop"
+        d.mkdir(parents=True, exist_ok=True)
+        hist = d / "history"
+        try:
+            readline.read_history_file(hist)
+        except OSError:
+            pass
+        readline.set_history_length(1000)
+        atexit.register(lambda: readline.write_history_file(hist))
+    except OSError:
+        pass
 
 
 def run_repl(json_mode: bool = False, stdin=None, stdout=None):
@@ -329,15 +519,26 @@ def run_repl(json_mode: bool = False, stdin=None, stdout=None):
                                         req.get("arg", ""))),
                   file=stdout, flush=True)
         return 0
-    print("metis-loop repl — :help for verbs; tabula rasa: the world "
-          "is empty until your first :accept.", file=stdout)
+    tty = (stdin is sys.stdin and stdout is sys.stdout
+           and hasattr(stdin, "isatty") and stdin.isatty())
+    if tty:
+        _wire_readline(s)
+
+    def next_line(prompt="μ> "):
+        if tty:
+            try:
+                return input(prompt) + "\n"
+            except (EOFError, KeyboardInterrupt):
+                return None
+        print(prompt, end="", file=stdout, flush=True)
+        return stdin.readline() or None
+
+    print("metis-loop repl — :help for verbs (tab completes; history "
+          "kept); tabula rasa: the world is empty until your first "
+          ":accept.", file=stdout)
     while True:
-        try:
-            print("μ> ", end="", file=stdout, flush=True)
-            line = stdin.readline()
-        except KeyboardInterrupt:
-            break
-        if not line:
+        line = next_line()
+        if line is None:
             break
         line = line.strip()
         if not line:
@@ -352,7 +553,9 @@ def run_repl(json_mode: bool = False, stdin=None, stdout=None):
             continue
         op, _, arg = line[1:].partition(" ")
         if op in ("text", "llp"):
-            arg = _read_block(arg.strip(), stdin) if arg.strip() else ""
+            arg = _read_block(arg.strip(),
+                              lambda: next_line("")) \
+                if arg.strip() else ""
         res = s.dispatch(op, arg)
         print(json.dumps(res, indent=1), file=stdout)
     return 0

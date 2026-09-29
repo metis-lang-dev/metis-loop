@@ -2,9 +2,15 @@
 
 A working tour of the language and its semantics, driven entirely
 from `metis-loop repl`. Every transcript below was executed; every
-number is exact. Start it with the metispy env active:
+number is exact. With metispy and metis-loop installed (both are
+`pip install -e .` into the shared env):
 
-    PYTHONPATH=path/to/metispy metis-loop repl        # or: python -m loop.cli repl
+    metis-loop repl        # or: PYTHONPATH=path/to/metispy python -m loop.cli repl
+
+The prompt has line editing, history and tab-completed verbs
+(`:help` lists them; the scene is `:init a=1,b=2`, `:steps N`,
+`:seed N`). Everything below also speaks JSON, one `{op, arg}` per
+line, over `metis-loop repl --json` — the wire every UI wraps.
 
 One idea carries the whole system: **a catalog is one program read
 three ways** — proof theory (typing, admission, canonical identity),
@@ -156,9 +162,12 @@ then on everything is the ground machinery of World 1.
 
 The session:
 
-    μ> :init eros(helena,hermia)=1,eros(hermia,helena)=1,eros(helena,lysander)=1,eros(lysander,hermia)=1
-    μ> :steps 1
     μ> :load metis-catalog/domains/fiction/love_triangle.llp
+    { ok: true, adopted_directives: { init: {eros(helena,hermia): 1,
+      eros(hermia,helena): 1, eros(helena,lysander): 1,
+      eros(lysander,hermia): 1}, steps: 6 },
+      adopted_text_chars: 590 }
+    μ> :steps 1
     μ> :gate
     { ok: true, classification: "counterexample: jealousy[A=helena,
       B=helena,C=hermia]: multiplicity 2 …", … }
@@ -168,11 +177,20 @@ The session:
     μ> :trace 9
     { events: ["go/jealousy[A=helena,B=lysander,C=hermia]"], … }
 
-**Trace labels carry the substitution.** Every event names its rule
-AND its cast — the derivation reading stays legible after
-grounding. (The `:load` verb splices `include`s; the canonical key
-is invariant under file splits, so loading the one-file or the
-split form is the same program.)
+**The file brought its own scene — and its own text.** The catalog
+carries the origin's `context init` and `#trace` as `#`-directive
+lines (metis-lang spec §8) — compiler-invisible, interpreter-visible
+— and `:load` adopts them wherever the scene is still unset; an
+explicit `:init`/`:steps` (here, narrowing to act one) always wins.
+A committed catalog's leading comment block is likewise adopted as
+the TEXT (the approved unit) when none was set — which is why `:gate`
+proceeds without a `:text` here, and why it would refuse a bare,
+undocumented candidate. **Trace labels carry the
+substitution:** every event names its rule AND its cast — the
+derivation reading stays legible after grounding. (`:load` also
+splices `include`s; the canonical key is invariant under file
+splits, so loading the one-file or the split form is the same
+program.)
 
     μ> :marginals anger(hermia,helena) anger(hermia,hermia)
     { support: 5, marginals: {anger(hermia,helena): 0.4,
@@ -277,8 +295,58 @@ Two verbs, two doctrines (SPEC.md §4):
   and the before/after exact measure diff on the current scene is
   printed — the consistency instrument.
 
-From here: `:formalize CMD` puts a model in the drafting seat with
-the gates as referee (the loop), and `:save` writes the world out.
-The same worlds, keys and numbers appear in the Loop Console and in
-the metis-catalog corpus gates — one program, three readings, every
-surface a wrapper.
+---
+
+## Closing the loop — a surprise becomes a rule
+
+The whole improvement cycle, in the REPL (SPEC.md §1): the runtime
+logged an outcome no rule covers — a shepherd's flock came through a
+wolf night *safe*, and the meadow world cannot derive `safe` at all.
+The sink holds the record; the session turns it into an admitted
+pack and verifies the fix.
+
+    μ> :sink runs/sink.jsonl
+    { records: [{idx: 0, kind: "unmodeled", likelihood: 0,
+                 observed: {safe: 1}, source: "sim:meadow"}] }
+    μ> :record
+    { ok: true, kind: "unmodeled", init: {wolf:1, sheep:3, night:2,
+      tally:2}, steps: 6 }
+    μ> :replay          (against the accepted meadow world)
+    { logged_likelihood: 0, likelihood: 0, explains: false,
+      fixed: false }
+
+**Likelihood 0 is structural.** No parameter can create missing
+support — a missing behavior is a missing rule, never a bad number.
+`:record` adopted the record's tick as the scene, so every
+instrument now speaks about that tick.
+
+    μ> :mine
+    { observed: {safe: 1}, hint: "state what happened that the world
+      cannot derive; quote atoms; that text is the approved unit" }
+    μ> :mine %% the shepherd tallies the flock at rest: a fed wolf means a loss, a hungry one safety.
+    μ> :formalize
+    (drafts via the LOCAL model — the Ollama adapter is the default
+     backend: $OLLAMA_HOST/$OLLAMA_MODEL, `ollama:MODEL` to pick one;
+     findings feed back, <= 4 rounds. Or write it yourself with :llp —
+     here, the shepherd pack of World 1's shape.)
+    μ> :gate
+    { ok: true, scenarios: [{ support: 5,
+        diffs: [[loss, 0, 0.828125], [safe, 0, 0.390625],
+                [tally, 1, 0]] }] }
+    μ> :accept
+    μ> :replay
+    { logged_likelihood: 0, likelihood: 0.21875, explains: true,
+      explanation_events: ["catch", "evade", "hr", "n1", "n2"],
+      fixed: true }
+
+**`fixed: true` is the loop's success criterion**: the same record
+that scored zero now carries positive mass, and the MAP explanation
+narrates it — one catch, one evade, settle, then the tally rules
+price the loss and the safety. The candidate never becomes the
+world without `:accept`, and nothing in the drafting seat can touch
+the verdict: the model proposes, the gates dispose, the human
+approves.
+
+`:save` writes the world out; the Loop Console shows the same queue,
+reports and keys for the approval seat — one program, three
+readings, every surface a wrapper over this REPL.
