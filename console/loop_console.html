@@ -1,0 +1,464 @@
+<title>Metis Loop Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F7F6F2; --panel:#FFFFFF; --panel2:#F1EFE8; --ink:#23261F;
+  --muted:#6B6E63; --line:#DFDDD3; --accent:#2E5E6B; --accent-ink:#FFFFFF;
+  --bad:#A33D2E; --warn:#B07C24; --good:#3D6B44;
+  --bad-bg:#F6E7E3; --warn-bg:#F5EDDA; --good-bg:#E6EFE7;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --body:'Source Sans 3',system-ui,sans-serif;
+  --disp:'Spectral',Georgia,serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#191B18; --panel:#20231F; --panel2:#262A24; --ink:#E8E6DD;
+    --muted:#9A9D90; --line:#33362F; --accent:#7FB3BF; --accent-ink:#14262B;
+    --bad:#D97E6D; --warn:#D2A755; --good:#8CBB93;
+    --bad-bg:#39231F; --warn-bg:#362D1B; --good-bg:#22301F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#191B18; --panel:#20231F; --panel2:#262A24; --ink:#E8E6DD;
+  --muted:#9A9D90; --line:#33362F; --accent:#7FB3BF; --accent-ink:#14262B;
+  --bad:#D97E6D; --warn:#D2A755; --good:#8CBB93;
+  --bad-bg:#39231F; --warn-bg:#362D1B; --good-bg:#22301F;
+  color-scheme: dark;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);
+  font-size:15px;line-height:1.5;padding-inline:16px;margin:0}
+.wrap{max-width:1380px;margin:0 auto;padding-block:14px}
+header.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
+h1{font-family:var(--disp);font-weight:600;font-size:1.5rem;margin:0;
+  letter-spacing:.01em}
+.sub{color:var(--muted);font-size:.85rem}
+.grid{display:grid;grid-template-columns:280px minmax(0,1fr) 360px;gap:14px}
+@media (max-width:1060px){.grid{grid-template-columns:250px minmax(0,1fr)}
+  .side{grid-column:1/-1;display:grid;gap:14px;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.panel>h2{font-family:var(--disp);font-weight:500;font-size:1.02rem;margin:0;
+  padding:10px 14px;border-bottom:1px solid var(--line)}
+.side{display:grid;gap:14px;align-content:start}
+.qlist{max-height:74vh;overflow-y:auto}
+.qitem{padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+.qitem:hover{background:var(--panel2)}
+.qitem[aria-selected="true"]{background:var(--panel2);
+  box-shadow:inset 3px 0 0 var(--accent)}
+.qitem .atoms{font-family:var(--mono);font-size:.72rem;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:.68rem;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;padding:1px 8px;border-radius:99px}
+.pill.unmodeled,.pill.rejected,.pill.refused{background:var(--bad-bg);color:var(--bad)}
+.pill.rare,.pill.regate{background:var(--warn-bg);color:var(--warn)}
+.pill.ok,.pill.approved,.pill.fixed,.pill.done{background:var(--good-bg);color:var(--good)}
+.pill.pending,.pill.queued{background:var(--panel2);color:var(--muted)}
+.verb{font-family:var(--mono);font-size:.74rem;font-weight:600;
+  color:var(--accent);background:var(--panel2);border:1px solid var(--line);
+  border-radius:4px;padding:0 6px}
+.step{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:8px}
+.step:first-child{border-top:0}
+.step>header{display:flex;gap:10px;align-items:baseline}
+.step>header .what{font-size:.78rem;font-weight:600;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;
+  font-size:.86rem;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere}
+.atomset{display:flex;flex-wrap:wrap;gap:5px}
+.atom{font-family:var(--mono);font-size:.76rem;background:var(--panel2);
+  border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+.atom.zero{border-color:var(--bad);color:var(--bad)}
+h3{font-size:.78rem;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);margin:0}
+pre{font-family:var(--mono);font-size:.76rem;line-height:1.45;
+  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  padding:10px 12px;overflow-x:auto;margin:0;max-height:320px;overflow-y:auto}
+/* LLP colorizer — mirrors the lexer's token classes */
+.tok-kw{color:var(--accent);font-weight:600}
+.tok-var{color:var(--warn)}
+.tok-op{color:var(--bad);font-weight:600}
+.tok-str{color:var(--good)}
+.tok-doc{color:var(--good);font-style:italic}
+.tok-com{color:var(--muted);font-style:italic}
+.tok-dir{color:var(--accent)}
+table{border-collapse:collapse;font-size:.8rem;width:100%}
+td,th{padding:3px 10px 3px 0;text-align:left;
+  border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.mono{font-family:var(--mono);font-size:.76rem}
+.gate{display:flex;gap:8px;font-size:.84rem;align-items:baseline}
+.gate .m{font-family:var(--mono);font-size:.9rem}
+.gate.fail .m{color:var(--bad)} .gate.warn .m{color:var(--warn)}
+.gate.pass .m{color:var(--good)}
+button{font:inherit;font-weight:600;border-radius:6px;padding:6px 16px;
+  cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+  color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);
+  color:var(--accent-ink)}
+button.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,.qitem:focus-visible{
+  outline:2px solid var(--accent);outline-offset:1px}
+.log{max-height:52vh;overflow-y:auto;padding:12px 14px;display:grid;gap:10px}
+.turn{font-size:.84rem;display:grid;gap:4px}
+.turn .cmdline{font-family:var(--mono);font-size:.8rem}
+.turn .cmdline::before{content:"μ> ";color:var(--muted)}
+.ask{display:grid;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
+.ask input{font-family:var(--mono);font-size:.84rem;background:var(--panel2);
+  color:var(--ink);border:1px solid var(--line);border-radius:6px;
+  padding:8px 10px;width:100%;box-sizing:border-box}
+.note{font-size:.78rem;color:var(--muted)}
+.banner{background:var(--warn-bg);color:var(--warn);
+  border:1px solid var(--line);border-radius:6px;padding:8px 12px;
+  font-size:.84rem;margin-bottom:12px}
+.empty{padding:22px 14px;color:var(--muted);font-size:.88rem}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;border:0;background:none;border-radius:0;padding:10px 8px;
+  font-family:var(--disp);font-weight:500;font-size:1rem;color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--ink);
+  box-shadow:inset 0 -2px 0 var(--accent)}
+.delta{padding:12px 14px;display:grid;gap:10px}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>Metis Loop Console</h1>
+  <span class="sub">a wrapper over <span class="verb">metis-loop repl</span>
+    &mdash; sources are read-only, commands queue for the loop session,
+    the model is local (ollama)</span>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<div class="grid">
+  <section class="panel">
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tab-q" role="tab" aria-selected="true">:sink</button>
+      <button class="tab" id="tab-c" role="tab" aria-selected="false">Catalogs</button>
+    </div>
+    <div id="queue" class="qlist"><div class="empty">Waiting for the
+      record store&hellip; the runtime sink arrives via the loop session
+      (<span class="verb">:sink</span> on their side, these rows on yours).</div></div>
+    <div id="cats" class="qlist" hidden><div class="empty">No catalogs
+      synced yet.</div></div>
+  </section>
+
+  <section class="panel">
+    <h2 id="dtitle">Record</h2>
+    <div id="detail">
+      <div class="empty">Select a surprise record. The panel walks the
+        loop exactly as the REPL does: the scene, the replay, the mined
+        text, the gate report, and the one thing only a human does here
+        &mdash; the decision.</div>
+    </div>
+  </section>
+
+  <div class="side">
+    <section class="panel" id="deltaPanel" hidden>
+      <h2>&Delta; rules <span class="verb">:gate</span></h2>
+      <div id="delta" class="delta"></div>
+    </section>
+
+    <section class="panel">
+      <h2>REPL <span class="verb">&mu;&gt;</span></h2>
+      <div id="clog" class="log">
+        <div class="turn note">Commands queue here and the loop session
+          executes them in <span class="verb">metis-loop repl</span>
+          (whitelist enforced REPL-side; <span class="verb">:help</span>
+          lists the verbs, <span class="verb">:formalize</span> drafts
+          via the local ollama model). Approval never queues &mdash; it
+          is the buttons in the middle panel, and nothing else.</div>
+      </div>
+      <div class="ask">
+        <input id="q" type="text" spellcheck="false"
+          placeholder=":help   :replay   :marginals atom…   :formalize ollama:phi3">
+        <div class="row">
+          <button class="primary" id="send">Queue</button>
+          <span class="note" id="cstate"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let db=null,uid=null;
+let records=new Map(),cands=new Map(),sel=null;
+let cats=new Map(),catSel=null,view="q";
+let intentDocs=new Map();
+
+function fmtTs(t){try{return new Date(t).toISOString().replace("T"," ").slice(0,16)}catch(e){return""}}
+function atoms(o,zero){return Object.entries(o||{}).map(([a,n])=>
+  `<span class="atom${zero&&!n?" zero":""}">${esc(a)}${n>1?"&times;"+n:zero&&!n?"=0":""}</span>`).join("")}
+function verbHead(verb,what){return `<header><span class="verb">${esc(verb)}</span><span class="what">${esc(what)}</span></header>`}
+
+/* ---- LLP colorizer: the lexer's token classes, as spans ---- */
+const LLP_KW=/^(catalog|provenance|extends|include|layers|stages|type|namespace|produce|consume|pred|bwd|weight|guard|input|output|reads|stage|qui|if|one)$/;
+function hl(src){
+  return String(src).split("\n").map(line=>{
+    const t=line.trimStart();
+    if(t.startsWith("%%"))return `<span class="tok-doc">${esc(line)}</span>`;
+    if(t.startsWith("%"))return `<span class="tok-com">${esc(line)}</span>`;
+    if(t.startsWith("#"))return `<span class="tok-dir">${esc(line)}</span>`;
+    return line.replace(
+      /"[^"]*"|-o(?![A-Za-z0-9_-])|:-|<>|@w|[$~]|[A-Za-z][A-Za-z0-9_-]*|\d+\.\d+|\.\d+|\d+|\s+|./g,
+      m=>{
+        if(/^\s+$/.test(m))return m;
+        if(m[0]==='"')return `<span class="tok-str">${esc(m)}</span>`;
+        if(m==="-o"||m===":-"||m==="<>"||m==="@w"||m==="$"||m==="~")
+          return `<span class="tok-op">${esc(m)}</span>`;
+        if(/^[A-Z]/.test(m))return `<span class="tok-var">${m}</span>`;
+        if(LLP_KW.test(m))return `<span class="tok-kw">${m}</span>`;
+        return esc(m);
+      });
+  }).join("\n");
+}
+
+function renderQueue(){
+  const q=$("#queue");
+  const rows=[...records.values()].sort((a,b)=>(b.ts||"").localeCompare(a.ts||""));
+  if(!rows.length){q.innerHTML='<div class="empty">No surprise records yet.</div>';return}
+  q.innerHTML=rows.map(r=>`
+    <div class="qitem" role="button" tabindex="0" data-id="${esc(r.id)}"
+         aria-selected="${r.id===sel&&view==="q"}">
+      <div class="row"><span class="pill ${esc(r.kind||"rare")}">${esc(r.kind||"?")}</span>
+        <span class="sub">${fmtTs(r.ts)}</span>
+        <span class="sub" style="margin-left:auto">${esc((r.meta&&r.meta.source)||"")}</span></div>
+      <div class="atoms">${esc(Object.keys(r.observed||{}).join("  "))}</div>
+    </div>`).join("");
+  q.querySelectorAll(".qitem").forEach(el=>{
+    const go=()=>select(el.dataset.id);
+    el.addEventListener("click",go);
+    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}});
+  });
+}
+
+function gateList(c){
+  const g=[];
+  (c.findings||[]).forEach(f=>g.push(`<div class="gate fail"><span class="m">&#x2717;</span><span>${esc(f)}</span></div>`));
+  (c.warnings||[]).forEach(w=>g.push(`<div class="gate warn"><span class="m">&#x26A0;</span><span>${esc(w)}</span></div>`));
+  if(c.ok)g.push(`<div class="gate pass"><span class="m">&#x2713;</span><span>parse &middot; roundtrip &middot; containment &middot; ${esc(c.classification||"?")} &middot; measure instruments</span></div>`);
+  return g.join("")}
+
+function candOf(r){
+  return [...cands.values()].filter(c=>c.record_id===r.id)
+    .sort((a,b)=>(b.ts||"").localeCompare(a.ts||""))[0]||null}
+
+async function decide(cid,status){
+  if(!db)return;
+  try{
+    await db.doc("candidates/"+cid).update({status,
+      decided_by:uid||"viewer",decided_ts:new Date().toISOString()});
+  }catch(e){toast("Decision not saved: "+(e&&e.message||e))}
+}
+
+function replayBlock(r,c){
+  const rp=r.replay||null;
+  const mapEv=(rp&&rp.events)||(c&&c.scenarios&&c.scenarios[0]&&c.scenarios[0].map_events)||null;
+  const now=rp?rp.likelihood:null;
+  return `<div class="step">${verbHead(":replay","trace & explanation")}
+    <div class="row">
+      <span class="sub">logged likelihood <b>${r.likelihood===0?"0":esc(String(r.likelihood))}</b></span>
+      ${now!==null?`<span class="sub">&rarr; now <b>${esc(String(now))}</b></span>`:""}
+      ${rp&&rp.fixed?'<span class="pill fixed">fixed</span>':""}
+      ${r.likelihood===0&&!(rp&&rp.fixed)?'<span class="sub">(unmodeled &mdash; a missing rule, not a bad parameter)</span>':""}
+    </div>
+    ${mapEv&&mapEv.length?`<div class="note">MAP trace:
+      <span class="atom">${mapEv.map(esc).join('</span> <span class="atom">')}</span></div>`:""}
+    ${r.explanation?`<pre>${esc(typeof r.explanation==="string"?r.explanation:JSON.stringify(r.explanation,null,1))}</pre>`:""}
+  </div>`}
+
+function renderDetail(){
+  if(view==="c"){renderCatDetail();renderDelta(null);return}
+  const d=$("#detail"),r=records.get(sel);
+  if(!r){d.innerHTML='<div class="empty">Select a surprise record.</div>';renderDelta(null);return}
+  $("#dtitle").textContent="Record "+(r.id||"");
+  const c=candOf(r);
+  const st=c?(c.status||"pending"):null;
+  d.innerHTML=`
+    <div class="step">${verbHead(":record","the scene")}
+      <div class="row"><span class="pill ${esc(r.kind||"rare")}">${esc(r.kind||"?")}</span>
+        <span class="sub">steps=${esc(String(r.steps||""))}</span></div>
+      <dl class="kv">
+        <dt>program_key</dt><dd>${esc(r.program_key||"")}</dd>
+        <dt>artifact</dt><dd>${esc((r.meta&&r.meta.artifact)||(r.meta&&r.meta.source)||"")}</dd>
+      </dl>
+      <div><h3>init</h3><div class="atomset">${atoms(r.init)}</div></div>
+      <div><h3>observed</h3><div class="atomset">${atoms(r.observed,true)}</div></div>
+    </div>
+    ${replayBlock(r,c)}
+    ${r.mined_text?`<div class="step">${verbHead(":mine","the approved unit")}
+      <pre style="max-height:120px">${hl(r.mined_text)}</pre></div>`:""}
+    ${c?`<div class="step">${verbHead(":gate","the report")}
+      <div class="row"><span class="pill ${esc(st)}">${esc(st)}</span>
+        <span class="sub">${esc(c.model||"")} &middot; rounds=${esc(String(c.rounds||1))}</span>
+        ${c.decided_by?`<span class="sub">by ${esc(c.decided_by)} ${fmtTs(c.decided_ts)}</span>`:""}</div>
+      <div>${gateList(c)}</div>
+      ${c.scenarios&&c.scenarios.length?`<div class="note">scenario key
+        <span class="atom">${esc((c.scenarios[0].key||"").slice(0,16))}</span>
+        &middot; support ${esc(String(c.scenarios[0].support))}</div>`:""}
+      <details><summary class="note">LLP source (read-only &mdash; edit the
+        file, the REPL reloads)</summary>
+        <pre>${hl(c.llp||"")}</pre></details>
+    </div>
+    <div class="step">${verbHead(":accept","approval — human only")}
+      ${st==="pending"&&c.ok?`<div class="row">
+          <button class="primary" data-a="approved" data-c="${esc(c.id)}">Approve for catalog</button>
+          <button class="danger" data-a="rejected" data-c="${esc(c.id)}">Reject</button></div>
+        <div class="note">Approval marks the candidate; the loop session
+          turns approved candidates into reviewed metis-catalog commits
+          and replays the record corpus.</div>`
+      :st==="regate"?'<div class="note">Being re-gated by the loop session.</div>'
+      :`<div class="note">Decided: <b>${esc(st)}</b>${c.decided_by?" by "+esc(c.decided_by):""}.</div>`}
+    </div>`
+    :`<div class="step">${verbHead(":gate","the report")}
+      <div class="note">No candidate yet &mdash; the loop session raises one
+        (<span class="verb">:mine</span> &rarr; <span class="verb">:formalize</span>
+        &rarr; <span class="verb">:gate</span>).</div></div>`}`;
+  d.querySelectorAll("button[data-c]").forEach(b=>
+    b.addEventListener("click",()=>decide(b.dataset.c,b.dataset.a)));
+  renderDelta(c);
+}
+
+/* the module window: what the loaded pack ADDS — its rules and the
+   exact measure it moves */
+function renderDelta(c){
+  const p=$("#deltaPanel");
+  const hasModule=c&&((c.rules&&c.rules.length)||
+    (c.scenarios||[]).some(s=>s.diffs&&s.diffs.length));
+  if(!hasModule){p.hidden=true;return}
+  p.hidden=false;
+  const sc=(c.scenarios||[]).filter(s=>s.diffs&&s.diffs.length);
+  $("#delta").innerHTML=`
+    ${c.rules&&c.rules.length?`<div><h3>added rules</h3>
+      ${c.rules.map(rl=>`<div class="note"><b style="font-family:var(--mono)">${esc(rl[0])}</b> &mdash; ${esc(rl[1])}</div>`).join("")}</div>`:""}
+    ${sc.length?sc.map((s,i)=>`<div><h3>measure delta${sc.length>1?" "+(i+1):""}</h3>
+      <table><tr><th>atom</th><th>base</th><th></th><th>merged</th></tr>
+      ${s.diffs.map(d=>`<tr><td class="mono">${esc(d[0])}</td><td>${(+d[1]).toFixed(4)}</td><td>&rarr;</td><td>${(+d[2]).toFixed(4)}</td></tr>`).join("")}
+      </table></div>`).join("")
+    :'<div class="note">no measure change vs base</div>'}`;
+}
+
+function select(id){sel=id;view="q";syncTabs();renderQueue();renderDetail()}
+
+/* ---- catalogs (read-only reference) ---- */
+function renderCats(){
+  const el=$("#cats");
+  const rows=[...cats.values()].sort((a,b)=>
+    ((a.group||"")+a.name).localeCompare((b.group||"")+b.name));
+  if(!rows.length){el.innerHTML='<div class="empty">No catalogs synced yet.</div>';return}
+  let g="";
+  el.innerHTML=rows.map(c=>{
+    const head=c.group!==g?`<div class="qitem" style="cursor:default">
+      <h3>${esc(g=c.group||"")}</h3></div>`:"";
+    return head+`<div class="qitem" role="button" tabindex="0"
+      data-cat="${esc(c.id)}" aria-selected="${c.id===catSel&&view==="c"}">
+      <div class="row"><span style="font-family:var(--mono);font-size:.8rem">${esc(c.name)}</span>
+        ${c.kind?`<span class="pill pending">${esc(c.kind)}</span>`:""}</div>
+      <div class="atoms">${esc(c.note||c.path||"")}</div></div>`}).join("");
+  el.querySelectorAll("[data-cat]").forEach(x=>{
+    const go=()=>{catSel=x.dataset.cat;view="c";syncTabs();renderCats();renderDetail()};
+    x.addEventListener("click",go);
+    x.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}});
+  });
+}
+function renderCatDetail(){
+  const d=$("#detail"),c=cats.get(catSel);
+  if(!c){d.innerHTML='<div class="empty">Select a catalog.</div>';return}
+  $("#dtitle").textContent=c.name;
+  d.innerHTML=`<div class="step">
+    <div class="row"><span class="pill pending">${esc(c.group||"")}</span>
+      ${c.kind?`<span class="pill pending">${esc(c.kind)}</span>`:""}
+      <span class="sub">${esc(c.path||"")}</span></div>
+    ${c.note?`<div class="note">${esc(c.note)}</div>`:""}
+    <div><h3>LLP source (read-only &mdash; changes go through the loop:
+      candidate &rarr; gates &rarr; approval &rarr; commit)</h3>
+      <pre style="max-height:60vh">${hl(c.llp||"")}</pre></div></div>`;
+}
+function syncTabs(){
+  $("#tab-q").setAttribute("aria-selected",view==="q");
+  $("#tab-c").setAttribute("aria-selected",view==="c");
+  $("#queue").hidden=view!=="q";$("#cats").hidden=view!=="c";
+}
+function toast(t){const b=$("#banner");b.textContent=t;b.hidden=false;
+  setTimeout(()=>{b.hidden=true},6000)}
+
+/* ---- the REPL window: commands queue as intents; the loop session
+   drains them through loop/repl.py run_intent (the ONE whitelist)
+   and posts each result back ---- */
+async function queueIntent(cmd){
+  if(!db){toast("Record store unavailable — cannot queue.");return}
+  const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  try{
+    await db.doc("intents/"+id).set({cmd,record_id:sel||null,
+      asked_by:uid||"viewer",ts:new Date().toISOString(),
+      status:"queued"});
+  }catch(e){toast("Not queued: "+(e&&e.message||e))}
+}
+function sendCmd(){
+  const q=$("#q");const cmd=q.value.trim();
+  if(!cmd)return;
+  if(!cmd.startsWith(":")){
+    $("#cstate").textContent="commands start with ':' — try :help";
+    return}
+  $("#cstate").textContent="";
+  q.value="";
+  queueIntent(cmd);
+}
+function renderLog(){
+  const el=$("#clog");
+  const rows=[...intentDocs.values()]
+    .sort((a,b)=>(a.ts||"").localeCompare(b.ts||"")).slice(-30);
+  const intro=el.firstElementChild?el.firstElementChild.outerHTML:"";
+  el.innerHTML=intro+rows.map(i=>`
+    <div class="turn">
+      <div class="row"><span class="cmdline">${esc(i.cmd||"")}</span>
+        <span class="pill ${esc(i.status||"queued")}">${esc(i.status||"queued")}</span></div>
+      ${i.result?`<pre style="max-height:180px">${
+        (i.result&&i.result.llp)?hl(i.result.llp)
+        :esc(typeof i.result==="string"?i.result:JSON.stringify(i.result,null,1))
+      }</pre>`:""}
+    </div>`).join("");
+  el.scrollTop=1e9;
+}
+
+/* ---- boot ---- */
+(async()=>{
+  $("#tab-q").addEventListener("click",()=>{view="q";syncTabs();renderQueue();renderDetail()});
+  $("#tab-c").addEventListener("click",()=>{view="c";syncTabs();renderCats();renderDetail()});
+  $("#send").addEventListener("click",sendCmd);
+  $("#q").addEventListener("keydown",e=>{
+    if(e.key==="Enter"){e.preventDefault();sendCmd()}});
+  claude.use("user").then(async u=>{
+    if(u&&u.id)try{uid=await u.id()}catch(e){}});
+  db=await claude.use("db");
+  if(!db){$("#banner").hidden=false;
+    $("#banner").textContent="Record store unavailable in this view — the queue stays empty.";
+    return}
+  db.collection("surprise").orderBy("ts","desc").limit(300).onSnapshot(s=>{
+    records=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    if(!sel&&s.docs.length)sel=s.docs[0].id;
+    renderQueue();renderDetail();
+  },e=>toast("Queue subscription lost: "+e.message));
+  db.collection("candidates").orderBy("ts","desc").limit(300).onSnapshot(s=>{
+    cands=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    renderDetail();
+  },e=>toast("Candidate subscription lost: "+e.message));
+  db.collection("intents").orderBy("ts","desc").limit(50).onSnapshot(s=>{
+    intentDocs=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    renderLog();
+  },e=>toast("Intent subscription lost: "+e.message));
+  db.collection("catalogs").limit(500).onSnapshot(s=>{
+    cats=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    renderCats();if(view==="c")renderDetail();
+  },e=>toast("Catalog subscription lost: "+e.message));
+})();
+</script>
