@@ -35,11 +35,21 @@ sampled trace.
 
 ## 2. The kernel is a REPL; every UI is a wrapper
 
-Lean/Coq architecture. `metis-loop repl` holds the session state —
-WORLD (accepted catalog; tabula rasa starts empty), TEXT, CANDIDATE,
-REPORT, scene (init/steps/seed) — behind one dispatcher spoken two
-ways: the interactive prompt and the JSON-lines wire (`repl --json`,
-one `{op, arg}` per line, one JSON result per line). Wrappers hold
+Lean/Coq architecture — and since 2026-10-01 (user decision) the one
+kernel REPL is THE METIS SHELL (`metis FILE.llp`, metispy): the loop
+merged into it as plain commands (metis.loop.verbs — text/llp/load/
+formalize/gate/revise/accept/mine/sink/records/record/replay/show/
+export, llm/narrate), because the shell was already the runtime
+session and the loop's judgements were already metispy's. The WORLD
+is the served catalog (+ accepted packs; `accept` RE-SERVES the
+merged catalog live — new key, new events, counts carry over);
+tabula rasa = serve a blank catalog and `revise` it. The JSON-lines
+wire is `metis --json FILE.llp` (one `{op, arg}` per line, one JSON
+result per line; metis.loop.wire, which also owns the intent
+policy). This repo is now the WRAPPERS: the web console, the Claude
+Code skill, the `metis-loop` CLI bindings (admit/formalize/replay),
+and compatibility shims (`loop.*` re-exports `metis.loop.*`).
+Wrappers hold
 NO semantics:
 
 | wrapper | binding |
