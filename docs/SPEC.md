@@ -20,6 +20,18 @@ decision, narrated from certified material (MAP derivation +
 per-candidate marginals + the rules' own %% docs), never generated
 from thin air. The LLM sits at exactly two text boundaries —
 formalize in, narrate out — and never inside the semantics.
+Both boundaries speak through ONE configurable endpoint (loop/llm.py:
+ollama[:MODEL] | anthropic[:MODEL] | command:ARGV; `:llm` sets it,
+page intents may never name a command). The narrate boundary is the
+`:narrate` verb (loop/narrate.py): one seeded trace rendered in its
+Foata beats + final state + %% docs, prompt-bound to the concurrency
+doctrine — within a beat only simultaneity language (same-beat events
+are independent; their order carries no information), across beats
+causal language licensed by the rules, threads told with explicit
+rewinds, repetitions aggregated. The same boundary is mounted in the
+metispy shell (`llm` / `narrate`, soft dependency on this package):
+`narrate` tells the interactive session itself; `narrate SEED` a
+sampled trace.
 
 ## 2. The kernel is a REPL; every UI is a wrapper
 

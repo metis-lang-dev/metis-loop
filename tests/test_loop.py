@@ -313,3 +313,38 @@ def test_intent_policy_is_the_single_gate():
     assert r["ok"] and abs(r["marginals"]["hungry"] - 0.5) < 1e-12
     r = s.run_intent(":accept")
     assert not r["ok"] and "refused" in r["error"]
+
+
+def test_llm_endpoint_resolve_and_intent_policy():
+    from loop.llm import resolve
+    from loop.repl import parse_intent
+    assert resolve("ollama").backend == "ollama"
+    assert resolve("anthropic:claude-opus-5-5").arg == "claude-opus-5-5"
+    assert resolve("ollama:qwen2.5-coder:7b").arg == "qwen2.5-coder:7b"
+    try:
+        resolve("sorcery")
+        assert False
+    except ValueError:
+        pass
+    # page intents may pick models, never commands
+    assert parse_intent(":llm anthropic:claude-opus-5-5") is not None
+    assert parse_intent(":llm command:rm -rf /") is None
+    assert parse_intent(":narrate 2") is not None
+
+
+def test_narrate_via_command_backend():
+    """The narrate-out boundary with `cat` in the LLM seat: the
+    'narration' is the prompt itself, so the certified material —
+    beats, state, rules — is verifiably all the model ever sees."""
+    from loop.repl import Session
+    s = Session()
+    assert s.dispatch("load", str(LANG / "corpus/love_triangle.llp"))["ok"]
+    assert s.dispatch("gate", "")["ok"]
+    assert s.dispatch("llm", "command:cat")["ok"]
+    r = s.dispatch("narrate", "1")
+    assert r["ok"] and r["events"] > 0
+    txt = r["narration"]
+    assert "beats" in txt and "== the final state ==" in txt
+    assert "== the rules" in txt and "jealousy" in txt
+    # within-beat independence is stated to the narrator
+    assert "INDEPENDENT" in txt

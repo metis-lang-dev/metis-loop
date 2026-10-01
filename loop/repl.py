@@ -41,7 +41,7 @@ from .core import formalize_loop, load_records
 INTENT_VERBS = frozenset(
     ["records", "record", "replay", "mine", "text", "init", "steps",
      "seed", "gate", "revise", "trace", "map", "marginals", "show",
-     "formalize", "help"])
+     "formalize", "llm", "narrate", "help"])
 
 
 def parse_intent(line: str):
@@ -57,6 +57,8 @@ def parse_intent(line: str):
         a = arg.strip()
         if a and a != "ollama" and not a.startswith("ollama:"):
             return None
+    if op == "llm" and arg.strip().startswith("command"):
+        return None          # shell execution never from page intents
     return op, arg
 
 
@@ -96,6 +98,7 @@ class Session:
     accepted: List[str] = field(default_factory=list)   # source log
     records: List[dict] = field(default_factory=list)   # surprise sink
     rec_idx: Optional[int] = None
+    llm: str = ""                    # LLM endpoint spec ('' = default)
     _revision: bool = False          # next accept REPLACES the base
 
     # -- verbs ---------------------------------------------------------
@@ -398,6 +401,41 @@ class Session:
                 "final_stage": stage,
                 "final": {a: n for a, n in sorted(kappa)}}
 
+    def cmd_llm(self, arg):
+        """Show or set the LLM endpoint for both text boundaries
+        (:formalize default backend stays ollama; :narrate uses
+        this). Specs: ollama[:MODEL] | anthropic[:MODEL] |
+        command:ARGV."""
+        from .llm import DEFAULT_SPEC, resolve
+        a = arg.strip()
+        if not a:
+            return {"ok": True,
+                    "llm": self.llm or f"(default: {DEFAULT_SPEC})"}
+        resolve(a)                       # validate now, fail loudly
+        self.llm = a
+        return {"ok": True, "llm": a}
+
+    def cmd_narrate(self, arg):
+        """The narrate-out boundary: one seeded trace of the world,
+        told as prose from certified material only (the trace's
+        Foata beats + final state + the rules' %% docs), through the
+        configured :llm endpoint."""
+        from .narrate import narrate
+        prog = self._ground()
+        seed = int(arg) if arg.strip() else self.seed
+        idx, (stage, kappa) = run_trace(prog, self.steps, seed)
+        events = canonical_events(prog)
+        rows = [events[i] for i in idx]
+        rules_src = self.base_llp or self.cand
+        if not rules_src.strip():
+            return {"ok": False,
+                    "error": "no rule source — :accept a world or "
+                             ":load a candidate first"}
+        text = narrate(self.llm or "ollama", rows, stage, kappa,
+                       rules_src, seed=seed)
+        return {"ok": True, "seed": seed, "events": len(rows),
+                "llm": self.llm or "ollama", "narration": text}
+
     def cmd_map(self, arg):
         prog = self._ground()
         pr = ForwardProjection(prog, self.steps)
@@ -499,6 +537,12 @@ the candidate:
                         '#'-directives seed the scene where unset)
 :init a=1,b=2   :steps N   :seed N        the scene
 :trace [seed]           one synthetic trajectory (seeded sampler)
+:llm [SPEC]             show/set the LLM endpoint —
+                        ollama[:MODEL] | anthropic[:MODEL] |
+                        command:ARGV (narrate + future text verbs)
+:narrate [seed]         tell one trace as prose (Foata beats +
+                        final state + %% docs through the endpoint —
+                        the narrate-out boundary, SPEC §1)
 :map                    the modal derivation (Viterbi) + final state
 :marginals [atoms]      exact final marginals (the measure)
 :show [state|text|base|llp]      :save DIR      :help      :quit"""
@@ -615,5 +659,10 @@ def run_repl(json_mode: bool = False, stdin=None, stdout=None):
                               lambda: next_line("")) \
                 if arg.strip() else ""
         res = s.dispatch(op, arg)
-        print(json.dumps(res, indent=1), file=stdout)
+        if res.get("ok") and "narration" in res:
+            head = {k: v for k, v in res.items() if k != "narration"}
+            print(json.dumps(head, indent=1), file=stdout)
+            print(res["narration"], file=stdout)
+        else:
+            print(json.dumps(res, indent=1), file=stdout)
     return 0
