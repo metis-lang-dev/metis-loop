@@ -58,6 +58,7 @@ NO semantics:
 | Claude Code plugin (`skills/metis-loop`) | the session drives the REPL; it is the formalizer seat |
 | web console (the Loop Console artifact) | db documents in/out; a loop session executes |
 | editor panels (later) | the JSON wire |
+| the loop bus (`loop/bus.py` + `loop/node.py`) | N `metis --json` interpreters message-passing through a dict-as-blackboard (§10 tier 2, REPL-scale) |
 
 ## 3. REPL verbs (the protocol)
 
@@ -168,6 +169,21 @@ measure, never an explosion. The layered checks, in order:
 - **Loop -> catalog**: approved candidates become metis-catalog
   commits (the text is the commit body), then recompile + corpus
   replay.
+- **Interpreter <-> interpreter (the bus)**: same machine, ONE
+  well-known named pipe as the shared ingress; envelopes
+  `{src, dst, epoch, seq, op, arg}`, one JSON per line (< PIPE_BUF,
+  so concurrent writers never interleave); each participant owns a
+  private reply fifo announced at hello. The broker (`loop/bus.py`)
+  holds the dict-as-blackboard (entries keep src/epoch/seq
+  provenance); the node shim (`loop/node.py`) runs `{op, arg}` on
+  its `metis --json` wire in order. Staleness: a channel is
+  (src, epoch); no hello, wrong epoch (a repl from a previous run
+  still writing; a fresh hello SUPERSEDES and the old channel is
+  told), or non-increasing seq (duplicates/replays) are DROPPED
+  with a stderr note; a dead reply reader is evicted on first
+  send (non-blocking fifo open). The bus is mechanism only: WHO
+  moves WHAT between worlds is the driver's policy, and no joint
+  measure is claimed (§10).
 
 ## 7. Explanation from IR (the debug sidecar)
 
