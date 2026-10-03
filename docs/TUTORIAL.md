@@ -1,32 +1,38 @@
 # Metis through the REPL — three worlds
 
 A working tour of the language and its semantics, driven entirely
-from `metis-loop repl`. Every transcript below was executed; every
-number is exact. With metispy and metis-loop installed (both are
-`pip install -e .` into the shared env):
+from the metis shell — the ONE kernel REPL (SPEC.md §2): the loop
+merged into it on 2026-10-01, and every UI is a wrapper over it.
+Every transcript below was executed; every number is exact. With
+metispy installed (`pip install -e .` into the shared env):
 
-    metis-loop repl        # or: PYTHONPATH=path/to/metispy python -m loop.cli repl
+    metis FILE.llp          # the shell: serve a catalog, drive it
+    metis --json FILE.llp   # the wire: {op, arg} JSON lines, one
+                            # result per line — what every UI wraps
 
-The prompt has line editing, history and tab-completed verbs
-(`:help` lists them; the scene is `:init a=1,b=2`, `:steps N`,
-`:seed N`). Everything below also speaks JSON, one `{op, arg}` per
-line, over `metis-loop repl --json` — the wire every UI wraps.
+The prompt is `llp> `, with line editing, history and tab-completed
+commands. Commands are bare words — `help` lists them; `events`
+shows what can fire. The scene comes from the file's `#`-directive
+lines (metis-lang spec §8), and a `#init ATOM N` / `#steps N` line
+typed at the prompt applies to the live session — the file syntax
+IS the shell syntax.
 
 One idea carries the whole system: **a catalog is one program read
 three ways** — proof theory (typing, admission, canonical identity),
 derivations (traces: the futures themselves), and denotation (the
-exact probability measure over those futures). The REPL exposes all
-three: `:gate` is the proof-theory reading, `:trace` the derivation
-reading, `:marginals`/`:map` the measure reading. They can never
-disagree, because they are readings of the same object.
+exact probability measure over those futures). The shell exposes all
+three: `gate` is the proof-theory reading, `trace`/`step`/`run` the
+derivation reading, `query`/`map` the measure reading. They can
+never disagree, because they are readings of the same object.
 
 ---
 
 ## World 1 — a coin and a market (resources, stages, packs)
 
-The smallest complete catalog (`metis-lang/corpus/packbase.llp`).
-It introduces the three primitives everything else builds on: linear
-rules, stages with quiescence, and weight ports.
+The smallest complete catalog (`metis-lang/corpus/packbase.llp`),
+served with its scene pinned by directives. It introduces the three
+primitives everything else builds on: linear rules, stages with
+quiescence, and weight ports.
 
     catalog packbase 1.
     layers (dyn pack).
@@ -42,6 +48,9 @@ rules, stages with quiescence, and weight ports.
     }
     %% roll committed -> note stage.
     qui rn [dyn] : roll -o note.
+    #init coin 1
+    #init mkt 1
+    #steps 4
 
 **Read `-o` as spending.** `coin -o heads` is a linear-logic lolli:
 firing it CONSUMES one `coin` and PRODUCES one `heads`. State is a
@@ -65,43 +74,45 @@ arrive later from a registry (runtime geometry) or from notching
 
 The session:
 
-    μ> :init coin=1,mkt=1
-    μ> :steps 4
-    μ> :text <<EOF
-    %% a coin is flipped once; it lands heads or tails.
-    EOF
-    μ> :llp <<EOF   (the catalog above)
-    ...
-    μ> :gate
-    { ok: true, classification: "class-F candidate …",
-      rules: [[h, "heads branch."], [t, "tails branch."], …],
-      scenarios: [{ key: "060bc3b3…", support: 2, … }] }
-    μ> :accept
+    $ metis world1.llp
+    metis shell — world1.llp (catalog packbase, key 060bc3b3d218…)
+    stage roll | coin:1 mkt:1
+    llp> events
+      1. h  w=1  p=0.5
+      2. t  w=1  p=0.5
+    llp> query heads
+    P[heads present after 4 steps] = 0.5
+    llp> map
+    map p=0.5
+      1 | roll/h
+      2 | roll/rn
+      3 | (quiesce)
+      4 | (quiesce)
+    final (done)
+      heads  ·
+      mkt    ·
+    llp> run 4
+    t rn
+    stage (done) | mkt:1 tails:1
 
-**`:gate` is the proof-theory reading.** Parse, roundtrip
-(`parse(pretty(a)) = a` — the catalog IS its own presentation),
-typecheck, and the canonical `program_key` (`060bc3…`) — the same
-key any toolchain (python, OCaml `metisc`) computes for this ground
-program. Identity is semantic, not textual: rename variables,
-reorder rules, split files with `include` — the key is unchanged.
+**The key in the banner is the proof-theory reading.** Serving the
+file parses, typechecks and computes the canonical `program_key`
+(`060bc3…`) — the same key any toolchain (python, OCaml `metisc`)
+computes for this ground program. Identity is semantic, not
+textual: rename variables, reorder rules, split files with
+`include` — the key is unchanged (and `parse(pretty(a)) = a`: the
+catalog IS its own presentation).
 
-    μ> :trace 1
-    { events: ["roll/t", "roll/rn"], final: {mkt:1, tails:1} }
-    μ> :trace 3
-    { events: ["roll/h", "roll/rn"], final: {heads:1, mkt:1} }
-    μ> :marginals heads tails
-    { support: 2, marginals: {heads: 0.5, tails: 0.5} }
-    μ> :map
-    { prob: 0.5, events: ["roll/h", "roll/rn", "(quiesce)", …] }
-
-**`:trace` samples ONE future; `:marginals` prices them ALL.** The
-trace is seeded and portable — the same seed gives the same
-trajectory in the python and C++ samplers. The marginals are not
-sampling: they are the exact measure, every reachable future
-weighted and summed (`support: 2` — this world has two futures).
-Ceptre, the ancestor system, could only run traces; metis prices
-them: that is the denotational reading. `:map` is the third readout
-on the same object — the single most probable derivation.
+**`run` samples ONE future; `query` prices them ALL.** `step` fires
+one event (by number or name, or sampled); `run N` walks on the
+seeded reference sampler — the same seed gives the same trajectory
+in the python and C++ samplers; `undo` takes it back, `reset`
+returns to the file's `#init`. The `query` answer is not sampling:
+it is the exact measure, every reachable future weighted and summed
+(this world has two). Ceptre, the ancestor system, could only run
+traces; metis prices them: that is the denotational reading. `map`
+is the third readout on the same object — the single most probable
+derivation.
 
 **A pack extends the world without touching it**
 (`metis-lang/corpus/packmark.llp`):
@@ -117,20 +128,43 @@ on the same object — the single most probable derivation.
       obt [pack] : mkt * $tails -o unseen.
     }
 
-    μ> :gate      (against the accepted world)
-    { ok: true, … }
-    μ> :accept
-    μ> :marginals seen unseen
-    { marginals: {seen: 0.5, unseen: 0.5} }
+This is the loop half of the shell — text, candidate, gates, world:
+
+    llp> text <<EOF
+    %% a market note observes the coin outcome.
+    EOF
+    llp> load metis-lang/corpus/packmark.llp
+    { ok: true, lines: 14 }
+    llp> gate
+    { ok: true,
+      classification: "class-F candidate (statics admit; Z-check applies with bindings)",
+      findings: [],
+      rules: [[obs, "pack observes heads: …"], [obt, "…"]],
+      scenarios: [{ key: "e486d08e4318…", support: 2,
+                    diffs: [[mkt, 1, 0], [seen, 0, 0.5], [unseen, 0, 0.5]] }] }
+    llp> accept
+    { ok: true, accepted_packs: 1, key: "e486d08e4318…" }
+    llp> query seen
+    P[seen present after 4 steps] = 0.5
+
+**`accept` re-serves the merged world LIVE.** The key moved
+(`060bc3…` → `e486d0…`): the session is now playing the extended
+world — new events, same counts, no restart. The gate report
+already priced the change before it happened: the scenario `diffs`
+are exact before/after marginals (`mkt` 1→0 because the pack spends
+it; `seen`/`unseen` split the coin's mass).
 
 **`$` reads without consuming; containment does the rest.**
 `$heads` is a persist premise. What the pack may NOT do is produce
 or consume base atoms — that is **containment admission**, the type
-system rather than a lint. Try it: change `obs` to produce `heads`
-and `:gate` answers `layer 'pack' may not produce 'heads'
-(namespace 'st')`. Packs observe and constrain; they can never
-enable base behavior. This is what makes learned and formalized
-extensions safe by construction.
+system rather than a lint. Try it: change `obs` to also produce
+`heads` and `gate` answers
+
+    findings: ["pack/obs: layer 'pack' may not produce 'heads' (namespace 'st')"]
+
+Packs observe and constrain; they can never enable base behavior.
+This is what makes learned and formalized extensions safe by
+construction.
 
 ---
 
@@ -162,39 +196,32 @@ then on everything is the ground machinery of World 1.
 
 The session:
 
-    μ> :load metis-catalog/domains/fiction/love_triangle.llp
-    { ok: true, adopted_directives: { init: {eros(helena,hermia): 1,
-      eros(hermia,helena): 1, eros(helena,lysander): 1,
-      eros(lysander,hermia): 1}, steps: 6 },
-      adopted_text_chars: 590 }
-    μ> :steps 1
-    μ> :gate
-    { ok: true, classification: "counterexample: jealousy[A=helena,
-      B=helena,C=hermia]: multiplicity 2 …", … }
-    μ> :accept
-    μ> :trace 5
-    { events: ["go/jealousy[A=lysander,B=hermia,C=helena]"], … }
-    μ> :trace 9
-    { events: ["go/jealousy[A=helena,B=lysander,C=hermia]"], … }
+    $ metis metis-catalog/domains/fiction/love_triangle.llp
+    metis shell — love_triangle.llp (catalog love-triangle, key e648d2c47888…)
+    stage go | eros(helena,hermia):1 eros(helena,lysander):1
+               eros(hermia,helena):1 eros(lysander,hermia):1
+    llp> events
+      1. jealousy[A=hermia,B=helena,C=helena]    w=1  p=0.2
+      2. jealousy[A=lysander,B=hermia,C=helena]  w=1  p=0.2
+      3. jealousy[A=helena,B=hermia,C=hermia]    w=1  p=0.2
+      4. jealousy[A=helena,B=lysander,C=hermia]  w=1  p=0.2
+      5. jealousy[A=hermia,B=helena,C=lysander]  w=1  p=0.2
 
-**The file brought its own scene — and its own text.** The catalog
-carries the origin's `context init` and `#trace` as `#`-directive
-lines (metis-lang spec §8) — compiler-invisible, interpreter-visible
-— and `:load` adopts them wherever the scene is still unset; an
-explicit `:init`/`:steps` (here, narrowing to act one) always wins.
-A committed catalog's leading comment block is likewise adopted as
-the TEXT (the approved unit) when none was set — which is why `:gate`
-proceeds without a `:text` here, and why it would refuse a bare,
-undocumented candidate. **Trace labels carry the
-substitution:** every event names its rule AND its cast — the
-derivation reading stays legible after grounding. (`:load` also
-splices `include`s; the canonical key is invariant under file
-splits, so loading the one-file or the split form is the same
-program.)
+**The file brought its own scene.** The catalog carries the
+origin's `context init` and `#trace` as `#`-directive lines
+(metis-lang spec §8) — compiler-invisible, interpreter-visible —
+so serving the file IS setting the stage; a committed catalog's
+leading comment block is likewise its TEXT (the approved unit).
+**Event labels carry the substitution:** every enabled transition
+names its rule AND its cast — the derivation reading stays legible
+after grounding. (Includes are spliced on serve; the canonical key
+is invariant under file splits, so the one-file and the split form
+are the same program.)
 
-    μ> :marginals anger(hermia,helena) anger(hermia,hermia)
-    { support: 5, marginals: {anger(hermia,helena): 0.4,
-                              anger(hermia,hermia): 0.2} }
+    llp> query anger(hermia,helena) 1
+    P[anger(hermia,helena) present after 1 steps] = 0.4
+    llp> query anger(hermia,hermia) 1
+    P[anger(hermia,hermia) present after 1 steps] = 0.2
 
 **Multiplicity is priced, not merely possible.** Five ground events
 are enabled in act one; at parity weights each fires 1/5. The 0.4
@@ -206,16 +233,33 @@ a theorem about the same program. The same pricing runs through
 `move_on`: its triple premise on a count-3 atom is 3! = 6
 transition tokens, and the measure charges all six.
 
-    μ> :map
-    { prob: 0.2, events: ["go/jealousy[A=helena,B=hermia,C=hermia]"], … }
+    llp> trace
+    case love_triangle steps=6 seeds=3
+    I eros(helena,hermia) 1
+    …
+    T 1 — 6 events, 4 beats
+      1 | jealousy [A=helena,B=hermia,C=hermia]
+        | jealousy [A=hermia,B=helena,C=lysander]
+      2 | jealousy [A=helena,B=lysander,C=hermia]
+        | jealousy [A=hermia,B=helena,C=lysander]
+      3 | jealousy [A=helena,B=hermia,C=hermia]
+      4 | move_on  [A=hermia,B=helena]
+    F 1 go
+      anger  (hermia,hermia):2 (hermia,lysander) (lysander,helena):2
+             (lysander,hermia):2
+      eros   (helena,hermia) (helena,lysander) (lysander,hermia)
+    …
+    Q anger(hermia,helena) 1/3 exact=0.718202
 
-**`:map` is the modal derivation — in a story domain, the most
-probable plot.** And the gate's classification line
-("counterexample: … multiplicity 2") is the factored-statics report
-being honest: this program is exact-filter territory, not
-clique-tree territory; nothing is rejected, the boundary is named.
-The origin's `#interactive` (a human picks the next step) maps to
-the policy hook: the same measure, reweighted — inference stays
+**`trace` replays the file's embedded `#`-case (= `metisc --run`),
+rendered as Foata beats.** Lines sharing a beat number fired
+INDEPENDENTLY — no shared resources, any order, same world; the
+indented continuation lines are the concurrency being shown, not
+hidden. Final states print as predicate tables; a `#query`
+directive closes with sampled-vs-exact agreement. Session state is
+untouched — `trace` is an instrument, not a move. The origin's
+`#interactive` (a human picks the next step) is the `step`-by-menu
+you already have — the same measure, reweighted; inference stays
 exact under direction.
 
 ---
@@ -253,22 +297,32 @@ style: the declared scope is what makes the encoding factorizable
 interprets. The measure lives on qualitative classes
 (`gclose`/`gsafe`); exact quantities ride as metadata.
 
-The session:
+The session — the scene typed live, in directive syntax:
 
-    μ> :init emvt=1,cmd(keep)=1,gclose=1,on(ego,l2)=1,on(alfa,l2)=1
-    μ> :steps 6
-    μ> :load metis-catalog/scenes/road_close_instance.llp
-    μ> :gate
-    { ok: true, classification: "class-F candidate …",
-      rules: [[mkeep, "hold the lane."], [mleft, "…"], …] }
-    μ> :accept
-    μ> :marginals crash gclose gsafe
-    { support: 3, marginals: {crash: 0.25, gclose: 0.5, gsafe: 0.5} }
-    μ> :map
-    { prob: 0.5, events: ["ego/mkeep", "ego/ew", "world/abo",
-                          "world/wc", "check/ok", "check/cb"], … }
+    $ metis metis-catalog/scenes/road_close_instance.llp
+    llp> #init emvt 1
+    llp> #init cmd(keep) 1
+    llp> #init gclose 1
+    llp> #init on(ego,l2) 1
+    llp> #init on(alfa,l2) 1
+    llp> #steps 6
+    llp> query crash
+    P[crash present after 6 steps] = 0.25
+    llp> map
+    map p=0.5
+      1 | ego/mkeep
+      2 | ego/ew
+      3 | world/abo
+      4 | world/wc
+      5 | check/ok
+      6 | check/cb
+    final ego
+      cmd    (keep)
+      emvt   ·
+      gsafe  ·
+      on     (alfa,l2) (ego,l2)
 
-**The stages ARE the tick, and `:map` narrates it.** Ego commits a
+**The stages ARE the tick, and `map` narrates it.** Ego commits a
 command, the world moves, the check stage prices the outcome — read
 the MAP events left to right and that is the tick pipeline.
 `crash: 0.25` under `keep` behind a close lead IS the decision
@@ -287,55 +341,66 @@ loop. A missing behavior is a missing rule, never a bad number.
 
 Two verbs, two doctrines (SPEC.md §4):
 
-- **`:gate` + `:accept` — a pack.** Only adds, containment-checked;
+- **`gate` + `accept` — a pack.** Only adds, containment-checked;
   base state readable via `$`, never producible or consumable
-  without an explicit namespace grant.
-- **`:revise` + `:accept` — a base edit.** The candidate replaces
+  without an explicit namespace grant. `accept` re-serves the
+  merged world live.
+- **`revise` + `accept` — a base edit.** The candidate replaces
   the world; accepted packs drop (re-propose them), the key moves,
   and the before/after exact measure diff on the current scene is
-  printed — the consistency instrument.
+  printed — the consistency instrument. Tabula rasa = serve a
+  blank catalog and `revise` it.
+
+Rule text is never REPL input: edit the file, `save` the session's
+scene back as directives, `reload` (alias `edit`) to recompile with
+state carried over — degrade-to-last-good if the edit is broken.
 
 ---
 
 ## Closing the loop — a surprise becomes a rule
 
-The whole improvement cycle, in the REPL (SPEC.md §1): the runtime
-logged an outcome no rule covers — a shepherd's flock came through a
-wolf night *safe*, and the meadow world cannot derive `safe` at all.
-The sink holds the record; the session turns it into an admitted
-pack and verifies the fix.
+The whole improvement cycle, in one session (SPEC.md §1): the
+runtime logged an outcome no rule covers — a shepherd's flock came
+through a wolf night *safe*, and the meadow world cannot derive
+`safe` at all. The sink holds the record; the session turns it into
+an admitted pack and verifies the fix.
 
-    μ> :sink runs/sink.jsonl
-    { records: [{idx: 0, kind: "unmodeled", likelihood: 0,
-                 observed: {safe: 1}, source: "sim:meadow"}] }
-    μ> :record
-    { ok: true, kind: "unmodeled", init: {wolf:1, sheep:3, night:2,
-      tally:2}, steps: 6 }
-    μ> :replay          (against the accepted meadow world)
-    { logged_likelihood: 0, likelihood: 0, explains: false,
-      fixed: false }
+    $ metis meadow.llp
+    llp> sink runs/sink.jsonl
+    { ok: true, records: [{idx: 0, kind: "unmodeled", likelihood: 0,
+                           steps: 6, observed: {safe: 1}}] }
+    llp> record 0
+    { ok: true, kind: "unmodeled",
+      init: {wolf: 1, sheep: 3, night: 2, tally: 2}, steps: 6 }
+    llp> replay
+    { ok: true, logged_likelihood: 0, likelihood: 0,
+      explains: false, fixed: false }
 
 **Likelihood 0 is structural.** No parameter can create missing
 support — a missing behavior is a missing rule, never a bad number.
-`:record` adopted the record's tick as the scene, so every
-instrument now speaks about that tick.
+`record` adopted the record's tick as the scene (`#init`/`#steps`),
+so every instrument now speaks about that tick.
 
-    μ> :mine
+    llp> mine
     { observed: {safe: 1}, hint: "state what happened that the world
       cannot derive; quote atoms; that text is the approved unit" }
-    μ> :mine %% the shepherd tallies the flock at rest: a fed wolf means a loss, a hungry one safety.
-    μ> :formalize
-    (drafts via the LOCAL model — the Ollama adapter is the default
-     backend: $OLLAMA_HOST/$OLLAMA_MODEL, `ollama:MODEL` to pick one;
-     findings feed back, <= 4 rounds. Or write it yourself with :llp —
+    llp> mine %% the shepherd tallies the flock at rest: a fed wolf means a loss, a hungry one safety.
+    llp> formalize
+    (drafts via the llm endpoint — `llm` shows/sets it: the Ollama
+     adapter is the default backend ($OLLAMA_HOST/$OLLAMA_MODEL,
+     `ollama:MODEL` to pick one), `anthropic[:MODEL]` or
+     `command:ARGV` the alternatives; findings feed back, <= 4
+     rounds. Or write it yourself: `llp <<EOF`, or `load` it —
      here, the shepherd pack of World 1's shape.)
-    μ> :gate
+    llp> gate
     { ok: true, scenarios: [{ support: 5,
         diffs: [[loss, 0, 0.828125], [safe, 0, 0.390625],
                 [tally, 1, 0]] }] }
-    μ> :accept
-    μ> :replay
-    { logged_likelihood: 0, likelihood: 0.21875, explains: true,
+    llp> accept
+    { ok: true, accepted_packs: 1, key: "1cdc8c1a1072…" }
+    llp> replay
+    { ok: true, logged_likelihood: 0, likelihood: 0.21875,
+      explains: true,
       explanation_events: ["catch", "evade", "hr", "n1", "n2"],
       fixed: true }
 
@@ -343,10 +408,13 @@ instrument now speaks about that tick.
 that scored zero now carries positive mass, and the MAP explanation
 narrates it — one catch, one evade, settle, then the tally rules
 price the loss and the safety. The candidate never becomes the
-world without `:accept`, and nothing in the drafting seat can touch
+world without `accept`, and nothing in the drafting seat can touch
 the verdict: the model proposes, the gates dispose, the human
 approves.
 
-`:save` writes the world out; the Loop Console shows the same queue,
-reports and keys for the approval seat — one program, three
-readings, every surface a wrapper over this REPL.
+`export` writes the world out as files; `narrate` reads the session
+back as prose (Foata beats + `%%` docs through the same llm
+endpoint); `show` inspects the loop state. The Loop Console shows
+the same queue, reports and keys for the approval seat; the loop
+bus runs N `metis --json` interpreters over one named pipe — one
+program, three readings, every surface a wrapper over this shell.
