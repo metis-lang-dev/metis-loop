@@ -218,3 +218,30 @@ scene (verified: meadow, IR PARITY + marginal equality at 1e-12).
    arrive by notching or through declared ports.
 5. Packs only add; base edits go through :revise with the diff
    surfaced.
+
+## 10. Direction (the change vector)
+
+Where this software is going — recorded 2026-10-03, updated as the
+orientation moves. The orientation itself is fixed: metis is the
+SLOW-THINKING (System-2) substrate for SMALL LLMs — the exact
+measure, the gates and the certificates are the deliberate half;
+the model halves stay at the two text boundaries (§1).
+
+Staged, in order:
+
+1. **Big-model formalization** (next step): put a frontier model
+   (Opus) on the formalize-in boundary — probably NOT inside the
+   metis loop process but in a conversational seat (Claude Code /
+   coworker) driving the same REPL wire; the `:llm` endpoint seam
+   (`anthropic:MODEL`) already carries it.
+2. **Small-model narration**: the narrate-out boundary (`:narrate`)
+   through the local small model — prove narration from certified
+   material works at small scale.
+3. **Integration**: once small-model narration holds, integrate the
+   metis interpreter as the slow-thinking organ OF the small model
+   itself — the interpreter inside the model's loop, not beside it.
+
+THE GATE STAYS at every stage (user decision 2026-10-03): whatever
+model sits at the formalize boundary, the cascade (§5) is the
+semantics of working on surprise inside the loop — a stronger
+formalizer changes the repair-round count, never the authority.
