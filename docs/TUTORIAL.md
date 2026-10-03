@@ -386,12 +386,16 @@ so every instrument now speaks about that tick.
       cannot derive; quote atoms; that text is the approved unit" }
     llp> mine %% the shepherd tallies the flock at rest: a fed wolf means a loss, a hungry one safety.
     llp> formalize
-    (drafts via the llm endpoint — `llm` shows/sets it: the Ollama
-     adapter is the default backend ($OLLAMA_HOST/$OLLAMA_MODEL,
-     `ollama:MODEL` to pick one), `anthropic[:MODEL]` or
-     `command:ARGV` the alternatives; findings feed back, <= 4
-     rounds. Or write it yourself: `llp <<EOF`, or `load` it —
-     here, the shepherd pack of World 1's shape.)
+    (drafts via the llm endpoint — `llm` shows, sets AND validates
+     it: for ollama it checks the server and whether the model is
+     pulled. The metis dot file seeds it ($METIS_CONFIG |
+     ./.metis.toml | ~/.config/metis/config.toml: [llm] endpoint,
+     [ollama] host/model under $OLLAMA_HOST/$OLLAMA_MODEL);
+     `anthropic[:MODEL]` or `command:ARGV` are the alternatives;
+     findings feed back, <= 4 rounds. The doctrine split: narration
+     runs local, formalization deserves the stronger model. Or
+     write it yourself: `llp <<EOF`, or `load` it — here, the
+     shepherd pack of World 1's shape.)
     llp> gate
     { ok: true, scenarios: [{ support: 5,
         diffs: [[loss, 0, 0.828125], [safe, 0, 0.390625],
@@ -414,7 +418,8 @@ approves.
 
 `export` writes the world out as files; `narrate` reads the session
 back as prose (Foata beats + `%%` docs through the same llm
-endpoint); `show` inspects the loop state. The Loop Console shows
+endpoint); `show` inspects the loop state; `version` says exactly
+what is running (package, source + git, python, config, endpoint). The Loop Console shows
 the same queue, reports and keys for the approval seat; the loop
 bus runs N `metis --json` interpreters over one named pipe — one
 program, three readings, every surface a wrapper over this shell.
