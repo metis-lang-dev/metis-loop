@@ -245,3 +245,23 @@ THE GATE STAYS at every stage (user decision 2026-10-03): whatever
 model sits at the formalize boundary, the cascade (§5) is the
 semantics of working on surprise inside the loop — a stronger
 formalizer changes the repair-round count, never the authority.
+
+**Parallelism — two tiers** (user direction 2026-10-03):
+
+1. *Inside one evaluation*: Theorem 4 / the Foata layers —
+   independent sites and disjoint junction-tree branches evaluate
+   concurrently; measure-preserving, already licensed; the
+   layer-structure wire record stays deferred until an artifact
+   outgrows ~ms queries (metis-lang spec-07 P3).
+2. *Between interpreters*: MULTIPLE interpreters, each a full world
+   with its own exact measure, coupled by message passing through a
+   BLACKBOARD (the behavior-tree notion). The blackboard is each
+   world's ENVIRONMENT, never shared state: values enter a world
+   only through declared ports (input/weight/guard, `reads{}`
+   contract) and leave through output ports — per-world exactness
+   untouched, coupling = conditioning at declared boundaries, the
+   same doctrine as `interactive`. Carriers already in hand: the
+   theia actor runtime; `metis --json` as the per-interpreter wire.
+   Honest limit: the ensemble has no joint measure — no certificate
+   spans the blackboard; if one is ever needed, that is new
+   semantics (composition across ports), not a deployment detail.
