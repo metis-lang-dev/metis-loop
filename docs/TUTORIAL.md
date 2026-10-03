@@ -177,8 +177,8 @@ introduces first-order rules, grounding, and the pricing of
 multiplicity — on a story instead of a machine.
 
     stage go {
-      %% A loves B while C loves A: the rival C seethes at beloved
-      %% and rival both.
+      %% A loves B while C loves A: C seethes at A and at B. B may be C
+      %% (the origin's only neq is C<>A): requited love angers C at self.
       jealousy [story] : $eros(A,B) * $eros(C,A) * C <> A
         -o anger(C,A) * anger(C,B).
       %% three angers at the beloved and the love dies (multiplicity-3
