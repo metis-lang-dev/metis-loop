@@ -12,14 +12,20 @@ TEXT = "%% market coin: a mark trades on the coin flip outcome."
 
 def test_shims_resolve_to_the_kernel():
     import loop
+    import loop.bus
     import loop.core
     import loop.llm
     import loop.narrate
+    import loop.node
     import loop.ollama
     import loop.repl
+    import metis.loop.bus
+    import metis.loop.node
     import metis.loop
     assert loop.admit is metis.loop.admit
     assert loop.repl.run_intent.__module__ == "metis.loop.wire"
+    assert loop.bus.Broker is metis.loop.bus.Broker
+    assert loop.node.serve is metis.loop.node.serve
 
 
 def test_cli_admit(tmp_path, capsys):
