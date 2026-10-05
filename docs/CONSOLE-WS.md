@@ -1,0 +1,174 @@
+# CONSOLE-WS — the Loop Console v2 (one backend, real transport)
+
+**Status: ACCEPTED 2026-10-05 (user review); D1–D5 resolved in §D.** Builds on
+CONSOLE.md (v1, shipped as artifact v8); v1's page rendering, kernel
+ops and ConsoleServer are REUSED, its artifact-db transport is
+RETIRED as the primary channel (the artifact surface itself is kept,
+§6).
+
+Origin: v1's structural gap, hit by the user on first contact —
+"where is the backend from session?" The artifact db is reachable
+only by the page or a Claude session's tools, so serving means a
+Claude session babysitting a drain loop; intents answer in seconds
+to never, and automated windows suspend inbound delivery entirely.
+v2 gives the console what it always implied: a standing backend on
+the operator's host, WebSocket push, and the agent in the backend
+where its tools are function calls.
+
+    ┌──────────── Browser (one page) ─────────────┐
+    │  debugger pane          │  Claude chat pane │
+    └──────────────┬──────────┴─────────┬─────────┘
+                   └── one WebSocket ───┘
+                             │
+    ┌────────────── metis-loop console-serve ─────────────────┐
+    │  Gateway (WS router, mode manifest, optional token)     │
+    │    ├── Session Manager  == ConsoleServer (sid -> Repl)  │
+    │    └── Agent Service (Claude Agent SDK, personal mode)  │
+    │           └── tools -> the wire-op module, in process   │
+    └──────────────────────────────────────────────────────────┘
+
+## 1. Gateway and wire
+
+`metis-loop console-serve` (new CLI verb): serves the page over HTTP
+and ONE WebSocket per browser window, multiplexed by channel —
+grown from `console/dev_serve.py`, which is already this shape.
+Messages (JSON, one per frame):
+
+    {ch:"repl",  type:"intent",  session, cmd, actor}        (page->gw)
+    {ch:"repl",  type:"posting", session, id, status, result,
+                 json, epoch}                                 (gw->page)
+    {ch:"repl",  type:"session", session, ...ctx fields}      (gw->page)
+    {ch:"chat",  type:"say", text}            (page->gw, personal mode)
+    {ch:"chat",  type:"token"|"tool"|"done"|"error", ...}     (gw->page)
+    {ch:"meta",  type:"manifest", modes...; type:"catalogs", names}
+
+The posting payload is `intent_posting`'s dict verbatim (CONSOLE §4)
+— the page's renderers do not change. The whitelist is enforced
+gateway-side with the SAME `parse_intent`; `accept` and paths stay
+structurally absent. Config: the metis dot file gains `[console]`
+(port, bind, mode, token?, session caps).
+
+## 2. Session Manager
+
+`ConsoleServer` as-is: one in-process `Repl` per console session,
+open/serve/close, epoch bumps, catalog names from the metis-catalog
+checkout. v2 additions: per-session COMMAND QUEUE (one command runs
+at a time; the page shows "running… [stop]" and disables Run — stop
+interrupts the running command, and in agent mode the agent loop
+too); caps from `[console]`: max sessions, max steps per `run`, idle
+session recycling (epoch bump says so). Subprocess isolation
+(`metis --json` per session over the bus) stays the drop-in upgrade
+if a session ever needs killing harder than Python allows.
+
+## 3. Agent Service (personal mode only)
+
+The chat pane's Claude moves into the backend: Python
+`claude-agent-sdk`, authenticated by the OPERATOR's `claude login`
+(Pro/Max) — the key/login never reaches the browser.
+
+- System prompt = v1's PREAMBLE (REPL skill + formalization skill),
+  promoted to a real system slot and PROMPT-CACHED.
+- Tools = one module wrapping the wire ops for a FIXED session id
+  (the window's): `repl(line)` as in v1, plus direct `ctx()` /
+  `transcript(n)` readers so the model needn't spend a round asking.
+  Results trimmed exactly as v1's `trimJson`; refusals throw.
+- Each chat is BOUND to the pane's session; the live ctx line rides
+  each turn as in v1.
+- Caps: ≤10 tool calls per turn, per-command timeout, output
+  truncation (first/last 200 lines). [stop] aborts the SDK turn.
+- Chat history is server-held IN MEMORY per session (D4): reload
+  restores both panes while the backend lives; a backend restart
+  starts clean. Nothing a visitor types or runs is written to the
+  operator's disk — deliberate, since shared instances serve people
+  from the net and we do not keep their work.
+- Later (v2.1, not launch): Suggest mode (code blocks with
+  insert/run buttons) beside today's Agent mode; selection →
+  "ask Claude".
+
+## 4. Deployment modes and LLM seat routing (the user's conditions)
+
+Anybody can start `metis-loop console-serve` on their host. The
+gateway advertises a MODE MANIFEST and the page renders what exists
+— nothing it cannot serve is shown as available.
+
+| seat | terminal REPL | web personal (own host, own login) | web shared (one public-ish instance) |
+|---|---|---|---|
+| REPL sessions | the local shell | yes (multi) | yes (multi) — "replit without AI" |
+| chat (agent) | — | Agent SDK, operator's Pro/Max | OFF (policy + resources) |
+| formalize | `llm` endpoint as today — the subscription path is the existing `command:` backend (`command:claude -p …`) or ollama | Agent Service (SDK, diagnostics-only repair, spec 08 D5) | OFF |
+| narrate | **ollama ONLY** (user condition: the terminal REPL narrates through ollama) | **Haiku PREFERRED** via the SDK (`claude-haiku-4-5`), ollama fallback when the SDK seat is absent | OFF (a nook cannot carry models) |
+
+Policy line, enforced by the manifest and stated in the page: a
+shared instance NEVER routes other people's chat, narration or
+formalization through the operator's Pro/Max credentials (Anthropic
+policy); AI for shared users lives on the artifact surface (§6),
+where `sample` bills the VIEWER. Shared mode ships with an optional
+access token + per-IP session caps + rate limits; "anyone on my LAN
+/ with the token can run catalogs, nothing can spend my tokens."
+
+## 5. Page changes
+
+One page serves both transports: a WS client module replaces the
+`claude.use("db")`/`sample` shims when the page is served by the
+gateway (served flag), and the rendering core — band, beat blocks,
+rule states, lenses, inspector, sections — is untouched. The chat
+pane renders per manifest: agent chat (personal), or a one-line
+pointer to the artifact console (shared), or hidden (terminal-only
+hosts). Busy/stop state per §2. The `?mocksample`/`?missmod` dev
+modes survive for page testing.
+
+## 6. The artifact surface is KEPT
+
+The published artifact (v8, same URL) remains the zero-install,
+share-from-anywhere surface: demos, approvals from any device, and
+the shared-users' Claude chat — `sample` is viewer-consented and
+viewer-billed, which is exactly the policy-clean shape for people
+who are not the operator. Its drain stays as documented (a Claude
+session serving `ConsoleServer.drain`), explicitly labeled the
+SECONDARY transport: the skill says "for live work, run
+console-serve; the artifact is the shared window."
+
+## 7. Security and limits
+
+- No API key or login token in the browser, ever (SDK auth lives in
+  the backend process).
+- Shared mode: token (optional), per-IP session cap, per-session
+  command queue, `run` step caps, rate limits; the whitelist is the
+  same one — approval verbs and paths cannot arrive over the wire.
+- Agent mode: tool-call cap per turn, interruptible, output
+  truncation before the model sees it; agent usage draws the
+  operator's subscription limits and the manifest shows a per-day
+  soft cap.
+
+## Implementation sketch
+
+- metis-loop: `loop/gateway.py` (websockets or FastAPI; grown from
+  dev_serve), `loop/agent_service.py` (claude-agent-sdk), the
+  `console-serve` CLI verb, `[console]` config; console page: the
+  WS client module + manifest rendering + busy/stop.
+- metispy: nothing new expected (the wire ops and ctx are done);
+  narrate's seat spec gains the SDK endpoint kind only if §D3 lands
+  it kernel-side rather than gateway-side.
+- Tests: gateway protocol round-trip over a real socket; manifest
+  gating (shared mode refuses chat/narrate/formalize frames);
+  agent-tool module against 3lp with the cap enforced; page guards.
+
+## §D — decisions (resolved in review, 2026-10-05)
+
+- **D1 — RESOLVED: plain `websockets` + stdlib http** (dev_serve
+  lineage; no framework).
+- **D2 — RESOLVED: shared-mode token in the URL.**
+- **D3 — RESOLVED: gateway substitutes the narrate seat with an
+  SDK-backed endpoint.** Kernel untouched; the terminal narrates
+  via ollama by construction.
+- **D4 — RESOLVED: chat history in memory only.** The user's
+  reasoning is privacy, recorded as doctrine: shared instances
+  serve users from the net and WE DO NOT KEEP THEIR WORK — no
+  visitor chat, session state or transcripts persisted to the
+  operator's disk (§3).
+- **D5 — RESOLVED: steps as proposed** — 1 gateway + session
+  manager + page WS client (REPL-only, both modes; this alone is
+  the nook deployment); 2 Agent Service + chat pane over WS +
+  caps/stop; 3 narrate-via-Haiku + in-memory history wiring +
+  manifest polish + docs/skill; the artifact-surface skill note
+  lands with step 1.
