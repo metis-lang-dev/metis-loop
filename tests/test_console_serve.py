@@ -55,3 +55,28 @@ def test_sessions_are_independent(srv):
 def test_bad_llp_closes_the_session(srv):
     s = srv.open_session("x", {"llp": "nope"})
     assert s["status"] == "closed" and "no catalog" in s["error"]
+
+
+def test_drain_is_a_pure_rows_to_writes_mapping(srv):
+    """The serving session's whole job: rows in, update-writes out.
+    Opening binds, queued intents serve oldest first, writes to one
+    doc merge; a live session without an interpreter (server restart)
+    re-binds with epoch + 1."""
+    w = srv.drain([{"id": "s1", "data": {"llp": "3lp", "status": "opening"}}],
+                  [{"id": "i2", "session": "s1", "cmd": ":step",
+                    "status": "queued", "ts": "2"},
+                   {"id": "i1", "session": "s1", "cmd": ":run 2",
+                    "status": "queued", "ts": "1"},
+                   {"id": "i0", "session": "s1", "cmd": ":ctx",
+                    "status": "done", "ts": "0"}])
+    by = {x["path"]: x["data"] for x in w}
+    assert list(by) == ["sessions/s1", "intents/i1", "intents/i2"]
+    assert by["intents/i1"]["json"]["fired"][0]["i"] == 1
+    assert by["intents/i2"]["json"]["fired"][0]["i"] == 3   # after i1
+    assert by["sessions/s1"]["ctx"]["fired"] == 3            # merged
+    fresh = ConsoleServer(srv.root)                          # "restart"
+    w2 = fresh.drain([("s1", {"llp": "domains/fiction/3lp",
+                              "status": "running", "epoch": 4})], [])
+    s = w2[0]["data"]
+    assert s["epoch"] == 5 and s["ctx"]["fired"] == 0 and "reopened" in s
+    assert fresh.catalogs_doc()["path"] == "meta/catalogs"

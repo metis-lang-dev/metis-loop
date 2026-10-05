@@ -93,24 +93,22 @@ working directly on the metis-catalog checkout (no catalog mirror).
     from loop.console_serve import ConsoleServer
     srv = ConsoleServer()          # $METIS_CATALOG or ../metis-catalog
 
-1. **Catalogs**: at start (and after every catalog commit) write the
-   single doc `meta/catalogs` = `{names: srv.catalogs(), ts}`.
-2. **Open**: query `sessions` where `status == "opening"`; for each,
-   `fields = srv.open_session(sid, doc)` and `update` the doc with
-   `fields` (key, stage, status, epoch, ctx, llp, last_ts — or
-   `status: "closed", error` for an unknown catalog). The page
-   minted the sid; never create sessions yourself.
-3. **Drain**: query `intents` where `status == "queued"`, oldest
-   `ts` first; for each, `out = srv.serve_one(doc.session, doc.cmd)`,
-   then `update` the SAME intent doc with `out["posting"]` (status
-   done|refused|error, result, json, epoch, done_ts) and the session
-   doc with `out["session"]` (its `ctx` is what the band renders;
-   an `epoch` bump makes the page clear its stream). One intent at a
-   time per session, in order; batch the two writes.
-4. **Close**: a session doc set to `status: "closed"` by the page or
-   idle past your patience → `srv.close_session(sid)`, `update` it.
-   A restarted serving session has no interpreters: re-open every
-   non-closed session (same sid, epoch +1 so pages reset cleanly).
+The whole drain is ONE pure call — you are glue, not logic:
+
+1. At start (and after every catalog commit): write
+   `srv.catalogs_doc()` (`{path: "meta/catalogs", data}`) with
+   ArtifactData `set`.
+2. Each pass: `list` the `sessions` collection and the `intents`
+   collection (query `status == "queued"` is enough for intents), then
+   `writes = srv.drain(sessions_rows, intents_rows)` and apply every
+   `{path, data}` as an `update`, in order, as ONE `batch`. That pass
+   binds `opening` sessions, re-binds live sessions this process has
+   no interpreter for (after a restart, epoch + 1 so pages reset),
+   and serves queued intents oldest first — each intent doc gets its
+   posting (status done|refused|error, result, json, epoch, done_ts),
+   each session doc its fresh `ctx` (what the band renders).
+3. Repeat while windows are open; a quiet pass returns `[]`.
+4. A session the page marks `closed` → `srv.close_session(sid)`.
 
 The whitelist lives in `run_intent`: never execute an intent any
 other way, never `accept`, never approve — `actor: "claude"` lines

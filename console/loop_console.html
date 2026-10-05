@@ -103,6 +103,13 @@ pre.err{color:var(--red)}
 .cand .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .ok{color:var(--green)}.bad{color:var(--red)}
 details summary{cursor:pointer;color:var(--dim)}
+.sect{border:1px solid var(--line);margin:4px 0 8px;padding:4px 8px}
+.sect>h4{margin:0 0 3px;font-weight:normal;color:var(--dim);font-size:11px;letter-spacing:.06em}
+.sect .mark{color:var(--green);margin-left:8px}
+.diag summary{color:var(--fg)}
+.sev-error{color:var(--red)}.sev-warning{color:var(--yellow)}.sev-note{color:var(--cyan)}
+.prose{white-space:pre-wrap;color:var(--fg);line-height:1.55}
+.dl{color:var(--cyan);cursor:pointer;text-decoration:underline;margin-right:12px;background:none;border:none;padding:0}
 @media (max-width:760px){
   main{flex-direction:column}#split{display:none}
   #left{flex:1 1 auto;min-height:60vh}#right{flex:none;height:70vh;border-top:1px solid var(--line)}
@@ -286,6 +293,42 @@ function contextHtml(c,only){
   if(want.has("tokens"))out.push(tokensHtml(c));
   if(want.has("proof"))out.push(proofHtml(c));
   return out.length?`<div class="ctxblk">${out.join("")}</div>`:""}
+/* FINDINGS (spec 08 D4): one line per diagnostic, expandable to the
+   full slice; NARRATOR: a section, never a chat — the REPL's own LLM
+   seat over the certified trace; GRAPH: the beat text + downloads
+   built in the page (no capability needed). */
+function findingsHtml(ds){
+  if(!ds.length)return `<div class="sect"><h4>FINDINGS</h4><div class="empty">no findings — catalog, last gate and runtime are clean</div></div>`;
+  return `<div class="sect"><h4>FINDINGS · ${ds.length}</h4>${ds.map((d,k)=>{
+    const loc=d.loc||{};const where=[loc.file,loc.line?("line "+loc.line):"",loc.decl].filter(Boolean).join(" · ");
+    return `<details class="diag"><summary><span class="sev-${esc(d.severity)}">${esc(d.severity)}</span> ${esc(d.code)} — ${esc(d.text||"")}</summary>
+      <div class="kv">${where?`<span>where</span><span>${esc(where)}</span>`:""}
+        ${(d.subject||[]).length?`<span>subject</span><span>${esc(d.subject.join(" · "))}</span>`:""}
+        ${d.hint?`<span>hint</span><span>${esc(d.hint)}</span>`:""}
+        ${Object.entries(d.data||{}).map(([a,b])=>`<span>${esc(a)}</span><span>${esc(typeof b==="string"?b:JSON.stringify(b))}</span>`).join("")}</div>
+      ${(d.context||[]).length?`<pre class="out">${esc(d.context.join("\n"))}</pre>`:""}
+      <div class="empty">findings ${k+1} — the full record</div></details>`}).join("")}</div>`}
+function narratorHtml(j){
+  const what=j.source==="session"?`this session's run (${j.events} event${j.events===1?"":"s"})`:`seeded trace ${j.seed} (${j.events} events)`;
+  return `<div class="sect"><h4>NARRATOR · ${esc(j.llm||"?")} · ${esc(what)}<span class="mark">certified trace only</span></h4>
+    <div class="prose">${esc(j.narration||"")}</div>
+    <div class="empty" style="margin-top:4px">prose from the REPL's narrator over the certified beats, state and %% docs — read it as a retelling, the beats above are the record</div></div>`}
+function graphHtml(i){
+  return `<div class="sect"><h4>GRAPH · ${(i.json.nodes||[]).length} nodes · ${(i.json.edges||[]).length} edges · frontier ${(i.json.frontier||[]).join(" ")}</h4>
+    <button class="dl" data-dl="dot" data-iid="${esc(i.id)}">causality.dot</button><button class="dl" data-dl="json" data-iid="${esc(i.id)}">causality.json</button>
+    <span class="empty">render the .dot with <span class="cmd">dot -Tsvg</span></span>
+    <pre class="out">${esc(i.result||"")}</pre>
+    <details><summary>DOT source</summary><pre class="out">${esc(i.json.dot||"")}</pre></details></div>`}
+function download(iid,kind){
+  const i=intents.get(iid);if(!i||!i.json)return;
+  let text,type;
+  if(kind==="dot"){text=i.json.dot||"";type="text/vnd.graphviz"}
+  else{const o={};for(const k of ["nodes","edges","frontier","stage","key"])o[k]=i.json[k];
+    text=JSON.stringify(o,null,1)+"\n";type="application/json"}
+  try{const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement("a");
+    a.href=url;a.download="causality."+kind;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000)}
+  catch(e){banner("Download blocked here — open “DOT source” and copy it.",6000)}}
 const STOPS=new Set(["run","step","undo","reset"]);
 function verbOf(cmd){return String(cmd||"").replace(/^:/,"").trim().split(/\s+/)[0]}
 function bodyHtml(i,isLastStop,seenMax){
@@ -298,6 +341,9 @@ function bodyHtml(i,isLastStop,seenMax){
     h=`<pre class="out">${esc(String(i.result||"").split("\n").slice(0,3).join("\n"))}</pre>`+
       contextHtml(c,new Set(sec==="trace"?[]:sec==="tokens"?["tokens"]:sec==="rules"?["rules"]:["rules","measure","tokens","proof"]));
     if(!sec||sec==="trace")h+=`<pre class="out">${esc((String(i.result||"").split("── trace\n")[1])||"")}</pre>`}
+  else if(v==="findings"&&Array.isArray(j.diagnostics))h=findingsHtml(j.diagnostics);
+  else if(v==="narrate"&&j.narration!==undefined)h=narratorHtml(j);
+  else if(v==="graph"&&j.nodes)h=graphHtml(i);
   else h=`<pre class="out">${esc(i.result)}</pre>`;
   if(isLastStop&&c)h+=contextHtml(c);
   return h}
@@ -449,7 +495,7 @@ function trimJson(j){
   if(!j||typeof j!=="object")return j;
   const o={};
   for(const [k,v] of Object.entries(j)){
-    if(k==="text"||k==="src")continue;
+    if(k==="text"||k==="src"||k==="dot"||k==="narration")continue;
     if(k==="fired"&&Array.isArray(v))o.fired=v.slice(0,30).map(f=>({i:f.i,name:f.name,beat:f.beat,kind:f.kind,consume:f.consume,produce:f.produce}));
     else if(k==="rules"&&Array.isArray(v))o.rules=v.map(r=>({name:r.name,state:r.state,detail:r.detail}));
     else if(k==="nodes"||k==="edges")o[k+"_count"]=Array.isArray(v)?v.length:0;
@@ -506,7 +552,8 @@ function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setA
 function flashOcc(i){const el=document.getElementById("occ-"+i);if(!el){banner("#"+i+" is not in the current stream",3000);return}
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1400)}
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec]");if(!t)return;
+  const t=e.target.closest("[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec],[data-dl]");if(!t)return;
+  if(t.dataset.dl){download(t.dataset.iid,t.dataset.dl);return}
   if(t.dataset.cmd)queue(t.dataset.cmd);
   else if(t.dataset.lens){lenses.has(t.dataset.lens)?lenses.delete(t.dataset.lens):lenses.add(t.dataset.lens);
     store.set("loopconsole.lenses",[...lenses]);syncLenses();renderStream()}

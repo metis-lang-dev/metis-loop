@@ -165,31 +165,18 @@ def drain(store, srv, stop):
 
 
 def drain_once(store, srv):
-    """One pass of the serving session (skills/metis-loop "Serving the
-    console"): bind opening sessions, serve queued intents oldest
-    first, write postings + session fields back."""
-    if True:
+    """One pass of the serving session — exactly what the real one does
+    with ArtifactData: list sessions + intents, `srv.drain(...)`, apply
+    the writes as updates."""
+    with store.lock:
+        sessions = [(p.split("/")[1], dict(d)) for p, d in store.docs.items()
+                    if p.startswith("sessions/") and p.count("/") == 1]
+        intents = [(p.split("/")[1], dict(d)) for p, d in store.docs.items()
+                   if p.startswith("intents/") and p.count("/") == 1
+                   and d.get("status") == "queued"]
+    for w in srv.drain(sessions, intents):
         with store.lock:
-            opening = [(p, dict(d)) for p, d in store.docs.items()
-                       if p.startswith("sessions/") and p.count("/") == 1
-                       and d.get("status") == "opening"]
-            queued = sorted(((p, dict(d)) for p, d in store.docs.items()
-                             if p.startswith("intents/")
-                             and d.get("status") == "queued"),
-                            key=lambda pd: str(pd[1].get("ts")))
-        for path, d in opening:
-            fields = srv.open_session(path.split("/")[1], d)
-            with store.lock:
-                store.docs[path].update(json.loads(json.dumps(fields)))
-        for path, d in queued:
-            sid = d.get("session")
-            out = srv.serve_one(sid, d.get("cmd", ""))
-            with store.lock:
-                store.docs[path].update(json.loads(json.dumps(
-                    out["posting"], default=str)))
-                if out["session"] and f"sessions/{sid}" in store.docs:
-                    store.docs[f"sessions/{sid}"].update(json.loads(
-                        json.dumps(out["session"], default=str)))
+            store.docs.setdefault(w["path"], {}).update(w["data"])
 
 
 def main(argv=None):
@@ -199,7 +186,7 @@ def main(argv=None):
     ns = ap.parse_args(argv)
     store, srv = Store(), ConsoleServer()
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    store.docs["meta/catalogs"] = {"names": srv.catalogs(), "ts": now}
+    store.docs["meta/catalogs"] = srv.catalogs_doc()["data"]
     if ns.demo:
         store.docs["candidates/c-demo"] = {
             "record_id": "r-demo", "status": "pending", "ok": True,
