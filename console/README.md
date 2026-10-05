@@ -29,5 +29,9 @@ metis-loop, "Serving the console").
 Local testing: `python console/dev_serve.py --demo` serves the page
 behind a dev shim (`claude.use("db"/"user")` over fetch to an
 in-memory store, drained in-process by console_serve — the real
-kernel). `?nodb` / `?guest` open it with that capability absent. The
-shim is dev-only and never part of the published page.
+kernel). `?nodb` / `?guest` open it with that capability absent;
+`?mocksample` gives the chat a CANNED stand-in (no model) that runs
+the REPL lines in a message through the page's `repl` tool —
+`=deny` / `=rate` simulate not_granted / rate_limited. The real-model
+pass happens on the published artifact. The shim is dev-only and
+never part of the published page.

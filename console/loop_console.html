@@ -7,6 +7,7 @@
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--fg)}
 body{font:12.5px/1.45 var(--mono);display:flex;flex-direction:column;overflow:hidden}
 button,input{font:inherit;color:inherit}
@@ -29,7 +30,21 @@ a{color:var(--cyan)}
 main{flex:1;display:flex;min-height:0}
 #left{flex:1 1 62%;display:flex;flex-direction:column;min-width:0}
 #split{flex:none;width:4px;cursor:col-resize;background:var(--line)}
-#right{flex:1 1 38%;display:flex;flex-direction:column;min-width:220px;overflow:auto;padding:8px 12px}
+#right{flex:1 1 38%;display:flex;flex-direction:column;min-width:220px;min-height:0}
+#chat{flex:1 1 62%;display:flex;flex-direction:column;min-height:0;padding:8px 12px 6px}
+#chatlog{flex:1;overflow:auto;min-height:0}
+#loop{flex:0 1 38%;overflow:auto;padding:6px 12px 8px;border-top:1px solid var(--line)}
+.turn{margin:0 0 8px}
+.turn .who{color:var(--dim);font-size:11px}
+.turn.user .who{color:var(--cyan)}.turn.assistant .who{color:var(--purple)}
+.turn .txt{white-space:pre-wrap;word-break:break-word}
+.turn .tool{color:var(--dim);font-size:11.5px}
+.turn .tool.refused{color:var(--red)}
+.turn.err .txt{color:var(--red)}
+#chatin{display:flex;gap:6px;align-items:flex-end;border-top:1px solid var(--line);padding-top:6px}
+#chatq{flex:1;background:transparent;border:1px solid var(--line);resize:vertical;min-height:2.6em;max-height:12em;padding:3px 6px;outline:none}
+#chatq:focus-visible{border-color:var(--cyan)}
+#chatstate{color:var(--dim);font-size:11px;min-height:1.4em}
 .ph{color:var(--dim);font-size:11px;letter-spacing:.06em;margin:0 0 6px}
 #stream{flex:1;overflow:auto;padding:8px 12px}
 .ent{margin:0 0 6px}
@@ -90,7 +105,7 @@ pre.err{color:var(--red)}
 details summary{cursor:pointer;color:var(--dim)}
 @media (max-width:760px){
   main{flex-direction:column}#split{display:none}
-  #left{flex:1 1 auto;min-height:60vh}#right{flex:none;max-height:40vh;border-top:1px solid var(--line)}
+  #left{flex:1 1 auto;min-height:60vh}#right{flex:none;height:70vh;border-top:1px solid var(--line)}
   #sessbar{margin-left:0;width:100%}#sessbar input{flex:1;width:auto}
 }
 </style>
@@ -143,12 +158,23 @@ details summary{cursor:pointer;color:var(--dim)}
     </div>
   </section>
   <div id="split" role="separator" aria-orientation="vertical" tabindex="0"></div>
-  <aside id="right" aria-label="loop">
-    <p class="ph">CLAUDE — the chat arrives in step 3</p>
-    <p class="ph" style="margin-top:10px">CANDIDATES</p>
-    <div id="cands"><div class="empty">No candidates.</div></div>
-    <p class="ph" style="margin-top:12px">SURPRISE RECORDS</p>
-    <div id="records"><div class="empty">No surprise records.</div></div>
+  <aside id="right" aria-label="Claude and the loop">
+    <section id="chat" aria-label="Claude">
+      <p class="ph">CLAUDE — reinterprets the machine; acts only through the REPL (its lines show as claude&gt; on the left)</p>
+      <div id="chatlog" aria-live="polite"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
+      <div id="chatstate" role="status"></div>
+      <div id="chatin">
+        <textarea id="chatq" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
+        <button class="btn" id="chatsend">send</button>
+        <button class="btn" id="chatstop" hidden>stop</button>
+      </div>
+    </section>
+    <section id="loop" aria-label="loop">
+      <p class="ph">CANDIDATES</p>
+      <div id="cands"><div class="empty">No candidates.</div></div>
+      <p class="ph" style="margin-top:12px">SURPRISE RECORDS</p>
+      <div id="records"><div class="empty">No surprise records.</div></div>
+    </section>
   </aside>
 </main>
 
@@ -312,13 +338,24 @@ function renderRight(){
   $("#records").innerHTML=rs.length?rs.map(r=>`<div class="cand"><span class="pill">${esc(r.kind||"?")}</span> ${esc(r.id)} <span class="empty">${esc(Object.keys(r.observed||{}).join(" "))}</span></div>`).join(""):'<div class="empty">No surprise records.</div>'}
 
 /* ---- actions: every one is an intents doc ---- */
-async function queue(cmd,actor){
-  cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return;
-  if(!db){banner("No backend in this view — nothing can be queued.",5000);return}
-  if(!sid||!sess||sess.status==="closed"){banner("Open a catalog first.",4000);return}
+async function queue(cmd,actor,quiet){
+  /* returns the intent id, or null; `quiet` callers (the chat's tool)
+     get the reason thrown instead of a banner */
+  cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return null;
+  const fail=m=>{if(quiet)throw new Error(m);banner(m,5000);return null};
+  if(!db)return fail("No backend in this view — nothing can be queued.");
+  if(!sid||!sess||sess.status==="closed")return fail("No open session — open a catalog first.");
   const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   try{await db.doc("intents/"+id).set({session:sid,cmd:":"+cmd,actor:actor||uid||"anon",status:"queued",ts:new Date().toISOString()})}
-  catch(e){banner("Not queued: "+(e&&e.message||e),6000)}}
+  catch(e){return fail("Not queued: "+(e&&e.message||e))}
+  return id}
+const waiters=new Map();   /* intent id -> resolve(posting) */
+function settle(){for(const [id,res] of waiters){const i=intents.get(id);
+  if(i&&i.status&&i.status!=="queued"){waiters.delete(id);res(i)}}}
+function awaitPosting(id,signal,ms){return new Promise((res,rej)=>{
+  waiters.set(id,res);settle();
+  const t=setTimeout(()=>{waiters.delete(id);rej(new Error("no posting within "+ms/1000+"s — is the serving session running?"))},ms||60000);
+  if(signal)signal.addEventListener("abort",()=>{clearTimeout(t);waiters.delete(id);rej(new Error("cancelled"))},{once:true})})}
 function subscribeSession(){
   if(unsubSess)unsubSess();if(unsubInt)unsubInt();
   intents=new Map();sess=null;seenEpoch=null;renderBand();
@@ -332,7 +369,7 @@ function subscribeSession(){
     if(sess)seenEpoch=sess.epoch??null;
     renderBand();renderStream()},e=>banner("Session subscription lost: "+e.message));
   unsubInt=db.collection("intents").where("session","==",sid).orderBy("ts","desc").limit(50).onSnapshot(s=>{
-    intents=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderStream()},
+    intents=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderStream();settle()},
     e=>banner("Intent subscription lost: "+e.message))}
 async function openCatalog(){
   const llp=$("#catin").value.trim();
@@ -341,7 +378,128 @@ async function openCatalog(){
   const id="s"+Math.random().toString(36).slice(2,8);
   try{await db.doc("sessions/"+id).set({llp,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
   catch(e){banner("Session not opened: "+(e&&e.message||e),6000);return}
-  sid=id;sstore.set("loopconsole.sid",sid);$("#stream").innerHTML="";subscribeSession()}
+  sid=id;sstore.set("loopconsole.sid",sid);$("#stream").innerHTML="";
+  chatLoad();renderChat();subscribeSession()}
+
+/* ---- the chat (CONSOLE §3): in-page Claude via `sample`, ONE tool ---- */
+const PREAMBLE_VERSION="console-chat 1 (CONSOLE.md §3, 2026-10-05)";
+const PREAMBLE=`You are the interpreter panel of the metis Loop Console (${PREAMBLE_VERSION}).
+The console is a state debugger over ONE kernel REPL running a linear-logic
+story/behavior catalog (LLP). You REINTERPRET the machine for the viewer: you
+run REPL lines through the \`repl\` tool and explain what they show. The tool is
+the only way you act; whatever you run appears in the viewer's transcript as
+"claude>", exactly as if they had typed it. Never invent results — run the line.
+
+== REPL skill: the commands (prefix every line with ":" when calling repl) ==
+:ctx [tokens|rules|trace]  the context at this stop: catalog, key, stage, BEAT,
+                           EPISODE, status running|quiescent|done, tokens, enabled
+:run N / :step [k|name]    fire N sampled events / one (k from :events, or a rule name)
+:events                    enabled events with weights w and normalized p
+:undo / :reset             back one command / back to the file's #init (new epoch)
+:why [ATOM|K]              causal cone: what the current state (or ATOM's last
+                           producer, or event K) rests on; the rest is "pruned"
+:causes A B                per occurrence of B: is some A among its causes (yes/some/no)
+:graph                     the run as beats with covering parents (i<j, flow atoms)
+:list / :state / :log      rules with marks / the multiset / fired events
+:findings [N]              diagnostics (catalog, last gate, runtime notes)
+:trace [SEED] / :map / :marginals   seeded replay / modal derivation / exact marginals
+:narrate [SEED]            prose of the run (the REPL's own narrator)
+:gate / :revise / :mine / :text / :formalize / :records / :record N / :replay / :show
+
+How to read what comes back:
+- BEATS (Foata levels): events in one beat are causally independent — never
+  say one caused another inside a beat; across beats, order is real. A stage
+  switch (quiescence link, e.g. act2) opens a new EPISODE.
+- Effects: −atom consumed, +atom produced, $atom read and kept.
+- RULE STATES (list's marks): * fireable now · ◂ #k the present rests on
+  occurrence k · · fired but nothing it touched is still present · ? waiting on
+  an atom some rule here makes ("← maker", * = enabled) · – spent: the atom is
+  gone and nothing here makes it. Presence-only: "pruned" never means "caused
+  nothing".
+- status quiescent = only a stage link can fire; done = nothing can.
+- Atoms are indistinguishable: this is dependence on the multiset, not token lineage.
+
+== Formalization skill (the loop) ==
+surprise record → mine the gap as a short factual %% text → a candidate LLP pack
+(packs consume base atoms, never produce them) → :gate (the cascade decides) →
+on findings, repair FROM THE DIAGNOSTICS (:findings), never by rewriting the base
+→ the HUMAN approves in the console's candidate buttons. You never approve:
+:accept is refused by design — do not try it, and say so if asked.
+
+== Style ==
+Answer in plain language, cite what you ran and where it shows ("BEAT 4",
+"RULES: blow_brick waiting on brickhouse"). Prefer one or two well-chosen
+lines over many; each tool round costs the viewer. Keep answers short.`;
+let sampleNs=null,chatTurns=[],chatBusy=null;
+const chatKey=()=>"loopconsole.chat."+(sid||"none");
+function chatLoad(){try{chatTurns=JSON.parse(sessionStorage.getItem(chatKey())||"[]")}catch(e){chatTurns=[]}
+  chatTurns.forEach(t=>{if(t.pending){t.pending=false;t.content=(t.content||"")+" [interrupted]"}})}
+function chatSave(){try{sessionStorage.setItem(chatKey(),JSON.stringify(
+  chatTurns.filter(t=>!(t.pending&&!t.content)).slice(-40)))}catch(e){}}
+function renderChat(){
+  const el=$("#chatlog");const atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-24;
+  el.innerHTML=chatTurns.length?chatTurns.map(t=>`<div class="turn ${t.role}${t.err?" err":""}">
+    <div class="who">${t.role==="user"?"you":"claude"}</div>
+    ${(t.tools||[]).map(x=>`<div class="tool${x.status==="refused"||x.status==="error"?" refused":""}">⚙ repl ${esc(x.line)} → ${esc(x.status)}</div>`).join("")}
+    <div class="txt">${esc(t.content||(t.pending?"Thinking…":""))}</div></div>`).join("")
+    :$("#chathello")?$("#chathello").outerHTML:"";
+  if(atEnd)el.scrollTop=el.scrollHeight}
+function trimJson(j){
+  /* what goes back to Claude: small and plain (each tool round bills) */
+  if(!j||typeof j!=="object")return j;
+  const o={};
+  for(const [k,v] of Object.entries(j)){
+    if(k==="text"||k==="src")continue;
+    if(k==="fired"&&Array.isArray(v))o.fired=v.slice(0,30).map(f=>({i:f.i,name:f.name,beat:f.beat,kind:f.kind,consume:f.consume,produce:f.produce}));
+    else if(k==="rules"&&Array.isArray(v))o.rules=v.map(r=>({name:r.name,state:r.state,detail:r.detail}));
+    else if(k==="nodes"||k==="edges")o[k+"_count"]=Array.isArray(v)?v.length:0;
+    else if(Array.isArray(v))o[k]=v.slice(0,30);
+    else o[k]=v}
+  return o}
+function chatContext(){const c=sess&&sess.ctx;
+  return c?`[console now: catalog ${c.catalog}, stage ${c.stage}, beat ${c.beat}, episode ${c.episode}, ${c.status}, ${c.fired-(c.base||0)} fired since base, last ${c.last_event||"—"}]`
+    :"[console now: no open session — the viewer must open a catalog before the repl tool can run]"}
+async function chatSend(){
+  const q=$("#chatq"),text=q.value.trim();
+  if(!text||chatBusy)return;
+  if(!sampleNs){$("#chatstate").textContent="chat unavailable in this view";return}
+  q.value="";
+  chatTurns.push({role:"user",content:text});
+  const reply={role:"assistant",content:"",pending:true,tools:[]};
+  chatTurns.push(reply);chatSave();renderChat();
+  const ctl=new AbortController();chatBusy=ctl;
+  $("#chatstop").hidden=false;$("#chatsend").disabled=true;$("#chatstate").textContent="";
+  /* no server memory: the whole turn list every call; the preamble
+     rides the first user turn, the live context the last one */
+  const turns=chatTurns.filter(t=>t!==reply&&!t.err&&(t.content||"").trim()).map(t=>({role:t.role,content:t.content}));
+  turns[0]={role:"user",content:PREAMBLE+"\n\n== The viewer ==\n"+turns[0].content};
+  turns[turns.length-1]={role:"user",content:turns[turns.length-1].content+"\n\n"+chatContext()};
+  const tool={name:"repl",
+    description:"Run ONE line in the console's REPL session (the viewer's window). Prefix with ':' (e.g. ':run 6', ':why', ':ctx rules'). Same whitelist as the viewer: :accept, file paths and command: specs are refused. Returns {status, result, json}.",
+    inputSchema:{type:"object",properties:{line:{type:"string",description:"one REPL line, starting with ':'"}},required:["line"]},
+    execute:async({line},ctx2)=>{
+      const rec={line:String(line||""),status:"queued"};reply.tools.push(rec);renderChat();
+      const id=await queue(line,"claude",true);
+      const post=await awaitPosting(id,(ctx2&&ctx2.signal)||ctl.signal,90000);
+      rec.status=post.status;renderChat();
+      const out={status:post.status,result:String(post.result||"").slice(0,1800),json:trimJson(post.json)};
+      if(post.status==="refused")throw new Error("refused by the console whitelist: "+out.result.slice(0,400));
+      return out}};
+  try{
+    const r=await sampleNs(turns,{cache:false,modelTier:"default",signal:ctl.signal,tools:[tool],
+      onText:({text})=>{reply.pending=false;reply.content=text;renderChat()}});
+    reply.pending=false;reply.content=r.text||reply.content||"(no answer)";
+    if(r.truncated)reply.content+="\n[answer truncated]";
+  }catch(e){
+    reply.pending=false;const code=e&&e.code;
+    if(e&&e.text)reply.content=e.text;
+    if(code==="cancelled")reply.content=(reply.content||"")+" [stopped]";
+    else if(code==="not_granted"){reply.err=true;reply.content="Claude is not available here (not granted).";
+      $("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable — the rest of the console works as before"}
+    else if(code==="rate_limited"){reply.err=!reply.content;reply.content=reply.content||"Rate limited — wait a minute before asking again.";
+      $("#chatstate").textContent="rate limited — not retrying"}
+    else{reply.err=!reply.content;reply.content=reply.content||("Claude call failed: "+((e&&e.message)||e))}
+  }finally{chatBusy=null;$("#chatstop").hidden=true;$("#chatsend").disabled=false;chatSave();renderChat()}}
 
 /* ---- wiring (static layout first; capabilities light up later) ---- */
 function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setAttribute("aria-pressed",lenses.has(b.dataset.lens)))}
@@ -358,6 +516,9 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest("[data-rule]");
   if(t&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click()}});
 $("#open").addEventListener("click",openCatalog);
+$("#chatsend").addEventListener("click",chatSend);
+$("#chatstop").addEventListener("click",()=>{if(chatBusy)chatBusy.abort()});
+$("#chatq").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chatSend()}});
 $("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
 $("#reset").addEventListener("click",()=>queue("reset"));
 $("#prompt").addEventListener("keydown",e=>{
@@ -373,6 +534,9 @@ $("#prompt").addEventListener("keydown",e=>{
   sp.addEventListener("pointerup",()=>{x0=null})})();
 syncLenses();renderBand();renderRight();
 
+chatLoad();renderChat();
+claude.use("sample").then(ns=>{sampleNs=ns;
+  if(!ns){$("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable in this view — the debugger works as before"}});
 (async()=>{
   user=await claude.use("user");
   if(user){try{uid=await user.id()}catch(e){}

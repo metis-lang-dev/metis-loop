@@ -17,7 +17,9 @@ real whitelist, the real catalogs.
 
 --demo seeds one candidate + one surprise record so the right panel
 has rows (the published page never seeds). Open the page with ?nodb
-or ?guest to see it with that capability absent (use() -> null)."""
+or ?guest to see it with that capability absent (use() -> null);
+?mocksample (=deny|=rate) gives `sample` a CANNED stand-in (no model)
+that runs the REPL lines found in a message through the page's tool."""
 import argparse
 import json
 import sys
@@ -66,8 +68,40 @@ const USER=Object.freeze({id:async()=>"dev-viewer",me:async()=>({id:"dev-viewer"
   isOwner:async()=>true,canEdit:async()=>true,can:async()=>true,
   profiles:async ids=>Object.fromEntries(ids.map(i=>[i,{id:i,name:""}]))});
 const Q=new URLSearchParams(location.search);   // ?nodb / ?guest: absence
+/* ?mocksample[=deny|rate]: a CANNED stand-in for Claude (never a model):
+   pulls REPL lines out of the last user message, runs each through the
+   page's repl tool, then streams a summary — drives the tool loop, the
+   claude> marks, streaming, stop, refusals and the error codes. */
+const sleep=(ms,sig)=>new Promise((r,j)=>{const t=setTimeout(r,ms);
+  sig&&sig.addEventListener("abort",()=>{clearTimeout(t);j({code:"cancelled",message:"cancelled"})},{once:true})});
+async function mockSample(input,opts){opts=opts||{};const sig=opts.signal;
+  const mode=Q.get("mocksample");
+  if(mode==="deny")throw {code:"not_granted",message:"not granted (mock)"};
+  if(mode==="rate")throw {code:"rate_limited",message:"rate limited (mock)"};
+  const turns=typeof input==="string"?[{role:"user",content:input}]:input;
+  const last=String(turns[turns.length-1].content).split("\n\n[console now")[0]
+    .split("== The viewer ==\n").pop();              // never the preamble
+  const lines=(last.match(/:?\b(run \d+|step|why(?: [\w()]+)?|ctx(?: \w+)?|events|graph|accept|causes \S+ \S+|reset)\b/g)||[])
+    .map(l=>":"+l.replace(/^:/,""));
+  const tool=(opts.tools||[]).find(t=>t.name==="repl");const notes=[];
+  await sleep(700,sig);
+  for(const line of lines){
+    if(!tool)break;
+    try{const r=await tool.execute({line},{signal:sig});
+      notes.push(`${line} -> ${r.status}: ${String(r.result).split("\n")[0].slice(0,90)}`)}
+    catch(e){if(e&&e.code==="cancelled")throw e;notes.push(`${line} -> ${e.message.slice(0,90)}`)}}
+  const text=(lines.length?"[mock] I ran "+lines.length+" line(s):\n"+notes.join("\n")
+    :"[mock] No REPL line in your message — this mock only echoes. ")+
+    "\n(the real model answers on the published artifact; this canned reply exercises the tool loop and streaming.)";
+  let shown="";
+  for(const w of text.split(/(\s+)/)){await sleep(25,sig);shown+=w;
+    opts.onText&&opts.onText({text:shown,delta:w})}
+  return {text,truncated:false,modelTierApplied:"default"}}
+const SAMPLE=Object.freeze(Object.assign(mockSample,{json:async()=>{throw {code:"invalid_argument",message:"mock: no json"}},
+  limits:async()=>({maxPromptBytes:200000})}));
 window.claude=Object.freeze({use:name=>new Promise(res=>setTimeout(()=>
-  res(name==="db"&&!Q.has("nodb")?DB:name==="user"&&!Q.has("guest")?USER:null),60))});
+  res(name==="db"&&!Q.has("nodb")?DB:name==="user"&&!Q.has("guest")?USER:
+      name==="sample"&&Q.has("mocksample")?SAMPLE:null),60))});
 })();
 """
 
