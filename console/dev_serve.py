@@ -39,9 +39,9 @@ const call=b=>fetch("/db",{method:"POST",headers:{"content-type":"application/js
   body:JSON.stringify(b)}).then(r=>r.json()).then(r=>{if(r.error)throw {code:"invalid_argument",message:r.error};return r});
 const meta={fromCache:false,hasPendingWrites:false};
 const dsnap=(id,r)=>({id,exists:!!r.exists,data:()=>r.exists?r.data:undefined,metadata:meta});
-function poll(fetcher,deliver,err){let last=null,stop=false;
+function poll(fetcher,deliver,err,keyOf){let last=null,stop=false;
   const tick=async()=>{if(stop)return;
-    try{const r=await fetcher();const k=JSON.stringify(r);if(k!==last){last=k;deliver(r)}}
+    try{const r=await fetcher();const k=(keyOf||JSON.stringify)(r);if(k!==last){last=k;deliver(r)}}
     catch(e){err&&err({code:"unavailable",message:String(e&&e.message||e)})}
     if(!stop)setTimeout(tick,250)};
   tick();return()=>{stop=true}}
@@ -60,7 +60,10 @@ function query(path,q){
     orderBy:(f,d)=>query(path,{...q,orderBy:[f,d||"asc"]}),
     limit:n=>query(path,{...q,limit:n}),
     get:async()=>qs(await call({op:"query",path,q})),
-    onSnapshot:(next,err)=>poll(()=>call({op:"query",path,q}),r=>next(qs(r)),err),
+    /* ?missmod: like the live db seen in step 4 — a query snapshot
+       fires on ADDS/REMOVES only, never on modifications */
+    onSnapshot:(next,err)=>poll(()=>call({op:"query",path,q}),r=>next(qs(r)),err,
+      new URLSearchParams(location.search).has("missmod")?r=>r.docs.map(d=>d.id).join(","):undefined),
     doc:id=>docRef(path+"/"+(id||Math.random().toString(36).slice(2,10))),
     add:async data=>{const d=docRef(path+"/"+Math.random().toString(36).slice(2,10));await d.set(data);return d}})}
 const DB=Object.freeze({doc:docRef,collection:p=>query(p,{})});

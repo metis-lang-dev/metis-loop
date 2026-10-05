@@ -351,6 +351,10 @@ function bodyHtml(i,isLastStop,seenMax){
   else h=`<pre class="out">${esc(i.result)}</pre>`;
   if(isLastStop&&c)h+=contextHtml(c);
   return h}
+setInterval(()=>{let stale=false;
+  for(const i of intents.values())if(i.status==="queued"){stale=true;
+    if(Date.now()-Date.parse(i.ts)>6000)refreshIntent(i.id)}
+  if(stale)renderStream()},5000);
 function renderStream(){
   const el=$("#stream");
   if(!sid){return}
@@ -366,7 +370,8 @@ function renderStream(){
   el.innerHTML=(rows.length?"":`<div class="empty">${sess&&sess.status==="opening"?"opening "+esc(sess.llp)+"…":"session ready — run, step, or type a REPL line."}</div>`)+
     rows.map(i=>{const claude=i.actor==="claude";
       return `<div class="ent"><div class="cmd"><span class="p${claude?" claude":""}">${claude?"claude&gt;":"llp&gt;"}</span> ${esc(String(i.cmd||"").replace(/^:/,""))}${
-        i.status!=="done"?`<span class="pill ${esc(i.status)}">${esc(i.status)}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
+        i.status!=="done"?`<span class="pill ${esc(i.status)}">${esc(i.status)}${
+          i.status==="queued"&&Date.now()-Date.parse(i.ts)>20000?" — waiting for the serving session":""}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
     (!lastStop&&sess&&sess.ctx&&rows.length===0?contextHtml(sess.ctx):"");
   if(atEnd)el.scrollTop=el.scrollHeight}
 
@@ -402,10 +407,28 @@ async function queue(cmd,actor,quiet){
 const waiters=new Map();   /* intent id -> resolve(posting) */
 function settle(){for(const [id,res] of waiters){const i=intents.get(id);
   if(i&&i.status&&i.status!=="queued"){waiters.delete(id);res(i)}}}
+/* The live db's filtered onSnapshot (where+orderBy+limit) was seen to
+   miss MODIFY events: postings committed in seconds never reached the
+   page. A direct read heals both consumers — the stream and a waiting
+   tool call — whatever the subscription delivers. */
+const refreshing=new Set();
+async function refreshIntent(id){
+  if(!db||refreshing.has(id))return;refreshing.add(id);
+  try{const s=await db.doc("intents/"+id).get();
+    if(!s.exists)return;
+    const fresh={id,...s.data()},old=intents.get(id);
+    if(!old||old.status!==fresh.status){
+      if(old&&old.status==="queued"&&fresh.status!=="queued")
+        console.warn("[loopconsole] snapshot missed the posting of intents/"+id+" ("+fresh.status+") — healed by a direct read");
+      intents.set(id,fresh);renderStream();settle()}}
+  catch(e){}finally{refreshing.delete(id)}}
 function awaitPosting(id,signal,ms){return new Promise((res,rej)=>{
-  waiters.set(id,res);settle();
-  const t=setTimeout(()=>{waiters.delete(id);rej(new Error("no posting within "+ms/1000+"s — is the serving session running?"))},ms||60000);
-  if(signal)signal.addEventListener("abort",()=>{clearTimeout(t);waiters.delete(id);rej(new Error("cancelled"))},{once:true})})}
+  /* resolved by the snapshot (settle) OR by a direct read every 4 s */
+  const poll=setInterval(()=>refreshIntent(id),4000);
+  const t=setTimeout(()=>{done();waiters.delete(id);rej(new Error("no posting within "+(ms||60000)/1000+"s — is the serving session running?"))},ms||60000);
+  function done(){clearInterval(poll);clearTimeout(t)}
+  if(signal)signal.addEventListener("abort",()=>{done();waiters.delete(id);rej(new Error("cancelled"))},{once:true});
+  waiters.set(id,v=>{done();res(v)});settle()})}
 function subscribeSession(){
   if(unsubSess)unsubSess();if(unsubInt)unsubInt();
   intents=new Map();sess=null;seenEpoch=null;renderBand();
@@ -529,8 +552,11 @@ async function chatSend(){
     inputSchema:{type:"object",properties:{line:{type:"string",description:"one REPL line, starting with ':'"}},required:["line"]},
     execute:async({line},ctx2)=>{
       const rec={line:String(line||""),status:"queued"};reply.tools.push(rec);renderChat();
-      const id=await queue(line,"claude",true);
-      const post=await awaitPosting(id,(ctx2&&ctx2.signal)||ctl.signal,90000);
+      let post;
+      try{const id=await queue(line,"claude",true);
+        post=await awaitPosting(id,(ctx2&&ctx2.signal)||ctl.signal,90000)}
+      catch(e){rec.status=/no posting/.test(e.message)?"timed out (no serving session?)":
+        e.message==="cancelled"?"cancelled":"error";renderChat();throw e}
       rec.status=post.status;renderChat();
       const out={status:post.status,result:String(post.result||"").slice(0,1800),json:trimJson(post.json)};
       if(post.status==="refused")throw new Error("refused by the console whitelist: "+out.result.slice(0,400));
