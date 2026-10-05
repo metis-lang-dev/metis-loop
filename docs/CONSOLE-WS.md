@@ -83,7 +83,14 @@ The chat pane's Claude moves into the backend: Python
   from the net and we do not keep their work.
 - Later (v2.1, not launch): Suggest mode (code blocks with
   insert/run buttons) beside today's Agent mode; selection →
-  "ask Claude".
+  "ask Claude"; VOICE on the chat pane — browser-side only, the
+  text loop unchanged: Web Speech API (SpeechRecognition in,
+  speechSynthesis out; Chrome/Edge; NOTE Chrome ships recognition
+  audio to Google's servers — say so in the UI). The privacy
+  upgrade, if ever wanted, is local STT/TTS on the personal host
+  (faster-whisper + piper) over an added WS audio channel — fits
+  the interception pattern, personal mode only (chat does not
+  exist in shared mode, so voice has no shared-instance story).
 
 ## 4. Deployment modes and LLM seat routing (the user's conditions)
 
