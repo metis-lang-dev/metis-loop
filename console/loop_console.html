@@ -199,7 +199,7 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON
 const sstore={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
 
-let db=null,user=null,uid=null,canDecide=false;
+let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
 let intents=new Map(),cands=new Map(),records=new Map(),catNames=[];
 let unsubSess=null,unsubInt=null,openInsp=null;
@@ -319,16 +319,20 @@ function graphHtml(i){
     <span class="empty">render the .dot with <span class="cmd">dot -Tsvg</span></span>
     <pre class="out">${esc(i.result||"")}</pre>
     <details><summary>DOT source</summary><pre class="out">${esc(i.json.dot||"")}</pre></details></div>`}
-function download(iid,kind){
+async function download(iid,kind){
+  /* the artifact viewer never grants plain blob/data saves: files go
+     through the `downloads` capability (viewer-confirmed). `.dot` is
+     outside its extension allowlist, so the DOT ships as .dot.txt —
+     the "DOT source" details stay as the copy fallback. */
   const i=intents.get(iid);if(!i||!i.json)return;
-  let text,type;
-  if(kind==="dot"){text=i.json.dot||"";type="text/vnd.graphviz"}
+  let text,filename;
+  if(kind==="dot"){text=i.json.dot||"";filename="causality.dot.txt"}
   else{const o={};for(const k of ["nodes","edges","frontier","stage","key"])o[k]=i.json[k];
-    text=JSON.stringify(o,null,1)+"\n";type="application/json"}
-  try{const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement("a");
-    a.href=url;a.download="causality."+kind;document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000)}
-  catch(e){banner("Download blocked here — open “DOT source” and copy it.",6000)}}
+    text=JSON.stringify(o,null,1)+"\n";filename="causality.json"}
+  if(!downloadsNs){banner("Downloads unavailable in this view — open “DOT source” and copy it.",6000);return}
+  try{await downloadsNs.save({filename,data:text})}
+  catch(e){if(e&&e.code==="declined")return;
+    banner("Not saved ("+((e&&e.code)||e&&e.message||e)+") — open “DOT source” and copy it.",6000)}}
 const STOPS=new Set(["run","step","undo","reset"]);
 function verbOf(cmd){return String(cmd||"").replace(/^:/,"").trim().split(/\s+/)[0]}
 function bodyHtml(i,isLastStop,seenMax){
@@ -584,6 +588,7 @@ syncLenses();renderBand();renderRight();
 chatLoad();renderChat();
 claude.use("sample").then(ns=>{sampleNs=ns;
   if(!ns){$("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable in this view — the debugger works as before"}});
+claude.use("downloads").then(ns=>{downloadsNs=ns});
 (async()=>{
   user=await claude.use("user");
   if(user){try{uid=await user.id()}catch(e){}
