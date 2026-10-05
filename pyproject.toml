@@ -5,6 +5,10 @@ description = "The metis formalization/explanation loop: surprise records -> tex
 requires-python = ">=3.9"
 dependencies = []
 
+[project.optional-dependencies]
+# `metis-loop console-serve` (docs/CONSOLE-WS.md): the gateway
+console = ["websockets>=13"]
+
 [project.scripts]
 metis-loop = "loop.cli:main"
 

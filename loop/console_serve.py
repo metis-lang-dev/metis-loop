@@ -40,6 +40,30 @@ def catalog_root() -> Path:
     return Path(__file__).resolve().parents[2] / "metis-catalog"
 
 
+MAX_SOURCE = 256 * 1024     # an in-memory catalog's byte cap
+
+
+def _source_repl(path: Path, source: str, seed: int):
+    """A Repl over catalog TEXT, compiled in memory (CONSOLE-WS §4a):
+    no temp file, nothing on disk. `path` only names it and anchors
+    includes (resolved against the checkout); the kernel is untouched —
+    the subclass swaps the one read in `_compile`."""
+    from metis.lang import compile_catalog, parse, resolve_includes
+    from metis.lang.directives import embedded_case
+    from metis.lang.repl import Repl
+
+    class SourceRepl(Repl):
+        def _compile(self):
+            text = self._source
+            ast = parse(text, file=str(self.path))
+            doc = compile_catalog(resolve_includes(ast, self.path.parent))
+            return text, doc, embedded_case(text)
+    r = SourceRepl.__new__(SourceRepl)
+    r._source = source
+    SourceRepl.__init__(r, path, seed=seed, stdout=io.StringIO())
+    return r
+
+
 def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -96,21 +120,42 @@ class ConsoleServer:
                 "last_ts": _now()}
 
     def open_session(self, sid: str, doc: dict) -> dict:
-        """Bind an interpreter to sessions/{sid} ({llp, …}); returns
-        the fields to write back. A bad llp comes back as
+        """Bind an interpreter to sessions/{sid}: either `{llp: name}` —
+        a catalog of the checkout — or `{source: text, name}` — catalog
+        TEXT compiled in memory (CONSOLE-WS §4a: a forked/edited
+        catalog never touches the operator's disk; `name` anchors its
+        includes, a checkout name keeps that file's directory). Returns
+        the fields to write back; a bad catalog comes back as
         {status: "closed", error}."""
         from metis.lang.repl import Repl
         try:
-            path = self.resolve(doc.get("llp", ""))
-            self.shells[sid] = Repl(path, seed=self.seed,
-                                    stdout=io.StringIO())
+            if doc.get("source") is not None:
+                src = str(doc["source"])
+                if len(src.encode()) > MAX_SOURCE:
+                    raise ValueError(f"catalog source over "
+                                     f"{MAX_SOURCE // 1024} KiB")
+                name = str(doc.get("name") or "scratch").strip() or "scratch"
+                try:
+                    path = self.resolve(name)
+                except ValueError:
+                    safe = "".join(c if c.isalnum() or c in "-_." else "_"
+                                   for c in name.split("/")[-1])[:64]
+                    path = self.root.resolve() / "scratch" / (
+                        (safe.removesuffix(".llp") or "scratch") + ".llp")
+                self.shells[sid] = _source_repl(path, src, self.seed)
+                llp = name.removesuffix(".llp") + " (in memory)"
+            else:
+                path = self.resolve(doc.get("llp", ""))
+                self.shells[sid] = Repl(path, seed=self.seed,
+                                        stdout=io.StringIO())
+                llp = str(path.relative_to(self.root.resolve())
+                          .with_suffix(""))
         except Exception as e:                      # noqa: BLE001
             return {"status": "closed", "error": str(e),
                     "last_ts": _now()}
         self.epochs[sid] = 1
         out = self._fields(sid)
-        out["llp"] = str(path.relative_to(self.root.resolve())
-                         .with_suffix(""))
+        out["llp"] = llp
         return out
 
     def serve_one(self, sid: str, cmd: str) -> dict:

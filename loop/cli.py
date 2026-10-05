@@ -41,7 +41,18 @@ def _print_report(rep):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="metis-loop")
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["console-serve"]:
+        # the console's standing backend (docs/CONSOLE-WS.md); needs the
+        # `console` extra (websockets)
+        from .gateway import main as serve_main
+        return serve_main(args[1:])
+    ap = argparse.ArgumentParser(
+        prog="metis-loop",
+        epilog="also: metis-loop console-serve [--port N] [--bind H] "
+               "[--mode personal|shared] [--token T] — the Loop Console "
+               "backend (pip install metis-loop[console])")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("admit")

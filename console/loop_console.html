@@ -137,6 +137,7 @@ details summary{cursor:pointer;color:var(--dim)}
   <div class="l">
     <span id="tokens"><b>TOKENS</b><span id="b-tok" class="empty">—</span></span>
     <span><b>ENABLED</b><span class="v" id="b-en">—</span></span>
+    <span id="b-mode" hidden><b>MODE</b><span class="v" id="b-modev"></span></span>
   </div>
 </header>
 <div id="banner" role="status" hidden></div>
@@ -160,7 +161,7 @@ details summary{cursor:pointer;color:var(--dim)}
       <button class="chip" data-cmd="narrate">narrate</button>
       <button class="chip" data-cmd="undo">undo</button>
     </div>
-    <div id="promptrow"><span class="p">llp&gt;</span>
+    <div id="promptrow"><span id="busy" hidden><span class="st-quiescent">running</span> <span id="busycmd" class="v"></span><span id="busyq" class="empty"></span> <button class="btn" id="stopcmd" title="interrupt the running command and drop the queued ones">stop</button></span><span class="p">llp&gt;</span>
       <input id="prompt" aria-label="REPL line" autocomplete="off" spellcheck="false" placeholder="a REPL line — Enter queues it">
     </div>
   </section>
@@ -200,6 +201,12 @@ const sstore={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}}
   set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
 
 let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
+/* Transport (CONSOLE-WS §5): served by `metis-loop console-serve` the
+   page talks to the gateway over ONE WebSocket (window.LOOP_GATEWAY is
+   its flag); published as an artifact it keeps the db/sample shims.
+   Both feed the same `intents`/`sess` state — the renderers are one. */
+const GW=window.LOOP_GATEWAY||null;
+let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
 let intents=new Map(),cands=new Map(),records=new Map(),catNames=[];
 let unsubSess=null,unsubInt=null,openInsp=null;
@@ -329,6 +336,10 @@ async function download(iid,kind){
   if(kind==="dot"){text=i.json.dot||"";filename="causality.dot.txt"}
   else{const o={};for(const k of ["nodes","edges","frontier","stage","key"])o[k]=i.json[k];
     text=JSON.stringify(o,null,1)+"\n";filename="causality.json"}
+  if(!downloadsNs&&GW){            // a plain page (gateway): blob saves work
+    const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));const a=document.createElement("a");
+    a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);return}
   if(!downloadsNs){banner("Downloads unavailable in this view — open “DOT source” and copy it.",6000);return}
   try{await downloadsNs.save({filename,data:text})}
   catch(e){if(e&&e.code==="declined")return;
@@ -371,7 +382,7 @@ function renderStream(){
     rows.map(i=>{const claude=i.actor==="claude";
       return `<div class="ent"><div class="cmd"><span class="p${claude?" claude":""}">${claude?"claude&gt;":"llp&gt;"}</span> ${esc(String(i.cmd||"").replace(/^:/,""))}${
         i.status!=="done"?`<span class="pill ${esc(i.status)}">${esc(i.status)}${
-          i.status==="queued"&&Date.now()-Date.parse(i.ts)>20000?" — waiting for the serving session":""}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
+          i.status==="queued"&&!GW&&Date.now()-Date.parse(i.ts)>20000?" — waiting for the serving session":""}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
     (!lastStop&&sess&&sess.ctx&&rows.length===0?contextHtml(sess.ctx):"");
   if(atEnd)el.scrollTop=el.scrollHeight}
 
@@ -398,6 +409,14 @@ async function queue(cmd,actor,quiet){
      get the reason thrown instead of a banner */
   cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return null;
   const fail=m=>{if(quiet)throw new Error(m);banner(m,5000);return null};
+  if(GW){
+    if(!wsUp)return fail("Not connected to the console backend — reconnecting…");
+    if(!sid||!sess)return fail("No open session — open a catalog first.");
+    const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    intents.set(id,{id,session:sid,cmd:":"+cmd,actor:actor||uid||"viewer",status:"queued",ts:new Date().toISOString()});
+    renderStream();
+    wsSend({ch:"repl",type:"intent",session:sid,id,cmd:":"+cmd,actor:actor||uid||"viewer"});
+    return id}
   if(!db)return fail("No backend in this view — nothing can be queued.");
   if(!sid||!sess||sess.status==="closed")return fail("No open session — open a catalog first.");
   const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -432,6 +451,7 @@ function awaitPosting(id,signal,ms){return new Promise((res,rej)=>{
 function subscribeSession(){
   if(unsubSess)unsubSess();if(unsubInt)unsubInt();
   intents=new Map();sess=null;seenEpoch=null;renderBand();
+  if(GW){renderBusy();renderStream();if(sid&&wsUp)wsSend({ch:"repl",type:"open",session:sid});return}
   if(!db||!sid){renderStream();return}
   unsubSess=db.doc("sessions/"+sid).onSnapshot(s=>{
     sess=s.exists?s.data():null;
@@ -447,6 +467,10 @@ function subscribeSession(){
 async function openCatalog(){
   const llp=$("#catin").value.trim();
   if(!llp){$("#catin").focus();return}
+  if(GW){
+    if(!wsUp){banner("Not connected to the console backend — reconnecting…",4000);return}
+    pendingReq="r"+Math.random().toString(36).slice(2,8);
+    wsSend({ch:"repl",type:"open",llp,req:pendingReq});return}
   if(!db){banner("No backend in this view — sessions need the db capability.",5000);return}
   const id="s"+Math.random().toString(36).slice(2,8);
   try{await db.doc("sessions/"+id).set({llp,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
@@ -577,6 +601,64 @@ async function chatSend(){
     else{reply.err=!reply.content;reply.content=reply.content||("Claude call failed: "+((e&&e.message)||e))}
   }finally{chatBusy=null;$("#chatstop").hidden=true;$("#chatsend").disabled=false;chatSave();renderChat()}}
 
+/* ---- the gateway transport (CONSOLE-WS §1/§5) ---- */
+function wsSend(f){try{wsock&&wsock.readyState===1&&wsock.send(JSON.stringify(f))}catch(e){}}
+function wsConnect(){
+  const proto=location.protocol==="https:"?"wss://":"ws://";
+  const q=GW.token?"?token="+encodeURIComponent(GW.token):"";
+  try{wsock=new WebSocket(proto+location.host+GW.ws+q)}catch(e){wsRetryLater();return}
+  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid})};
+  wsock.onclose=()=>{const was=wsUp;wsUp=false;
+    if(was)banner("console backend connection lost — reconnecting…");wsRetryLater()};
+  wsock.onmessage=e=>{let f;try{f=JSON.parse(e.data)}catch(x){return}wsHandle(f)}}
+function wsRetryLater(){setTimeout(wsConnect,wsRetry);wsRetry=Math.min(wsRetry*2,8000)}
+function wsHandle(f){
+  if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
+  if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
+    $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("");return}
+  if(f.ch==="chat"){$("#chatstate").textContent=f.error||"";return}
+  if(f.ch!=="repl")return;
+  if(f.type==="error"){
+    if(f.req&&f.req===pendingReq)pendingReq=null;
+    if(f.error==="gone"&&f.session===sid){sid=null;sstore.set("loopconsole.sid",null);sess=null;
+      intents=new Map();renderBand();renderBusy();
+      $("#stream").innerHTML='<div class="empty">'+esc(f.detail||"session gone")+'</div>';return}
+    if(f.id&&intents.has(f.id)){const i=intents.get(f.id);
+      intents.set(f.id,{...i,status:"error",result:f.error,json:{ok:false,error:f.error}});renderStream();settle()}
+    banner(f.error+(f.detail?" — "+f.detail:""),6000);return}
+  if(f.type==="session"){
+    if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
+      intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatLoad();renderChat()}
+    if(f.session!==sid)return;
+    if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
+      banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
+    seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();return}
+  if((f.type==="queued"||f.type==="posting")&&f.session===sid){
+    const old=intents.get(f.id);
+    if(f.type==="queued"&&old&&old.status!=="queued")return;
+    intents.set(f.id,{...(old||{}),...f,status:f.type==="queued"?"queued":f.status});
+    renderStream();settle()}}
+function renderBusy(){
+  const b=!!(GW&&sess&&sess.busy);
+  $("#busy").hidden=!b;
+  if(b){$("#busycmd").textContent=String(sess.running||"").replace(/^:/,"");
+    $("#busyq").textContent=sess.queued?" · "+sess.queued+" queued":""}
+  document.querySelectorAll('[data-cmd^="run"],[data-cmd="step"]').forEach(c=>c.disabled=b)}
+function applyManifest(){
+  const m=manifestM;if(!m)return;
+  $("#b-mode").hidden=false;$("#b-modev").textContent=m.mode+(m.mode==="shared"?" · REPL only":"");
+  $("#b-mode").title=m.policy||"";
+  const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
+  const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
+  $("#chatin").hidden=chat!=="agent";
+  if(chat!=="agent"){                // no chat here: no invitation to one
+    $("#chat .ph").textContent=chat==="pending"?"CLAUDE — agent chat (step 2)":"CLAUDE — not on this instance";
+    if(!chatTurns.length)$("#chatlog").innerHTML=""}
+  $("#chatstate").innerHTML=chat==="agent"?"":chat==="pending"
+    ?"agent chat on this host arrives with step 2 (CONSOLE-WS §3)"
+    :"AI chat is not served on this shared instance — it would run on the operator's credentials. Claude for you lives on"+link+" (billed to you).";
+  $("#loop").innerHTML=`<p class="ph">CANDIDATES · RECORDS</p><div class="empty">approvals and surprise records live on${link}.</div>`}
+
 /* ---- wiring (static layout first; capabilities light up later) ---- */
 function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setAttribute("aria-pressed",lenses.has(b.dataset.lens)))}
 function flashOcc(i){const el=document.getElementById("occ-"+i);if(!el){banner("#"+i+" is not in the current stream",3000);return}
@@ -598,6 +680,7 @@ $("#chatstop").addEventListener("click",()=>{if(chatBusy)chatBusy.abort()});
 $("#chatq").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chatSend()}});
 $("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
 $("#reset").addEventListener("click",()=>queue("reset"));
+$("#stopcmd").addEventListener("click",()=>{if(GW&&sid)wsSend({ch:"repl",type:"stop",session:sid})});
 $("#prompt").addEventListener("keydown",e=>{
   const p=e.target;
   if(e.key==="Enter"){e.preventDefault();const v=p.value.trim();if(!v)return;
@@ -613,12 +696,14 @@ syncLenses();renderBand();renderRight();
 
 chatLoad();renderChat();
 claude.use("sample").then(ns=>{sampleNs=ns;
+  if(GW)return;                      // the gateway's manifest owns the pane
   if(!ns){$("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable in this view — the debugger works as before"}});
 claude.use("downloads").then(ns=>{downloadsNs=ns});
 (async()=>{
   user=await claude.use("user");
   if(user){try{uid=await user.id()}catch(e){}
     try{canDecide=(await user.isOwner())||(await user.canEdit())}catch(e){}}
+  if(GW){wsConnect();return}
   db=await claude.use("db");
   if(!db){banner("No backend in this view (db unavailable) — the console renders, but nothing can be queued.");return}
   db.doc("meta/catalogs").onSnapshot(s=>{catNames=(s.exists&&s.data().names)||[];

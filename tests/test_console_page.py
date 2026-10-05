@@ -31,3 +31,15 @@ def test_chat_preamble_and_tool_invariants():
     assert 'name:"repl"' in PAGE and 'queue(line,"claude",true)' in PAGE
     assert "cache:false" in PAGE                 # chat never replays
     assert 'code==="not_granted"' in PAGE and 'code==="rate_limited"' in PAGE
+
+
+def test_gateway_transport_is_flag_gated_and_manifest_driven():
+    """CONSOLE-WS §5: the WS client only switches on under the gateway's
+    flag; the artifact build keeps its capability shims; the chat pane
+    and LLM affordances follow the manifest; stop is wired."""
+    assert "const GW=window.LOOP_GATEWAY||null" in PAGE
+    assert "if(GW){wsConnect();return}" in PAGE            # skips the db
+    assert "new WebSocket(" in PAGE and "GW.ws" in PAGE
+    assert "function applyManifest()" in PAGE
+    assert '"chat is not served' not in PAGE                # gateway says it
+    assert 'type:"stop"' in PAGE and 'id="stopcmd"' in PAGE

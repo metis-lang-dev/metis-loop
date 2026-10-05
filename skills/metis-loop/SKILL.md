@@ -83,7 +83,16 @@ also their window into the loop.
 Never bypass a gate, never edit the harness to make a candidate
 pass, never write catalog files for an unapproved candidate.
 
-## Serving the console (docs/CONSOLE.md §5a)
+## Live work: run console-serve (docs/CONSOLE-WS.md)
+
+For live work, start the standing backend — `metis-loop console-serve`
+(personal, http://127.0.0.1:8770/) — and work in that page: commands
+answer over a WebSocket in milliseconds, no drain to babysit. The
+published artifact is the SHARED window (demos, approvals from any
+device, `sample` chat billed to the viewer); serve its db only when
+someone is using that surface, as below.
+
+## Serving the console (docs/CONSOLE.md §5a) — the artifact surface (secondary transport)
 
 The console's db is reachable only by the page or by THIS session's
 ArtifactData tool, so you are the backend: a drain loop over

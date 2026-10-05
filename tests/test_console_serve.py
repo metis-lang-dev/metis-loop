@@ -80,3 +80,24 @@ def test_drain_is_a_pure_rows_to_writes_mapping(srv):
     s = w2[0]["data"]
     assert s["epoch"] == 5 and s["ctx"]["fired"] == 0 and "reopened" in s
     assert fresh.catalogs_doc()["path"] == "meta/catalogs"
+
+
+def test_open_session_from_source_in_memory(srv, tmp_path, monkeypatch):
+    """CONSOLE-WS §4a from day one: {source, name} compiles catalog TEXT
+    in memory — the same kernel, no file written anywhere."""
+    src = (srv.resolve("3lp")).read_text().replace(
+        "#init pig 3", "#init pig 1")
+    monkeypatch.chdir(tmp_path)
+    before = set(srv.root.rglob("*"))
+    s = srv.open_session("f1", {"source": src, "name": "domains/fiction/3lp"})
+    assert s["status"] == "running" and s["llp"].endswith("(in memory)")
+    assert s["ctx"]["counts"]["pig"] == 1                 # the edited text
+    out = srv.serve_one("f1", "run 6")["posting"]
+    assert out["status"] == "done"
+    assert set(srv.root.rglob("*")) == before and not any(tmp_path.iterdir())
+    bad = srv.open_session("f2", {"source": "stage go {", "name": "x"})
+    assert bad["status"] == "closed" and bad["error"]
+    big = srv.open_session("f3", {"source": "%" * (300 * 1024)})
+    assert "KiB" in big["error"]
+    scratch = srv.open_session("f4", {"source": src, "name": "my fork!"})
+    assert scratch["status"] == "running"

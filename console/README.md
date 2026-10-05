@@ -35,3 +35,42 @@ the REPL lines in a message through the page's `repl` tool —
 `=deny` / `=rate` simulate not_granted / rate_limited. The real-model
 pass happens on the published artifact. The shim is dev-only and
 never part of the published page.
+
+## The standing backend: `metis-loop console-serve` (CONSOLE-WS.md)
+
+For live work run the gateway on your host — no drain, no db:
+
+    pip install -e '.[console]'          # websockets
+    metis-loop console-serve             # personal: http://127.0.0.1:8770/
+    metis-loop console-serve --mode shared --bind 0.0.0.0 --token T
+
+It serves this same page with `window.LOOP_GATEWAY` set and a
+`claude.use` shim that resolves null; the page then talks over ONE
+WebSocket (`/ws`) — open/attach, intents, postings, session frames
+(busy, queued), stop — and renders exactly as before. The mode
+manifest decides the chat pane and the LLM seats: **personal** = the
+operator's own host (REPL + its LLM seats; agent chat lands in step 2),
+**shared** = REPL only — `narrate`/`formalize`/`llm` and chat frames are
+refused (they would run on the operator's credentials), with a URL
+token, per-IP session cap and a rate limit. Sessions, postings and
+history live in MEMORY only (D4: nothing a visitor types or runs is
+written to disk); `{source, name}` opens a catalog from text, compiled
+in memory (§4a).
+
+Config — the metis dot file's `[console]` table (flags override):
+
+    [console]
+    port = 8770
+    bind = "127.0.0.1"
+    mode = "personal"            # or "shared"
+    token = ""                   # shared: required as ?token=… when set
+    max_sessions = 16
+    max_sessions_per_ip = 4      # shared mode
+    max_run_steps = 500          # `run N` is clamped above this
+    idle_secs = 1800             # idle sessions reset (epoch + 1)
+    rate_per_min = 120           # shared mode, per address
+    artifact_url = ""            # where the chat pointer sends shared users
+
+The artifact (same page, published) stays the SHARED window — demos,
+approvals from any device, `sample` chat billed to the viewer — over
+its db drain; that is the secondary transport.
