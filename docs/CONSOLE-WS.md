@@ -98,6 +98,41 @@ gateway advertises a MODE MANIFEST and the page renders what exists
 | formalize | `llm` endpoint as today — the subscription path is the existing `command:` backend (`command:claude -p …`) or ollama | Agent Service (SDK, diagnostics-only repair, spec 08 D5) | OFF |
 | narrate | **ollama ONLY** (user condition: the terminal REPL narrates through ollama) | **Haiku PREFERRED** via the SDK (`claude-haiku-4-5`), ollama fallback when the SDK seat is absent | OFF (a nook cannot carry models) |
 
+### 4a. Command interception and copy-on-write catalogs (user, 2026-10-05)
+
+D3's pattern generalized: the gateway INTERCEPTS the commands whose
+terminal semantics (local editors, local paths) mean nothing over
+the web, and substitutes web-native ones. The kernel is untouched;
+the terminal REPL keeps its behavior.
+
+- **`edit [RULE]`** → a READ-ONLY, syntax-colored source viewer in
+  the browser (popup or tab): the LLP colorizer (the v1 console's
+  `hl()` token classes), scrolled to RULE's line with the rule
+  flashed; AUTO-RELOADS when the session's catalog changes (epoch /
+  key bump, or a COW re-send). No editor component — a plain
+  rendered view; editing happens in the COW editor below.
+- **Copy-on-write catalogs.** metis-catalog is READ-ONLY for every
+  web user. "Fork" on a session pulls the resolved catalog's source
+  (a read-only gateway fetch) into the BROWSER DB (IndexedDB,
+  per-browser) where the user edits it (plain textarea with the
+  colorizer as overlay — minimal decoration, no editor framework);
+  the page re-opens the session FROM SOURCE: `open_session` accepts
+  `{source: text, name}` beside `{llp: name}`, compiles in memory,
+  and NOTHING touches the operator's disk (the D4 doctrine extended:
+  visitors' catalogs are theirs, held client-side). Saving in the
+  editor re-sends the source — the REPL reload semantics apply
+  (state carries over, NEW-key banner, epoch bump), and the `edit`
+  viewer auto-follows. New scripts = COW from a blank scratch
+  catalog. Changes destined for the REAL metis-catalog still go the
+  one road: candidate → gates → the operator approves → commit (the
+  loop; never a web write).
+- **`save`/`export`** → browser downloads of the session state /
+  COW source (gateway returns the text; the page saves it), never
+  server paths.
+- On the ARTIFACT surface the COW copy's home is the viewer's
+  private `data/users/<id>/` subtree (same ownership story,
+  different store).
+
 Policy line, enforced by the manifest and stated in the page: a
 shared instance NEVER routes other people's chat, narration or
 formalization through the operator's Pro/Max credentials (Anthropic
@@ -166,9 +201,12 @@ console-serve; the artifact is the shared window."
   serve users from the net and WE DO NOT KEEP THEIR WORK — no
   visitor chat, session state or transcripts persisted to the
   operator's disk (§3).
-- **D5 — RESOLVED: steps as proposed** — 1 gateway + session
-  manager + page WS client (REPL-only, both modes; this alone is
-  the nook deployment); 2 Agent Service + chat pane over WS +
-  caps/stop; 3 narrate-via-Haiku + in-memory history wiring +
-  manifest polish + docs/skill; the artifact-surface skill note
-  lands with step 1.
+- **D5 — RESOLVED: steps as proposed, plus step 4 (user)** —
+  1 gateway + session manager + page WS client (REPL-only, both
+  modes; this alone is the nook deployment — and `open_session`
+  accepts `{source}` from day one so §4a needs no API rework);
+  2 Agent Service + chat pane over WS + caps/stop; 3 narrate-via-
+  Haiku + in-memory history wiring + manifest polish + docs/skill;
+  4 command interception + COW (§4a): the edit viewer, fork/editor
+  over IndexedDB, save/export as downloads. The artifact-surface
+  skill note lands with step 1.
