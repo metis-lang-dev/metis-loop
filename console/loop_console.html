@@ -1,464 +1,390 @@
-<title>Metis Loop Console</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<title>Loop Console</title>
 <style>
 :root{
-  --bg:#F7F6F2; --panel:#FFFFFF; --panel2:#F1EFE8; --ink:#23261F;
-  --muted:#6B6E63; --line:#DFDDD3; --accent:#2E5E6B; --accent-ink:#FFFFFF;
-  --bad:#A33D2E; --warn:#B07C24; --good:#3D6B44;
-  --bad-bg:#F6E7E3; --warn-bg:#F5EDDA; --good-bg:#E6EFE7;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
-  --body:'Source Sans 3',system-ui,sans-serif;
-  --disp:'Spectral',Georgia,serif;
+  --bg:#0d1014;--panel:#11151b;--line:#232a33;--fg:#c9d1d9;--dim:#7d8590;
+  --faint:#4a525c;--green:#3fb950;--purple:#bc8cff;--yellow:#d29922;
+  --red:#f85149;--cyan:#39c5cf;--gray:#6e7681;--sel:#1b2330;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#191B18; --panel:#20231F; --panel2:#262A24; --ink:#E8E6DD;
-    --muted:#9A9D90; --line:#33362F; --accent:#7FB3BF; --accent-ink:#14262B;
-    --bad:#D97E6D; --warn:#D2A755; --good:#8CBB93;
-    --bad-bg:#39231F; --warn-bg:#362D1B; --good-bg:#22301F;
-    color-scheme: dark;
-  }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg)}
+body{font:12.5px/1.45 var(--mono);display:flex;flex-direction:column;overflow:hidden}
+button,input{font:inherit;color:inherit}
+a{color:var(--cyan)}
+#band{border-bottom:1px solid var(--line);padding:6px 12px;background:var(--panel);flex:none}
+#band .l{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;min-height:19px}
+#band b{color:var(--dim);font-weight:normal;margin-right:5px;font-size:11px;letter-spacing:.04em}
+#band .v{color:var(--fg)}
+#tokens{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.dots{color:var(--cyan);letter-spacing:1px}
+.st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
+.st-done,.st-closed{color:var(--gray)}.st-opening{color:var(--cyan)}
+#sessbar{margin-left:auto;display:flex;gap:6px;align-items:center}
+#sessbar input{background:var(--bg);border:1px solid var(--line);padding:1px 6px;width:190px}
+.btn{background:transparent;border:1px solid var(--line);padding:1px 8px;cursor:pointer}
+.btn:hover{border-color:var(--dim)}
+.btn:focus-visible,.chip:focus-visible,input:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
+#banner{background:#2a2111;color:var(--yellow);padding:3px 12px;border-bottom:1px solid var(--line);flex:none}
+#banner[hidden]{display:none}
+main{flex:1;display:flex;min-height:0}
+#left{flex:1 1 62%;display:flex;flex-direction:column;min-width:0}
+#split{flex:none;width:4px;cursor:col-resize;background:var(--line)}
+#right{flex:1 1 38%;display:flex;flex-direction:column;min-width:220px;overflow:auto;padding:8px 12px}
+.ph{color:var(--dim);font-size:11px;letter-spacing:.06em;margin:0 0 6px}
+#stream{flex:1;overflow:auto;padding:8px 12px}
+.ent{margin:0 0 6px}
+.cmd{color:var(--fg)}.cmd .p{color:var(--cyan)}.cmd .p.claude{color:var(--purple)}
+.pill{font-size:10.5px;padding:0 5px;border:1px solid var(--line);margin-left:8px;color:var(--dim)}
+.pill.refused,.pill.error{color:var(--red);border-color:#5a2a2a}
+.pill.queued{color:var(--yellow)}
+pre{margin:2px 0 0;white-space:pre-wrap;word-break:break-word;font:inherit}
+pre.out{color:#aab3bd}
+pre.err{color:var(--red)}
+.beat{border-left:2px solid var(--line);margin:3px 0 3px 2px;padding:0 0 0 8px}
+.beat.cur{border-left-color:var(--cyan)}
+.beat .bh{color:var(--dim);font-size:11px}
+.beat.cur .bh{color:var(--cyan)}
+.ev{display:flex;gap:10px;flex-wrap:wrap}
+.ev .n{color:var(--cyan)}
+.ev .bind{color:var(--dim)}
+.ev .eff{color:#aab3bd}
+.ev .eff .m{color:var(--red)}.ev .eff .pl{color:var(--green)}.ev .eff .r{color:var(--purple)}
+.ev.flash{background:var(--sel)}
+.episode{display:flex;align-items:center;gap:8px;color:var(--yellow);margin:6px 0;font-size:11.5px}
+.episode::before,.episode::after{content:"";flex:1;border-top:1px solid #3a3220}
+.ctxblk{border:1px solid var(--line);margin:6px 0 10px;padding:4px 8px}
+.sec{margin:4px 0}
+.sec h4{margin:0 0 2px;font-weight:normal;color:var(--dim);font-size:11px;letter-spacing:.06em}
+.rule{display:flex;gap:8px;cursor:pointer;padding:0 2px}
+.rule:hover{background:var(--sel)}
+.rule .mk{width:1.2em;text-align:center}
+.rule .rn{min-width:13em}
+.rule .dt{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-fireable .mk,.s-fireable .rn{color:var(--green)}
+.s-rests_on .mk,.s-rests_on .rn{color:var(--purple)}
+.s-fired_pruned .mk,.s-fired_pruned .rn{color:var(--gray)}
+.s-waiting .mk,.s-waiting .rn{color:var(--yellow)}
+.s-spent .mk,.s-spent .rn{color:var(--red)}
+.s-idle .mk,.s-idle .rn{color:var(--faint)}
+.insp{margin:2px 0 6px 2.4em;border-left:1px solid var(--line);padding-left:8px;color:#aab3bd}
+.occ{color:var(--purple);cursor:pointer;text-decoration:underline dotted}
+.restsoff{color:var(--purple)}
+.meas{display:flex;gap:8px;align-items:center}
+.meas .bar{height:6px;background:var(--yellow);opacity:.7}
+.meas .nm{min-width:14em}
+.kv{display:grid;grid-template-columns:8em 1fr;gap:0 8px}
+.kv span:nth-child(odd){color:var(--dim)}
+#lenses,#chips{display:flex;flex-wrap:wrap;gap:4px;padding:4px 12px;border-top:1px solid var(--line);flex:none}
+#lenses{color:var(--dim);font-size:11px;align-items:center}
+.chip{background:transparent;border:1px solid var(--line);padding:0 8px;cursor:pointer;color:var(--fg)}
+.chip:hover{border-color:var(--cyan)}
+.chip[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan)}
+.chip[disabled]{opacity:.4;cursor:default}
+#promptrow{display:flex;gap:6px;padding:6px 12px 8px;border-top:1px solid var(--line);flex:none}
+#promptrow .p{color:var(--cyan)}
+#prompt{flex:1;background:transparent;border:none;outline:none}
+.empty{color:var(--dim)}
+.cand{border-top:1px solid var(--line);padding:5px 0}
+.cand .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.ok{color:var(--green)}.bad{color:var(--red)}
+details summary{cursor:pointer;color:var(--dim)}
+@media (max-width:760px){
+  main{flex-direction:column}#split{display:none}
+  #left{flex:1 1 auto;min-height:60vh}#right{flex:none;max-height:40vh;border-top:1px solid var(--line)}
+  #sessbar{margin-left:0;width:100%}#sessbar input{flex:1;width:auto}
 }
-:root[data-theme="dark"]{
-  --bg:#191B18; --panel:#20231F; --panel2:#262A24; --ink:#E8E6DD;
-  --muted:#9A9D90; --line:#33362F; --accent:#7FB3BF; --accent-ink:#14262B;
-  --bad:#D97E6D; --warn:#D2A755; --good:#8CBB93;
-  --bad-bg:#39231F; --warn-bg:#362D1B; --good-bg:#22301F;
-  color-scheme: dark;
-}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);
-  font-size:15px;line-height:1.5;padding-inline:16px;margin:0}
-.wrap{max-width:1380px;margin:0 auto;padding-block:14px}
-header.top{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
-  border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
-h1{font-family:var(--disp);font-weight:600;font-size:1.5rem;margin:0;
-  letter-spacing:.01em}
-.sub{color:var(--muted);font-size:.85rem}
-.grid{display:grid;grid-template-columns:280px minmax(0,1fr) 360px;gap:14px}
-@media (max-width:1060px){.grid{grid-template-columns:250px minmax(0,1fr)}
-  .side{grid-column:1/-1;display:grid;gap:14px;
-    grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}}
-@media (max-width:720px){.grid{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px}
-.panel>h2{font-family:var(--disp);font-weight:500;font-size:1.02rem;margin:0;
-  padding:10px 14px;border-bottom:1px solid var(--line)}
-.side{display:grid;gap:14px;align-content:start}
-.qlist{max-height:74vh;overflow-y:auto}
-.qitem{padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer}
-.qitem:hover{background:var(--panel2)}
-.qitem[aria-selected="true"]{background:var(--panel2);
-  box-shadow:inset 3px 0 0 var(--accent)}
-.qitem .atoms{font-family:var(--mono);font-size:.72rem;color:var(--muted);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.pill{font-size:.68rem;font-weight:600;letter-spacing:.06em;
-  text-transform:uppercase;padding:1px 8px;border-radius:99px}
-.pill.unmodeled,.pill.rejected,.pill.refused{background:var(--bad-bg);color:var(--bad)}
-.pill.rare,.pill.regate{background:var(--warn-bg);color:var(--warn)}
-.pill.ok,.pill.approved,.pill.fixed,.pill.done{background:var(--good-bg);color:var(--good)}
-.pill.pending,.pill.queued{background:var(--panel2);color:var(--muted)}
-.verb{font-family:var(--mono);font-size:.74rem;font-weight:600;
-  color:var(--accent);background:var(--panel2);border:1px solid var(--line);
-  border-radius:4px;padding:0 6px}
-.step{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:8px}
-.step:first-child{border-top:0}
-.step>header{display:flex;gap:10px;align-items:baseline}
-.step>header .what{font-size:.78rem;font-weight:600;letter-spacing:.07em;
-  text-transform:uppercase;color:var(--muted)}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;
-  font-size:.86rem;margin:0}
-.kv dt{color:var(--muted)}
-.kv dd{margin:0;font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere}
-.atomset{display:flex;flex-wrap:wrap;gap:5px}
-.atom{font-family:var(--mono);font-size:.76rem;background:var(--panel2);
-  border:1px solid var(--line);border-radius:4px;padding:1px 7px}
-.atom.zero{border-color:var(--bad);color:var(--bad)}
-h3{font-size:.78rem;font-weight:600;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--muted);margin:0}
-pre{font-family:var(--mono);font-size:.76rem;line-height:1.45;
-  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
-  padding:10px 12px;overflow-x:auto;margin:0;max-height:320px;overflow-y:auto}
-/* LLP colorizer — mirrors the lexer's token classes */
-.tok-kw{color:var(--accent);font-weight:600}
-.tok-var{color:var(--warn)}
-.tok-op{color:var(--bad);font-weight:600}
-.tok-str{color:var(--good)}
-.tok-doc{color:var(--good);font-style:italic}
-.tok-com{color:var(--muted);font-style:italic}
-.tok-dir{color:var(--accent)}
-table{border-collapse:collapse;font-size:.8rem;width:100%}
-td,th{padding:3px 10px 3px 0;text-align:left;
-  border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
-td.mono{font-family:var(--mono);font-size:.76rem}
-.gate{display:flex;gap:8px;font-size:.84rem;align-items:baseline}
-.gate .m{font-family:var(--mono);font-size:.9rem}
-.gate.fail .m{color:var(--bad)} .gate.warn .m{color:var(--warn)}
-.gate.pass .m{color:var(--good)}
-button{font:inherit;font-weight:600;border-radius:6px;padding:6px 16px;
-  cursor:pointer;border:1px solid var(--line);background:var(--panel2);
-  color:var(--ink)}
-button.primary{background:var(--accent);border-color:var(--accent);
-  color:var(--accent-ink)}
-button.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
-button:disabled{opacity:.45;cursor:default}
-button:focus-visible,input:focus-visible,.qitem:focus-visible{
-  outline:2px solid var(--accent);outline-offset:1px}
-.log{max-height:52vh;overflow-y:auto;padding:12px 14px;display:grid;gap:10px}
-.turn{font-size:.84rem;display:grid;gap:4px}
-.turn .cmdline{font-family:var(--mono);font-size:.8rem}
-.turn .cmdline::before{content:"μ> ";color:var(--muted)}
-.ask{display:grid;gap:8px;padding:12px 14px;border-top:1px solid var(--line)}
-.ask input{font-family:var(--mono);font-size:.84rem;background:var(--panel2);
-  color:var(--ink);border:1px solid var(--line);border-radius:6px;
-  padding:8px 10px;width:100%;box-sizing:border-box}
-.note{font-size:.78rem;color:var(--muted)}
-.banner{background:var(--warn-bg);color:var(--warn);
-  border:1px solid var(--line);border-radius:6px;padding:8px 12px;
-  font-size:.84rem;margin-bottom:12px}
-.empty{padding:22px 14px;color:var(--muted);font-size:.88rem}
-.tabs{display:flex;border-bottom:1px solid var(--line)}
-.tab{flex:1;border:0;background:none;border-radius:0;padding:10px 8px;
-  font-family:var(--disp);font-weight:500;font-size:1rem;color:var(--muted)}
-.tab[aria-selected="true"]{color:var(--ink);
-  box-shadow:inset 0 -2px 0 var(--accent)}
-.delta{padding:12px 14px;display:grid;gap:10px}
 </style>
 
-<div class="wrap">
-<header class="top">
-  <h1>Metis Loop Console</h1>
-  <span class="sub">a wrapper over <span class="verb">metis-loop repl</span>
-    &mdash; sources are read-only, commands queue for the loop session,
-    the model is local (ollama)</span>
-</header>
-
-<div id="banner" class="banner" hidden></div>
-
-<div class="grid">
-  <section class="panel">
-    <div class="tabs" role="tablist">
-      <button class="tab" id="tab-q" role="tab" aria-selected="true">:sink</button>
-      <button class="tab" id="tab-c" role="tab" aria-selected="false">Catalogs</button>
-    </div>
-    <div id="queue" class="qlist"><div class="empty">Waiting for the
-      record store&hellip; the runtime sink arrives via the loop session
-      (<span class="verb">:sink</span> on their side, these rows on yours).</div></div>
-    <div id="cats" class="qlist" hidden><div class="empty">No catalogs
-      synced yet.</div></div>
-  </section>
-
-  <section class="panel">
-    <h2 id="dtitle">Record</h2>
-    <div id="detail">
-      <div class="empty">Select a surprise record. The panel walks the
-        loop exactly as the REPL does: the scene, the replay, the mined
-        text, the gate report, and the one thing only a human does here
-        &mdash; the decision.</div>
-    </div>
-  </section>
-
-  <div class="side">
-    <section class="panel" id="deltaPanel" hidden>
-      <h2>&Delta; rules <span class="verb">:gate</span></h2>
-      <div id="delta" class="delta"></div>
-    </section>
-
-    <section class="panel">
-      <h2>REPL <span class="verb">&mu;&gt;</span></h2>
-      <div id="clog" class="log">
-        <div class="turn note">Commands queue here and the loop session
-          executes them in <span class="verb">metis-loop repl</span>
-          (whitelist enforced REPL-side; <span class="verb">:help</span>
-          lists the verbs, <span class="verb">:formalize</span> drafts
-          via the local ollama model). Approval never queues &mdash; it
-          is the buttons in the middle panel, and nothing else.</div>
-      </div>
-      <div class="ask">
-        <input id="q" type="text" spellcheck="false"
-          placeholder=":help   :replay   :marginals atom…   :formalize ollama:phi3">
-        <div class="row">
-          <button class="primary" id="send">Queue</button>
-          <span class="note" id="cstate"></span>
-        </div>
-      </div>
-    </section>
+<header id="band" aria-label="context">
+  <div class="l">
+    <span><b>CATALOG</b><span class="v" id="b-cat">—</span></span>
+    <span><b>KEY</b><span class="v" id="b-key">—</span></span>
+    <span><b>STAGE</b><span class="v" id="b-stage">—</span></span>
+    <span><b>BEAT</b><span class="v" id="b-beat">—</span></span>
+    <span><b>EPISODE</b><span class="v" id="b-ep">—</span></span>
+    <span id="b-status" class="v">no session</span>
+    <span class="v" id="b-fired"></span>
+    <span id="sessbar">
+      <input id="catin" list="catlist" placeholder="catalog, e.g. 3lp" aria-label="catalog to open" autocomplete="off">
+      <datalist id="catlist"></datalist>
+      <button class="btn" id="open">open</button>
+      <button class="btn" id="reset" title="queue reset">reset</button>
+      <span id="b-sid" class="empty"></span>
+    </span>
   </div>
-</div>
-</div>
+  <div class="l">
+    <span id="tokens"><b>TOKENS</b><span id="b-tok" class="empty">—</span></span>
+    <span><b>ENABLED</b><span class="v" id="b-en">—</span></span>
+  </div>
+</header>
+<div id="banner" role="status" hidden></div>
+<main>
+  <section id="left" aria-label="debugger">
+    <div id="stream" aria-live="polite"><div class="empty" id="hello">Open a catalog above to start a session — then type REPL lines below (<span class="cmd">run 6</span>, <span class="cmd">why</span>, <span class="cmd">ctx</span>…) or use the chips.</div></div>
+    <div id="lenses">context after each stop:
+      <button class="chip" data-lens="rules">rules</button>
+      <button class="chip" data-lens="measure">measure</button>
+      <button class="chip" data-lens="tokens">tokens</button>
+      <button class="chip" data-lens="proof">proof</button>
+    </div>
+    <div id="chips">
+      <button class="chip" data-cmd="run 50" title="run to quiescence (≤50 steps)">run</button>
+      <button class="chip" data-cmd="step">step</button>
+      <button class="chip" data-cmd="events">events</button>
+      <button class="chip" data-cmd="ctx">ctx</button>
+      <button class="chip" data-cmd="graph">graph</button>
+      <button class="chip" data-cmd="why">why</button>
+      <button class="chip" data-cmd="findings">findings</button>
+      <button class="chip" data-cmd="narrate">narrate</button>
+      <button class="chip" data-cmd="undo">undo</button>
+    </div>
+    <div id="promptrow"><span class="p">llp&gt;</span>
+      <input id="prompt" aria-label="REPL line" autocomplete="off" spellcheck="false" placeholder="a REPL line — Enter queues it">
+    </div>
+  </section>
+  <div id="split" role="separator" aria-orientation="vertical" tabindex="0"></div>
+  <aside id="right" aria-label="loop">
+    <p class="ph">CLAUDE — the chat arrives in step 3</p>
+    <p class="ph" style="margin-top:10px">CANDIDATES</p>
+    <div id="cands"><div class="empty">No candidates.</div></div>
+    <p class="ph" style="margin-top:12px">SURPRISE RECORDS</p>
+    <div id="records"><div class="empty">No surprise records.</div></div>
+  </aside>
+</main>
 
 <script>
 "use strict";
+/* The Loop Console (metis-loop docs/CONSOLE.md): a state inspector over
+   the ONE kernel REPL. The page never computes semantics: the band and
+   sections render from the backend's ctx/json postings; every action
+   is an intents doc the serving session drains through run_intent. */
 const $=s=>document.querySelector(s);
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let db=null,uid=null;
-let records=new Map(),cands=new Map(),sel=null;
-let cats=new Map(),catSel=null,view="q";
-let intentDocs=new Map();
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MARK={fireable:"*",rests_on:"◂",fired_pruned:"·",waiting:"?",spent:"–",idle:" "};
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const sstore={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},
+  set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
 
-function fmtTs(t){try{return new Date(t).toISOString().replace("T"," ").slice(0,16)}catch(e){return""}}
-function atoms(o,zero){return Object.entries(o||{}).map(([a,n])=>
-  `<span class="atom${zero&&!n?" zero":""}">${esc(a)}${n>1?"&times;"+n:zero&&!n?"=0":""}</span>`).join("")}
-function verbHead(verb,what){return `<header><span class="verb">${esc(verb)}</span><span class="what">${esc(what)}</span></header>`}
+let db=null,user=null,uid=null,canDecide=false;
+let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
+let intents=new Map(),cands=new Map(),records=new Map(),catNames=[];
+let unsubSess=null,unsubInt=null,openInsp=null;
+let lenses=new Set(store.get("loopconsole.lenses",["rules","measure"]));
+let hist=store.get("loopconsole.hist",[]),hpos=hist.length;
 
-/* ---- LLP colorizer: the lexer's token classes, as spans ---- */
-const LLP_KW=/^(catalog|provenance|extends|include|layers|stages|type|namespace|produce|consume|pred|bwd|weight|guard|input|output|reads|stage|qui|if|one)$/;
-function hl(src){
-  return String(src).split("\n").map(line=>{
-    const t=line.trimStart();
-    if(t.startsWith("%%"))return `<span class="tok-doc">${esc(line)}</span>`;
-    if(t.startsWith("%"))return `<span class="tok-com">${esc(line)}</span>`;
-    if(t.startsWith("#"))return `<span class="tok-dir">${esc(line)}</span>`;
-    return line.replace(
-      /"[^"]*"|-o(?![A-Za-z0-9_-])|:-|<>|@w|[$~]|[A-Za-z][A-Za-z0-9_-]*|\d+\.\d+|\.\d+|\d+|\s+|./g,
-      m=>{
-        if(/^\s+$/.test(m))return m;
-        if(m[0]==='"')return `<span class="tok-str">${esc(m)}</span>`;
-        if(m==="-o"||m===":-"||m==="<>"||m==="@w"||m==="$"||m==="~")
-          return `<span class="tok-op">${esc(m)}</span>`;
-        if(/^[A-Z]/.test(m))return `<span class="tok-var">${m}</span>`;
-        if(LLP_KW.test(m))return `<span class="tok-kw">${m}</span>`;
-        return esc(m);
-      });
-  }).join("\n");
+function banner(t,ms){const b=$("#banner");b.textContent=t;b.hidden=!t;
+  if(ms)setTimeout(()=>{if(b.textContent===t)b.hidden=true},ms)}
+
+/* ---- the band: renders from sessions/{sid}.ctx only ---- */
+function dots(n){return n<=5?"●".repeat(n):"●×"+n}
+function renderBand(){
+  const c=sess&&sess.ctx;
+  $("#b-sid").textContent=sid?("session "+sid):"";
+  const st=sess?(sess.status||"opening"):"no session";
+  const s=$("#b-status");s.textContent=String(st).toUpperCase();s.className="v st-"+st;
+  if(!c){["#b-cat","#b-key","#b-stage","#b-beat","#b-ep","#b-en"].forEach(k=>$(k).textContent="—");
+    $("#b-cat").textContent=sess&&sess.llp||"—";$("#b-fired").textContent="";
+    $("#b-tok").innerHTML='<span class="empty">—</span>';return}
+  $("#b-cat").textContent=c.catalog;$("#b-key").textContent=c.key.slice(0,12);
+  $("#b-key").title=c.key;$("#b-stage").textContent=c.stage;
+  $("#b-beat").textContent=c.beat;$("#b-ep").textContent=c.episode;
+  const since=c.fired-(c.base||0);
+  $("#b-fired").textContent=since+" fired"+(c.base?" since #"+c.base:"")+(since&&c.last_event?" · last "+c.last_event:"");
+  const toks=Object.entries(c.counts||{});
+  $("#b-tok").innerHTML=toks.length?toks.map(([a,n])=>
+    `<span>${esc(a)} <span class="dots">${dots(n)}</span></span>`).join("&ensp; "):'<span class="empty">(empty)</span>';
+  $("#tokens").title=toks.map(([a,n])=>a+":"+n).join("  ");
+  const nr=(c.rules||[]).filter(r=>r.state==="fireable").length;
+  $("#b-en").textContent=`${(c.enabled||[]).length} event(s) · ${nr} of ${(c.rules||[]).length} rule(s)`;
 }
 
-function renderQueue(){
-  const q=$("#queue");
-  const rows=[...records.values()].sort((a,b)=>(b.ts||"").localeCompare(a.ts||""));
-  if(!rows.length){q.innerHTML='<div class="empty">No surprise records yet.</div>';return}
-  q.innerHTML=rows.map(r=>`
-    <div class="qitem" role="button" tabindex="0" data-id="${esc(r.id)}"
-         aria-selected="${r.id===sel&&view==="q"}">
-      <div class="row"><span class="pill ${esc(r.kind||"rare")}">${esc(r.kind||"?")}</span>
-        <span class="sub">${fmtTs(r.ts)}</span>
-        <span class="sub" style="margin-left:auto">${esc((r.meta&&r.meta.source)||"")}</span></div>
-      <div class="atoms">${esc(Object.keys(r.observed||{}).join("  "))}</div>
-    </div>`).join("");
-  q.querySelectorAll(".qitem").forEach(el=>{
-    const go=()=>select(el.dataset.id);
-    el.addEventListener("click",go);
-    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}});
-  });
-}
+/* ---- stream: beat-grouped derivation + inline context sections ---- */
+function effect(f){
+  const side=(o,cls,pre)=>Object.entries(o||{}).map(([a,n])=>
+    `<span class="${cls}">${pre}${esc(a)}${n>1?"×"+n:""}</span>`).join(" ");
+  const parts=[side(f.consume,"m","−"),side(f.persist,"r","$"),side(f.produce,"pl","+")].filter(Boolean);
+  return parts.join(" ")||'<span class="empty">(no effect)</span>'}
+function splitName(n){const i=n.indexOf("[");return i<0?[n,""]:[n.slice(0,i),n.slice(i+1,-1).replace(/,/g," ")]}
+function beatsHtml(fired,curBeat,seenMax){
+  /* one block per beat, beats ascending: a later-fired independent
+     event can sit in an earlier beat — draw it there, and say so when
+     that beat already holds events shown above (never "time going
+     back") */
+  let html="",cur=null;
+  fired=[...fired].sort((a,b)=>(a.beat-b.beat)||(a.i-b.i));
+  for(const f of fired){
+    if(f.kind==="link"){
+      if(cur!==null){html+="</div>";cur=null}
+      html+=`<div class="episode" id="occ-${f.i}">${esc(f.name)} · stage ${esc(f.stage)} → ${esc(f.post)} · beat ${f.beat}</div>`;continue}
+    if(f.beat!==cur){if(cur!==null)html+="</div>";cur=f.beat;
+      const late=seenMax!==undefined&&f.beat<=seenMax;
+      html+=`<div class="beat${f.beat===curBeat?" cur":""}"><div class="bh">BEAT ${f.beat}${late?' <span class="empty">· fired later, beside beat '+f.beat+' above: nothing after beat '+(f.beat-1)+' caused it</span>':""}</div>`}
+    const [n,b]=splitName(f.name);
+    html+=`<div class="ev" id="occ-${f.i}"><span class="bind">#${f.i}</span><span class="n">${esc(n)}</span>${b?`<span class="bind">${esc(b)}</span>`:""}<span class="eff">${effect(f)}</span></div>`}
+  if(cur!==null)html+="</div>";
+  return html}
+function rulesHtml(c){
+  const rows=(c.rules||[]).map(r=>{
+    const occ=(r.rests_on||[]).map(i=>`<span class="occ" data-occ="${i}">#${i}</span>`).join(" ");
+    const open=openInsp===r.name;
+    return `<div class="rule s-${r.state}" data-rule="${esc(r.name)}" role="button" tabindex="0" aria-expanded="${open}">
+      <span class="mk">${MARK[r.state]||" "}</span><span class="rn">${esc(r.name)}</span>
+      <span class="dt">${esc(r.detail||r.state)}</span></div>
+      ${open?`<div class="insp"><div class="kv">
+        <span>state</span><span class="s-${r.state}"><span class="rn">${esc(r.state)}</span></span>
+        <span>enabled</span><span>${r.enabled||0} ground instance(s)</span>
+        <span>rests on</span><span>${occ||"—"}</span>
+        <span>pruned</span><span>${(r.pruned||[]).map(i=>"#"+i).join(" ")||"—"}</span>
+        <span>source</span><span>line ${r.line??"?"}</span></div>
+        <pre>${esc(r.src||"")}</pre></div>`:""}`}).join("");
+  const rests=(c.rests_on_stages||[]).map(s=>`<div class="restsoff">◂ ${esc(s.stage)}: ${
+    s.rules.map(r=>esc(r.name)+" "+r.occurrences.map(i=>`<span class="occ" data-occ="${i}">#${i}</span>`).join(" ")).join(" · ")}</div>`).join("");
+  return `<div class="sec"><h4>RULES · stage ${esc(c.stage)}${c.status==="done"?" (the run is done)":""} — * fireable ◂ rests on · fired, no longer matters ? waiting – spent</h4>${rows||`<div class="empty">${c.status==="done"?"the run is done — nothing can fire ('reset' to start over)":"no rules in this stage"}</div>`}
+    ${rests?`<h4 style="margin-top:4px">RESTS ON (other stages)</h4>${rests}`:""}
+    ${c.pruned_elsewhere?`<div class="empty">· ${c.pruned_elsewhere} more fired event(s) in other stages no longer matter</div>`:""}</div>`}
+function measureHtml(c){
+  const en=c.enabled||[];
+  return `<div class="sec"><h4>MEASURE · enabled tier (${esc(c.status)})</h4>${en.length?en.map(e=>
+    `<div class="meas"><span class="nm">${esc(e.name)}</span><span class="bar" style="width:${Math.max(2,Math.round(e.p*160))}px"></span><span>p=${(+e.p).toFixed(3)}</span></div>`).join(""):'<div class="empty">nothing can fire</div>'}</div>`}
+function tokensHtml(c){const t=Object.entries(c.counts||{});
+  return `<div class="sec"><h4>TOKENS</h4>${t.length?`<div class="kv">${t.map(([a,n])=>`<span>${esc(a)}</span><span>${n}</span>`).join("")}</div>`:'<div class="empty">(empty)</div>'}</div>`}
+function proofHtml(c){
+  return `<div class="sec"><h4>PROOF</h4><div class="kv"><span>program_key</span><span>${esc(c.key)}</span>
+    <span>run_key</span><span>${esc(c.run_key||"—")}</span><span>since</span><span>#${c.base} (base #0)</span>
+    <span>state</span><span>${esc(Object.entries(c.counts||{}).map(([a,n])=>a+(n>1?":"+n:"")).join(" ")||"(empty)")}</span></div></div>`}
+function contextHtml(c,only){
+  const want=only||lenses;const out=[];
+  if(want.has("rules"))out.push(rulesHtml(c));
+  if(want.has("measure"))out.push(measureHtml(c));
+  if(want.has("tokens"))out.push(tokensHtml(c));
+  if(want.has("proof"))out.push(proofHtml(c));
+  return out.length?`<div class="ctxblk">${out.join("")}</div>`:""}
+const STOPS=new Set(["run","step","undo","reset"]);
+function verbOf(cmd){return String(cmd||"").replace(/^:/,"").trim().split(/\s+/)[0]}
+function bodyHtml(i,isLastStop,seenMax){
+  if(i.status==="queued")return "";
+  if(i.status==="refused"||i.status==="error")return `<pre class="err">${esc((i.json&&i.json.error)||i.result)}</pre>`;
+  const v=verbOf(i.cmd),j=i.json||{},c=sess&&sess.ctx;
+  let h="";
+  if((v==="run"||v==="step")&&j.fired&&j.fired.length)h=beatsHtml(j.fired,c&&c.beat,seenMax);
+  else if(v==="ctx"&&c){const sec=String(i.cmd).replace(/^:/,"").trim().split(/\s+/)[1];
+    h=`<pre class="out">${esc(String(i.result||"").split("\n").slice(0,3).join("\n"))}</pre>`+
+      contextHtml(c,new Set(sec==="trace"?[]:sec==="tokens"?["tokens"]:sec==="rules"?["rules"]:["rules","measure","tokens","proof"]));
+    if(!sec||sec==="trace")h+=`<pre class="out">${esc((String(i.result||"").split("── trace\n")[1])||"")}</pre>`}
+  else h=`<pre class="out">${esc(i.result)}</pre>`;
+  if(isLastStop&&c)h+=contextHtml(c);
+  return h}
+function renderStream(){
+  const el=$("#stream");
+  if(!sid){return}
+  const ep=sess&&sess.epoch;
+  const rows=[...intents.values()].filter(i=>!i.epoch||!ep||i.epoch===ep)
+    .sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  let lastStop=null;
+  for(const i of rows)if(i.status==="done"&&STOPS.has(verbOf(i.cmd)))lastStop=i.id;
+  const atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-24;
+  let seenMax=-1;const seen={};
+  for(const i of rows){seen[i.id]=seenMax;
+    for(const f of ((i.json||{}).fired||[]))if(f.beat!=null&&f.beat>seenMax)seenMax=f.beat}
+  el.innerHTML=(rows.length?"":`<div class="empty">${sess&&sess.status==="opening"?"opening "+esc(sess.llp)+"…":"session ready — run, step, or type a REPL line."}</div>`)+
+    rows.map(i=>{const claude=i.actor==="claude";
+      return `<div class="ent"><div class="cmd"><span class="p${claude?" claude":""}">${claude?"claude&gt;":"llp&gt;"}</span> ${esc(String(i.cmd||"").replace(/^:/,""))}${
+        i.status!=="done"?`<span class="pill ${esc(i.status)}">${esc(i.status)}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
+    (!lastStop&&sess&&sess.ctx&&rows.length===0?contextHtml(sess.ctx):"");
+  if(atEnd)el.scrollTop=el.scrollHeight}
 
-function gateList(c){
-  const g=[];
-  (c.findings||[]).forEach(f=>g.push(`<div class="gate fail"><span class="m">&#x2717;</span><span>${esc(f)}</span></div>`));
-  (c.warnings||[]).forEach(w=>g.push(`<div class="gate warn"><span class="m">&#x26A0;</span><span>${esc(w)}</span></div>`));
-  if(c.ok)g.push(`<div class="gate pass"><span class="m">&#x2713;</span><span>parse &middot; roundtrip &middot; containment &middot; ${esc(c.classification||"?")} &middot; measure instruments</span></div>`);
-  return g.join("")}
-
-function candOf(r){
-  return [...cands.values()].filter(c=>c.record_id===r.id)
-    .sort((a,b)=>(b.ts||"").localeCompare(a.ts||""))[0]||null}
-
+/* ---- the right panel: candidates (the only approve path) + records ---- */
 async function decide(cid,status){
   if(!db)return;
-  try{
-    await db.doc("candidates/"+cid).update({status,
-      decided_by:uid||"viewer",decided_ts:new Date().toISOString()});
-  }catch(e){toast("Decision not saved: "+(e&&e.message||e))}
-}
+  try{await db.doc("candidates/"+cid).update({status,decided_by:uid||"viewer",decided_ts:new Date().toISOString()})}
+  catch(e){banner("Decision not saved: "+(e&&e.message||e),6000)}}
+function renderRight(){
+  const cs=[...cands.values()].sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,30);
+  $("#cands").innerHTML=cs.length?cs.map(c=>{
+    const open=c.status==="pending"||c.status==="regate";
+    return `<div class="cand"><div class="row"><span class="${c.ok?"ok":"bad"}">${c.ok?"✓ gates":"✗ "+(c.findings||[]).length+" finding(s)"}</span>
+      <span>${esc(c.record_id||c.id)}</span><span class="pill">${esc(c.status||"?")}</span>
+      ${open&&canDecide?`<button class="btn" data-dec="approved" data-cid="${esc(c.id)}">approve</button><button class="btn" data-dec="rejected" data-cid="${esc(c.id)}">reject</button>`:""}</div>
+      ${(c.findings||[]).slice(0,3).map(f=>`<div class="bad">${esc(f)}</div>`).join("")}
+      ${c.llp?`<details><summary>candidate LLP</summary><pre class="out">${esc(c.llp)}</pre></details>`:""}</div>`}).join(""):'<div class="empty">No candidates.</div>';
+  const rs=[...records.values()].sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,30);
+  $("#records").innerHTML=rs.length?rs.map(r=>`<div class="cand"><span class="pill">${esc(r.kind||"?")}</span> ${esc(r.id)} <span class="empty">${esc(Object.keys(r.observed||{}).join(" "))}</span></div>`).join(""):'<div class="empty">No surprise records.</div>'}
 
-function replayBlock(r,c){
-  const rp=r.replay||null;
-  const mapEv=(rp&&rp.events)||(c&&c.scenarios&&c.scenarios[0]&&c.scenarios[0].map_events)||null;
-  const now=rp?rp.likelihood:null;
-  return `<div class="step">${verbHead(":replay","trace & explanation")}
-    <div class="row">
-      <span class="sub">logged likelihood <b>${r.likelihood===0?"0":esc(String(r.likelihood))}</b></span>
-      ${now!==null?`<span class="sub">&rarr; now <b>${esc(String(now))}</b></span>`:""}
-      ${rp&&rp.fixed?'<span class="pill fixed">fixed</span>':""}
-      ${r.likelihood===0&&!(rp&&rp.fixed)?'<span class="sub">(unmodeled &mdash; a missing rule, not a bad parameter)</span>':""}
-    </div>
-    ${mapEv&&mapEv.length?`<div class="note">MAP trace:
-      <span class="atom">${mapEv.map(esc).join('</span> <span class="atom">')}</span></div>`:""}
-    ${r.explanation?`<pre>${esc(typeof r.explanation==="string"?r.explanation:JSON.stringify(r.explanation,null,1))}</pre>`:""}
-  </div>`}
-
-function renderDetail(){
-  if(view==="c"){renderCatDetail();renderDelta(null);return}
-  const d=$("#detail"),r=records.get(sel);
-  if(!r){d.innerHTML='<div class="empty">Select a surprise record.</div>';renderDelta(null);return}
-  $("#dtitle").textContent="Record "+(r.id||"");
-  const c=candOf(r);
-  const st=c?(c.status||"pending"):null;
-  d.innerHTML=`
-    <div class="step">${verbHead(":record","the scene")}
-      <div class="row"><span class="pill ${esc(r.kind||"rare")}">${esc(r.kind||"?")}</span>
-        <span class="sub">steps=${esc(String(r.steps||""))}</span></div>
-      <dl class="kv">
-        <dt>program_key</dt><dd>${esc(r.program_key||"")}</dd>
-        <dt>artifact</dt><dd>${esc((r.meta&&r.meta.artifact)||(r.meta&&r.meta.source)||"")}</dd>
-      </dl>
-      <div><h3>init</h3><div class="atomset">${atoms(r.init)}</div></div>
-      <div><h3>observed</h3><div class="atomset">${atoms(r.observed,true)}</div></div>
-    </div>
-    ${replayBlock(r,c)}
-    ${r.mined_text?`<div class="step">${verbHead(":mine","the approved unit")}
-      <pre style="max-height:120px">${hl(r.mined_text)}</pre></div>`:""}
-    ${c?`<div class="step">${verbHead(":gate","the report")}
-      <div class="row"><span class="pill ${esc(st)}">${esc(st)}</span>
-        <span class="sub">${esc(c.model||"")} &middot; rounds=${esc(String(c.rounds||1))}</span>
-        ${c.decided_by?`<span class="sub">by ${esc(c.decided_by)} ${fmtTs(c.decided_ts)}</span>`:""}</div>
-      <div>${gateList(c)}</div>
-      ${c.scenarios&&c.scenarios.length?`<div class="note">scenario key
-        <span class="atom">${esc((c.scenarios[0].key||"").slice(0,16))}</span>
-        &middot; support ${esc(String(c.scenarios[0].support))}</div>`:""}
-      <details><summary class="note">LLP source (read-only &mdash; edit the
-        file, the REPL reloads)</summary>
-        <pre>${hl(c.llp||"")}</pre></details>
-    </div>
-    <div class="step">${verbHead(":accept","approval — human only")}
-      ${st==="pending"&&c.ok?`<div class="row">
-          <button class="primary" data-a="approved" data-c="${esc(c.id)}">Approve for catalog</button>
-          <button class="danger" data-a="rejected" data-c="${esc(c.id)}">Reject</button></div>
-        <div class="note">Approval marks the candidate; the loop session
-          turns approved candidates into reviewed metis-catalog commits
-          and replays the record corpus.</div>`
-      :st==="regate"?'<div class="note">Being re-gated by the loop session.</div>'
-      :`<div class="note">Decided: <b>${esc(st)}</b>${c.decided_by?" by "+esc(c.decided_by):""}.</div>`}
-    </div>`
-    :`<div class="step">${verbHead(":gate","the report")}
-      <div class="note">No candidate yet &mdash; the loop session raises one
-        (<span class="verb">:mine</span> &rarr; <span class="verb">:formalize</span>
-        &rarr; <span class="verb">:gate</span>).</div></div>`}`;
-  d.querySelectorAll("button[data-c]").forEach(b=>
-    b.addEventListener("click",()=>decide(b.dataset.c,b.dataset.a)));
-  renderDelta(c);
-}
-
-/* the module window: what the loaded pack ADDS — its rules and the
-   exact measure it moves */
-function renderDelta(c){
-  const p=$("#deltaPanel");
-  const hasModule=c&&((c.rules&&c.rules.length)||
-    (c.scenarios||[]).some(s=>s.diffs&&s.diffs.length));
-  if(!hasModule){p.hidden=true;return}
-  p.hidden=false;
-  const sc=(c.scenarios||[]).filter(s=>s.diffs&&s.diffs.length);
-  $("#delta").innerHTML=`
-    ${c.rules&&c.rules.length?`<div><h3>added rules</h3>
-      ${c.rules.map(rl=>`<div class="note"><b style="font-family:var(--mono)">${esc(rl[0])}</b> &mdash; ${esc(rl[1])}</div>`).join("")}</div>`:""}
-    ${sc.length?sc.map((s,i)=>`<div><h3>measure delta${sc.length>1?" "+(i+1):""}</h3>
-      <table><tr><th>atom</th><th>base</th><th></th><th>merged</th></tr>
-      ${s.diffs.map(d=>`<tr><td class="mono">${esc(d[0])}</td><td>${(+d[1]).toFixed(4)}</td><td>&rarr;</td><td>${(+d[2]).toFixed(4)}</td></tr>`).join("")}
-      </table></div>`).join("")
-    :'<div class="note">no measure change vs base</div>'}`;
-}
-
-function select(id){sel=id;view="q";syncTabs();renderQueue();renderDetail()}
-
-/* ---- catalogs (read-only reference) ---- */
-function renderCats(){
-  const el=$("#cats");
-  const rows=[...cats.values()].sort((a,b)=>
-    ((a.group||"")+a.name).localeCompare((b.group||"")+b.name));
-  if(!rows.length){el.innerHTML='<div class="empty">No catalogs synced yet.</div>';return}
-  let g="";
-  el.innerHTML=rows.map(c=>{
-    const head=c.group!==g?`<div class="qitem" style="cursor:default">
-      <h3>${esc(g=c.group||"")}</h3></div>`:"";
-    return head+`<div class="qitem" role="button" tabindex="0"
-      data-cat="${esc(c.id)}" aria-selected="${c.id===catSel&&view==="c"}">
-      <div class="row"><span style="font-family:var(--mono);font-size:.8rem">${esc(c.name)}</span>
-        ${c.kind?`<span class="pill pending">${esc(c.kind)}</span>`:""}</div>
-      <div class="atoms">${esc(c.note||c.path||"")}</div></div>`}).join("");
-  el.querySelectorAll("[data-cat]").forEach(x=>{
-    const go=()=>{catSel=x.dataset.cat;view="c";syncTabs();renderCats();renderDetail()};
-    x.addEventListener("click",go);
-    x.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}});
-  });
-}
-function renderCatDetail(){
-  const d=$("#detail"),c=cats.get(catSel);
-  if(!c){d.innerHTML='<div class="empty">Select a catalog.</div>';return}
-  $("#dtitle").textContent=c.name;
-  d.innerHTML=`<div class="step">
-    <div class="row"><span class="pill pending">${esc(c.group||"")}</span>
-      ${c.kind?`<span class="pill pending">${esc(c.kind)}</span>`:""}
-      <span class="sub">${esc(c.path||"")}</span></div>
-    ${c.note?`<div class="note">${esc(c.note)}</div>`:""}
-    <div><h3>LLP source (read-only &mdash; changes go through the loop:
-      candidate &rarr; gates &rarr; approval &rarr; commit)</h3>
-      <pre style="max-height:60vh">${hl(c.llp||"")}</pre></div></div>`;
-}
-function syncTabs(){
-  $("#tab-q").setAttribute("aria-selected",view==="q");
-  $("#tab-c").setAttribute("aria-selected",view==="c");
-  $("#queue").hidden=view!=="q";$("#cats").hidden=view!=="c";
-}
-function toast(t){const b=$("#banner");b.textContent=t;b.hidden=false;
-  setTimeout(()=>{b.hidden=true},6000)}
-
-/* ---- the REPL window: commands queue as intents; the loop session
-   drains them through loop/repl.py run_intent (the ONE whitelist)
-   and posts each result back ---- */
-async function queueIntent(cmd){
-  if(!db){toast("Record store unavailable — cannot queue.");return}
+/* ---- actions: every one is an intents doc ---- */
+async function queue(cmd,actor){
+  cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return;
+  if(!db){banner("No backend in this view — nothing can be queued.",5000);return}
+  if(!sid||!sess||sess.status==="closed"){banner("Open a catalog first.",4000);return}
   const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  try{
-    await db.doc("intents/"+id).set({cmd,record_id:sel||null,
-      asked_by:uid||"viewer",ts:new Date().toISOString(),
-      status:"queued"});
-  }catch(e){toast("Not queued: "+(e&&e.message||e))}
-}
-function sendCmd(){
-  const q=$("#q");const cmd=q.value.trim();
-  if(!cmd)return;
-  if(!cmd.startsWith(":")){
-    $("#cstate").textContent="commands start with ':' — try :help";
-    return}
-  $("#cstate").textContent="";
-  q.value="";
-  queueIntent(cmd);
-}
-function renderLog(){
-  const el=$("#clog");
-  const rows=[...intentDocs.values()]
-    .sort((a,b)=>(a.ts||"").localeCompare(b.ts||"")).slice(-30);
-  const intro=el.firstElementChild?el.firstElementChild.outerHTML:"";
-  el.innerHTML=intro+rows.map(i=>`
-    <div class="turn">
-      <div class="row"><span class="cmdline">${esc(i.cmd||"")}</span>
-        <span class="pill ${esc(i.status||"queued")}">${esc(i.status||"queued")}</span></div>
-      ${i.result?`<pre style="max-height:180px">${
-        (i.result&&i.result.llp)?hl(i.result.llp)
-        :esc(typeof i.result==="string"?i.result:JSON.stringify(i.result,null,1))
-      }</pre>`:""}
-    </div>`).join("");
-  el.scrollTop=1e9;
-}
+  try{await db.doc("intents/"+id).set({session:sid,cmd:":"+cmd,actor:actor||uid||"anon",status:"queued",ts:new Date().toISOString()})}
+  catch(e){banner("Not queued: "+(e&&e.message||e),6000)}}
+function subscribeSession(){
+  if(unsubSess)unsubSess();if(unsubInt)unsubInt();
+  intents=new Map();sess=null;seenEpoch=null;renderBand();
+  if(!db||!sid){renderStream();return}
+  unsubSess=db.doc("sessions/"+sid).onSnapshot(s=>{
+    sess=s.exists?s.data():null;
+    if(!sess){banner("Session "+sid+" is gone — open a catalog.",6000);sid=null;sstore.set("loopconsole.sid",null)}
+    else if(seenEpoch!==null&&sess.epoch!==seenEpoch){
+      openInsp=null;banner(`epoch ${sess.epoch}: the stream restarts — ${sess.ctx?("key "+sess.ctx.key.slice(0,12)+"…, stage "+sess.ctx.stage):"reloaded"}`,6000)}
+    if(sess&&sess.status==="closed"&&sess.error)banner("Session closed: "+sess.error,8000);
+    if(sess)seenEpoch=sess.epoch??null;
+    renderBand();renderStream()},e=>banner("Session subscription lost: "+e.message));
+  unsubInt=db.collection("intents").where("session","==",sid).orderBy("ts","desc").limit(50).onSnapshot(s=>{
+    intents=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderStream()},
+    e=>banner("Intent subscription lost: "+e.message))}
+async function openCatalog(){
+  const llp=$("#catin").value.trim();
+  if(!llp){$("#catin").focus();return}
+  if(!db){banner("No backend in this view — sessions need the db capability.",5000);return}
+  const id="s"+Math.random().toString(36).slice(2,8);
+  try{await db.doc("sessions/"+id).set({llp,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
+  catch(e){banner("Session not opened: "+(e&&e.message||e),6000);return}
+  sid=id;sstore.set("loopconsole.sid",sid);$("#stream").innerHTML="";subscribeSession()}
 
-/* ---- boot ---- */
+/* ---- wiring (static layout first; capabilities light up later) ---- */
+function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setAttribute("aria-pressed",lenses.has(b.dataset.lens)))}
+function flashOcc(i){const el=document.getElementById("occ-"+i);if(!el){banner("#"+i+" is not in the current stream",3000);return}
+  el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1400)}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec]");if(!t)return;
+  if(t.dataset.cmd)queue(t.dataset.cmd);
+  else if(t.dataset.lens){lenses.has(t.dataset.lens)?lenses.delete(t.dataset.lens):lenses.add(t.dataset.lens);
+    store.set("loopconsole.lenses",[...lenses]);syncLenses();renderStream()}
+  else if(t.dataset.occ){e.stopPropagation();flashOcc(t.dataset.occ)}
+  else if(t.dataset.rule){openInsp=openInsp===t.dataset.rule?null:t.dataset.rule;renderStream()}
+  else if(t.dataset.dec)decide(t.dataset.cid,t.dataset.dec)});
+document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest("[data-rule]");
+  if(t&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click()}});
+$("#open").addEventListener("click",openCatalog);
+$("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
+$("#reset").addEventListener("click",()=>queue("reset"));
+$("#prompt").addEventListener("keydown",e=>{
+  const p=e.target;
+  if(e.key==="Enter"){e.preventDefault();const v=p.value.trim();if(!v)return;
+    if(hist[hist.length-1]!==v){hist.push(v);hist=hist.slice(-100);store.set("loopconsole.hist",hist)}
+    hpos=hist.length;p.value="";queue(v)}
+  else if(e.key==="ArrowUp"&&hpos>0){e.preventDefault();p.value=hist[--hpos]}
+  else if(e.key==="ArrowDown"){e.preventDefault();hpos=Math.min(hist.length,hpos+1);p.value=hist[hpos]||""}});
+(function splitter(){const sp=$("#split"),L=$("#left");let x0=null,w0=0;
+  sp.addEventListener("pointerdown",e=>{x0=e.clientX;w0=L.getBoundingClientRect().width;sp.setPointerCapture(e.pointerId)});
+  sp.addEventListener("pointermove",e=>{if(x0===null)return;L.style.flex="0 0 "+Math.max(280,w0+e.clientX-x0)+"px"});
+  sp.addEventListener("pointerup",()=>{x0=null})})();
+syncLenses();renderBand();renderRight();
+
 (async()=>{
-  $("#tab-q").addEventListener("click",()=>{view="q";syncTabs();renderQueue();renderDetail()});
-  $("#tab-c").addEventListener("click",()=>{view="c";syncTabs();renderCats();renderDetail()});
-  $("#send").addEventListener("click",sendCmd);
-  $("#q").addEventListener("keydown",e=>{
-    if(e.key==="Enter"){e.preventDefault();sendCmd()}});
-  claude.use("user").then(async u=>{
-    if(u&&u.id)try{uid=await u.id()}catch(e){}});
+  user=await claude.use("user");
+  if(user){try{uid=await user.id()}catch(e){}
+    try{canDecide=(await user.isOwner())||(await user.canEdit())}catch(e){}}
   db=await claude.use("db");
-  if(!db){$("#banner").hidden=false;
-    $("#banner").textContent="Record store unavailable in this view — the queue stays empty.";
-    return}
-  db.collection("surprise").orderBy("ts","desc").limit(300).onSnapshot(s=>{
-    records=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
-    if(!sel&&s.docs.length)sel=s.docs[0].id;
-    renderQueue();renderDetail();
-  },e=>toast("Queue subscription lost: "+e.message));
-  db.collection("candidates").orderBy("ts","desc").limit(300).onSnapshot(s=>{
-    cands=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
-    renderDetail();
-  },e=>toast("Candidate subscription lost: "+e.message));
-  db.collection("intents").orderBy("ts","desc").limit(50).onSnapshot(s=>{
-    intentDocs=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
-    renderLog();
-  },e=>toast("Intent subscription lost: "+e.message));
-  db.collection("catalogs").limit(500).onSnapshot(s=>{
-    cats=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
-    renderCats();if(view==="c")renderDetail();
-  },e=>toast("Catalog subscription lost: "+e.message));
+  if(!db){banner("No backend in this view (db unavailable) — the console renders, but nothing can be queued.");return}
+  db.doc("meta/catalogs").onSnapshot(s=>{catNames=(s.exists&&s.data().names)||[];
+    $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("")},()=>{});
+  db.collection("candidates").orderBy("ts","desc").limit(100).onSnapshot(s=>{
+    cands=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderRight()},e=>banner("Candidates lost: "+e.message));
+  db.collection("surprise").orderBy("ts","desc").limit(100).onSnapshot(s=>{
+    records=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderRight()},e=>banner("Records lost: "+e.message));
+  renderRight();subscribeSession();
 })();
 </script>

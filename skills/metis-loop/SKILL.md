@@ -68,12 +68,10 @@ also their window into the loop.
    the approved unit), push the fresh report, set
    `status: pending`. Console REPL intents (`intents` docs) are
    drained ONLY through `run_intent` — the whitelist; never
-   `accept`, file paths, or arbitrary backend commands. Keep the
-   console's `catalogs` collection in sync with metis-catalog after
-   every catalog commit (one doc per .llp: name/path/group/kind/
-   note/llp). The console artifact URL is in the project memory;
-   sync with the ArtifactData tool (collections `surprise`,
-   `candidates`; approvals arrive as `status: approved`).
+   `accept`, file paths, or arbitrary backend commands (see
+   "Serving the console" below). The console artifact URL is in the
+   project memory; sync with the ArtifactData tool (collections
+   `surprise`, `candidates`; approvals arrive as `status: approved`).
 6. **Approval**: never approve yourself. The human approves in the
    console (or in chat). On `status: approved`: commit text + pack
    to metis-catalog (packs/, with the text as the commit body),
@@ -84,3 +82,38 @@ also their window into the loop.
 
 Never bypass a gate, never edit the harness to make a candidate
 pass, never write catalog files for an unapproved candidate.
+
+## Serving the console (docs/CONSOLE.md §5a)
+
+The console's db is reachable only by the page or by THIS session's
+ArtifactData tool, so you are the backend: a drain loop over
+`loop/console_serve.py`, one interpreter per open console window,
+working directly on the metis-catalog checkout (no catalog mirror).
+
+    from loop.console_serve import ConsoleServer
+    srv = ConsoleServer()          # $METIS_CATALOG or ../metis-catalog
+
+1. **Catalogs**: at start (and after every catalog commit) write the
+   single doc `meta/catalogs` = `{names: srv.catalogs(), ts}`.
+2. **Open**: query `sessions` where `status == "opening"`; for each,
+   `fields = srv.open_session(sid, doc)` and `update` the doc with
+   `fields` (key, stage, status, epoch, ctx, llp, last_ts — or
+   `status: "closed", error` for an unknown catalog). The page
+   minted the sid; never create sessions yourself.
+3. **Drain**: query `intents` where `status == "queued"`, oldest
+   `ts` first; for each, `out = srv.serve_one(doc.session, doc.cmd)`,
+   then `update` the SAME intent doc with `out["posting"]` (status
+   done|refused|error, result, json, epoch, done_ts) and the session
+   doc with `out["session"]` (its `ctx` is what the band renders;
+   an `epoch` bump makes the page clear its stream). One intent at a
+   time per session, in order; batch the two writes.
+4. **Close**: a session doc set to `status: "closed"` by the page or
+   idle past your patience → `srv.close_session(sid)`, `update` it.
+   A restarted serving session has no interpreters: re-open every
+   non-closed session (same sid, epoch +1 so pages reset cleanly).
+
+The whitelist lives in `run_intent`: never execute an intent any
+other way, never `accept`, never approve — `actor: "claude"` lines
+(the page's chat, step 3) get exactly the same treatment as the
+viewer's. Local dev without claude.ai: `python console/dev_serve.py
+--demo` runs this same loop in-process behind a capability shim.
