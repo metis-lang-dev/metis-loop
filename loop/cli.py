@@ -72,6 +72,10 @@ def main(argv=None):
     f.add_argument("--max-rounds", type=int, default=4)
 
     rp = sub.add_parser("repl")
+    rp.add_argument("llp", nargs="?",
+                    help="the catalog to serve (none = a blank scratch "
+                         "world, as `metis` itself)")
+    rp.add_argument("--seed", type=int, default=1)
     rp.add_argument("--json", action="store_true",
                     help="JSON-lines wire (one {op, arg} per line) — "
                          "the protocol every UI wraps")
@@ -84,8 +88,12 @@ def main(argv=None):
 
     ns = ap.parse_args(argv)
     if ns.cmd == "repl":
-        from .repl import run_repl
-        return run_repl(json_mode=ns.json)
+        # the loop REPL merged into the metis shell (one kernel REPL;
+        # every UI a wrapper) — this verb delegates there
+        from metis.lang.repl import main as metis_shell
+        return metis_shell((["--json"] if ns.json else [])
+                           + ["--seed", str(ns.seed)]
+                           + ([ns.llp] if ns.llp else []))
 
     if ns.cmd == "admit":
         rep = admit(Path(ns.text).read_text(), Path(ns.llp).read_text(),
