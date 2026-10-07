@@ -374,6 +374,12 @@ class Gateway:
         if parts and parts[0] == "run" and len(parts) == 2 and \
                 parts[1].isdigit() and int(parts[1]) > cap:
             return f":run {cap}", f"(run capped at {cap} steps)"
+        # spec 10: `whatif K do(...) run N` samples too — same cap
+        if len(parts) >= 3 and parts[0] == "whatif" and \
+                parts[-2] == "run" and parts[-1].isdigit() and \
+                int(parts[-1]) > cap:
+            return (":" + " ".join(parts[:-1] + [str(cap)]),
+                    f"(whatif run capped at {cap} steps)")
         return cmd, None
 
     async def intent(self, ws, msg):

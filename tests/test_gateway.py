@@ -276,3 +276,28 @@ def test_shared_mode_never_shows_the_operators_paths():
             assert root not in text, root
     finally:
         r.close()
+
+
+def test_interventions_served_in_shared_mode_and_whatif_run_capped():
+    """Spec 10 P5: do/fork/back/whatif/necessity/sufficiency are
+    session-local REPL verbs — a shared nook serves them like run/step
+    (no LLM, no paths); `whatif … run N` obeys the run cap."""
+    r = Running(mode="shared", token="t0k", max_run_steps=3)
+    try:
+        with r.ws("t0k") as ws:
+            sid = open3(ws)["session"]
+            send(ws, sid, "run 3", "a")
+            p = send(ws, sid, "whatif 1 do(~blow_stick) run 50", "b")[-1]
+            assert p["status"] == "done"
+            assert p["result"].startswith("(whatif run capped at 3 steps)")
+            assert "WHATIF at #1  do(~blow_stick)  ·  run 3 " in p["result"]
+            p = send(ws, sid, "necessity 1", "c")[-1]
+            assert p["status"] == "done"
+            assert p["result"].startswith(("NECESSITY of #1 ",
+                                           "necessity 1 needs an ATOM"))
+            for k, cmd in enumerate(["do ~blow_stick", "fork 1", "back",
+                                     "sufficiency 1 stickhouse"]):
+                p = send(ws, sid, cmd, f"d{k}")[-1]
+                assert p["status"] == "done", (cmd, p)
+    finally:
+        r.close()

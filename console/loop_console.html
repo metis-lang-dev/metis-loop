@@ -435,7 +435,7 @@ async function download(iid,kind){
   try{await downloadsNs.save({filename,data:text})}
   catch(e){if(e&&e.code==="declined")return;
     banner("Not saved ("+((e&&e.code)||e&&e.message||e)+") — open “DOT source” and copy it.",6000)}}
-const STOPS=new Set(["run","step","undo","reset"]);
+const STOPS=new Set(["run","step","undo","reset","do","fork","back"]);
 function verbOf(cmd){return String(cmd||"").replace(/^:/,"").trim().split(/\s+/)[0]}
 function bodyHtml(i,isLastStop,seenMax){
   if(i.status==="queued")return "";
@@ -624,6 +624,13 @@ the only way you act; whatever you run appears in the viewer's transcript as
 :findings [N]              diagnostics (catalog, last gate, runtime notes)
 :trace [SEED] / :map / :marginals   seeded replay / modal derivation / exact marginals
 :narrate [SEED]            prose of the run (the REPL's own narrator)
+:do +A [N] | -A | EVENT | ~EVENT   an intervention, recorded as one: set/remove
+                           atoms, FORCE an enabled event, or block (~) an event/rule
+:fork [K] / :back          branch at occurrence K (one shelved world) / return to it
+:whatif K do(X)... query A [N] | run N   fork, intervene, compare (fact · with do ·
+                           by chance), back — the session is left untouched
+:necessity K [A]           PN: block #K from K-1 on; P(not A | do(not K)) beside the fact
+:sufficiency K A           the INTERVENTIONAL PROXY for PS (labelled; exact PS deferred)
 :gate / :revise / :mine / :text / :formalize / :records / :record N / :replay / :show
 
 How to read what comes back:
@@ -638,6 +645,10 @@ How to read what comes back:
   nothing".
 - status quiescent = only a stage link can fire; done = nothing can.
 - Atoms are indistinguishable: this is dependence on the multiset, not token lineage.
+- INTERVENTIONS: rows marked [forced] (a chosen step) or [do] were not chance —
+  never describe them as luck or as sampled; the likelihood excludes them.
+  \`why\` is structural (the cone), \`necessity\` is measure (PN): give both. The
+  exact tier may refuse on its state budget — report that, never guess a number.
 
 == Formalization skill (the loop) ==
 surprise record → mine the gap as a short factual %% text → a candidate LLP pack
