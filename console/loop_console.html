@@ -558,6 +558,12 @@ function chatContext(){const c=sess&&sess.ctx;
     :"[console now: no open session — the viewer must open a catalog before the repl tool can run]"}
 async function chatSend(){
   const q=$("#chatq"),text=q.value.trim();
+  if(GW){
+    if(!text||gwChatBusy)return;
+    if(!sid||!sess){$("#chatstate").textContent="open a catalog first — Claude works in your session";return}
+    if(!wsUp){$("#chatstate").textContent="not connected to the backend";return}
+    q.value="";$("#chatstate").textContent="";
+    wsSend({ch:"chat",type:"say",session:sid,text});return}
   if(!text||chatBusy)return;
   if(!sampleNs){$("#chatstate").textContent="chat unavailable in this view";return}
   q.value="";
@@ -616,7 +622,7 @@ function wsHandle(f){
   if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
     $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("");return}
-  if(f.ch==="chat"){$("#chatstate").textContent=f.error||"";return}
+  if(f.ch==="chat"){chatFrame(f);return}
   if(f.ch!=="repl")return;
   if(f.type==="error"){
     if(f.req&&f.req===pendingReq)pendingReq=null;
@@ -628,7 +634,7 @@ function wsHandle(f){
     banner(f.error+(f.detail?" — "+f.detail:""),6000);return}
   if(f.type==="session"){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
-      intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatLoad();renderChat()}
+      intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatTurns=[];chatBusyUi(false);renderChat()}
     if(f.session!==sid)return;
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
@@ -638,6 +644,28 @@ function wsHandle(f){
     if(f.type==="queued"&&old&&old.status!=="queued")return;
     intents.set(f.id,{...(old||{}),...f,status:f.type==="queued"?"queued":f.status});
     renderStream();settle()}}
+/* the agent chat over the gateway (CONSOLE-WS §3): the backend holds
+   the turns (memory only); the page renders its frames into the same
+   chatTurns structure v1 renders */
+let gwChatBusy=false;
+function lastReply(){for(let k=chatTurns.length-1;k>=0;k--)if(chatTurns[k].role==="assistant")return chatTurns[k];return null}
+function chatBusyUi(b){gwChatBusy=b;$("#chatstop").hidden=!b;$("#chatsend").disabled=b}
+function chatFrame(f){
+  if(f.session&&f.session!==sid)return;
+  if(f.type==="history"){chatTurns=(f.turns||[]).map(t=>({...t}));chatBusyUi(!!f.busy);renderChat();return}
+  if(f.type==="user"){chatTurns.push({role:"user",content:f.text});
+    chatTurns.push({role:"assistant",content:"",pending:true,tools:[]});chatBusyUi(true);renderChat();return}
+  const r=lastReply();
+  if(f.type==="token"&&r){r.content=f.text;r.pending=false;renderChat();return}
+  if(f.type==="tool"&&r){r.tools=r.tools||[];r.tools[(f.n||r.tools.length+1)-1]={line:f.line,status:f.status};renderChat();return}
+  if(f.type==="done"&&r){r.content=f.text||r.content||"(no answer)";r.pending=false;
+    if(f.error){r.err=!f.text;r.content=(f.text?f.text+"\n":"")+"["+f.error+"]"}
+    chatBusyUi(false);renderChat();return}
+  if(f.type==="error"){
+    if(gwChatBusy&&r&&r.pending!==undefined&&(f.text!==undefined)){r.pending=false;r.err=true;
+      r.content=(f.text||"")+(f.text?"\n":"")+"Claude call failed: "+f.error;chatBusyUi(false);renderChat()}
+    else $("#chatstate").textContent=f.error||"";
+    return}}
 function renderBusy(){
   const b=!!(GW&&sess&&sess.busy);
   $("#busy").hidden=!b;
@@ -651,11 +679,13 @@ function applyManifest(){
   const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
   const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
   $("#chatin").hidden=chat!=="agent";
+  if(chat==="agent"){$("#chat .ph").textContent="CLAUDE — the agent on this host (the operator's login); it acts only through the REPL — its lines show as claude> on the left";
+    $("#chatstate").textContent="";if(sid)wsSend({ch:"chat",type:"history",session:sid});return}
   if(chat!=="agent"){                // no chat here: no invitation to one
     $("#chat .ph").textContent=chat==="pending"?"CLAUDE — agent chat (step 2)":"CLAUDE — not on this instance";
     if(!chatTurns.length)$("#chatlog").innerHTML=""}
-  $("#chatstate").innerHTML=chat==="agent"?"":chat==="pending"
-    ?"agent chat on this host arrives with step 2 (CONSOLE-WS §3)"
+  $("#chatstate").innerHTML=m.mode!=="shared"
+    ?"agent chat unavailable on this host — "+esc(m.chat_unavailable||"not configured")
     :"AI chat is not served on this shared instance — it would run on the operator's credentials. Claude for you lives on"+link+" (billed to you).";
   $("#loop").innerHTML=`<p class="ph">CANDIDATES · RECORDS</p><div class="empty">approvals and surprise records live on${link}.</div>`}
 
@@ -676,7 +706,9 @@ document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.close
   if(t&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click()}});
 $("#open").addEventListener("click",openCatalog);
 $("#chatsend").addEventListener("click",chatSend);
-$("#chatstop").addEventListener("click",()=>{if(chatBusy)chatBusy.abort()});
+$("#chatstop").addEventListener("click",()=>{
+  if(GW){if(sid)wsSend({ch:"chat",type:"stop",session:sid});return}
+  if(chatBusy)chatBusy.abort()});
 $("#chatq").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chatSend()}});
 $("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
 $("#reset").addEventListener("click",()=>queue("reset"));

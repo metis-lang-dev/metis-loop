@@ -115,7 +115,7 @@ def test_round_trip_queue_posting_and_reattach(personal):
             "error"] == "gone"
 
 
-def test_run_cap_and_chat_pending_in_personal_mode():
+def test_run_cap_and_chat_needs_a_session():
     r = Running(mode="personal", max_run_steps=2)
     try:
         with r.ws() as ws:
@@ -125,7 +125,7 @@ def test_run_cap_and_chat_pending_in_personal_mode():
             assert post["result"].startswith("(run capped at 2 steps)")
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "hi"}))
             err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
-            assert "step 2" in err["error"]
+            assert "open a session first" in err["error"]
     finally:
         r.close()
 

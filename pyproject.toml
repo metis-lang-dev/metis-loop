@@ -8,6 +8,8 @@ dependencies = []
 [project.optional-dependencies]
 # `metis-loop console-serve` (docs/CONSOLE-WS.md): the gateway
 console = ["websockets>=13"]
+# the console's agent seat (personal mode, CONSOLE-WS §3)
+agent = ["websockets>=13", "claude-agent-sdk"]
 
 [project.scripts]
 metis-loop = "loop.cli:main"

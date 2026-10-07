@@ -15,7 +15,8 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"intent", session, id, cmd, actor}
                  {ch:"repl", type:"stop",   session}
                  {ch:"repl", type:"close",  session}
-                 {ch:"chat", ...}                          (step 2)
+                 {ch:"chat", type:"say"|"stop"|"history", session, text}
+                                          (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
                  {ch:"repl", type:"queued",  session, id, cmd, actor, ts}
@@ -58,6 +59,9 @@ DEFAULTS = {
     "max_sessions": 16, "max_sessions_per_ip": 4, "max_run_steps": 500,
     "idle_secs": 1800, "rate_per_min": 120, "history": 300,
     "artifact_url": "",
+    # the agent seat (personal mode, step 2 — CONSOLE-WS §3)
+    "agent": True, "agent_model": "claude-opus-5-5", "agent_tool_calls": 10,
+    "agent_cmd_timeout": 60, "agent_max_turns": 12,
 }
 # the LLM seats: never through the operator's credentials in shared mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
@@ -82,14 +86,28 @@ def load_config(**overrides) -> dict:
     return cfg
 
 
+def agent_seat(cfg: dict):
+    """(seat, reason): 'agent' when personal mode can run the Agent
+    Service here, else None with why."""
+    if cfg["mode"] == "shared":
+        return None, "shared instance"
+    if not cfg.get("agent", True):
+        return None, "agent disabled in [console]"
+    from .agent_service import available
+    why = available()
+    return (None, why) if why else ("agent", None)
+
+
 def manifest(cfg: dict) -> dict:
     """What this instance serves — the page renders only these (§4)."""
     shared = cfg["mode"] == "shared"
+    seat, why = agent_seat(cfg)
     return {
         "mode": cfg["mode"],
+        "chat_unavailable": why,
         "seats": {
             "repl": True,
-            "chat": None if shared else "pending",       # step 2: agent
+            "chat": seat,                                # §3
             "narrate": None if shared else "llm",        # step 3: Haiku
             "formalize": None if shared else "llm",
         },
@@ -126,6 +144,7 @@ class Sess:
         self.stopping = False
         self.last = time.time()
         self.worker: Optional[asyncio.Task] = None
+        self.futs: Dict[str, asyncio.Future] = {}   # submit() waiters
 
 
 class Gateway:
@@ -134,6 +153,10 @@ class Gateway:
         self.srv = srv or ConsoleServer()
         self.sessions: Dict[str, Sess] = {}
         self.rates: Dict[object, deque] = {}
+        self.agent = None
+        if agent_seat(cfg)[0] == "agent":
+            from .agent_service import AgentService
+            self.agent = AgentService(self, cfg)
 
     # -- frames ----------------------------------------------------------
 
@@ -182,6 +205,8 @@ class Gateway:
             await self._send(ws, self._session_frame(s, req=msg.get("req")))
             for f in list(s.log):
                 await self._send(ws, f)
+            if self.agent:
+                await self._send(ws, self.agent.history(sid))
             return
         cap = self.cfg
         if len(self.sessions) >= cap["max_sessions"]:
@@ -239,20 +264,41 @@ class Gateway:
         if not s:
             return await self._send(ws, {"ch": "repl", "type": "error",
                                          "id": iid, "error": "gone"})
-        cmd = str(msg.get("cmd") or "").strip()
-        cmd = cmd if cmd.startswith(":") else ":" + cmd
         actor = str(msg.get("actor") or "viewer")[:40]
+        if actor == "claude":                # only the backend agent is
+            actor = "viewer"                 # claude> — never the page
+        await self.enqueue(s, msg.get("cmd"), actor, iid)
+
+    async def submit(self, s: "Sess", cmd: str, actor: str) -> dict:
+        """Queue a line and await its posting (the Agent Service's repl
+        tool): the same queue, whitelist, busy/stop and transcript."""
+        iid = "a" + secrets.token_hex(6)
+        fut = asyncio.get_running_loop().create_future()
+        s.futs[iid] = fut
+        await self.enqueue(s, cmd, actor, iid)
+        return await fut
+
+    def _resolve(self, s: "Sess", iid: str, posting: dict):
+        fut = s.futs.pop(iid, None)
+        if fut and not fut.done():
+            fut.set_result(posting)
+
+    async def enqueue(self, s: "Sess", cmd, actor: str, iid: str):
+        cmd = str(cmd or "").strip()
+        cmd = cmd if cmd.startswith(":") else ":" + cmd
         item = {"id": iid, "cmd": cmd, "actor": actor, "ts": _now()}
         s.last = time.time()
         await self._broadcast(s, {"ch": "repl", "type": "queued",
                                   "session": s.sid, **item}, log=True)
         refusal = self._gate(cmd)
         if refusal:
-            return await self._broadcast(s, {
-                "ch": "repl", "type": "posting", "session": s.sid, **item,
-                "status": "refused", "result": refusal,
-                "json": {"ok": False, "error": refusal},
-                "epoch": self.srv.epochs.get(s.sid)}, log=True)
+            post = {"status": "refused", "result": refusal,
+                    "json": {"ok": False, "error": refusal},
+                    "epoch": self.srv.epochs.get(s.sid)}
+            await self._broadcast(s, {"ch": "repl", "type": "posting",
+                                      "session": s.sid, **item, **post},
+                                  log=True)
+            return self._resolve(s, iid, post)
         await s.queue.put(item)
         await self._broadcast(s, self._session_frame(s))
 
@@ -293,6 +339,7 @@ class Gateway:
             await self._broadcast(s, {"ch": "repl", "type": "posting",
                                       "session": s.sid, **item, **posting},
                                   log=True)
+            self._resolve(s, item["id"], posting)
             await self._broadcast(s, self._session_frame(s))
 
     async def stop(self, msg):
@@ -300,13 +347,17 @@ class Gateway:
         s = self.sessions.get(msg.get("session", ""))
         if not s:
             return
+        if self.agent:                       # [stop] stops Claude too
+            await self.agent.stop(s.sid)
         while not s.queue.empty():
             item = s.queue.get_nowait()
-            await self._broadcast(s, {
-                "ch": "repl", "type": "posting", "session": s.sid, **item,
-                "status": "error", "result": "cancelled (stop)",
-                "json": {"ok": False, "error": "cancelled"},
-                "epoch": self.srv.epochs.get(s.sid)}, log=True)
+            post = {"status": "error", "result": "cancelled (stop)",
+                    "json": {"ok": False, "error": "cancelled"},
+                    "epoch": self.srv.epochs.get(s.sid)}
+            await self._broadcast(s, {"ch": "repl", "type": "posting",
+                                      "session": s.sid, **item, **post},
+                                  log=True)
+            self._resolve(s, item["id"], post)
         with s.lock:
             if s.tid is not None and not s.stopping:
                 s.stopping = True
@@ -318,6 +369,12 @@ class Gateway:
         s = self.sessions.pop(sid, None)
         if not s:
             return
+        if self.agent:
+            await self.agent.close(sid)
+        for fut in s.futs.values():
+            if not fut.done():
+                fut.set_result({"status": "error", "result": "session closed",
+                                "json": {"ok": False, "error": "closed"}})
         if s.worker:
             s.worker.cancel()
         s.pool.shutdown(wait=False, cancel_futures=True)
@@ -377,11 +434,7 @@ class Gateway:
                     continue
                 ch, typ = msg.get("ch"), msg.get("type")
                 if ch == "chat":
-                    await self._send(ws, {
-                        "ch": "chat", "type": "error",
-                        "error": "chat is not served on this instance"
-                        if self.cfg["mode"] == "shared" else
-                        "agent chat arrives with step 2 (CONSOLE-WS §3)"})
+                    await self.chat(ws, ip, msg)
                     continue
                 if ch != "repl":
                     await self._send(ws, {"ch": "meta", "type": "error",
@@ -411,6 +464,37 @@ class Gateway:
         finally:
             for s in self.sessions.values():
                 s.subs.discard(ws)
+
+    async def chat(self, ws, ip, msg):
+        """Chat frames (§1, §3): personal mode with the agent seat only;
+        a shared instance refuses them all."""
+        sid = msg.get("session", "")
+        if not self.agent:
+            why = ("chat is not served on this instance"
+                   if self.cfg["mode"] == "shared" else
+                   "agent chat unavailable here: " +
+                   (agent_seat(self.cfg)[1] or "?"))
+            return await self._send(ws, {"ch": "chat", "type": "error",
+                                         "session": sid, "error": why})
+        s = self.sessions.get(sid)
+        if not s or ws not in s.subs:
+            return await self._send(ws, {"ch": "chat", "type": "error",
+                                         "session": sid,
+                                         "error": "open a session first"})
+        typ = msg.get("type")
+        if typ == "say":
+            err = await self.agent.say(sid, msg.get("text"))
+            if err:
+                await self._send(ws, {"ch": "chat", "type": "error",
+                                      "session": sid, **err})
+        elif typ == "stop":
+            await self.stop({"session": sid})
+        elif typ == "history":
+            await self._send(ws, self.agent.history(sid))
+        else:
+            await self._send(ws, {"ch": "chat", "type": "error",
+                                  "session": sid,
+                                  "error": f"unknown chat type {typ!r}"})
 
     # -- HTTP on the same port -------------------------------------------
 
@@ -491,6 +575,10 @@ def main(argv=None) -> int:
     ap.add_argument("--bind")
     ap.add_argument("--mode", choices=["personal", "shared"])
     ap.add_argument("--token")
+    ap.add_argument("--mock-agent", action="store_true",
+                    help="DEV ONLY: a canned chat client (never a model) "
+                         "for driving the page without spending anyone's "
+                         "subscription")
     ns = ap.parse_args(argv)
     cfg = load_config(port=ns.port, bind=ns.bind, mode=ns.mode,
                       token=ns.token)
@@ -501,6 +589,10 @@ def main(argv=None) -> int:
               "token — anyone who can reach it can run catalogs (no AI "
               "is ever served in shared mode).")
     gw = Gateway(cfg)
+    if ns.mock_agent and gw.agent:
+        from .agent_service import MockClient
+        gw.agent.client_factory = MockClient
+        print("console-serve: --mock-agent — the chat is CANNED (dev only)")
     q = f"?token={cfg['token']}" if cfg["token"] else ""
     print(f"loop console ({cfg['mode']}): http://{cfg['bind']}:"
           f"{cfg['port']}/{q}", flush=True)
