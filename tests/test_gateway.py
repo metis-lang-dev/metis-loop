@@ -117,8 +117,13 @@ def test_round_trip_queue_posting_and_reattach(personal):
             "error"] == "gone"
 
 
-def test_run_cap_and_chat_needs_a_session():
-    r = Running(mode="personal", max_run_steps=2)
+def test_run_cap_and_chat_seat_precedence():
+    """Precedence, pinned: with no agent seat the seat reason wins over
+    "open a session first" (a session cannot fix a missing seat). The
+    seat is disabled by config so this holds with or without the SDK;
+    the session check itself is tested with the seat present
+    (test_agent_service)."""
+    r = Running(mode="personal", max_run_steps=2, agent=False)
     try:
         with r.ws() as ws:
             sid = open3(ws)["session"]
@@ -127,7 +132,8 @@ def test_run_cap_and_chat_needs_a_session():
             assert post["result"].startswith("(run capped at 2 steps)")
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "hi"}))
             err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
-            assert "open a session first" in err["error"]
+            assert err["error"] == ("agent chat unavailable here: "
+                                    "agent disabled in [console]")
     finally:
         r.close()
 

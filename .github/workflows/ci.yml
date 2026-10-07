@@ -35,6 +35,12 @@ jobs:
           repository: metis-lang-dev/metispy
           token: ${{ secrets.METIS_READ_TOKEN }}
           path: metispy
+      - name: Checkout metis-lang (public; test fixtures e.g. corpus/packmark.llp)
+        if: env.HAVE_READ_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-lang
+          path: metis-lang
       - name: Checkout metis-catalog (private; console + fixtures)
         if: env.HAVE_READ_TOKEN == 'true'
         uses: actions/checkout@v4

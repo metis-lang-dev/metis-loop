@@ -229,3 +229,11 @@ def test_source_tools_edit_pack_and_recompile(agent):
     # the checkout itself is untouched
     assert "% Port of interactive-lp" in agent.gw.srv.resolve(
         "3lp").read_text()
+
+
+def test_chat_needs_a_session_when_the_seat_exists(agent):
+    with agent.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        ws.send(json.dumps({"ch": "chat", "type": "say", "text": "hi"}))
+        err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
+        assert err["type"] == "error" and err["error"] == "open a session first"
