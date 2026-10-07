@@ -15,3 +15,8 @@ entry.js:
   export { StreamLanguage } from "@codemirror/language";
   export { oneDark } from "@codemirror/theme-one-dark";
 build: npx esbuild entry.js --bundle --format=esm --minify --outfile=codemirror.js
+
+viz.js — @viz-js/viz@3.31.0 dist/viz.js verbatim (Graphviz compiled to
+WASM, embedded; viz.js MIT per its package.json, Graphviz EPL-1.0). Renders the `graph` verb's DOT
+in the page; loaded lazily on the first graph. Outside the gateway the
+page imports the same version from cdn.jsdelivr.net.

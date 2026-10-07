@@ -230,3 +230,16 @@ def test_open_from_source_over_the_socket(personal):
         f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
         assert f["type"] == "session" and f["llp"].endswith("(in memory)")
         assert f["ctx"]["counts"]["pig"] == 2
+
+
+def test_vendor_bundles_served_and_nothing_else():
+    r = Running()
+    try:
+        for name in ("codemirror.js", "viz.js"):
+            with urllib.request.urlopen(f"http://{r.url}/vendor/{name}") as f:
+                assert f.status == 200 and "javascript" in f.headers["Content-Type"]
+        for bad in ("VERSIONS.txt", "nope.js", "..%2Fgateway.py", "x/../viz.js"):
+            with pytest.raises(urllib.error.HTTPError):
+                urllib.request.urlopen(f"http://{r.url}/vendor/{bad}")
+    finally:
+        r.close()

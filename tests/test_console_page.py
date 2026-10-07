@@ -71,3 +71,25 @@ def test_vendor_bundle_exports_what_the_page_uses():
     for name in ("EditorView", "basicSetup", "minimalSetup", "keymap",
                  "placeholder", "Prec", "StreamLanguage", "oneDark"):
         assert f" as {name}" in exports or f"{name}," in exports
+
+
+def test_stream_tolerates_count_fired_and_links_follow_ups():
+    """`state`/`list` return `fired` as a COUNT (run/step: a list) — the
+    stream must not iterate it (it froze `state` at "queued"). Plain
+    outputs carry follow-ups: atom → why, #K → why K, rule → step/edit."""
+    assert "Array.isArray((i.json||{}).fired)" in PAGE
+    assert 'h=`<pre class="out">${linkify(i.result)}</pre>`' in PAGE
+    assert 'cmd="why "+t.slice(1)' in PAGE and '"step ":"edit "' in PAGE
+    assert "e.shiftKey||e.altKey" in PAGE
+
+
+def test_graph_renders_in_page_from_the_verbs_dot():
+    """`graph` draws its own DOT with Graphviz-in-WASM (viz.js): the
+    vendored copy under the gateway, the pinned CDN copy elsewhere,
+    loaded lazily; nodes are follow-ups (why K); text + DOT kept."""
+    assert 'import(GW?"/vendor/viz.js":"https://cdn.jsdelivr.net/npm/@viz-js/viz@3.31.0/dist/viz.js")' in PAGE
+    assert "viz.renderSVGElement(i.json.dot)" in PAGE
+    assert 'g.setAttribute("data-fu","why "+id.slice(1))' in PAGE
+    assert "<summary>DOT source</summary>" in PAGE
+    vz = Path(__file__).resolve().parents[1] / "console/vendor/viz.js"
+    assert vz.stat().st_size > 500_000 and "renderSVGElement" in vz.read_text()

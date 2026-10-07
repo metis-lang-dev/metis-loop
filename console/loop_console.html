@@ -137,6 +137,12 @@ details summary{cursor:pointer;color:var(--dim)}
 .sev-error{color:var(--red)}.sev-warning{color:var(--yellow)}.sev-note{color:var(--cyan)}
 .prose{white-space:pre-wrap;color:var(--fg);line-height:1.55}
 .dl{color:var(--cyan);cursor:pointer;text-decoration:underline;margin-right:12px;background:none;border:none;padding:0}
+.gsvg{background:#f6f8fa;border-radius:4px;padding:6px;margin:6px 0;overflow:auto;max-height:70vh}
+.gsvg.fit svg{max-width:100%;height:auto}.gsvg svg{display:block;margin:0 auto}
+.gsvg g.node[data-k]{cursor:pointer}.gsvg g.node[data-k]:hover polygon,.gsvg g.node[data-k]:hover ellipse{fill:#dbeafe}
+.gsvg .gmsg{color:#57606a;font-size:12px}
+.fu{cursor:pointer;border-bottom:1px dotted var(--gray)}.fu:hover{color:var(--cyan);border-bottom-color:var(--cyan)}
+.fu.rule{color:var(--fg)}.fu.en{color:var(--green)}.fu.occ{color:var(--dim)}
 .evbtn{background:none;border:none;padding:0;color:var(--green);cursor:pointer;text-align:left;font:inherit}
 .evbtn:hover{text-decoration:underline}
 .evbtn::before{content:"▸ ";color:var(--dim)}
@@ -388,9 +394,29 @@ function narratorHtml(j){
 function graphHtml(i){
   return `<div class="sect"><h4>GRAPH · ${(i.json.nodes||[]).length} nodes · ${(i.json.edges||[]).length} edges · frontier ${(i.json.frontier||[]).join(" ")}</h4>
     <button class="dl" data-dl="dot" data-iid="${esc(i.id)}">causality.dot</button><button class="dl" data-dl="json" data-iid="${esc(i.id)}">causality.json</button>
-    <span class="empty">render the .dot with <span class="cmd">dot -Tsvg</span></span>
-    <pre class="out">${esc(i.result||"")}</pre>
+    <button class="dl" data-gfit="${esc(i.id)}" title="fit to the pane / natural size">fit ↔ 1:1</button>
+    <div class="gsvg fit" data-graph="${esc(i.id)}">${graphSvg.get(i.id)||'<span class="gmsg">rendering…</span>'}</div>
+    <details><summary>text</summary><pre class="out">${linkify(i.result||"")}</pre></details>
     <details><summary>DOT source</summary><pre class="out">${esc(i.json.dot||"")}</pre></details></div>`}
+/* the causality graph drawn in the page: Graphviz (viz.js, WASM) renders
+   the verb's own DOT — vendored under the gateway, the pinned CDN copy
+   elsewhere; loaded on the first graph. Nodes are follow-ups: why K. */
+const graphSvg=new Map();let vizP=null;
+function loadViz(){return vizP||(vizP=import(GW?"/vendor/viz.js":"https://cdn.jsdelivr.net/npm/@viz-js/viz@3.31.0/dist/viz.js")
+  .then(m=>m.instance()).catch(e=>{vizP=null;throw e}))}
+async function renderGraphs(){
+  for(const el of document.querySelectorAll("[data-graph]")){const iid=el.dataset.graph;
+    if(graphSvg.has(iid)){if(!el.querySelector("svg"))el.innerHTML=graphSvg.get(iid);continue}
+    const i=intents.get(iid);if(!i||!i.json||!i.json.dot)continue;
+    let svg;
+    try{const viz=await loadViz();const doc=viz.renderSVGElement(i.json.dot);
+      doc.querySelectorAll("g.node").forEach(g=>{const id=(g.querySelector("title")||{}).textContent||"";
+        if(/^n\d+$/.test(id)&&id!=="n0"){g.dataset.k=id.slice(1);g.setAttribute("data-fu","why "+id.slice(1));g.setAttribute("data-word","#"+id.slice(1))}});
+      doc.removeAttribute("width");doc.removeAttribute("height");doc.style.width=doc.viewBox.baseVal.width+"px";
+      svg=doc.outerHTML}
+    catch(e){svg=`<span class="gmsg">graph not rendered (${esc(e.message||e)}) — the text and DOT source are below</span>`}
+    graphSvg.set(iid,svg);
+    for(const t of document.querySelectorAll(`[data-graph="${CSS.escape(iid)}"]`))t.innerHTML=svg}}
 async function download(iid,kind){
   /* the artifact viewer never grants plain blob/data saves: files go
      through the `downloads` capability (viewer-confirmed). `.dot` is
@@ -427,9 +453,33 @@ function bodyHtml(i,isLastStop,seenMax){
     :'<div class="empty">nothing can fire</div>';
   else if(v==="narrate"&&j.narration!==undefined)h=narratorHtml(j);
   else if(v==="graph"&&j.nodes)h=graphHtml(i);
-  else h=`<pre class="out">${esc(i.result)}</pre>`;
+  else h=`<pre class="out">${linkify(i.result)}</pre>`;
   if(isLastStop&&c)h+=contextHtml(c);
   return h}
+/* follow-ups: names in a plain output become the next REPL action —
+   atom → `why ATOM` (what made it), #K → `why K`, an enabled rule →
+   `step RULE`, any other rule → `edit RULE`. Click runs it; Shift-click
+   puts it in the prompt (or appends the bare name, to build `causes A B`). */
+function vocab(){const c=(sess&&sess.ctx)||{};
+  const rules=new Set((c.rules||[]).map(r=>r.name)),en=new Set((c.enabled||[]).map(e=>e.name)),atoms=new Set(Object.keys(c.counts||{}));
+  for(const r of c.rules||[]){const body=String(r.src||"").split("\n").filter(l=>!/^\s*%/.test(l)).join(" ");
+    const m=/:([^.]*)\./.exec(body.replace(/\[[^\]]*\]/g,"").replace(/-o\b/g," "));
+    if(m)for(const w of m[1].match(/[a-z_][A-Za-z0-9_]*/g)||[])if(!rules.has(w))atoms.add(w)}
+  return {rules,en,atoms}}
+function linkify(text){
+  const v=vocab();
+  return String(text??"").split("\n").map(line=>{const k=line.indexOf("%");
+    const code=k<0?line:line.slice(0,k),rest=k<0?"":line.slice(k);
+    return code.split(/(#\d+|[A-Za-z_][A-Za-z0-9_]*)/).map((t,j)=>{
+      if(j%2===0)return esc(t);
+      let cmd=null,cls="fu";
+      if(/^#\d+$/.test(t)){cmd="why "+t.slice(1);cls+=" occ"}
+      else if(v.rules.has(t)){cmd=(v.en.has(t)?"step ":"edit ")+t;cls+=v.en.has(t)?" en":" rule"}
+      else if(v.atoms.has(t))cmd="why "+t;
+      return cmd?`<span class="${cls}" data-fu="${esc(cmd)}" data-word="${esc(t)}" title="${esc(cmd)} — click runs, Shift-click to the prompt">${esc(t)}</span>`:esc(t)}).join("")+esc(rest)}).join("\n")}
+function followUp(t,toPrompt){
+  if(!toPrompt){queue(t.dataset.fu);return}
+  const q=$("#prompt"),cur=q.value.trim();q.value=cur?cur+" "+t.dataset.word:t.dataset.fu;q.focus()}
 setInterval(()=>{let stale=false;
   for(const i of intents.values())if(i.status==="queued"){stale=true;
     if(Date.now()-Date.parse(i.ts)>6000)refreshIntent(i.id)}
@@ -445,14 +495,15 @@ function renderStream(){
   const atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-24;
   let seenMax=-1;const seen={};
   for(const i of rows){seen[i.id]=seenMax;
-    for(const f of ((i.json||{}).fired||[]))if(f.beat!=null&&f.beat>seenMax)seenMax=f.beat}
+    for(const f of (Array.isArray((i.json||{}).fired)?i.json.fired:[]))if(f.beat!=null&&f.beat>seenMax)seenMax=f.beat}
   el.innerHTML=(rows.length?"":`<div class="empty">${sess&&sess.status==="opening"?"opening "+esc(sess.llp)+"…":"session ready — run, step, or type a REPL line."}</div>`)+
     rows.map(i=>{const claude=i.actor==="claude";
       return `<div class="ent"><div class="cmd"><span class="p${claude?" claude":""}">${claude?"claude&gt;":"llp&gt;"}</span> ${esc(String(i.cmd||"").replace(/^:/,""))}${
         i.status!=="done"?`<span class="pill ${esc(i.status)}">${esc(i.status)}${
           i.status==="queued"&&!GW&&Date.now()-Date.parse(i.ts)>20000?" — waiting for the serving session":""}</span>`:""}</div>${bodyHtml(i,i.id===lastStop,seen[i.id])}</div>`}).join("")+
     (!lastStop&&sess&&sess.ctx&&rows.length===0?contextHtml(sess.ctx):"");
-  if(atEnd)el.scrollTop=el.scrollHeight}
+  if(atEnd)el.scrollTop=el.scrollHeight;
+  if(el.querySelector("[data-graph]"))renderGraphs().then(()=>{if(atEnd)el.scrollTop=el.scrollHeight})}
 
 /* ---- the right panel: candidates (the only approve path) + records ---- */
 async function decide(cid,status){
@@ -987,7 +1038,9 @@ function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setA
 function flashOcc(i){const el=document.getElementById("occ-"+i);if(!el){banner("#"+i+" is not in the current stream",3000);return}
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1400)}
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec],[data-dl]");if(!t)return;
+  const t=e.target.closest("[data-fu],[data-gfit],[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec],[data-dl]");if(!t)return;
+  if(t.dataset.fu){e.preventDefault();followUp(t,e.shiftKey||e.altKey);return}
+  if(t.dataset.gfit){const g=document.querySelector(`[data-graph="${CSS.escape(t.dataset.gfit)}"]`);if(g)g.classList.toggle("fit");return}
   if(t.dataset.dl){download(t.dataset.iid,t.dataset.dl);return}
   if(t.dataset.cmd)queue(t.dataset.cmd);
   else if(t.dataset.lens){lenses.has(t.dataset.lens)?lenses.delete(t.dataset.lens):lenses.add(t.dataset.lens);
