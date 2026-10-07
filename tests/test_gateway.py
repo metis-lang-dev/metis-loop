@@ -249,3 +249,30 @@ def test_vendor_bundles_served_and_nothing_else():
                 urllib.request.urlopen(f"http://{r.url}/vendor/{bad}")
     finally:
         r.close()
+
+
+def test_shared_mode_never_shows_the_operators_paths():
+    """Web output names catalogs relative to the checkout
+    ("domains/fiction/3lp.llp"), never the operator's filesystem — every
+    frame of a shared-mode round trip, file-bearing verbs included."""
+    from pathlib import Path
+    r = Running(mode="shared", token="t0k")
+    roots = {str(r.gw.srv.root), str(r.gw.srv.root.resolve()),
+             str(Path.home())}
+    try:
+        with r.ws("t0k") as ws:
+            got = frames(ws, lambda f: f.get("type") == "catalogs")
+            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "3lp"}))
+            got += frames(ws, lambda f: f.get("type") == "source")
+            sid = [f for f in got if f.get("type") == "session"][-1]["session"]
+            for k, cmd in enumerate(["run 2", "list", "ctx", "state", "why",
+                                     "graph", "show llp", "findings",
+                                     "edit build_stick", "nope"]):
+                got += send(ws, sid, cmd, f"p{k}")
+        text = json.dumps(got)
+        assert "domains/fiction/3lp.llp" in text
+        assert "/home/" not in text
+        for root in roots:
+            assert root not in text, root
+    finally:
+        r.close()

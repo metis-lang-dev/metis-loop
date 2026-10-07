@@ -76,6 +76,10 @@ class ConsoleServer:
         self.seed = seed
         self.shells: Dict[str, object] = {}
         self.epochs: Dict[str, int] = {}
+        self._roots = sorted({str(self.root), str(self.root.resolve())},
+                             key=len, reverse=True)
+        home = str(Path.home())
+        self._home = home if len(home) > 1 else ""
 
     # -- catalogs --------------------------------------------------------
 
@@ -107,6 +111,25 @@ class ConsoleServer:
             raise ValueError(f"'{llp}' resolves outside the checkout")
         return path
 
+    # -- what leaves for the web -----------------------------------------
+
+    def scrub(self, obj):
+        """Web output never names the operator's filesystem: the
+        checkout root becomes relative ("domains/fiction/3lp.llp") and
+        any other home path "~/…". Applied to every posting, session
+        doc and ctx this server hands out; the terminal REPL never comes
+        through here and keeps its absolute paths (the user's own
+        machine)."""
+        if isinstance(obj, str):
+            for root in self._roots:
+                obj = obj.replace(root + "/", "").replace(root, ".")
+            return obj.replace(self._home + "/", "~/") if self._home else obj
+        if isinstance(obj, dict):
+            return {k: self.scrub(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [self.scrub(v) for v in obj]
+        return obj
+
     # -- sessions --------------------------------------------------------
 
     def _fields(self, sid: str) -> dict:
@@ -114,10 +137,10 @@ class ConsoleServer:
         band renders from it)."""
         r = self.shells[sid]
         c = r.ctx()
-        return {"name": c["catalog"], "key": c["key"],
-                "stage": c["stage"], "status": c["status"],
-                "epoch": self.epochs[sid], "ctx": c,
-                "last_ts": _now()}
+        return self.scrub({"name": c["catalog"], "key": c["key"],
+                           "stage": c["stage"], "status": c["status"],
+                           "epoch": self.epochs[sid], "ctx": c,
+                           "last_ts": _now()})
 
     def _source_path(self, name: str) -> Path:
         """Where an in-memory catalog is anchored (names it, resolves its
@@ -198,7 +221,7 @@ class ConsoleServer:
         try:
             r, llp, reports = self.build(doc)
         except Exception as e:                      # noqa: BLE001
-            return {"status": "closed", "error": str(e),
+            return {"status": "closed", "error": self.scrub(str(e)),
                     "last_ts": _now()}
         self.shells[sid] = r
         self.epochs[sid] = 1
@@ -229,7 +252,7 @@ class ConsoleServer:
             self.epochs[sid] += 1
         session = self._fields(sid)
         posting.update({"epoch": self.epochs[sid], "done_ts": _now()})
-        return {"posting": posting, "session": session}
+        return {"posting": self.scrub(posting), "session": session}
 
     # -- the drain as one pure mapping (the serving session is glue) ----
 
