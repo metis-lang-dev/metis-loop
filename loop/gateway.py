@@ -62,6 +62,11 @@ DEFAULTS = {
     # the agent seat (personal mode, step 2 — CONSOLE-WS §3)
     "agent": True, "agent_model": "claude-opus-5-5", "agent_tool_calls": 10,
     "agent_cmd_timeout": 60, "agent_max_turns": 12,
+    # the narrate seat (personal mode, step 3 — D3): "sdk" substitutes the
+    # session's LLM endpoint with loop.sdk_narrate (Haiku); "llm" keeps
+    # the kernel's configured endpoint (ollama)
+    "narrate": "sdk", "narrate_model": "claude-haiku-4-5",
+    "narrate_thinking": 1024,       # tokens; 0 = off (fast, unfaithful)
 }
 # the LLM seats: never through the operator's credentials in shared mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
@@ -98,6 +103,24 @@ def agent_seat(cfg: dict):
     return (None, why) if why else ("agent", None)
 
 
+def narrate_seat(cfg: dict):
+    """(label, endpoint spec or None): the narrate seat this instance
+    serves (D3). None spec = leave the kernel's endpoint (ollama)."""
+    if cfg["mode"] == "shared":
+        return None, None
+    if cfg.get("narrate") == "sdk":
+        from .agent_service import available
+        if available() is None:
+            import shlex
+            import sys
+            argv = [sys.executable, "-m", "loop.sdk_narrate", "--model",
+                    str(cfg.get("narrate_model") or "claude-haiku-4-5"),
+                    "--thinking", str(int(cfg.get("narrate_thinking", 1024)))]
+            return (f"{cfg.get('narrate_model')} (SDK)",
+                    "command:" + " ".join(shlex.quote(a) for a in argv))
+    return "llm (ollama)", None
+
+
 def manifest(cfg: dict) -> dict:
     """What this instance serves — the page renders only these (§4)."""
     shared = cfg["mode"] == "shared"
@@ -108,9 +131,11 @@ def manifest(cfg: dict) -> dict:
         "seats": {
             "repl": True,
             "chat": seat,                                # §3
-            "narrate": None if shared else "llm",        # step 3: Haiku
+            "narrate": narrate_seat(cfg)[0],              # D3
             "formalize": None if shared else "llm",
         },
+        "chat_model": (cfg.get("agent_model") or "the CLI default")
+        if seat == "agent" else None,
         "chat_pointer": cfg["artifact_url"] or None,
         "caps": {k: cfg[k] for k in ("max_sessions", "max_sessions_per_ip",
                                      "max_run_steps", "idle_secs",
@@ -234,10 +259,20 @@ class Gateway:
                                                              "cannot open")})
         s = Sess(sid, fields.get("llp", llp), ip, cap["history"])
         s.spec = spec                    # what idle recycling re-opens
+        self._seat(sid)
         s.subs.add(ws)
         s.worker = asyncio.create_task(self._work(s))
         self.sessions[sid] = s
         await self._send(ws, self._session_frame(s, req=msg.get("req")))
+
+    def _seat(self, sid: str):
+        """D3: in personal mode the session's narrate seat goes to the
+        SDK endpoint (kernel untouched — its `command:` backend runs
+        loop.sdk_narrate); the cwd that module needs is this package."""
+        spec = narrate_seat(self.cfg)[1]
+        r = self.srv.shells.get(sid)
+        if spec and r is not None:
+            r.llm = spec
 
     def _gate(self, cmd: str) -> Optional[str]:
         """Gateway-side policy beyond run_intent's whitelist: shared mode
@@ -400,6 +435,7 @@ class Gateway:
             ep = self.srv.epochs.get(s.sid, 1)
             await loop.run_in_executor(s.pool, self.srv.open_session,
                                        s.sid, s.spec)
+            self._seat(s.sid)
             self.srv.epochs[s.sid] = ep + 1
             s.log.clear()
             s.last = now

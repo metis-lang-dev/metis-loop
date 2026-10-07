@@ -70,6 +70,21 @@ Config — the metis dot file's `[console]` table (flags override):
     idle_secs = 1800             # idle sessions reset (epoch + 1)
     rate_per_min = 120           # shared mode, per address
     artifact_url = ""            # where the chat pointer sends shared users
+    # personal mode seats (CONSOLE-WS §3, §4)
+    agent = true                 # the chat pane's Agent Service
+    agent_model = "claude-opus-5-5"
+    agent_tool_calls = 10        # per answer
+    agent_cmd_timeout = 60       # seconds per repl command
+    agent_max_turns = 12
+    narrate = "sdk"              # or "llm" (the kernel's endpoint, ollama)
+    narrate_model = "claude-haiku-4-5"
+    narrate_thinking = 1024      # tokens; 0 = off (fast but fuses beats)
+
+Seats per mode: personal = REPL + agent chat (`pip install
+-e '.[agent]'`) + narrate on Haiku via the SDK + formalize on the
+kernel's `llm`; shared = REPL only. The band's MODE tooltip lists what
+this instance serves. Both SDK seats run with no built-in tools, no
+user/project settings and `--no-session-persistence`.
 
 The artifact (same page, published) stays the SHARED window — demos,
 approvals from any device, `sample` chat billed to the viewer — over

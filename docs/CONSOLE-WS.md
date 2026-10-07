@@ -217,3 +217,36 @@ console-serve; the artifact is the shared window."
   4 command interception + COW (§4a): the edit viewer, fork/editor
   over IndexedDB, save/export as downloads. The artifact-surface
   skill note lands with step 1.
+
+## Implementation notes (steps 1–3, opus seat, 2026-10-07)
+
+- **Gateway** `loop/gateway.py`: websockets on one port (`process_request`
+  serves `/`, `/healthz`); session ids gateway-minted (bearer for
+  re-attach); per-session asyncio queue + ONE worker thread; stop raises
+  KeyboardInterrupt into that thread (tid lock-guarded) and cancels the
+  queue — soft by nature (subprocess isolation stays the upgrade);
+  `submit()` lets the agent queue a line and await its posting.
+- **Session from source** (§4a, day one): `ConsoleServer.open_session
+  ({source, name})` — a `Repl` subclass compiling the given text; no
+  temp file; 256 KiB cap.
+- **Agent Service** `loop/agent_service.py`: PREAMBLE read from the page
+  (one source) + an addendum; one in-process MCP server per chat
+  (repl via the session queue as `claude>`, ctx/transcript from cached
+  state); `tools=[]`, strict MCP, `setting_sources=[]`,
+  `--no-session-persistence` (verified: no transcript written after
+  live turns); a `can_use_tool` gate is the ONLY authority — no
+  `allowed_tools`, which auto-approves before the callback; the page
+  cannot claim `actor: claude`.
+- **Narrate seat** (D3) `loop/sdk_narrate.py`: the gateway points a
+  personal session's LLM endpoint at it through the kernel's existing
+  `command:` backend (pages can't set `command:` — whitelist); no
+  tools, one turn, no persistence. Measured on 3lp: CLI-default
+  thinking ~5k tokens/~50 s (faithful); thinking off ~4 s but fused
+  separate beats and once invented events (3/3 wrong); budget 1024
+  ~8–18 s and faithful → the default (`narrate_thinking`).
+- **Tests** are hermetic (FakeClient over a real socket; SDK `query`
+  monkeypatched); real turns are opt-in with `METIS_AGENT_LIVE=1`.
+- **Tooling fact**: WebSocket push keeps flowing in a hidden/
+  background browser window — unlike the artifact frame, whose
+  inbound delivery is suspended there.
+

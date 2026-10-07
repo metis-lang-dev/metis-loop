@@ -317,7 +317,9 @@ function findingsHtml(ds){
       <div class="empty">findings ${k+1} — the full record</div></details>`}).join("")}</div>`}
 function narratorHtml(j){
   const what=j.source==="session"?`this session's run (${j.events} event${j.events===1?"":"s"})`:`seeded trace ${j.seed} (${j.events} events)`;
-  return `<div class="sect"><h4>NARRATOR · ${esc(j.llm||"?")} · ${esc(what)}<span class="mark">certified trace only</span></h4>
+  const m=/sdk_narrate.*--model\s+(\S+)/.exec(String(j.llm||""));
+  const seat=m?m[1].replace(/['"]/g,"")+" (Claude Agent SDK)":(j.llm||"?");
+  return `<div class="sect"><h4>NARRATOR · ${esc(seat)} · ${esc(what)}<span class="mark">certified trace only</span></h4>
     <div class="prose">${esc(j.narration||"")}</div>
     <div class="empty" style="margin-top:4px">prose from the REPL's narrator over the certified beats, state and %% docs — read it as a retelling, the beats above are the record</div></div>`}
 function graphHtml(i){
@@ -675,7 +677,9 @@ function renderBusy(){
 function applyManifest(){
   const m=manifestM;if(!m)return;
   $("#b-mode").hidden=false;$("#b-modev").textContent=m.mode+(m.mode==="shared"?" · REPL only":"");
-  $("#b-mode").title=m.policy||"";
+  const se=m.seats||{};
+  $("#b-mode").title=[m.policy||"","seats — repl: yes · chat: "+(se.chat?"agent ("+(m.chat_model||"?")+")":"off")+
+    " · narrate: "+(se.narrate||"off")+" · formalize: "+(se.formalize||"off")].join("\n");
   const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
   const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
   $("#chatin").hidden=chat!=="agent";
