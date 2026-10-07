@@ -152,7 +152,7 @@ def test_sdk_options_are_contained():
         assert not o.allowed_tools            # the gate decides every call
         assert o.setting_sources == []
         assert "no-session-persistence" in o.extra_args
-        assert o.system_prompt == preamble() and "You have no other tools" in o.system_prompt
+        assert o.system_prompt == preamble() and "no shell, no web" in o.system_prompt
         deny = asyncio.run(o.can_use_tool("Bash", {}, None))
         allow = asyncio.run(o.can_use_tool("mcp__metis__repl", {}, None))
         assert type(deny).__name__ == "PermissionResultDeny"
@@ -192,3 +192,40 @@ def test_live_turn_on_the_operators_login():
             assert "go" in done["text"].lower()
     finally:
         r.close()
+
+
+def test_source_tools_edit_pack_and_recompile(agent):
+    """§4a: Claude reads/edits the working copy and adds a pack (memory
+    only), every window sees the source frames, recompile certifies it
+    locally; ambiguous edits, pack without extends, bad targets fail."""
+    from test_working_copy import PACK
+    FakeClient.hang = False
+    FakeClient.script = [
+        ("source_read", {"target": "copy", "start": 1, "end": 2}),
+        ("source_edit", {"target": "copy", "old_str": "stage",
+                         "new_str": "x"}),                    # not unique
+        ("source_edit", {"target": "copy",
+                         "old_str": "% Port of interactive-lp",
+                         "new_str": "% Ported from interactive-lp"}),
+        ("pack_create", {"name": "nope", "source": "catalog x 1."}),
+        ("pack_create", {"name": "tired", "source": PACK}),
+        ("source_read", {"target": "pack:9"}),
+        ("recompile", {}),
+    ]
+    with agent.ws() as ws:
+        sid = open3(ws)["session"]
+        got = say(ws, sid, "extend it")
+        parts = got[-1]["text"].split(" | ")
+        assert [p[:3] for p in parts] == \
+            ["Don", "ERR", "ok ", "ERR", "ok ", "ERR", "ok "]
+        assert "\"target\": \"copy\"" in parts[0] and "exactly once" in parts[1]
+        srcs = [f for f in got if f.get("type") == "source"]
+        assert srcs[0]["certified"] is None           # after the edit
+        assert srcs[-1]["certified"] == "local"       # after recompile
+        assert srcs[-1]["copy"].startswith("% Ported from interactive-lp")
+        assert [p["name"] for p in srcs[-1]["packs"]] == ["tired"]
+        assert any(f.get("type") == "session" and f.get("recompiled")
+                   for f in got)
+    # the checkout itself is untouched
+    assert "% Port of interactive-lp" in agent.gw.srv.resolve(
+        "3lp").read_text()

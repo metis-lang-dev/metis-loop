@@ -43,3 +43,31 @@ def test_gateway_transport_is_flag_gated_and_manifest_driven():
     assert "function applyManifest()" in PAGE
     assert '"chat is not served' not in PAGE                # gateway says it
     assert 'type:"stop"' in PAGE and 'id="stopcmd"' in PAGE
+
+
+def test_working_copy_editor_panels_and_dictation():
+    """§4a: CodeMirror only from the ONE vendor bundle (two CDN copies of
+    @codemirror/state refuse to run) and only under the gateway; the
+    copy lives in IndexedDB; the right side is tool panels whose state
+    is a per-viewer convenience; dictation is feature-detected and says
+    where Chrome sends the audio."""
+    assert 'import("/vendor/codemirror.js")' in PAGE
+    assert not re.search(r"https?://[^\"']*codemirror", PAGE)
+    assert "if(!GW){cmLib=null;return cmLib}" in PAGE
+    assert 'indexedDB.open("loopconsole"' in PAGE
+    for d in ("claude", "catalog", "candidates", "records"):
+        assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
+    assert 'store.set("loopconsole.docks"' in PAGE
+    assert "#chatq{flex:1;background:var(--bg);color:var(--fg)" in PAGE
+    assert "window.SpeechRecognition||window.webkitSpeechRecognition" in PAGE
+    assert "Google's speech service" in PAGE
+    assert 'data-cmd="step ${esc(e.name)}"' in PAGE         # events step
+
+
+def test_vendor_bundle_exports_what_the_page_uses():
+    js = (Path(__file__).resolve().parents[1]
+          / "console/vendor/codemirror.js").read_text()
+    exports = js[js.rindex("export{"):]
+    for name in ("EditorView", "basicSetup", "minimalSetup", "keymap",
+                 "placeholder", "Prec", "StreamLanguage", "oneDark"):
+        assert f" as {name}" in exports or f"{name}," in exports

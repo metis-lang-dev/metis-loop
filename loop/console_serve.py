@@ -119,43 +119,93 @@ class ConsoleServer:
                 "epoch": self.epochs[sid], "ctx": c,
                 "last_ts": _now()}
 
-    def open_session(self, sid: str, doc: dict) -> dict:
-        """Bind an interpreter to sessions/{sid}: either `{llp: name}` —
-        a catalog of the checkout — or `{source: text, name}` — catalog
-        TEXT compiled in memory (CONSOLE-WS §4a: a forked/edited
-        catalog never touches the operator's disk; `name` anchors its
-        includes, a checkout name keeps that file's directory). Returns
-        the fields to write back; a bad catalog comes back as
-        {status: "closed", error}."""
-        from metis.lang.repl import Repl
+    def _source_path(self, name: str) -> Path:
+        """Where an in-memory catalog is anchored (names it, resolves its
+        includes): a checkout name keeps that file's directory, anything
+        else a virtual <root>/scratch/<safe>.llp — never written."""
         try:
-            if doc.get("source") is not None:
-                src = str(doc["source"])
-                if len(src.encode()) > MAX_SOURCE:
-                    raise ValueError(f"catalog source over "
-                                     f"{MAX_SOURCE // 1024} KiB")
-                name = str(doc.get("name") or "scratch").strip() or "scratch"
-                try:
-                    path = self.resolve(name)
-                except ValueError:
-                    safe = "".join(c if c.isalnum() or c in "-_." else "_"
-                                   for c in name.split("/")[-1])[:64]
-                    path = self.root.resolve() / "scratch" / (
-                        (safe.removesuffix(".llp") or "scratch") + ".llp")
-                self.shells[sid] = _source_repl(path, src, self.seed)
-                llp = name.removesuffix(".llp") + " (in memory)"
-            else:
-                path = self.resolve(doc.get("llp", ""))
-                self.shells[sid] = Repl(path, seed=self.seed,
-                                        stdout=io.StringIO())
-                llp = str(path.relative_to(self.root.resolve())
-                          .with_suffix(""))
+            return self.resolve(name)
+        except ValueError:
+            safe = "".join(c if c.isalnum() or c in "-_." else "_"
+                           for c in name.split("/")[-1])[:64]
+            return self.root.resolve() / "scratch" / (
+                (safe.removesuffix(".llp") or "scratch") + ".llp")
+
+    @staticmethod
+    def _pack_text(src: str) -> str:
+        """A pack's approved text = its leading `%` comment block (the
+        `load` convention) — what its %% docs quote at the gate."""
+        head = []
+        for line in src.splitlines():
+            if line.startswith("%"):
+                head.append(line.lstrip("%").strip())
+            elif line.strip():
+                break
+        return "\n".join(head) or "extension pack"
+
+    def build(self, doc: dict):
+        """A Repl for `{llp}` (a checkout catalog) or `{source, name,
+        packs?}` — catalog TEXT compiled in memory, then each pack
+        (`{source, name}`) gated as a pack against it and merged into
+        THIS session only (the loop's own llp → gate → accept, called
+        here — `accept` stays off the wire; nothing is committed).
+        Returns (repl, llp label, pack reports); raises ValueError with
+        the findings on any failure."""
+        from metis.lang.repl import Repl
+        if doc.get("source") is None:
+            path = self.resolve(doc.get("llp", ""))
+            r = Repl(path, seed=self.seed, stdout=io.StringIO())
+            return r, str(path.relative_to(self.root.resolve())
+                          .with_suffix("")), []
+        src = str(doc["source"])
+        packs = list(doc.get("packs") or [])
+        total = len(src.encode()) + sum(len(str(p.get("source", "")).encode())
+                                        for p in packs)
+        if total > MAX_SOURCE:
+            raise ValueError(f"catalog source over {MAX_SOURCE // 1024} KiB")
+        name = str(doc.get("name") or "scratch").strip() or "scratch"
+        r = _source_repl(self._source_path(name), src, self.seed)
+        reports = []
+        for k, pk in enumerate(packs, 1):
+            psrc = str(pk.get("source") or "")
+            pname = str(pk.get("name") or f"pack {k}")
+            if not psrc.strip():
+                continue
+            r.cmd_text(self._pack_text(psrc))
+            r.cmd_llp(psrc)
+            rep = r.cmd_gate("")
+            if not rep.get("ok"):
+                found = rep.get("findings") or [rep.get("error", "rejected")]
+                raise ValueError(f"pack '{pname}' not admitted: " +
+                                 "; ".join(map(str, found))[:1500])
+            acc = r.cmd_accept("")
+            reports.append({"name": pname, "ok": True,
+                            "key": acc.get("key")})
+            r.loop.text = ""
+        label = name.removesuffix(".llp") + " (in memory" + (
+            f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
+            if reports else "") + ")"
+        return r, label, reports
+
+    def open_session(self, sid: str, doc: dict) -> dict:
+        """Bind an interpreter to sessions/{sid} from `{llp: name}` (a
+        checkout catalog) or `{source, name, packs?}` (CONSOLE-WS §4a:
+        a copy and its extension packs, compiled in memory — never on
+        the operator's disk). The live interpreter is replaced only
+        when everything compiles and every pack is admitted; a failure
+        comes back as {status: "closed", error} and leaves an existing
+        session as it was."""
+        try:
+            r, llp, reports = self.build(doc)
         except Exception as e:                      # noqa: BLE001
             return {"status": "closed", "error": str(e),
                     "last_ts": _now()}
+        self.shells[sid] = r
         self.epochs[sid] = 1
         out = self._fields(sid)
         out["llp"] = llp
+        if reports:
+            out["packs"] = reports
         return out
 
     def serve_one(self, sid: str, cmd: str) -> dict:

@@ -28,20 +28,29 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 
-TOOLS = ("repl", "ctx", "transcript")
+TOOLS = ("repl", "ctx", "transcript", "source_read", "source_edit",
+         "pack_create", "recompile")
 ALLOWED = tuple(f"mcp__metis__{t}" for t in TOOLS)
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
 
 ADDENDUM = """
 
 == This console's backend (agent mode) ==
-You run on the operator's host. Three tools, all scoped to the viewer's
+You run on the operator's host. Your tools, all scoped to the viewer's
 session: `repl(line)` runs one REPL line (prefix ":"; it appears in the
 transcript as claude>), `ctx()` returns the context at this stop without
 a REPL round, `transcript(n)` returns the last n console lines (yours and
-the viewer's). At most 10 tool calls per answer — prefer ctx/transcript
-when they answer the question. You have no other tools: no files, no
-shell, no web."""
+the viewer's). The WORKING COPY — the viewer's private, in-memory copy of
+the catalog plus extension packs (each pack `extends` the copy and only
+adds; the real catalog is never touched): `source_read(target)` shows it
+with line numbers (target "copy" or "pack:N"), `source_edit(target,
+old_str, new_str)` replaces one exact, unique piece of text,
+`pack_create(name, source)` adds a pack, `recompile()` rebuilds the
+session from copy + packs (until then the copy is UNCERTIFIED; a failed
+recompile returns the findings and keeps the old world). The viewer sees
+every edit live in their editor. At most 10 tool calls per answer —
+prefer ctx/transcript when they answer the question. You have no other
+tools: no files, no shell, no web."""
 
 
 def preamble() -> str:
@@ -202,7 +211,98 @@ class AgentService:
                          "status": f.get("status"),
                          "result": truncate(f.get("result"), 20)}
                         for f in posts])
-        return {"repl": repl, "ctx": ctx, "transcript": transcript}
+        def work_of(target):
+            s = gw.sessions.get(chat.sid)
+            if not s or not getattr(s, "work", None):
+                return None, None, "the session has no working copy"
+            t = str(target or "copy")
+            if t == "copy":
+                return s, ("copy", None), None
+            if t.startswith("pack:") and t[5:].isdigit() and \
+                    1 <= int(t[5:]) <= len(s.work["packs"]):
+                return s, ("pack", int(t[5:]) - 1), None
+            return None, None, (f"no target {t!r} — use 'copy' or "
+                                f"'pack:1'..'pack:{len(s.work['packs'])}'")
+
+        def text_of(s, where):
+            return s.work["copy"] if where[0] == "copy" else \
+                s.work["packs"][where[1]]["source"]
+
+        async def source_read(args):
+            over = counted()
+            if over:
+                return over
+            s, where, err = work_of(args.get("target"))
+            if err:
+                return _err(err)
+            lines = text_of(s, where).splitlines()
+            a = max(1, int(args.get("start") or 1))
+            b = min(len(lines), int(args.get("end") or len(lines)))
+            body = "\n".join(f"{k:4} {lines[k - 1]}" for k in range(a, b + 1))
+            return _ok({"target": args.get("target") or "copy",
+                        "certified": s.work["certified"],
+                        "lines": f"{a}-{b} of {len(lines)}",
+                        "text": truncate(body)})
+
+        async def source_edit(args):
+            over = counted()
+            if over:
+                return over
+            s, where, err = work_of(args.get("target"))
+            if err:
+                return _err(err)
+            old, new = str(args.get("old_str", "")), str(args.get("new_str", ""))
+            text = text_of(s, where)
+            n = text.count(old) if old else 0
+            if n != 1:
+                return _err(f"old_str must occur exactly once (found {n}) "
+                            "— read the source and quote a unique piece")
+            text = text.replace(old, new, 1)
+            if where[0] == "copy":
+                s.work["copy"] = text
+            else:
+                s.work["packs"][where[1]]["source"] = text
+            s.work["certified"] = None
+            await gw._broadcast(s, gw._source_frame(s))
+            return _ok({"edited": args.get("target") or "copy",
+                        "certified": None,
+                        "note": "uncertified until recompile()"})
+
+        async def pack_create(args):
+            over = counted()
+            if over:
+                return over
+            s, _, err = work_of("copy")
+            if err:
+                return _err(err)
+            src = str(args.get("source") or "")
+            if "extends" not in src:
+                return _err("a pack must declare `extends <the copy's "
+                            "catalog name>.`")
+            s.work["packs"].append({"name": str(args.get("name") or
+                                                f"pack {len(s.work['packs']) + 1}"),
+                                    "source": src})
+            s.work["certified"] = None
+            await gw._broadcast(s, gw._source_frame(s))
+            return _ok({"created": f"pack:{len(s.work['packs'])}",
+                        "note": "uncertified until recompile()"})
+
+        async def recompile(args):
+            over = counted()
+            if over:
+                return over
+            s, _, err = work_of("copy")
+            if err:
+                return _err(err)
+            if s.running:
+                return _err("a command is running — try again after it ends")
+            out = await gw.recompile(s)
+            return _ok(out) if out.get("ok") else _err(
+                "recompile failed (old world kept): " + str(out.get("error")))
+
+        return {"repl": repl, "ctx": ctx, "transcript": transcript,
+                "source_read": source_read, "source_edit": source_edit,
+                "pack_create": pack_create, "recompile": recompile}
 
     def _server(self, chat: Chat):
         from claude_agent_sdk import create_sdk_mcp_server, tool
@@ -219,6 +319,22 @@ class AgentService:
             tool("transcript", "The last n console lines (commands + "
                  "results, viewer's and yours).", {"n": int})(
                      fns["transcript"]),
+            tool("source_read", "The working copy with line numbers: "
+                 "target 'copy' or 'pack:N'; optional start/end lines.",
+                 {"target": str, "start": int, "end": int})(
+                     fns["source_read"]),
+            tool("source_edit", "Replace ONE exact, unique piece of the "
+                 "working copy (target 'copy' or 'pack:N'). The copy is "
+                 "uncertified until recompile().",
+                 {"target": str, "old_str": str, "new_str": str})(
+                     fns["source_edit"]),
+            tool("pack_create", "Add an extension pack on top of the copy: "
+                 "full LLP text starting with `catalog <name> 1.` and "
+                 "`extends <the copy's catalog name>.`; it may only ADD.",
+                 {"name": str, "source": str})(fns["pack_create"]),
+            tool("recompile", "Rebuild the session from the working copy + "
+                 "packs (in memory). Returns the new key, or the findings "
+                 "and keeps the old world.", {})(fns["recompile"]),
         ]
         return create_sdk_mcp_server("metis", tools=tools)
 

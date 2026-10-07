@@ -67,6 +67,8 @@ def open3(ws, llp="3lp"):
     ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp,
                         "req": "r1"}))
     f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
+    if f.get("type") == "session":            # then the working copy (§4a)
+        frames(ws, lambda g: g.get("type") == "source")
     return f
 
 

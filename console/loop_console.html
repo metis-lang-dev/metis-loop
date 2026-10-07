@@ -30,10 +30,31 @@ a{color:var(--cyan)}
 main{flex:1;display:flex;min-height:0}
 #left{flex:1 1 62%;display:flex;flex-direction:column;min-width:0}
 #split{flex:none;width:4px;cursor:col-resize;background:var(--line)}
-#right{flex:1 1 38%;display:flex;flex-direction:column;min-width:220px;min-height:0}
-#chat{flex:1 1 62%;display:flex;flex-direction:column;min-height:0;padding:8px 12px 6px}
+#right{flex:1 1 38%;display:flex;flex-direction:column;min-width:240px;min-height:0}
+#right[hidden],#split[hidden]{display:none!important}
+/* tool panels (Android Studio style): a vertical strip toggles them;
+   shown panels stack and share the height; each collapses to its header */
+#strip{flex:none;width:26px;background:#0b0e12;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px;padding-top:4px}
+#strip button{writing-mode:vertical-rl;background:none;border:none;border-left:2px solid transparent;color:var(--dim);
+  font:11px var(--mono);letter-spacing:.06em;padding:10px 4px;cursor:pointer}
+#strip button[aria-pressed="true"]{color:var(--fg);border-left-color:var(--cyan);background:#11161d}
+#strip button:hover{color:var(--fg)}
+.dock{display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--line)}
+.dock[hidden]{display:none!important}
+.dock.open{flex:1 1 0;min-height:90px}.dock.collapsed{flex:none}
+.dock>header{display:flex;align-items:center;gap:6px;padding:3px 10px;background:#161b22;cursor:pointer;user-select:none;
+  color:var(--dim);font-size:11px;letter-spacing:.06em;flex:none}
+.dock>header .tw{width:1em;color:var(--fg)}.dock>header .tt{flex:1;color:var(--fg)}
+.dock>header .x{background:none;border:none;color:var(--dim);cursor:pointer;font:inherit;padding:0 2px}
+.dock>header .x:hover{color:var(--fg)}
+.dock.collapsed>.dbody{display:none}
+.dbody{flex:1;min-height:0;overflow:auto;padding:6px 10px 8px}
+#dock-claude .dbody{display:flex;flex-direction:column;overflow:hidden}
+#dock-claude.collapsed .dbody{display:none}
 #chatlog{flex:1;overflow:auto;min-height:0}
-#loop{flex:0 1 38%;overflow:auto;padding:6px 12px 8px;border-top:1px solid var(--line)}
+.wrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0 6px}
+.plist .pk{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:3px 0}
+.plist .pk .nm{flex:1}
 .turn{margin:0 0 8px}
 .turn .who{color:var(--dim);font-size:11px}
 .turn.user .who{color:var(--cyan)}.turn.assistant .who{color:var(--purple)}
@@ -42,8 +63,14 @@ main{flex:1;display:flex;min-height:0}
 .turn .tool.refused{color:var(--red)}
 .turn.err .txt{color:var(--red)}
 #chatin{display:flex;gap:6px;align-items:flex-end;border-top:1px solid var(--line);padding-top:6px}
-#chatq{flex:1;background:transparent;border:1px solid var(--line);resize:vertical;min-height:2.6em;max-height:12em;padding:3px 6px;outline:none}
+#chatq{flex:1;background:var(--bg);color:var(--fg);caret-color:var(--cyan);font:12.5px/1.45 var(--mono);border:1px solid var(--line);resize:vertical;min-height:2.6em;max-height:12em;padding:3px 6px;outline:none}
 #chatq:focus-visible{border-color:var(--cyan)}
+#chatcm{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)}
+#chatcm:focus-within{border-color:var(--cyan)}
+#chatcm .cm-editor{max-height:14em;font-size:12.5px}#chatcm .cm-scroller{font-family:var(--mono)}
+#chatcm .cm-editor.cm-focused{outline:none}
+#chatmic{min-width:2.4em}#chatmic.on{color:var(--bg);background:var(--red,#f85149);border-color:transparent}
+#chatinterim{color:var(--dim);font-style:italic;min-height:1em;font-size:11.5px;padding:0 2px}
 #chatstate{color:var(--dim);font-size:11px;min-height:1.4em}
 .ph{color:var(--dim);font-size:11px;letter-spacing:.06em;margin:0 0 6px}
 #stream{flex:1;overflow:auto;padding:8px 12px}
@@ -110,9 +137,27 @@ details summary{cursor:pointer;color:var(--dim)}
 .sev-error{color:var(--red)}.sev-warning{color:var(--yellow)}.sev-note{color:var(--cyan)}
 .prose{white-space:pre-wrap;color:var(--fg);line-height:1.55}
 .dl{color:var(--cyan);cursor:pointer;text-decoration:underline;margin-right:12px;background:none;border:none;padding:0}
+.evbtn{background:none;border:none;padding:0;color:var(--green);cursor:pointer;text-align:left;font:inherit}
+.evbtn:hover{text-decoration:underline}
+.evbtn::before{content:"▸ ";color:var(--dim)}
+.fwin{position:fixed;z-index:20;display:flex;flex-direction:column;background:var(--panel);border:1px solid #3a4452;
+  box-shadow:0 8px 28px rgba(0,0,0,.55);min-width:320px;min-height:120px;resize:both;overflow:hidden}
+.fwin.min{height:auto!important;min-height:0;resize:none}.fwin.min .fbody,.fwin.min .ffoot{display:none}
+.fhead{display:flex;gap:8px;align-items:center;padding:3px 8px;background:#161b22;cursor:move;user-select:none;border-bottom:1px solid var(--line)}
+.fhead .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fhead .btn{padding:0 6px;font-size:11.5px}
+.badge{font-size:10.5px;padding:0 6px;border:1px solid}
+.badge.checkout,.badge.local{color:var(--green);border-color:#2a4d33}
+.badge.unc{color:var(--yellow);border-color:#4d3f1f}.badge.err{color:var(--red);border-color:#5a2a2a}
+.fbody{flex:1;min-height:0;overflow:auto;display:flex}
+.fbody>.cm-editor{flex:1;height:100%}.fbody textarea{flex:1;background:var(--bg);color:var(--fg);border:none;font:12.5px/1.45 var(--mono);padding:6px;resize:none;outline:none}
+.ffoot{font-size:11px;color:var(--dim);padding:2px 8px;border-top:1px solid var(--line);max-height:6em;overflow:auto;white-space:pre-wrap}
+.ffoot.err{color:var(--red)}
+.cm-flash{background:rgba(57,197,207,.25)!important}
 @media (max-width:760px){
   main{flex-direction:column}#split{display:none}
   #left{flex:1 1 auto;min-height:60vh}#right{flex:none;height:70vh;border-top:1px solid var(--line)}
+  #strip{flex-direction:row;width:auto;height:auto}#strip button{writing-mode:horizontal-tb}
   #sessbar{margin-left:0;width:100%}#sessbar input{flex:1;width:auto}
 }
 </style>
@@ -131,6 +176,7 @@ details summary{cursor:pointer;color:var(--dim)}
       <datalist id="catlist"></datalist>
       <button class="btn" id="open">open</button>
       <button class="btn" id="reset" title="queue reset">reset</button>
+      <button class="btn" id="editbtn" title="the catalog's working copy (floating editor)" hidden>edit</button>
       <span id="b-sid" class="empty"></span>
     </span>
   </div>
@@ -166,24 +212,41 @@ details summary{cursor:pointer;color:var(--dim)}
     </div>
   </section>
   <div id="split" role="separator" aria-orientation="vertical" tabindex="0"></div>
-  <aside id="right" aria-label="Claude and the loop">
-    <section id="chat" aria-label="Claude">
-      <p class="ph">CLAUDE — reinterprets the machine; acts only through the REPL (its lines show as claude&gt; on the left)</p>
-      <div id="chatlog" aria-live="polite"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
-      <div id="chatstate" role="status"></div>
-      <div id="chatin">
-        <textarea id="chatq" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
-        <button class="btn" id="chatsend">send</button>
-        <button class="btn" id="chatstop" hidden>stop</button>
+  <aside id="right" aria-label="tool panels">
+    <section class="dock" id="dock-claude" data-dock="claude" aria-label="Claude">
+      <header><span class="tw">▾</span><span class="tt">CLAUDE</span><button class="x" title="hide (the strip brings it back)">✕</button></header>
+      <div class="dbody">
+        <p class="ph" id="chatsub">reinterprets the machine; acts only through the REPL (its lines show as claude&gt; on the left)</p>
+        <div id="chatlog" aria-live="polite"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
+        <div id="chatstate" role="status"></div>
+        <div id="chatinterim" aria-live="polite"></div>
+        <div id="chatin">
+          <textarea id="chatq" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
+          <button class="btn" id="chatmic" hidden title="dictate (browser speech recognition)">mic</button>
+          <button class="btn" id="chatsend">send</button>
+          <button class="btn" id="chatstop" hidden>stop</button>
+        </div>
       </div>
     </section>
-    <section id="loop" aria-label="loop">
-      <p class="ph">CANDIDATES</p>
-      <div id="cands"><div class="empty">No candidates.</div></div>
-      <p class="ph" style="margin-top:12px">SURPRISE RECORDS</p>
-      <div id="records"><div class="empty">No surprise records.</div></div>
+    <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and packs">
+      <header><span class="tw">▾</span><span class="tt">CATALOG · working copy &amp; packs</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody" id="catdock"><div class="empty">Open a catalog — its working copy and extension packs show here.</div></div>
+    </section>
+    <section class="dock" id="dock-candidates" data-dock="candidates" aria-label="candidates">
+      <header><span class="tw">▾</span><span class="tt">CANDIDATES</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="cands"><div class="empty">No candidates.</div></div></div>
+    </section>
+    <section class="dock" id="dock-records" data-dock="records" aria-label="surprise records">
+      <header><span class="tw">▾</span><span class="tt">SURPRISE RECORDS</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="records"><div class="empty">No surprise records.</div></div></div>
     </section>
   </aside>
+  <nav id="strip" aria-label="tool windows">
+    <button data-strip="claude" title="Claude">Claude</button>
+    <button data-strip="catalog" title="working copy and packs">Catalog</button>
+    <button data-strip="candidates" title="candidates">Candidates</button>
+    <button data-strip="records" title="surprise records">Records</button>
+  </nav>
 </main>
 
 <script>
@@ -286,7 +349,7 @@ function rulesHtml(c){
 function measureHtml(c){
   const en=c.enabled||[];
   return `<div class="sec"><h4>MEASURE · enabled tier (${esc(c.status)})</h4>${en.length?en.map(e=>
-    `<div class="meas"><span class="nm">${esc(e.name)}</span><span class="bar" style="width:${Math.max(2,Math.round(e.p*160))}px"></span><span>p=${(+e.p).toFixed(3)}</span></div>`).join(""):'<div class="empty">nothing can fire</div>'}</div>`}
+    `<div class="meas"><span class="nm"><button class="evbtn" data-cmd="step ${esc(e.name)}" title="fire this event as the next step">${esc(e.name)}</button></span><span class="bar" style="width:${Math.max(2,Math.round(e.p*160))}px"></span><span>p=${(+e.p).toFixed(3)}</span></div>`).join(""):'<div class="empty">nothing can fire</div>'}</div>`}
 function tokensHtml(c){const t=Object.entries(c.counts||{});
   return `<div class="sec"><h4>TOKENS</h4>${t.length?`<div class="kv">${t.map(([a,n])=>`<span>${esc(a)}</span><span>${n}</span>`).join("")}</div>`:'<div class="empty">(empty)</div>'}</div>`}
 function proofHtml(c){
@@ -359,6 +422,9 @@ function bodyHtml(i,isLastStop,seenMax){
       contextHtml(c,new Set(sec==="trace"?[]:sec==="tokens"?["tokens"]:sec==="rules"?["rules"]:["rules","measure","tokens","proof"]));
     if(!sec||sec==="trace")h+=`<pre class="out">${esc((String(i.result||"").split("── trace\n")[1])||"")}</pre>`}
   else if(v==="findings"&&Array.isArray(j.diagnostics))h=findingsHtml(j.diagnostics);
+  else if(v==="events"&&Array.isArray(j.enabled))h=j.enabled.length?`<div class="sect"><h4>EVENTS · click one to fire it as the next step</h4>${
+    j.enabled.map(e=>`<div class="meas"><span class="nm"><button class="evbtn" data-cmd="step ${esc(e.name)}">${esc(e.k)}. ${esc(e.name)}</button></span><span class="bar" style="width:${Math.max(2,Math.round(e.p*160))}px"></span><span>p=${(+e.p).toFixed(3)}${e.kind==="link"?" · stage link":""}</span></div>`).join("")}</div>`
+    :'<div class="empty">nothing can fire</div>';
   else if(v==="narrate"&&j.narration!==undefined)h=narratorHtml(j);
   else if(v==="graph"&&j.nodes)h=graphHtml(i);
   else h=`<pre class="out">${esc(i.result)}</pre>`;
@@ -411,6 +477,10 @@ async function queue(cmd,actor,quiet){
      get the reason thrown instead of a banner */
   cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return null;
   const fail=m=>{if(quiet)throw new Error(m);banner(m,5000);return null};
+  if(GW&&!quiet){                     // §4a: terminal verbs, web meanings
+    const [verb,...rest]=cmd.split(/\s+/);
+    if(verb==="edit"){openEditor("copy",{rule:rest[0]});return null}
+    if(verb==="save"||verb==="export"){downloadWork();return null}}
   if(GW){
     if(!wsUp)return fail("Not connected to the console backend — reconnecting…");
     if(!sid||!sess)return fail("No open session — open a catalog first.");
@@ -520,7 +590,10 @@ How to read what comes back:
 
 == Formalization skill (the loop) ==
 surprise record → mine the gap as a short factual %% text → a candidate LLP pack
-(packs consume base atoms, never produce them) → :gate (the cascade decides) →
+(a pack WRITES only what the base's namespaces grant its layer — the
+gate's containment check enforces those produce-rights; a base that
+grants nothing means the pack only reads base atoms and produces its
+own) → :gate (the cascade decides) →
 on findings, repair FROM THE DIAGNOSTICS (:findings), never by rewriting the base
 → the HUMAN approves in the console's candidate buttons. You never approve:
 :accept is refused by design — do not try it, and say so if asked.
@@ -558,17 +631,56 @@ function trimJson(j){
 function chatContext(){const c=sess&&sess.ctx;
   return c?`[console now: catalog ${c.catalog}, stage ${c.stage}, beat ${c.beat}, episode ${c.episode}, ${c.status}, ${c.fired-(c.base||0)} fired since base, last ${c.last_event||"—"}]`
     :"[console now: no open session — the viewer must open a catalog before the repl tool can run]"}
+/* the chat input: CodeMirror (from the vendor bundle) under the gateway,
+   the textarea elsewhere — one small interface either way */
+const chatIn={get:()=>$("#chatq").value,set:v=>{$("#chatq").value=v},focus:()=>$("#chatq").focus(),
+  insert(t){const q=$("#chatq"),a=q.selectionStart??q.value.length;q.value=q.value.slice(0,a)+t+q.value.slice(q.selectionEnd??a);
+    q.selectionStart=q.selectionEnd=a+t.length}};
+async function chatInputCM(){
+  const lib=await loadCM(),cm=lib&&lib.mod;if(!cm||!cm.minimalSetup)return;
+  const host=document.createElement("div");host.id="chatcm";const ta=$("#chatq");ta.replaceWith(host);
+  const send=()=>{chatSend();return true};
+  const view=new cm.EditorView({parent:host,doc:ta.value,extensions:[cm.minimalSetup,cm.EditorView.lineWrapping,cm.oneDark,
+    cm.placeholder(ta.placeholder),cm.EditorView.contentAttributes.of({"aria-label":"message to Claude"}),
+    cm.Prec.highest(cm.keymap.of([{key:"Enter",run:send},
+      {key:"Shift-Enter",run:v=>{v.dispatch(v.state.replaceSelection("\n"),{scrollIntoView:true});return true}}]))]});
+  Object.assign(chatIn,{get:()=>view.state.doc.toString(),
+    set:v=>view.dispatch({changes:{from:0,to:view.state.doc.length,insert:v}}),focus:()=>view.focus(),
+    insert:t=>{view.dispatch(view.state.replaceSelection(t),{scrollIntoView:true})}})}
+
+/* dictation: the browser's SpeechRecognition (Chrome/Edge/Safari). NOTE in
+   Chrome the audio goes to the vendor's speech service — the button says
+   so; a local Whisper engine can replace `recog` behind the same button. */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recog=null,dictating=false;
+function micUi(){const b=$("#chatmic");b.classList.toggle("on",dictating);b.textContent=dictating?"● rec":"mic";
+  b.setAttribute("aria-pressed",dictating);if(!dictating)$("#chatinterim").textContent=""}
+function micToggle(){
+  if(!SR)return;
+  if(dictating){dictating=false;try{recog.stop()}catch(e){}micUi();return}
+  recog=new SR();recog.continuous=true;recog.interimResults=true;recog.lang=store.get("loopconsole.lang",navigator.language||"en-US");
+  recog.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
+      if(r.isFinal){const t=r[0].transcript.trim();if(t){const cur=chatIn.get();chatIn.insert((cur&&!/\s$/.test(cur)?" ":"")+t)}}
+      else interim+=r[0].transcript}
+    $("#chatinterim").textContent=interim};
+  recog.onerror=e=>{if(e.error==="no-speech"||e.error==="aborted")return;
+    dictating=false;micUi();$("#chatstate").textContent="dictation: "+e.error+(e.error==="network"?" (the browser's speech service is unreachable)":"")};
+  /* engines end a session after a pause or ~a minute: long narrations keep going */
+  recog.onend=()=>{if(dictating){try{recog.start()}catch(e){dictating=false;micUi()}}else micUi()};
+  try{recog.start();dictating=true;micUi();chatIn.focus()}catch(e){$("#chatstate").textContent="dictation unavailable: "+e.message}}
+
 async function chatSend(){
-  const q=$("#chatq"),text=q.value.trim();
+  const text=chatIn.get().trim();
   if(GW){
     if(!text||gwChatBusy)return;
     if(!sid||!sess){$("#chatstate").textContent="open a catalog first — Claude works in your session";return}
     if(!wsUp){$("#chatstate").textContent="not connected to the backend";return}
-    q.value="";$("#chatstate").textContent="";
+    chatIn.set("");$("#chatstate").textContent="";
+    if(dictating)micToggle();
     wsSend({ch:"chat",type:"say",session:sid,text});return}
   if(!text||chatBusy)return;
   if(!sampleNs){$("#chatstate").textContent="chat unavailable in this view";return}
-  q.value="";
+  chatIn.set("");
   chatTurns.push({role:"user",content:text});
   const reply={role:"assistant",content:"",pending:true,tools:[]};
   chatTurns.push(reply);chatSave();renderChat();
@@ -634,6 +746,7 @@ function wsHandle(f){
     if(f.id&&intents.has(f.id)){const i=intents.get(f.id);
       intents.set(f.id,{...i,status:"error",result:f.error,json:{ok:false,error:f.error}});renderStream();settle()}
     banner(f.error+(f.detail?" — "+f.detail:""),6000);return}
+  if(f.type==="source"){if(f.session===sid)onSource(f);return}
   if(f.type==="session"){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
       intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatTurns=[];chatBusyUi(false);renderChat()}
@@ -683,15 +796,191 @@ function applyManifest(){
   const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
   const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
   $("#chatin").hidden=chat!=="agent";
-  if(chat==="agent"){$("#chat .ph").textContent="CLAUDE — the agent on this host (the operator's login); it acts only through the REPL — its lines show as claude> on the left";
+  if(chat==="agent"){$("#chatsub").textContent="the agent on this host (the operator's login); it acts only through the REPL — its lines show as claude> on the left";
     $("#chatstate").textContent="";if(sid)wsSend({ch:"chat",type:"history",session:sid});return}
   if(chat!=="agent"){                // no chat here: no invitation to one
-    $("#chat .ph").textContent=chat==="pending"?"CLAUDE — agent chat (step 2)":"CLAUDE — not on this instance";
+    $("#chatsub").textContent=chat==="pending"?"agent chat (step 2)":"not on this instance";
     if(!chatTurns.length)$("#chatlog").innerHTML=""}
   $("#chatstate").innerHTML=m.mode!=="shared"
     ?"agent chat unavailable on this host — "+esc(m.chat_unavailable||"not configured")
     :"AI chat is not served on this shared instance — it would run on the operator's credentials. Claude for you lives on"+link+" (billed to you).";
-  $("#loop").innerHTML=`<p class="ph">CANDIDATES · RECORDS</p><div class="empty">approvals and surprise records live on${link}.</div>`}
+  $("#cands").innerHTML=`<div class="empty">approvals live on${link}.</div>`;
+  $("#records").innerHTML=`<div class="empty">surprise records live on${link}.</div>`}
+
+/* ---- the working copy + floating editors (CONSOLE-WS §4a, the user's
+   simple model): open → the catalog's text is copied into IndexedDB
+   (certified: it IS the checkout's); edits are stored there and make it
+   UNCERTIFIED until [recompile] builds the session from it (+ extension
+   packs on top) cleanly; [download] takes it home to merge by the one
+   road. Editors are floating, non-modal windows — the REPL and the chat
+   stay live beside them. Claude's source tools edit the same copy. */
+let work=null;const wins=new Map();let cmLib=null,cmTried=false,workTimer=null;
+const idb={db:null,
+  async open(){if(this.db)return this.db;if(!window.indexedDB)return null;
+    try{this.db=await new Promise((ok,no)=>{const r=indexedDB.open("loopconsole",1);
+      r.onupgradeneeded=()=>r.result.createObjectStore("work",{keyPath:"name"});
+      r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}catch(e){this.db=null}return this.db},
+  async get(name){const db=await this.open();if(!db)return null;
+    return new Promise(ok=>{try{const q=db.transaction("work").objectStore("work").get(name);
+      q.onsuccess=()=>ok(q.result||null);q.onerror=()=>ok(null)}catch(e){ok(null)}})},
+  async put(rec){const db=await this.open();if(!db)return;
+    try{db.transaction("work","readwrite").objectStore("work").put({...rec,updated:new Date().toISOString()})}catch(e){}}};
+function certOf(w){return w.error?["err","recompile failed"]:w.certified==="checkout"?["checkout","certified · catalog"]
+  :w.certified==="local"?["local","certified · local"]:["unc","uncertified — recompile"]}
+async function onSource(f){
+  const first=!work||work.name!==f.name;
+  work={name:f.name,copy:f.copy,packs:f.packs||[],certified:f.certified,error:f.error,key:f.key};
+  if(first&&f.certified==="checkout"){            // reopen: keep your edits
+    const saved=await idb.get(f.name);
+    if(saved&&(saved.copy!==f.copy||(saved.packs||[]).length)&&saved.certified!=="checkout"){
+      work.copy=saved.copy;work.packs=saved.packs||[];work.certified=null;
+      wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+      banner("restored your edited copy of "+f.name+" from this browser — uncertified until you recompile it",8000)}}
+  idb.put(work);refreshEditors();renderCatalogDock()}
+function workTarget(t){return t==="copy"?work.copy:(work.packs[+t.split(":")[1]-1]||{}).source||""}
+function setWorkTarget(t,text){if(t==="copy")work.copy=text;else{const p=work.packs[+t.split(":")[1]-1];if(p)p.source=text}}
+function onEdit(t,text){if(!work)return;setWorkTarget(t,text);work.certified=null;work.error=null;idb.put(work);paintWin(t);renderCatalogDock();
+  clearTimeout(workTimer);workTimer=setTimeout(()=>wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs}),500)}
+async function loadCM(){
+  if(cmTried)return cmLib;cmTried=true;
+  /* ONE bundle (console/vendor/codemirror.js, built with esbuild from
+     deduped npm packages): separate CDN imports load two copies of
+     @codemirror/state and CM6 refuses to run. Served by the gateway;
+     elsewhere the editor is a plain textarea. */
+  if(!GW){cmLib=null;return cmLib}
+  try{const cm=await import("/vendor/codemirror.js");const lang=cm,dark=cm;
+    const KW=/^(catalog|extends|provenance|layers|stages|type|namespace|produce|pred|stage|qui|bwd|weight|guard|input|output|fact)\b/;
+    const llp=lang.StreamLanguage.define({name:"llp",
+      token(st){if(st.sol()&&st.match(/^%%.*/))return "string";if(st.match(/^%.*/))return "comment";
+        if(st.sol()&&st.match(/^#.*/))return "meta";if(st.eatSpace())return null;
+        if(st.match(/^"[^"]*"/))return "string";if(st.match(/^\[[A-Za-z_]+\]/))return "labelName";
+        if(st.match(/^(-o|<>|@w|\(\))/)||st.match(/^[*$]/))return "operator";if(st.match(/^\d+(\.\d+)?/))return "number";
+        if(st.match(KW))return "keyword";if(st.match(/^[A-Z][A-Za-z0-9_]*/))return "variableName";
+        if(st.match(/^[a-z_][A-Za-z0-9_-]*(?=\s*\[)/))return "definition";if(st.match(/^[a-z_][A-Za-z0-9_-]*/))return "atom";
+        st.next();return null}});
+    cmLib={EditorView:cm.EditorView,basicSetup:cm.basicSetup,ext:[llp,dark.oneDark],mod:cm}}
+  catch(e){cmLib=null;banner("CodeMirror unavailable (offline?) — plain editor instead",5000)}
+  return cmLib}
+function winTitle(t){return t==="copy"?(work.name||"copy")+".llp":((work.packs[+t.split(":")[1]-1]||{}).name||t)+" (pack on top of the copy)"}
+function paintWin(t){const w=wins.get(t);if(!w||!work)return;const [cls,label]=certOf(work);
+  w.el.querySelector(".badge").className="badge "+cls;w.el.querySelector(".badge").textContent=label;
+  w.el.querySelector(".t").textContent=winTitle(t);const f=w.el.querySelector(".ffoot");
+  f.className="ffoot"+(work.error?" err":"");f.textContent=work.error?work.error:(work.certified?"key "+String(work.key||"").slice(0,12)+"…":"edited — [recompile] to run it")}
+function refreshEditors(){for(const [t,w] of wins){const want=workTarget(t);
+  if(w.get()!==want)w.set(want);paintWin(t)}}
+let zTop=30;
+async function openEditor(t,opt){
+  opt=opt||{};if(!work){banner("Open a catalog first — its copy is what the editor shows.",4000);return}
+  if(t.startsWith("pack:")&&!work.packs[+t.split(":")[1]-1]){banner("no "+t,3000);return}
+  let w=wins.get(t);
+  if(!w){const el=document.createElement("section");el.className="fwin";el.setAttribute("aria-label","editor "+t);
+    const n=wins.size;el.style.left=(80+n*28)+"px";el.style.top=(70+n*28)+"px";el.style.width="640px";el.style.height="420px";
+    el.innerHTML=`<div class="fhead"><span class="t"></span><span class="badge"></span>
+      <button class="btn" data-w="recompile" title="build the session from this copy + packs">recompile</button>
+      ${t==="copy"?'<button class="btn" data-w="pack" title="a new extension pack on top of the copy">+ pack</button>':""}
+      <button class="btn" data-w="download">download</button><button class="btn" data-w="min" title="minimize">_</button><button class="btn" data-w="close">✕</button></div>
+      <div class="fbody"></div><div class="ffoot"></div>`;
+    document.body.appendChild(el);
+    const body=el.querySelector(".fbody");const lib=await loadCM();let get,set,view=null;
+    if(lib){let syncing=false;
+      view=new lib.EditorView({doc:workTarget(t),parent:body,extensions:[lib.basicSetup,...lib.ext,
+        lib.EditorView.updateListener.of(u=>{if(u.docChanged&&!syncing)onEdit(t,u.state.doc.toString())})]});
+      get=()=>view.state.doc.toString();
+      set=x=>{syncing=true;const sel=Math.min(view.state.selection.main.head,x.length);
+        view.dispatch({changes:{from:0,to:view.state.doc.length,insert:x},selection:{anchor:sel}});syncing=false}}
+    else{const ta=document.createElement("textarea");ta.spellcheck=false;ta.value=workTarget(t);body.appendChild(ta);
+      ta.addEventListener("input",()=>onEdit(t,ta.value));get=()=>ta.value;set=x=>{ta.value=x}}
+    w={el,get,set,view};wins.set(t,w);
+    el.addEventListener("pointerdown",()=>{el.style.zIndex=++zTop});
+    const head=el.querySelector(".fhead");let dx=null,dy=0;
+    head.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;dx=e.clientX-el.offsetLeft;dy=e.clientY-el.offsetTop;head.setPointerCapture(e.pointerId)});
+    head.addEventListener("pointermove",e=>{if(dx===null)return;el.style.left=Math.max(0,e.clientX-dx)+"px";el.style.top=Math.max(0,e.clientY-dy)+"px"});
+    head.addEventListener("pointerup",()=>{dx=null});
+    head.addEventListener("click",e=>{const b=e.target.closest("[data-w]");if(!b)return;const a=b.dataset.w;
+      if(a==="close"){if(view)view.destroy();el.remove();wins.delete(t)}
+      else if(a==="min")el.classList.toggle("min");
+      else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+        wsSend({ch:"repl",type:"recompile",session:sid});w.el.querySelector(".ffoot").textContent="recompiling…"}
+      else if(a==="pack")newPack();else if(a==="download")downloadText(t)})}
+  w.el.style.zIndex=++zTop;w.el.classList.remove("min");paintWin(t);
+  if(opt.rule)gotoRule(w,opt.rule)}
+function gotoRule(w,rule){
+  const lines=w.get().split("\n");const re=new RegExp("^\\s*(qui\\s+)?"+rule.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*\\[");
+  const k=lines.findIndex(l=>re.test(l));if(k<0){banner("no rule "+rule+" in the copy",3000);return}
+  if(w.view){const ln=w.view.state.doc.line(k+1);
+    w.view.dispatch({selection:{anchor:ln.from,head:ln.to},scrollIntoView:true});w.view.focus()}
+  else{const ta=w.el.querySelector("textarea");const at=lines.slice(0,k).join("\n").length+(k?1:0);
+    ta.focus();ta.setSelectionRange(at,at+lines[k].length)}}
+function newPack(){
+  const c=(sess&&sess.ctx)||{};const base=c.catalog||"base";const n=work.packs.length+1;
+  const today=new Date().toISOString().slice(0,10);
+  work.packs.push({name:base+"-ext"+n,source:`% <one line: what this pack adds — what was observed>
+catalog ${base}-ext${n} 1.
+extends ${base}.
+provenance hand "web console" "${today}".
+namespace ext${n} produce (story).
+pred example${n} : ext${n}.
+stage ${c.stage&&c.stage!=="(done)"?c.stage:"go"} {
+  %% <what this rule means, in the observed words>
+  example${n} [story] : example${n} -o example${n}.
+}
+`});
+  work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+  openEditor("pack:"+n)}
+function saveBlob(name,text){
+  const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));const a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000)}
+function baseName(){return String(work.name||"copy").split("/").pop()}
+function downloadText(t){if(!work)return;saveBlob(t==="copy"?baseName()+".llp":(work.packs[+t.split(":")[1]-1].name||"pack")+".llp",workTarget(t))}
+function downloadWork(){if(!work){banner("nothing to save — open a catalog first",3000);return}
+  downloadText("copy");work.packs.forEach((p,k)=>setTimeout(()=>downloadText("pack:"+(k+1)),300*(k+1)))}
+
+/* ---- tool panels: shown/collapsed per panel, remembered per viewer ---- */
+const DOCKS=["claude","catalog","candidates","records"];
+let docks=store.get("loopconsole.docks",{claude:{shown:true,open:true},catalog:{shown:!!GW,open:true},
+  candidates:{shown:!GW,open:false},records:{shown:!GW,open:false}});
+function applyDocks(){
+  let any=false;
+  for(const d of DOCKS){const st=docks[d]||{shown:false,open:true},el=$("#dock-"+d);
+    el.hidden=!st.shown;el.classList.toggle("open",st.shown&&st.open);el.classList.toggle("collapsed",st.shown&&!st.open);
+    el.querySelector(".tw").textContent=st.open?"▾":"▸";
+    document.querySelector(`[data-strip="${d}"]`).setAttribute("aria-pressed",!!st.shown);any=any||st.shown}
+  $("#right").hidden=!any;$("#split").hidden=!any;
+  if(!any)$("#left").style.flex="1 1 auto";
+  store.set("loopconsole.docks",docks)}
+function dockSet(d,patch){docks[d]={...(docks[d]||{}),...patch};applyDocks()}
+document.querySelectorAll(".dock>header").forEach(h=>h.addEventListener("click",e=>{
+  const d=h.parentElement.dataset.dock;
+  if(e.target.closest(".x")){dockSet(d,{shown:false});return}
+  dockSet(d,{open:!(docks[d]&&docks[d].open)})}));
+document.querySelectorAll("[data-strip]").forEach(b=>b.addEventListener("click",()=>{
+  const d=b.dataset.strip,st=docks[d]||{};
+  if(st.shown&&st.open)dockSet(d,{shown:false});else dockSet(d,{shown:true,open:true})}));
+
+/* the CATALOG panel: the working copy's state and its packs */
+function renderCatalogDock(){
+  const el=$("#catdock");
+  if(!GW){el.innerHTML='<div class="empty">The working copy and packs need the console backend (metis-loop console-serve).</div>';return}
+  if(!work){el.innerHTML='<div class="empty">Open a catalog — its working copy and extension packs show here.</div>';return}
+  const [cls,label]=certOf(work);
+  el.innerHTML=`<div class="wrow"><b>${esc(baseName())}.llp</b><span class="badge ${cls}">${esc(label)}</span>
+      <span class="empty">${work.key?"key "+esc(String(work.key).slice(0,12))+"…":""}</span></div>
+    <div class="wrow"><button class="btn" data-cw="edit">edit copy</button><button class="btn" data-cw="pack">+ pack</button>
+      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="download">download all</button></div>
+    ${work.error?`<pre class="err">${esc(work.error)}</pre>`:""}
+    <div class="ph" style="margin-top:6px">PACKS on top of the copy (each extends it, only adds)</div>
+    <div class="plist">${work.packs.length?work.packs.map((p,k)=>`<div class="pk"><span class="nm">${esc(p.name)}</span>
+      <button class="btn" data-cw="open" data-k="${k+1}">open</button><button class="btn" data-cw="dl" data-k="${k+1}">download</button>
+      <button class="btn" data-cw="rm" data-k="${k+1}" title="remove (uncertifies the copy)">remove</button></div>`).join("")
+      :'<div class="empty">none — [+ pack] starts one on top of the copy</div>'}</div>
+    <div class="empty" style="margin-top:8px">Edits live in this browser (IndexedDB) and in the backend's memory — never on the server's disk. Download and merge by the one road: candidate → gates → approval → commit.</div>`}
+$("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
+  if(a==="edit")openEditor("copy");else if(a==="pack")newPack();else if(a==="download")downloadWork();
+  else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});wsSend({ch:"repl",type:"recompile",session:sid})}
+  else if(a==="open")openEditor("pack:"+k);else if(a==="dl")downloadText("pack:"+k);
+  else if(a==="rm"){const t="pack:"+k;if(wins.has(t)){const w=wins.get(t);if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}
+    work.packs.splice(+k-1,1);work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+    renderCatalogDock()}});
 
 /* ---- wiring (static layout first; capabilities light up later) ---- */
 function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setAttribute("aria-pressed",lenses.has(b.dataset.lens)))}
@@ -714,8 +1003,13 @@ $("#chatstop").addEventListener("click",()=>{
   if(GW){if(sid)wsSend({ch:"chat",type:"stop",session:sid});return}
   if(chatBusy)chatBusy.abort()});
 $("#chatq").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chatSend()}});
+if(SR){$("#chatmic").hidden=false;$("#chatmic").title="dictate — the browser's speech recognition (in Chrome the audio is sent to Google's speech service)";
+  $("#chatmic").addEventListener("click",micToggle)}
+if(GW)chatInputCM();
 $("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
 $("#reset").addEventListener("click",()=>queue("reset"));
+$("#editbtn").addEventListener("click",()=>openEditor("copy"));
+if(GW)$("#editbtn").hidden=false;
 $("#stopcmd").addEventListener("click",()=>{if(GW&&sid)wsSend({ch:"repl",type:"stop",session:sid})});
 $("#prompt").addEventListener("keydown",e=>{
   const p=e.target;
@@ -728,7 +1022,7 @@ $("#prompt").addEventListener("keydown",e=>{
   sp.addEventListener("pointerdown",e=>{x0=e.clientX;w0=L.getBoundingClientRect().width;sp.setPointerCapture(e.pointerId)});
   sp.addEventListener("pointermove",e=>{if(x0===null)return;L.style.flex="0 0 "+Math.max(280,w0+e.clientX-x0)+"px"});
   sp.addEventListener("pointerup",()=>{x0=null})})();
-syncLenses();renderBand();renderRight();
+syncLenses();renderBand();renderRight();applyDocks();renderCatalogDock();
 
 chatLoad();renderChat();
 claude.use("sample").then(ns=>{sampleNs=ns;
