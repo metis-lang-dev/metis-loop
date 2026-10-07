@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAVE_READ_TOKEN: ${{ secrets.METIS_READ_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metis-loop
+      # metis-loop imports metispy and its tests read metis-catalog —
+      # both PRIVATE; GITHUB_TOKEN cannot read them. The suite runs when
+      # the repo secret METIS_READ_TOKEN (fine-grained PAT, Contents:
+      # read on metis-lang-dev/metispy + metis-lang-dev/metis-catalog)
+      # exists; otherwise the job says so instead of passing silently.
+      - name: Checkout metispy (private)
+        if: env.HAVE_READ_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metispy
+          token: ${{ secrets.METIS_READ_TOKEN }}
+          path: metispy
+      - name: Checkout metis-catalog (private; console + fixtures)
+        if: env.HAVE_READ_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          token: ${{ secrets.METIS_READ_TOKEN }}
+          path: metis-catalog
+      - uses: actions/setup-python@v5
+        if: env.HAVE_READ_TOKEN == 'true'
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: metis-loop/pyproject.toml
+      - name: Install (console extra; the agent extra deliberately NOT)
+        if: env.HAVE_READ_TOKEN == 'true'
+        run: |
+          pip install -e ./metispy
+          pip install -e './metis-loop[console]' pytest
+      - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
+        if: env.HAVE_READ_TOKEN == 'true'
+        working-directory: metis-loop
+        run: pytest -q tests/
+      - name: Suite NOT run (no METIS_READ_TOKEN)
+        if: env.HAVE_READ_TOKEN != 'true'
+        run: |
+          echo "::warning::metis-loop suite skipped: add repo secret METIS_READ_TOKEN (fine-grained PAT, Contents: read on metis-lang-dev/metispy and metis-lang-dev/metis-catalog)"
+          echo "### metis-loop suite NOT run — secret METIS_READ_TOKEN missing (Contents: read on metispy + metis-catalog)" >> "$GITHUB_STEP_SUMMARY"

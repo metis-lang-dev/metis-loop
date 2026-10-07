@@ -1,5 +1,7 @@
 # metis-loop
 
+[![ci](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml)
+
 The explanation / formalization loop for metis catalogs:
 
     surprise records → mined text → formalize (LLM) → gated candidate
