@@ -50,10 +50,23 @@ also their window into the loop.
    behavior, from the record's observed-vs-modeled gap. Short,
    factual, quoting atoms. It is stamped on the record as
    `mined_text`.
+
+   **Investigate with the causal instruments (specs 09-11)** before
+   writing a rule: `why [ATOM|K]` — what the state rests on (the
+   structural cone); `whatif K do(~RULE|+ATOM|EVENT) query Y [@N]` —
+   the counterfactual comparison (fact / with-do / by-chance);
+   `necessity K [ATOM]` — was K needed for the outcome (PN with the
+   Tian–Pearl verdict; inhibitors named); `fork K`/`back` to explore
+   an alternative branch by hand. Answers state their tier (exact
+   cone / sampled ± ci) and readout; trust the extremes, read
+   mid-range PN against the by-chance column. These are
+   session-local and on the console whitelist.
 3. **Formalize**: YOU write the candidate `.llp` pack over the base
-   vocabulary (`llp <<EOF` or `load FILE.llp`; packs consume base
-   atoms, never produce them — containment admission enforces it;
-   new vocabulary only for new observations). Numbers from data:
+   vocabulary (`llp <<EOF` or `load FILE.llp`; a pack WRITES only what the
+   base's namespaces grant its layer — the gate's containment check
+   enforces the produce-rights; a base granting nothing means the
+   pack only reads base atoms and produces its own; new vocabulary
+   only for new observations). Numbers from data:
    prior-mode measures, no invented weights — notching fits them
    later. (`formalize` drafts via the llm endpoint instead; the
    gate treats both the same.)
