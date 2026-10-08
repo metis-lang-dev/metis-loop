@@ -46,6 +46,22 @@ semantics. metis interleaves; RDDL ticks. The lockstep idiom exists
 the loop DISCOVERS the tick structure through surprises or needs the
 idiom handed over. Either answer is a finding.
 
+## Step 2a — notching: the world matched through probability (user)
+
+metis has no reward — and does not need one to GROUND a domain: the
+measure is matched to the world by NOTCHING (fit the weights from
+observed data; the skill's "no invented weights" doctrine). Until
+now the catalogs followed Ceptre and narrative domains; this is the
+turn toward quantitative worlds. After the dynamics gate green and
+the surprise loop settles the STRUCTURE, notch the weights from
+recorded episodes — and here the experiment has GROUND TRUTH: the
+instance's constants (per-floor ARRIVE-PARAM Bernoullis) are the
+generator itself. ACCEPTANCE, quantitative: the notched arrival
+weights recover the instance's constants within sampling error
+(report the table: floor, true param, notched weight, n). Reward
+stays out of grounding entirely; it returns only as the arena
+objective below.
+
 ## Step 3 — extra credit: the arena
 
 The metis agent on the pyRDDLGym loop (IPPC 2023 infrastructure):
@@ -68,3 +84,23 @@ plan" (pick up, deliver, hover) the narrative check via `narrate`.
 4. Extra credit: the arena table (metis vs NoOp vs Random).
 Report = the experiment writeup (this file gains a RESULTS section);
 suites green as always.
+
+## The domain shelf (faithful seeds for later REPLs)
+
+rddlrepository carries the AUTHOR's description for all 90 problems
+(`ProblemInfo.desc` + the domain file's header comment) — each new
+formalization session seeds those VERBATIM, nothing paraphrased.
+NOTE: the ippc2023 set is almost entirely continuous-fluent (HVAC,
+RaceCar, Reservoir, UAV, PowerGen, MarsRover, RecSim) — not metis
+material; the boolean, storied, notchable shelf is 2011/2014/2018:
+
+- Elevators_MDP (this experiment) — Bernoulli arrivals per floor.
+- Wildfire_MDP_ippc2014 — spatial spread + ignition probabilities.
+- Tamarisk_MDP_ippc2014 — invasive-species spread/eradication.
+- SkillTeaching_MDP — probabilistic student learning (storied).
+- CrossingTraffic_MDP — robot vs Bernoulli-arriving obstacles.
+- TriangleTireworld_MDP — the classic probabilistic-planning fable.
+- AcademicAdvising — course-passing probabilities.
+(SysAdmin, GoL, Navigation, Traffic already have metispy adapters.)
+Each is a candidate rerun of steps 1-2a once elevators proves the
+recipe.
