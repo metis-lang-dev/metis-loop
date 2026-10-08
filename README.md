@@ -16,7 +16,9 @@ Interactive: `metis FILE.llp`, where the loop verbs are plain
 commands (`gate`, `accept`, `mine`, `narrate`, ...). The JSON wire
 for wrappers: `metis --json FILE.llp`. This repo is the wrappers —
 the web console (console/), the Claude Code skill (skills/), the
-`metis-loop` CLI bindings (admit/formalize/replay) — plus `loop.*`
+`metis-loop` CLI (console-serve + the repl delegation; the old
+admit/formalize/replay batch verbs merged into the kernel REPL) —
+plus `loop.*`
 compatibility shims re-exporting `metis.loop.*`.
 
 **The spec lives in ONE file: [docs/SPEC.md](docs/SPEC.md)** — the

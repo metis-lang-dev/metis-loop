@@ -28,12 +28,11 @@ def test_shims_resolve_to_the_kernel():
     assert loop.node.serve is metis.loop.node.serve
 
 
-def test_cli_admit(tmp_path, capsys):
+def test_cli_legacy_verbs_point_at_the_shell(capsys):
+    """admit/formalize/replay merged into the kernel REPL — the CLI
+    says where they went instead of pretending to be a second loop."""
     from loop.cli import main
-    t = tmp_path / "t.md"
-    t.write_text(TEXT)
-    rc = main(["admit", str(t), str(LANG / "corpus/packmark.llp"),
-               "--base", str(LANG / "corpus/packbase.llp"),
-               "--scenario", "coin=1,mkt=1", "--steps", "4"])
-    out = capsys.readouterr().out
-    assert rc == 0 and "ok=True" in out and "diff" in out
+    for verb in ("admit", "formalize", "replay"):
+        rc = main([verb, "x"])
+        err = capsys.readouterr().err
+        assert rc == 2 and "merged into the metis shell" in err
