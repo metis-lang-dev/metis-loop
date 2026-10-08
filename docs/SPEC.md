@@ -47,14 +47,14 @@ tabula rasa = serve a blank catalog and `revise` it. The JSON-lines
 wire is `metis --json FILE.llp` (one `{op, arg}` per line, one JSON
 result per line; metis.loop.wire, which also owns the intent
 policy). This repo is now the WRAPPERS: the web console, the Claude
-Code skill, the `metis-loop` CLI (console-serve + repl delegation),
+Code skill, the `metis-loop` CLI (= the console backend),
 and compatibility shims (`loop.*` re-exports `metis.loop.*`).
 Wrappers hold
 NO semantics:
 
 | wrapper | binding |
 | --- | --- |
-| CLI (`console-serve`, `repl`) | the standing web backend; the shell delegation (the old batch verbs merged into the REPL's gate/formalize/replay) |
+| CLI (`metis-loop`, bare) | the standing web backend itself; the shell is `metis`, the old batch verbs merged into the REPL's gate/formalize/replay |
 | Claude Code plugin (`skills/metis-loop`) | the session drives the REPL; it is the formalizer seat |
 | web console (the Loop Console artifact) | db documents in/out; a loop session executes |
 | editor panels (later) | the JSON wire |

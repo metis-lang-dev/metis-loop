@@ -30,7 +30,7 @@ wire for programmatic driving is `metis --json FILE.llp`, one
 `{op, arg}` per line. `docs/TUTORIAL.md` is the executed walkthrough.
 
 This repo (metis-loop) is the WRAPPERS: the web console, this
-skill, the `metis-loop` CLI (console-serve + repl delegation), the
+skill, the `metis-loop` CLI (= the console backend; the shell is `metis`), the
 `loop.*` shims. Wrappers hold no semantics.
 
 **Run interactive shell sessions inside tmux** (e.g.
