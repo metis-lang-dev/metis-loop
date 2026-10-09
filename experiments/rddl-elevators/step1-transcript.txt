@@ -1,0 +1,451 @@
+no catalog given — serving a blank scratch world (/tmp/metis-scratch-w4effe1a.llp); revise/accept to build it, save/export to keep it
+metis shell — metis-scratch-w4effe1a.llp (catalog scratch, key 2ce21dd7fdf9…)
+stage z | (empty)
+type 'help' for commands, 'events' to see what can fire
+llp> <"" --no-session-persistence --model claude-opus-5-5
+llm: command:claude -p --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence --model claude-opus-5-5
+llp> text <<EOF
+////////////////////////////////////////////////////////////////////
+// Elevator Domain
+//
+// Author: Tom Walsh (thomasjwalsh [at] gmail.com)
+//
+// Edited for competition and translation purposes by Scott Sanner.
+//
+// The "elevators" domain has a number of elevators delivering passengers 
+// to either the top or the bottom floor (the only allowable destinations).
+// Potential passengers arrive at a floor based on Bernoulli draws 
+// with a potentially different arrival probability for each floor.  
+//
+// The elevator can move in its current direction if the doors are closed,
+// can remain stationary (noop), or can open its door while indicating
+// the direction that it will go in next (this allows potential passengers
+// to determine whether to board or not).  Note that the elevator can only
+// change direction by opening its door while indicating the opposite 
+// direction. 
+//
+// A passable plan in this domain is to pick up a passenger every time 
+// they appear and take them to their destination.  A better plan includes 
+// having the elevator "hover" near floors where passengers are likely to 
+// arrive and coordinating multiple elevators for up and down passengers.
+//
+// This domain was designed to support extension to multiple elevators
+// and may be used in either single or multi-elevator mode.
+////////////////////////////////////////////////////////////////////
+EOF
+{
+ "ok": true,
+ "chars": 1393
+}
+llp> show text
+{
+ "ok": true,
+ "text": "////////////////////////////////////////////////////////////////////\n// Elevator Domain\n//\n// Author: Tom Walsh (thomasjwalsh [at] gmail.com)\n//\n// Edited for competition and translation purposes by Scott Sanner.\n//\n// The \"elevators\" domain has a number of elevators delivering passengers \n// to either the top or the bottom floor (the only allowable destinations).\n// Potential passengers arrive at a floor based on Bernoulli draws \n// with a potentially different arrival probability for each floor.  \n//\n// The elevator can move in its current direction if the doors are closed,\n// can remain stationary (noop), or can open its door while indicating\n// the direction that it will go in next (this allows potential passengers\n// to determine whether to board or not).  Note that the elevator can only\n// change direction by opening its door while indicating the opposite \n// direction. \n//\n// A passable plan in this domain is to pick up a passenger every time \n// they appear and take them to their destination.  A better plan includes \n// having the elevator \"hover\" near floors where passengers are likely to \n// arrive and coordinating multiple elevators for up and down passengers.\n//\n// This domain was designed to support extension to multiple elevators\n// and may be used in either single or multi-elevator mode.\n////////////////////////////////////////////////////////////////////\n"
+}
+llp> formalize
+{
+ "ok": false,
+ "backend": "command:claude -p --tools \"\" --strict-mcp-config --setting-sources \"\" --no-session-persistence --model claude-opus-5-5",
+ "rounds": 4,
+ "findings": [
+  "parse: 2:17: expected ., got '1'"
+ ]
+}
+llp> show llp
+{
+ "ok": true,
+ "llp": "catalog elevators 1.\nextends scratch 1.\n\n%% \"The \"elevators\" domain has a number of elevators delivering passengers\n%%  to either the top or the bottom floor (the only allowable destinations).\"\ntype elevators.elevator.\ntype elevators.floor.\ntype elevators.dir.\n\nconst elevators.up : elevators.dir.\nconst elevators.down : elevators.dir.\n\n%% \"to either the top or the bottom floor (the only allowable destinations)\"\npred elevators.top(elevators.floor) persistent.\npred elevators.bottom(elevators.floor) persistent.\npred elevators.above(elevators.floor, elevators.floor) persistent.\n\npred elevators.at(elevators.elevator, elevators.floor).\npred elevators.heading(elevators.elevator, elevators.dir).\npred elevators.closed(elevators.elevator).\npred elevators.open(elevators.elevator).\npred elevators.waiting(elevators.floor, elevators.dir).\npred elevators.riding(elevators.elevator, elevators.dir).\npred elevators.delivered(elevators.dir).\npred elevators.arrival_tick(elevators.floor).\n\nstage z {\n\n  %% \"Potential passengers arrive at a floor based on Bernoulli draws\n  %%  with a potentially different arrival probability for each floor.\"\n  rule elevators.arrive_up :\n    elevators.arrival_tick(F) * elevators.bottom(F)\n    -o elevators.waiting(F, elevators.up).\n\n  %% \"Potential passengers arrive at a floor based on Bernoulli draws\n  %%  with a potentially different arrival probability for each floor.\"\n  rule elevators.arrive_down :\n    elevators.arrival_tick(F) * elevators.top(F)\n    -o elevators.waiting(F, elevators.down).\n\n  %% \"The elevator can move in its current direction if the doors are closed\"\n  rule elevators.move_up :\n    elevators.at(E, F) * elevators.closed(E)\n    * elevators.heading(E, elevators.up) * elevators.above(G, F)\n    -o elevators.at(E, G) * elevators.closed(E)\n    * elevators.heading(E, elevators.up).\n\n  %% \"The elevator can move in its current direction if the doors are closed\"\n  rule elevators.move_down :\n    elevators.at(E, F) * elevators.closed(E)\n    * elevators.heading(E, elevators.down) * elevators.above(F, G)\n    -o elevators.at(E, G) * elevators.closed(E)\n    * elevators.heading(E, elevators.down).\n\n  %% \"can remain stationary (noop)\"\n  rule elevators.noop :\n    elevators.at(E, F)\n    -o elevators.at(E, F).\n\n  %% \"or can open its door while indicating the direction that it will go\n  %%  in next (this allows potential passengers to determine whether to\n  %%  board or not).\"\n  rule elevators.open_keep :\n    elevators.closed(E) * elevators.heading(E, D)\n    -o elevators.open(E) * elevators.heading(E, D).\n\n  %% \"Note that the elevator can only change direction by opening its door\n  %%  while indicating the opposite direction.\"\n  rule elevators.open_flip_down :\n    elevators.closed(E) * elevators.heading(E, elevators.up)\n    -o elevators.open(E) * elevators.heading(E, elevators.down).\n\n  %% \"Note that the elevator can only change direction by opening its door\n  %%  while indicating the opposite direction.\"\n  rule elevators.open_flip_up :\n    elevators.closed(E) * elevators.heading(E, elevators.down)\n    -o elevators.open(E) * elevators.heading(E, elevators.up).\n\n  %% \"The elevator can move in its current direction if the doors are closed\"\n  rule elevators.close :\n    elevators.open(E)\n    -o elevators.closed(E).\n\n  %% \"this allows potential passengers to determine whether to board or not\"\n  rule elevators.board :\n    elevators.open(E) * elevators.at(E, F) * elevators.heading(E, D)\n    * elevators.waiting(F, D)\n    -o elevators.open(E) * elevators.at(E, F) * elevators.heading(E, D)\n    * elevators.riding(E, D).\n\n  %% \"delivering passengers to either the top or the bottom floor\n  %%  (the only allowable destinations).\"\n  rule elevators.deliver_up :\n    elevators.riding(E, elevators.up) * elevators.at(E, F)\n    * elevators.top(F) * elevators.open(E)\n    -o elevators.at(E, F) * elevators.open(E)\n    * elevators.delivered(elevators.up).\n\n  %% \"delivering passengers to either the top or the bottom floor\n  %%  (the only allowable destinations).\"\n  rule elevators.deliver_down :\n    elevators.riding(E, elevators.down) * elevators.at(E, F)\n    * elevators.bottom(F) * elevators.open(E)\n    -o elevators.at(E, F) * elevators.open(E)\n    * elevators.delivered(elevators.down).\n\n}\n"
+}
+llp> formalize system
+(/home/axadmin/.config/metis/prompts/formalize.txt)
+You are a formalizer for LLP, a typed linear-logic behavior-catalog
+language. Emit ONLY LLP source, no fences, no prose.
+llp> formalize system <<EOF
+You are a formalizer for LLP, a typed linear-logic behavior-catalog
+language. Emit ONLY LLP source: no fences, no prose, nothing else.
+
+The world is BLANK: emit ONE standalone base catalog (no `extends`).
+LLP syntax, exactly as shown (every declaration ends with "."; a
+comment line starts with "%"; a doc line starts with "%%"):
+
+catalog NAME 1.
+provenance text "WHAT IT FORMALIZES" "YYYY-MM-DD".
+layers (L ...).                       the rule layers
+stages (S ...).                       stage names, each defined below
+type T {c1 c2 c3}.                    a finite type (range: {n0..n4})
+namespace NS produce (L ...).         which layers may produce its atoms
+pred p(T1, T2) : NS.                  a RESOURCE predicate (linear state)
+bwd q(T1, T2).                        a static (Horn) predicate ...
+q(c1, c2).                            ... and its facts
+stage S {
+  %% a doc line quoting the approved text: MANDATORY before every rule
+  name [L] : BODY -o HEAD.
+}
+%% a doc line (mandatory on links too)
+qui name [L] : S1 -o S2.              switch stage when S1 can fire nothing more
+#init ATOM N                          optional: an initial state (ground atoms)
+#steps N
+
+BODY is atoms joined by "*": a plain atom is CONSUMED, `$atom` is read
+and KEPT, a bwd atom is a static guard, `X <> Y` requires distinct.
+HEAD is atoms joined by "*", or `()` for nothing. `@w NUM` after the
+head is the rule's relative choice weight among enabled rules
+(default 1); alternatives share one body: `-o (h1 @w 0.7 | h2 @w 0.3)`.
+Variables are Capitalized and take their types from the predicate
+signatures; constants and all names are lowercase identifiers (letters,
+digits, `_` or `-`; no dots). Every predicate used must be declared.
+
+A complete, valid example (a toy, unrelated domain):
+
+catalog bakery 1.
+provenance text "a toy bakery" "2026-10-08".
+layers (dyn).
+stages (day night).
+type oven {o1 o2}.
+type grade {g0..g2}.
+namespace bk produce (dyn).
+pred dough : bk.
+pred loaf(grade) : bk.
+pred hot(oven) : bk.
+pred cold(oven) : bk.
+pred sold : bk.
+bwd next(grade, grade).
+next(g0, g1).
+next(g1, g2).
+stage day {
+  %% "an oven heats up"
+  heat [dyn] : cold(O) -o hot(O).
+  %% "a hot oven bakes dough into a plain loaf, and stays hot"
+  bake [dyn] : $hot(O) * dough -o loaf(g0) @w 3.
+  %% "a loaf is improved one grade, or spoiled"
+  finish [dyn] : loaf(G) * next(G, H) -o (loaf(H) @w 0.8 | () @w 0.2).
+  %% "two ovens cannot be the same oven"
+  swap [dyn] : hot(O) * cold(P) * O <> P -o cold(O) * hot(P).
+  %% "a top-grade loaf is sold"
+  sell [dyn] : loaf(g2) -o sold.
+}
+stage night {
+  %% "at night a hot oven cools"
+  cool [dyn] : hot(O) -o cold(O).
+}
+%% "when nothing more happens by day, night falls"
+qui dusk [dyn] : day -o night.
+#init dough 2
+#init cold(o1) 1
+#init cold(o2) 1
+#steps 8
+EOF
+formalize system prompt: session (2795 chars)
+llp> formalize
+error (TimeoutExpired): Command '['claude', '-p', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--model', 'claude-opus-5-5']' timed out after 600 seconds
+llp> formalize
+{
+ "ok": false,
+ "backend": "command:claude -p --tools \"\" --strict-mcp-config --setting-sources \"\" --no-session-persistence --model claude-opus-5-5",
+ "rounds": 4,
+ "findings": [
+  "pack adds stage 'run' \u2014 stage set is the kernel's"
+ ]
+}
+llp> revise
+{
+ "ok": true,
+ "classification": "unclassified (no scenario provided)",
+ "findings": [],
+ "warnings": [],
+ "rules": [
+  [
+   "arrive_busy-1",
+   "\"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\""
+  ],
+  [
+   "arrive_busy-2",
+   "\"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\""
+  ],
+  [
+   "arrive_quiet-1",
+   "\"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\""
+  ],
+  [
+   "arrive_quiet-2",
+   "\"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\""
+  ],
+  [
+   "move",
+   "\"The elevator can move in its current direction if the doors are closed\""
+  ],
+  [
+   "noop",
+   "\"can remain stationary (noop)\""
+  ],
+  [
+   "open_same",
+   "\"or can open its door while indicating the direction that it will go in next\""
+  ],
+  [
+   "open_turn",
+   "\"the elevator can only change direction by opening its door while indicating the opposite direction.\""
+  ],
+  [
+   "close",
+   "\"The elevator can move in its current direction if the doors are closed\""
+  ],
+  [
+   "board",
+   "\"(this allows potential passengers to determine whether to board or not)\""
+  ],
+  [
+   "alight",
+   "\"delivering passengers to either the top or the bottom floor (the only allowable destinations).\""
+  ]
+ ],
+ "revision": true,
+ "diff_preview": []
+}
+llp> show llp
+{
+ "ok": true,
+ "llp": "catalog rddl_elevators 1.\nprovenance text \"the RDDL elevators domain (Walsh, ed. Sanner): elevators delivering passengers to the top or bottom floor\" \"2026-10-08\".\nlayers (dyn).\nstages (run).\ntype elevator {e0 e1}.\ntype floor {f0..f4}.\ntype dir {up down}.\ntype dest {top bottom}.\nnamespace el produce (dyn).\npred at(elevator, floor) : el.\npred closed(elevator) : el.\npred open(elevator) : el.\npred heading(elevator, dir) : el.\npred free(floor, dest) : el.\npred waiting(floor, dest) : el.\npred riding(elevator, dest) : el.\npred delivered : el.\nbwd step(dir, floor, floor).\nstep(up, f0, f1).\nstep(up, f1, f2).\nstep(up, f2, f3).\nstep(up, f3, f4).\nstep(down, f4, f3).\nstep(down, f3, f2).\nstep(down, f2, f1).\nstep(down, f1, f0).\nbwd opposite(dir, dir).\nopposite(up, down).\nopposite(down, up).\nbwd toward(dir, dest).\ntoward(up, top).\ntoward(down, bottom).\nbwd goal(dest, floor).\ngoal(top, f4).\ngoal(bottom, f0).\nbwd busy(floor).\nbusy(f0).\nbusy(f2).\nbwd quiet(floor).\nquiet(f1).\nquiet(f3).\nquiet(f4).\nstage run {\n  %% \"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\"\n  arrive_busy [dyn] : free(F, X) * busy(F) -o (waiting(F, X) @w 0.4 | free(F, X) @w 0.6).\n  %% \"Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor.\"\n  arrive_quiet [dyn] : free(F, X) * quiet(F) -o (waiting(F, X) @w 0.1 | free(F, X) @w 0.9).\n  %% \"The elevator can move in its current direction if the doors are closed\"\n  move [dyn] : $closed(E) * $heading(E, D) * at(E, F) * step(D, F, G) -o at(E, G) @w 2.\n  %% \"can remain stationary (noop)\"\n  noop [dyn] : $at(E, F) -o () @w 0.2.\n  %% \"or can open its door while indicating the direction that it will go in next\"\n  open_same [dyn] : closed(E) * $heading(E, D) -o open(E).\n  %% \"the elevator can only change direction by opening its door while indicating the opposite direction.\"\n  open_turn [dyn] : closed(E) * heading(E, D) * opposite(D, R) -o open(E) * heading(E, R).\n  %% \"The elevator can move in its current direction if the doors are closed\"\n  close [dyn] : open(E) -o closed(E).\n  %% \"(this allows potential passengers to determine whether to board or not)\"\n  board [dyn] : $open(E) * $at(E, F) * $heading(E, D) * waiting(F, X) * toward(D, X) -o riding(E, X) * free(F, X) @w 3.\n  %% \"delivering passengers to either the top or the bottom floor (the only allowable destinations).\"\n  alight [dyn] : $open(E) * $at(E, F) * riding(E, X) * goal(X, F) -o delivered @w 3.\n}\n#init at(e0, f0) 1\n#init closed(e0) 1\n#init heading(e0, up) 1\n#init at(e1, f4) 1\n#init closed(e1) 1\n#init heading(e1, down) 1\n#init free(f0, top) 1\n#init free(f1, top) 1\n#init free(f1, bottom) 1\n#init free(f2, top) 1\n#init free(f2, bottom) 1\n#init free(f3, top) 1\n#init free(f3, bottom) 1\n#init free(f4, bottom) 1\n#steps 60\n"
+}
+llp> accept
+{
+ "ok": true,
+ "diffs": [],
+ "dropped_packs": 0,
+ "accepted_packs": 0,
+ "key": "f89a2f6ef39c35b231aa3c6c38914041c2c32cf8f2acd636cf9c2418e2c2fa16"
+}
+llp> trace
+cannot trace: no #steps directive — e.g. '#steps 6' in the file or as a sent line
+llp> save elevators_born.llp
+wrote elevators_born.llp (catalog + 0 directives) — replay: metisc --run elevators_born.llp
+llp> #init at(e0, f0) 1
+bad directive: #init at(e0, f0) 1
+llp> #init closed(e0) 1
+closed(e0):1
+llp> #init heading(e0, up) 1
+bad directive: #init heading(e0, up) 1
+llp> #init at(e1, f4) 1
+bad directive: #init at(e1, f4) 1
+llp> #init closed(e1) 1
+closed(e1):1
+llp> #init heading(e1, down) 1
+bad directive: #init heading(e1, down) 1
+llp> #init free(f0, top) 1
+bad directive: #init free(f0, top) 1
+llp> #init free(f1, top) 1
+bad directive: #init free(f1, top) 1
+llp> #init free(f1, bottom) 1
+bad directive: #init free(f1, bottom) 1
+llp> #init free(f2, top) 1
+bad directive: #init free(f2, top) 1
+llp> #init free(f2, bottom) 1
+bad directive: #init free(f2, bottom) 1
+llp> #init free(f3, top) 1
+bad directive: #init free(f3, top) 1
+llp> #init free(f3, bottom) 1
+bad directive: #init free(f3, bottom) 1
+llp> #init free(f4, bottom) 1
+bad directive: #init free(f4, bottom) 1
+llp> #steps 60
+steps 60
+llp> reset
+stage run
+  closed  (e0) (e1)
+llp> trace
+case metis-scratch-w4effe1a steps=60 seeds=1
+I closed(e0) 1
+I closed(e1) 1
+T 1 -
+F 1 (done)
+  closed  (e0) (e1)
+llp> run 30
+(quiescent)
+stage (done) | closed(e0):1 closed(e1):1
+llp> graph
+metis-scratch-w4effe1a.llp · key f89a2f6ef39c · stage (done) · 0 fired
+  0 |*0  #init
+  * frontier: 0
+llp> save elevators_born.llp
+wrote elevators_born.llp (catalog + 3 directives) — replay: metisc --run elevators_born.llp
+llp> list
+file   /tmp/metis-scratch-w4effe1a.llp  (catalog rddl_elevators, key f89a2f6ef39c…)
+frame  stage (done) | 0 fired, last —
+       closed  (e0) (e1)
+rules  none can fire — the run is done ('reset' to start over)
+llp> #init at(e0,f0) 1
+at(e0,f0):1
+llp> #init closed(e0) 1
+closed(e0):1
+llp> #init heading(e0,up) 1
+heading(e0,up):1
+llp> #init at(e1,f4) 1
+at(e1,f4):1
+llp> #init closed(e1) 1
+closed(e1):1
+llp> #init heading(e1,down) 1
+heading(e1,down):1
+llp> #init free(f0,top) 1
+free(f0,top):1
+llp> #init free(f1,top) 1
+free(f1,top):1
+llp> #init free(f1,bottom) 1
+free(f1,bottom):1
+llp> #init free(f2,top) 1
+free(f2,top):1
+llp> #init free(f2,bottom) 1
+free(f2,bottom):1
+llp> #init free(f3,top) 1
+free(f3,top):1
+llp> #init free(f3,bottom) 1
+free(f3,bottom):1
+llp> #init free(f4,bottom) 1
+free(f4,bottom):1
+llp> reset
+stage run
+  at       (e0,f0) (e1,f4)
+  closed   (e0) (e1)
+  free     (f0,top) (f1,bottom) (f1,top) (f2,bottom) (f2,top) (f3,bottom)
+           (f3,top) (f4,bottom)
+  heading  (e0,up) (e1,down)
+llp> state
+stage run
+  at       (e0,f0) (e1,f4)
+  closed   (e0) (e1)
+  free     (f0,top) (f1,bottom) (f1,top) (f2,bottom) (f2,top) (f3,bottom)
+           (f3,top) (f4,bottom)
+  heading  (e0,up) (e1,down)
+llp> trace
+case metis-scratch-w4effe1a steps=60 seeds=1
+I closed(e0) 1
+I closed(e1) 1
+I at(e0,f0) 1
+I heading(e0,up) 1
+I at(e1,f4) 1
+I heading(e1,down) 1
+I free(f0,top) 1
+I free(f1,top) 1
+I free(f1,bottom) 1
+I free(f2,top) 1
+I free(f2,bottom) 1
+I free(f3,top) 1
+I free(f3,bottom) 1
+I free(f4,bottom) 1
+T 1 — 60 events, 13 beats
+   1 | arrive_busy-1  [F=f0,X=top]
+     | arrive_busy-2  [F=f2,X=top]
+     | arrive_quiet-2 [F=f4,X=bottom]
+     | open_same      [E=e1,D=down]
+     | arrive_quiet-2 [F=f1,X=top]
+     | arrive_quiet-2 [F=f3,X=top]
+     | arrive_busy-2  [F=f2,X=bottom]
+     | open_turn      [E=e0,D=up,R=down]
+     | arrive_quiet-2 [F=f3,X=bottom]
+     | arrive_quiet-2 [F=f1,X=bottom]
+     | noop           [E=e1,F=f4]
+   2 | arrive_quiet-2 [F=f4,X=bottom]
+     | close          [E=e0]
+     | arrive_quiet-2 [F=f1,X=top]
+     | arrive_busy-1  [F=f2,X=top]
+     | arrive_busy-2  [F=f2,X=bottom]
+     | arrive_quiet-2 [F=f3,X=top]
+     | arrive_quiet-1 [F=f3,X=bottom]
+     | close          [E=e1]
+     | arrive_quiet-2 [F=f1,X=bottom]
+   3 | arrive_quiet-2 [F=f1,X=top]
+     | open_turn      [E=e0,D=down,R=up]
+     | arrive_quiet-2 [F=f4,X=bottom]
+     | open_turn      [E=e1,D=down,R=up]
+     | arrive_busy-1  [F=f2,X=bottom]
+     | arrive_quiet-1 [F=f3,X=top]
+     | arrive_quiet-2 [F=f1,X=bottom]
+   4 | arrive_quiet-2 [F=f1,X=top]
+     | close          [E=e0]
+     | arrive_quiet-2 [F=f4,X=bottom]
+     | close          [E=e1]
+     | arrive_quiet-2 [F=f1,X=bottom]
+   5 | move           [E=e0,D=up,F=f0,G=f1]
+     | arrive_quiet-2 [F=f1,X=top]
+     | arrive_quiet-2 [F=f4,X=bottom]
+     | open_turn      [E=e1,D=up,R=down]
+   6 | move           [E=e0,D=up,F=f1,G=f2]
+     | arrive_quiet-2 [F=f1,X=top]
+     | arrive_quiet-1 [F=f4,X=bottom]
+   7 | move           [E=e0,D=up,F=f2,G=f3]
+     | arrive_quiet-2 [F=f1,X=top]
+     | board          [E=e1,F=f4,D=down,X=bottom]
+   8 | open_same      [E=e0,D=up]
+     | arrive_quiet-2 [F=f1,X=top]
+     | close          [E=e1]
+     | arrive_quiet-2 [F=f4,X=bottom]
+   9 | board          [E=e0,F=f3,D=up,X=top]
+     | open_same      [E=e1,D=down]
+     | arrive_quiet-2 [F=f4,X=bottom]
+  10 | arrive_quiet-2 [F=f3,X=top]
+     | close          [E=e1]
+     | close          [E=e0]
+     | arrive_quiet-2 [F=f4,X=bottom]
+  11 | arrive_quiet-2 [F=f3,X=top]
+     | move           [E=e1,D=down,F=f4,G=f3]
+     | move           [E=e0,D=up,F=f3,G=f4]
+  12 | open_same      [E=e0,D=up]
+     | open_turn      [E=e1,D=down,R=up]
+  13 | alight         [E=e0,F=f4,X=top]
+     | close          [E=e1]
+F 1 run
+  at         (e0,f4) (e1,f3)
+  closed     (e1)
+  delivered  ·
+  free       (f1,bottom) (f1,top) (f3,top) (f4,bottom)
+  heading    (e0,up) (e1,up)
+  open       (e0)
+  riding     (e1,bottom)
+  waiting    (f0,top) (f2,bottom) (f2,top) (f3,bottom)
+llp> run 40
+arrive_busy-1[F=f0,X=top] arrive_busy-2[F=f2,X=top] arrive_quiet-2[F=f4,X=bottom] open_same[E=e1,D=down] arrive_quiet-2[F=f1,X=top] arrive_quiet-2[F=f3,X=top] arrive_quiet-2[F=f4,X=bottom] arrive_busy-2[F=f2,X=bottom] open_turn[E=e0,D=up,R=down] close[E=e0] arrive_quiet-2[F=f1,X=top] arrive_busy-1[F=f2,X=top] arrive_quiet-2[F=f1,X=top] arrive_busy-2[F=f2,X=bottom] arrive_quiet-2[F=f1,X=top] open_turn[E=e0,D=down,R=up] close[E=e0] arrive_quiet-2[F=f3,X=top] arrive_quiet-2[F=f3,X=bottom] arrive_quiet-2[F=f4,X=bottom] move[E=e0,D=up,F=f0,G=f1] move[E=e0,D=up,F=f1,G=f2] arrive_quiet-2[F=f1,X=top] move[E=e0,D=up,F=f2,G=f3] open_same[E=e0,D=up] arrive_quiet-2[F=f1,X=bottom] arrive_quiet-1[F=f3,X=bottom] arrive_quiet-2[F=f4,X=bottom] noop[E=e1,F=f4] close[E=e1] arrive_quiet-2[F=f1,X=top] arrive_quiet-2[F=f1,X=top] open_turn[E=e1,D=down,R=up] arrive_busy-1[F=f2,X=bottom] arrive_quiet-2[F=f1,X=top] arrive_quiet-1[F=f3,X=top] close[E=e1] board[E=e0,F=f3,D=up,X=top] arrive_quiet-2[F=f4,X=bottom] arrive_quiet-2[F=f3,X=top]
+stage run | at(e0,f3):1 at(e1,f4):1 closed(e1):1 free(f1,bottom):1 free(f1,top):1 free(f3,top):1 free(f4,bottom):1 heading(e0,up):1 heading(e1,up):1 open(e0):1 riding(e0,top):1 waiting(f0,top):1 waiting(f2,bottom):1 waiting(f2,top):1 waiting(f3,bottom):1
+llp> log
+  1. arrive_busy-1[F=f0,X=top]
+  2. arrive_busy-2[F=f2,X=top]
+  3. arrive_quiet-2[F=f4,X=bottom]
+  4. open_same[E=e1,D=down]
+  5. arrive_quiet-2[F=f1,X=top]
+  6. arrive_quiet-2[F=f3,X=top]
+  7. arrive_quiet-2[F=f4,X=bottom]
+  8. arrive_busy-2[F=f2,X=bottom]
+  9. open_turn[E=e0,D=up,R=down]
+  10. close[E=e0]
+  11. arrive_quiet-2[F=f1,X=top]
+  12. arrive_busy-1[F=f2,X=top]
+  13. arrive_quiet-2[F=f1,X=top]
+  14. arrive_busy-2[F=f2,X=bottom]
+  15. arrive_quiet-2[F=f1,X=top]
+  16. open_turn[E=e0,D=down,R=up]
+  17. close[E=e0]
+  18. arrive_quiet-2[F=f3,X=top]
+  19. arrive_quiet-2[F=f3,X=bottom]
+  20. arrive_quiet-2[F=f4,X=bottom]
+  21. move[E=e0,D=up,F=f0,G=f1]
+  22. move[E=e0,D=up,F=f1,G=f2]
+  23. arrive_quiet-2[F=f1,X=top]
+  24. move[E=e0,D=up,F=f2,G=f3]
+  25. open_same[E=e0,D=up]
+  26. arrive_quiet-2[F=f1,X=bottom]
+  27. arrive_quiet-1[F=f3,X=bottom]
+  28. arrive_quiet-2[F=f4,X=bottom]
+  29. noop[E=e1,F=f4]
+  30. close[E=e1]
+  31. arrive_quiet-2[F=f1,X=top]
+  32. arrive_quiet-2[F=f1,X=top]
+  33. open_turn[E=e1,D=down,R=up]
+  34. arrive_busy-1[F=f2,X=bottom]
+  35. arrive_quiet-2[F=f1,X=top]
+  36. arrive_quiet-1[F=f3,X=top]
+  37. close[E=e1]
+  38. board[E=e0,F=f3,D=up,X=top]
+  39. arrive_quiet-2[F=f4,X=bottom]
+  40. arrive_quiet-2[F=f3,X=top]
+likelihood 5.21267e-45 over 40 sampled steps
+llp> save elevators_born.llp
+wrote elevators_born.llp (catalog + 16 directives) — replay: metisc --run elevators_born.llp
+llp> 

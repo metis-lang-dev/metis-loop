@@ -1,0 +1,926 @@
+2026-10-09 10:26:52.628684: [info] initializing pvariable tensors:
+	ARRIVE-PARAM['floor'], shape=(4,), dtype=float64
+	ELEVATOR-PENALTY-RIGHT-DIR[], shape=(), dtype=float64
+	ELEVATOR-PENALTY-WRONG-DIR[], shape=(), dtype=float64
+	TOP-FLOOR['floor'], shape=(4,), dtype=bool
+	BOTTOM-FLOOR['floor'], shape=(4,), dtype=bool
+	ADJACENT-UP['floor', 'floor'], shape=(4, 4), dtype=bool
+	person-waiting-up['floor'], shape=(4,), dtype=bool
+	person-waiting-up'['floor'], shape=(4,), dtype=bool
+	person-waiting-down['floor'], shape=(4,), dtype=bool
+	person-waiting-down'['floor'], shape=(4,), dtype=bool
+	person-in-elevator-going-up['elevator'], shape=(2,), dtype=bool
+	person-in-elevator-going-up'['elevator'], shape=(2,), dtype=bool
+	person-in-elevator-going-down['elevator'], shape=(2,), dtype=bool
+	person-in-elevator-going-down'['elevator'], shape=(2,), dtype=bool
+	elevator-dir-up['elevator'], shape=(2,), dtype=bool
+	elevator-dir-up'['elevator'], shape=(2,), dtype=bool
+	elevator-closed['elevator'], shape=(2,), dtype=bool
+	elevator-closed'['elevator'], shape=(2,), dtype=bool
+	elevator-at-floor['elevator', 'floor'], shape=(2, 4), dtype=bool
+	elevator-at-floor'['elevator', 'floor'], shape=(2, 4), dtype=bool
+	move-current-dir['elevator'], shape=(2,), dtype=bool
+	open-door-going-up['elevator'], shape=(2,), dtype=bool
+	open-door-going-down['elevator'], shape=(2,), dtype=bool
+	close-door['elevator'], shape=(2,), dtype=bool
+
+2026-10-09 10:26:52.628893: [info] computed fluent dependencies in CPFs:
+	next-state-fluent person-waiting-up': {elevator-at-floor, elevator-closed, elevator-dir-up, person-waiting-up}
+	next-state-fluent person-waiting-down': {elevator-at-floor, elevator-closed, elevator-dir-up, person-waiting-down}
+	next-state-fluent person-in-elevator-going-up': {elevator-at-floor, elevator-closed, elevator-dir-up, person-in-elevator-going-up, person-waiting-up}
+	next-state-fluent person-in-elevator-going-down': {elevator-at-floor, elevator-closed, elevator-dir-up, person-in-elevator-going-down, person-waiting-down}
+	next-state-fluent elevator-closed': {close-door, elevator-closed, open-door-going-down, open-door-going-up}
+	next-state-fluent elevator-dir-up': {elevator-dir-up, open-door-going-down, open-door-going-up}
+	next-state-fluent elevator-at-floor': {elevator-at-floor, elevator-closed, elevator-dir-up, move-current-dir}
+
+2026-10-09 10:26:52.628904: [info] computed order of CPF evaluation:
+	0: {elevator-at-floor', elevator-closed', elevator-dir-up', person-in-elevator-going-down', person-in-elevator-going-up', person-waiting-down', person-waiting-up'}
+
+2026-10-09 10:26:52.628937: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-closed'), args=(elevator-closed, [?e]))
+	CPF to check          =elevator-closed'
+
+2026-10-09 10:26:52.628980: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f470>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629017: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f05f0>
+	variable                =move-current-dir
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629037: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?f]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629062: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0800>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629092: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0920>
+	variable                =move-current-dir
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629105: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-dir-up'), args=(elevator-dir-up, [?e]))
+	CPF to check          =elevator-dir-up'
+
+2026-10-09 10:26:52.629123: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f09e0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629143: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?cur]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629194: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0cb0>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?cur', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(2, 4, 4)
+	transform operation     =1 with argument(s) (np.int64(0), np.int64(2), np.int64(1))
+
+2026-10-09 10:26:52.629227: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0da0>
+	variable                =ADJACENT-UP
+	variable evaluated at   =[('?cur', 'floor'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(4, 4, 2)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.629239: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?cur', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(2,)
+
+2026-10-09 10:26:52.629271: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0ef0>
+	variable                =move-current-dir
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629283: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-dir-up'), args=(elevator-dir-up, [?e]))
+	CPF to check          =elevator-dir-up'
+
+2026-10-09 10:26:52.629299: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0fe0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629317: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?cur]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629342: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f12e0>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?cur', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(2, 4, 4)
+	transform operation     =1 with argument(s) (np.int64(0), np.int64(2), np.int64(1))
+
+2026-10-09 10:26:52.629367: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f13d0>
+	variable                =ADJACENT-UP
+	variable evaluated at   =[('?f', 'floor'), ('?cur', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(4, 4, 2)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(0), np.int64(1))
+
+2026-10-09 10:26:52.629377: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?cur', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor'), ('?cur', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(2,)
+
+2026-10-09 10:26:52.629405: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1520>
+	variable                =move-current-dir
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629415: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-dir-up'), args=(elevator-dir-up, [?e]))
+	CPF to check          =elevator-dir-up'
+
+2026-10-09 10:26:52.629430: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f15e0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629446: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?f]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629464: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1910>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(2, 4, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629489: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1a00>
+	variable                =ADJACENT-UP
+	variable evaluated at   =[('?f', 'floor'), ('?next', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(4, 4, 2)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(0), np.int64(1))
+
+2026-10-09 10:26:52.629500: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?next', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(2,)
+
+2026-10-09 10:26:52.629511: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?f]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629530: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1ac0>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629550: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1be0>
+	variable                =move-current-dir
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629561: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-dir-up'), args=(elevator-dir-up, [?e]))
+	CPF to check          =elevator-dir-up'
+
+2026-10-09 10:26:52.629575: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1cd0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629592: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?f]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629610: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2030>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(2, 4, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629634: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2120>
+	variable                =ADJACENT-UP
+	variable evaluated at   =[('?next', 'floor'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(4, 4, 2)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.629644: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?next', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor'), ('?next', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(2,)
+
+2026-10-09 10:26:52.629655: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-at-floor'), args=(elevator-at-floor, [?e, ?f]))
+	CPF to check          =elevator-at-floor'
+
+2026-10-09 10:26:52.629672: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f21e0>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629697: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-closed'), args=(elevator-closed, [?e]))
+	CPF to check          =elevator-closed'
+
+2026-10-09 10:26:52.629714: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e5d0>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629732: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fcb0>
+	variable                =open-door-going-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629748: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fe90>
+	variable                =open-door-going-down
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629765: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5ff50>
+	variable                =close-door
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629785: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f320>
+	variable                =open-door-going-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629808: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0380>
+	variable                =open-door-going-down
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629822: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'elevator-dir-up'), args=(elevator-dir-up, [?e]))
+	CPF to check          =elevator-dir-up'
+
+2026-10-09 10:26:52.629837: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0620>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629852: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-in-elevator-going-down'), args=(person-in-elevator-going-down, [?e]))
+	CPF to check          =person-in-elevator-going-down'
+
+2026-10-09 10:26:52.629866: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e0f0>
+	variable                =person-in-elevator-going-down
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629892: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f860>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629914: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f8c0>
+	variable                =BOTTOM-FLOOR
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 2)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.629924: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?f', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.629949: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fb90>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629967: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fc20>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629984: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fd10>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.629994: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-waiting-down'), args=(person-waiting-down, [?f]))
+	CPF to check          =person-waiting-down'
+
+2026-10-09 10:26:52.630014: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5fdd0>
+	variable                =person-waiting-down
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 2)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630024: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?f', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.630037: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-in-elevator-going-up'), args=(person-in-elevator-going-up, [?e]))
+	CPF to check          =person-in-elevator-going-up'
+
+2026-10-09 10:26:52.630052: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5df10>
+	variable                =person-in-elevator-going-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630076: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f050>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630098: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f0b0>
+	variable                =TOP-FLOOR
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 2)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630107: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?f', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.630130: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f380>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630146: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f3e0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630163: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f4a0>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630175: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-waiting-up'), args=(person-waiting-up, [?f]))
+	CPF to check          =person-waiting-up'
+
+2026-10-09 10:26:52.630194: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5f560>
+	variable                =person-waiting-up
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?e', 'elevator'), ('?f', 'floor')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 2)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630203: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?f', 'floor'))]
+	free object(s) in outer scope =[('?e', 'elevator')]
+	free object(s) in inner scope =[('?e', 'elevator'), ('?f', 'floor')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.630217: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-waiting-down'), args=(person-waiting-down, [?f]))
+	CPF to check          =person-waiting-down'
+
+2026-10-09 10:26:52.630232: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e120>
+	variable                =person-waiting-down
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630260: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e990>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630282: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5ea20>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630304: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5eae0>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630313: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[('?f', 'floor')]
+	free object(s) in inner scope =[('?f', 'floor'), ('?e', 'elevator')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.630335: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5ec90>
+	variable                =ARRIVE-PARAM
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630351: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'person-waiting-up'), args=(person-waiting-up, [?f]))
+	CPF to check          =person-waiting-up'
+
+2026-10-09 10:26:52.630366: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5d790>
+	variable                =person-waiting-up
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630395: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e450>
+	variable                =elevator-at-floor
+	variable evaluated at   =[('?e', 'elevator'), ('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630416: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e4b0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630436: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e570>
+	variable                =elevator-closed
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?f', 'floor'), ('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(2, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-09 10:26:52.630445: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[('?f', 'floor')]
+	free object(s) in inner scope =[('?f', 'floor'), ('?e', 'elevator')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-09 10:26:52.630467: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe4c5e6c0>
+	variable                =ARRIVE-PARAM
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630504: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0740>
+	variable                =ELEVATOR-PENALTY-RIGHT-DIR
+	variable evaluated at   =[]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630528: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1010>
+	variable                =person-in-elevator-going-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630548: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1310>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630556: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?e', 'elevator')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-09 10:26:52.630578: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f0f80>
+	variable                =ELEVATOR-PENALTY-RIGHT-DIR
+	variable evaluated at   =[]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630597: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1d30>
+	variable                =person-in-elevator-going-down
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630616: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1bb0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630625: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?e', 'elevator')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-09 10:26:52.630645: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f1f70>
+	variable                =ELEVATOR-PENALTY-WRONG-DIR
+	variable evaluated at   =[]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630665: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f24b0>
+	variable                =person-in-elevator-going-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630681: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f25a0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630690: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?e', 'elevator')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-09 10:26:52.630712: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2540>
+	variable                =ELEVATOR-PENALTY-WRONG-DIR
+	variable evaluated at   =[]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630730: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2810>
+	variable                =person-in-elevator-going-down
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630745: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f28d0>
+	variable                =elevator-dir-up
+	variable evaluated at   =[('?e', 'elevator')]
+	free object(s) in scope =[('?e', 'elevator')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(2,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630753: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?e', 'elevator'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?e', 'elevator')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-09 10:26:52.630773: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2a50>
+	variable                =person-waiting-up
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630788: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x79ffe49f2b10>
+	variable                =person-waiting-down
+	variable evaluated at   =[('?f', 'floor')]
+	free object(s) in scope =[('?f', 'floor')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-09 10:26:52.630795: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?f', 'floor'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?f', 'floor')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-09 10:26:52.630806: [info] computed whether each CPF expression is fluent:
+	elevator-at-floor': True
+	elevator-closed': True
+	elevator-dir-up': True
+	person-in-elevator-going-down': True
+	person-in-elevator-going-up': True
+	person-waiting-down': True
+	person-waiting-up': True
+
+2026-10-09 10:26:52.630927: [info] computed simulation bounds:
+	person-waiting-up___f0: (np.float64(-inf), np.float64(inf))
+	person-waiting-up___f1: (np.float64(-inf), np.float64(inf))
+	person-waiting-up___f2: (np.float64(-inf), np.float64(inf))
+	person-waiting-up___f3: (np.float64(-inf), np.float64(inf))
+	person-waiting-down___f0: (np.float64(-inf), np.float64(inf))
+	person-waiting-down___f1: (np.float64(-inf), np.float64(inf))
+	person-waiting-down___f2: (np.float64(-inf), np.float64(inf))
+	person-waiting-down___f3: (np.float64(-inf), np.float64(inf))
+	person-in-elevator-going-up___e0: (np.float64(-inf), np.float64(inf))
+	person-in-elevator-going-up___e1: (np.float64(-inf), np.float64(inf))
+	person-in-elevator-going-down___e0: (np.float64(-inf), np.float64(inf))
+	person-in-elevator-going-down___e1: (np.float64(-inf), np.float64(inf))
+	elevator-dir-up___e0: (np.float64(-inf), np.float64(inf))
+	elevator-dir-up___e1: (np.float64(-inf), np.float64(inf))
+	elevator-closed___e0: (np.float64(-inf), np.float64(inf))
+	elevator-closed___e1: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e0__f0: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e0__f1: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e0__f2: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e0__f3: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e1__f0: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e1__f1: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e1__f2: (np.float64(-inf), np.float64(inf))
+	elevator-at-floor___e1__f3: (np.float64(-inf), np.float64(inf))
+	move-current-dir___e0: (np.float64(-inf), np.float64(inf))
+	move-current-dir___e1: (np.float64(-inf), np.float64(inf))
+	open-door-going-up___e0: (np.float64(-inf), np.float64(inf))
+	open-door-going-up___e1: (np.float64(-inf), np.float64(inf))
+	open-door-going-down___e0: (np.float64(-inf), np.float64(inf))
+	open-door-going-down___e1: (np.float64(-inf), np.float64(inf))
+	close-door___e0: (np.float64(-inf), np.float64(inf))
+	close-door___e1: (np.float64(-inf), np.float64(inf))
+

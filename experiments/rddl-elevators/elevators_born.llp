@@ -1,0 +1,106 @@
+% SOURCE: rddlrepository Elevators_MDP_ippc2011 — archive/competitions/IPPC2011/Elevators/MDP/domain.rddl, header lines 1-27 verbatim:
+% ////////////////////////////////////////////////////////////////////
+% // Elevator Domain
+% //
+% // Author: Tom Walsh (thomasjwalsh [at] gmail.com)
+% //
+% // Edited for competition and translation purposes by Scott Sanner.
+% //
+% // The "elevators" domain has a number of elevators delivering passengers 
+% // to either the top or the bottom floor (the only allowable destinations).
+% // Potential passengers arrive at a floor based on Bernoulli draws 
+% // with a potentially different arrival probability for each floor.  
+% //
+% // The elevator can move in its current direction if the doors are closed,
+% // can remain stationary (noop), or can open its door while indicating
+% // the direction that it will go in next (this allows potential passengers
+% // to determine whether to board or not).  Note that the elevator can only
+% // change direction by opening its door while indicating the opposite 
+% // direction. 
+% //
+% // A passable plan in this domain is to pick up a passenger every time 
+% // they appear and take them to their destination.  A better plan includes 
+% // having the elevator "hover" near floors where passengers are likely to 
+% // arrive and coordinating multiple elevators for up and down passengers.
+% //
+% // This domain was designed to support extension to multiple elevators
+% // and may be used in either single or multi-elevator mode.
+% ////////////////////////////////////////////////////////////////////
+%
+catalog rddl_elevators 1.
+provenance text "the RDDL elevators domain (Walsh, ed. Sanner): elevators delivering passengers to the top or bottom floor" "2026-10-08".
+layers (dyn).
+stages (run).
+type elevator {e0 e1}.
+type floor {f0..f4}.
+type dir {up down}.
+type dest {top bottom}.
+namespace el produce (dyn).
+pred at(elevator, floor) : el.
+pred closed(elevator) : el.
+pred open(elevator) : el.
+pred heading(elevator, dir) : el.
+pred free(floor, dest) : el.
+pred waiting(floor, dest) : el.
+pred riding(elevator, dest) : el.
+pred delivered : el.
+bwd step(dir, floor, floor).
+step(up, f0, f1).
+step(up, f1, f2).
+step(up, f2, f3).
+step(up, f3, f4).
+step(down, f4, f3).
+step(down, f3, f2).
+step(down, f2, f1).
+step(down, f1, f0).
+bwd opposite(dir, dir).
+opposite(up, down).
+opposite(down, up).
+bwd toward(dir, dest).
+toward(up, top).
+toward(down, bottom).
+bwd goal(dest, floor).
+goal(top, f4).
+goal(bottom, f0).
+bwd busy(floor).
+busy(f0).
+busy(f2).
+bwd quiet(floor).
+quiet(f1).
+quiet(f3).
+quiet(f4).
+stage run {
+  %% "Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor."
+  arrive_busy [dyn] : free(F, X) * busy(F) -o (waiting(F, X) @w 0.4 | free(F, X) @w 0.6).
+  %% "Potential passengers arrive at a floor based on Bernoulli draws with a potentially different arrival probability for each floor."
+  arrive_quiet [dyn] : free(F, X) * quiet(F) -o (waiting(F, X) @w 0.1 | free(F, X) @w 0.9).
+  %% "The elevator can move in its current direction if the doors are closed"
+  move [dyn] : $closed(E) * $heading(E, D) * at(E, F) * step(D, F, G) -o at(E, G) @w 2.
+  %% "can remain stationary (noop)"
+  noop [dyn] : $at(E, F) -o () @w 0.2.
+  %% "or can open its door while indicating the direction that it will go in next"
+  open_same [dyn] : closed(E) * $heading(E, D) -o open(E).
+  %% "the elevator can only change direction by opening its door while indicating the opposite direction."
+  open_turn [dyn] : closed(E) * heading(E, D) * opposite(D, R) -o open(E) * heading(E, R).
+  %% "The elevator can move in its current direction if the doors are closed"
+  close [dyn] : open(E) -o closed(E).
+  %% "(this allows potential passengers to determine whether to board or not)"
+  board [dyn] : $open(E) * $at(E, F) * $heading(E, D) * waiting(F, X) * toward(D, X) -o riding(E, X) * free(F, X) @w 3.
+  %% "delivering passengers to either the top or the bottom floor (the only allowable destinations)."
+  alight [dyn] : $open(E) * $at(E, F) * riding(E, X) * goal(X, F) -o delivered @w 3.
+}
+#init at(e0,f0) 1
+#init closed(e0) 1
+#init heading(e0,up) 1
+#init at(e1,f4) 1
+#init closed(e1) 1
+#init heading(e1,down) 1
+#init free(f0,top) 1
+#init free(f1,top) 1
+#init free(f1,bottom) 1
+#init free(f2,top) 1
+#init free(f2,bottom) 1
+#init free(f3,top) 1
+#init free(f3,bottom) 1
+#init free(f4,bottom) 1
+#steps 60
