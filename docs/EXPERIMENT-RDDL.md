@@ -85,6 +85,39 @@ plan" (pick up, deliver, hover) the narrative check via `narrate`.
 Report = the experiment writeup (this file gains a RESULTS section);
 suites green as always.
 
+## Provenance doctrine (user, checkpoint): carry the source header
+
+A catalog born from an external script CARRIES THAT SCRIPT'S HEADER
+verbatim as `%` comments at the top (the RDDL domain description, its
+author line included), beside the `provenance` declaration. The old
+rddl catalogs (sysadmin, xtraffic) lost their tie to the source
+exactly by dropping this — we are re-deriving them now partly for
+that reason. Applies to elevators_born.llp and every derived catalog
+onward.
+
+## Session transcript logging (user, checkpoint): a small REPL feature
+
+`transcript [FILE]` in the terminal REPL: a lab-notebook log —
+every command and its output, the system prompts in effect (and
+changes to them), candidate snapshots on `llp`/`load`/`formalize`,
+gate reports, accepts. Reviewable after the fact; the experiment's
+sessions use it (exploratory phase: ctx/run/why…; then the
+refactoring phase: mine/formalize/notch). Terminal-REPL only: in
+web/shared mode nothing is written to the operator's disk (the D4
+doctrine); the console's equivalent stays a download if ever wanted.
+
+## The redo program (user, checkpoint): path diversity as a bug-finder
+
+After elevators proves the recipe, RE-DERIVE the already-adapted
+RDDL domains in metis-catalog through the same prompt+discovery
+process (sysadmin, gol, nav, xtraffic — author prose as the seed,
+the loop + notching as the method) and DIFF the born catalogs
+against the hand-written ones. Not a vain exercise: each rerun walks
+different tool paths, which surfaces latent bugs and new
+possibilities (step 1 alone found the cold-start gap, the
+pack-vs-revise gating defect, two directive bugs and a save bug) —
+the diversity is the point, the diffs are findings either way.
+
 ## The domain shelf (faithful seeds for later REPLs)
 
 rddlrepository carries the AUTHOR's description for all 90 problems
