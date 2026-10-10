@@ -1,0 +1,53 @@
+catalog tamarisk 1.
+provenance text "RL Competition 2014 Invasive Species (Tamarisk) domain, RDDL translation by Scott Sanner" "2026-10-10".
+layers (dyn).
+stages (act grow assess).
+type reach {r1 r2 r3}.
+type slot {s1 s2}.
+namespace ts produce (dyn).
+pred native(reach,slot) : ts.
+pred tamarisk(reach,slot) : ts.
+pred empty(reach,slot) : ts.
+pred cost : ts.
+pred unchecked(reach) : ts.
+pred penalty(reach) : ts.
+bwd downstream(reach,reach).
+downstream(r1,r2).
+downstream(r2,r3).
+weight pdown(R) reads {}.
+weight pup(R) reads {}.
+weight pcompete(R) reads {}.
+stage act {
+%% "One can manually intervene to eradicate tamarisk plants at a reach"
+%% "Costs are assessed for eradication and restorative actions based on the amount of work that has to be done"
+  eradicate [dyn] : tamarisk(R,S) -o empty(R,S) * cost.
+%% "or restore them to their native species."
+%% "Costs are assessed for eradication and restorative actions based on the amount of work that has to be done"
+  restore [dyn] : empty(R,S) -o native(R,S) * cost.
+}
+stage grow {
+%% "Tamarisk plants spread downstream"
+  spread_down-1 [dyn] : $tamarisk(R,S) * empty(D,T) * downstream(R,D) -o tamarisk(D,T)  @w pdown(D).
+%% "Tamarisk plants spread downstream"
+  spread_down-2 [dyn] : $tamarisk(R,S) * empty(D,T) * downstream(R,D) -o empty(D,T)  @w ~pdown(D).
+%% "and sometimes upstream"
+  spread_up-1 [dyn] : $tamarisk(D,S) * empty(R,T) * downstream(R,D) -o tamarisk(R,T)  @w pup(R).
+%% "and sometimes upstream"
+  spread_up-2 [dyn] : $tamarisk(D,S) * empty(R,T) * downstream(R,D) -o empty(R,T)  @w ~pup(R).
+%% "and compete to replace native species"
+  compete-1 [dyn] : $tamarisk(R,S) * native(D,T) * downstream(R,D) -o tamarisk(D,T)  @w pcompete(D).
+%% "and compete to replace native species"
+  compete-2 [dyn] : $tamarisk(R,S) * native(D,T) * downstream(R,D) -o native(D,T)  @w ~pcompete(D).
+%% "native species that spread at a fixed rate"
+  native_spread [dyn] : $native(R,S) * empty(R,T) * S <> T -o native(R,T).
+}
+stage assess {
+%% "penalties are assessed for invaded or vulnerable reaches"
+  invaded [dyn] : unchecked(R) * $tamarisk(R,S) -o penalty(R).
+%% "penalties are assessed for invaded or vulnerable reaches"
+  vulnerable [dyn] : unchecked(R) * $empty(R,S) -o penalty(R).
+}
+%% "One can manually intervene" — once interventions are done, the stream grows
+qui intervene_done [dyn] : act -o grow.
+%% "Tamarisk plants spread downstream and sometimes upstream" — once spread is done, penalties are assessed
+qui growth_done [dyn] : grow -o assess.

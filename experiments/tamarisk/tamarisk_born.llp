@@ -1,0 +1,103 @@
+% SOURCE: rddlrepository Tamarisk_MDP_ippc2014 — archive/competitions/IPPC2014/Tamarisk/MDP/domain.rddl, header lines 1-39 verbatim (read as latin-1: the 0x96 in the page range is kept as U+0096, cp1252's en-dash):
+% ///////////////////////////////////////////////////////////////
+% //
+% // Invasive Species (Tamarisk) Domain 
+% //
+% // This is adapted from the RL Competition 2014 Invasive Species domain 
+% //
+% //   https://slots.google.com/slot/rlcompetition2014/domains/invasive-species 
+% //
+% // by Majid Alkaee Taleghan, Mark Crowley, and Thomas Dietterich 
+% // of Oregon State University, who have investigated reinforcement learning
+% // for this domain in 
+% //
+% //   Dietterich, T., Taleghan, M., Crowley, M. (2013). 
+% //   PAC Optimal Planning for Invasive Species Management: 
+% //     Improved Exploration for Reinforcement Learning from Simulator-Defined MDPs. 
+% //   In Proceedings of the AAAI Conference on Artificial Intelligence, AAAI-13.
+% //
+% // and based their Invasive Species (Tamarisk) model on the following work 
+% //
+% //   Muneepeerakul, R., Weitz, J. S., Levin, S. a, Rinaldo, A., & Rodriguez-Iturbe, I. (2007). 
+% //   A neutral metapopulation model of biodiversity in river networks. 
+% //   Journal of theoretical biology, 245(2), 35163.
+% //
+% // Quick explanation: a stream system is organized into reaches with
+% // slots at each reach.  Each slot may have a native plot or invasive
+% // tamarisk plant (or be empty).  Tamarisk plants spread downstream
+% // and sometimes upstream and compete to replace native species that
+% // spread at a fixed rate.  One can manually intervene to eradicate
+% // tamarisk plants at a reach or restore them to their native species.
+% // Costs are assessed for eradication and restorative actions based on
+% // the amount of work that has to be done and penalties are assessed
+% // for invaded or vulnerable reaches.
+% //
+% // NOTE: this is a variation of the domain defined in the citations
+% //       above, points of variation or interpretation are noted below.
+% //
+% // RDDL translation by Scott Sanner (ssanner@gmail.com).
+% //
+% ///////////////////////////////////////////////////////////////
+%
+catalog tamarisk 1.
+provenance text "RL Competition 2014 Invasive Species (Tamarisk) domain, RDDL translation by Scott Sanner" "2026-10-10".
+layers (dyn).
+stages (act grow assess).
+% illustrative instance: a three-reach stream with two slots per reach
+type reach {r1 r2 r3}.
+type slot {s1 s2}.
+namespace ts produce (dyn).
+pred native(reach, slot) : ts.
+pred tamarisk(reach, slot) : ts.
+pred empty(reach, slot) : ts.
+pred cost : ts.
+pred unchecked(reach) : ts.
+pred penalty(reach) : ts.
+bwd downstream(reach, reach).
+% illustrative stream topology: r1 flows into r2, r2 into r3
+downstream(r1, r2).
+downstream(r2, r3).
+weight pdown(R) reads {}.
+weight pup(R) reads {}.
+weight pcompete(R) reads {}.
+stage act {
+  %% "One can manually intervene to eradicate tamarisk plants at a reach"
+  %% "Costs are assessed for eradication and restorative actions based on the amount of work that has to be done"
+  eradicate [dyn] : tamarisk(R, S) -o empty(R, S) * cost.
+  %% "or restore them to their native species."
+  %% "Costs are assessed for eradication and restorative actions based on the amount of work that has to be done"
+  restore [dyn] : empty(R, S) -o native(R, S) * cost.
+}
+stage grow {
+  %% "Tamarisk plants spread downstream"
+  spread_down [dyn] : $tamarisk(R, S) * empty(D, T) * downstream(R, D) -o (tamarisk(D, T) @w pdown(D) | empty(D, T) @w ~pdown(D)).
+  %% "and sometimes upstream"
+  spread_up [dyn] : $tamarisk(D, S) * empty(R, T) * downstream(R, D) -o (tamarisk(R, T) @w pup(R) | empty(R, T) @w ~pup(R)).
+  %% "and compete to replace native species"
+  compete [dyn] : $tamarisk(R, S) * native(D, T) * downstream(R, D) -o (tamarisk(D, T) @w pcompete(D) | native(D, T) @w ~pcompete(D)).
+  %% "native species that spread at a fixed rate"
+  native_spread [dyn] : $native(R, S) * empty(R, T) * S <> T -o native(R, T).
+}
+stage assess {
+  %% "penalties are assessed for invaded or vulnerable reaches"
+  % an invaded reach holds a tamarisk plant; each reach is assessed once
+  invaded [dyn] : unchecked(R) * $tamarisk(R, S) -o penalty(R).
+  %% "penalties are assessed for invaded or vulnerable reaches"
+  % a vulnerable reach holds an empty slot open to invasion
+  vulnerable [dyn] : unchecked(R) * $empty(R, S) -o penalty(R).
+}
+%% "One can manually intervene" — once interventions are done, the stream grows
+qui intervene_done [dyn] : act -o grow.
+%% "Tamarisk plants spread downstream and sometimes upstream" — once spread is done, penalties are assessed
+qui growth_done [dyn] : grow -o assess.
+% illustrative initial state
+#init tamarisk(r1, s1) 1
+#init native(r1, s2) 1
+#init native(r2, s1) 1
+#init empty(r2, s2) 1
+#init native(r3, s1) 1
+#init empty(r3, s2) 1
+#init unchecked(r1) 1
+#init unchecked(r2) 1
+#init unchecked(r3) 1
+#steps 12
