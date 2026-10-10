@@ -1,0 +1,23 @@
+% Scope fixture (PLUGIN-PORTS.md target 1): a hazard priced by a port
+% reading the gap class. The REAL gap lives in the plugin's env
+% (sensor_plugin.py); the catalog sees only the gclose class.
+catalog sensor 1.
+provenance text "a hazard priced by a port reading the gap class" "2026-10-09".
+layers (dyn).
+stages (tick).
+namespace sx produce (dyn).
+pred ck : sx.
+pred gclose : sx.
+pred crash : sx.
+pred ok : sx.
+weight rss reads {gclose}.
+stage tick {
+  %% "the hazard fires with the rss-priced probability"
+  hit [dyn] : ck * $gclose -o crash  @w rss.
+  %% "the tick passes clean"
+  pass [dyn] : ck -o ok  @w ~rss.
+}
+#plugin sensor_plugin:make
+#init ck 1
+#init gclose 1
+#steps 2

@@ -1,0 +1,24 @@
+% Time fixture catalog (PLUGIN-PORTS.md target 3, clock-world): the
+% world has NO arrival rules — customers and the door state are
+% exogenous, injected by the env's tick as do-interventions on a
+% schedule. The catalog only says what trade does with them.
+% Driver: clock_proto.py.
+catalog clock 1.
+provenance text "a shop: customers arrive on the env's clock; a sale needs the door open, a shut door loses them" "2026-10-09".
+layers (dyn).
+stages (trade).
+namespace sh produce (dyn).
+pred customer : sh.
+pred dooropen : sh.
+pred doorshut : sh.
+pred sale : sh.
+pred missed : sh.
+stage trade {
+  %% "a customer buys while the door is open"
+  serve [dyn] : customer * $dooropen -o sale.
+  %% "a shut door loses the customer"
+  lose [dyn] : customer * $doorshut -o missed.
+}
+#plugin clock_plugin:make
+#init doorshut 1
+#steps 20

@@ -1,0 +1,23 @@
+% G5 teeth: the SAME binding, but the port declares it reads NOTHING —
+% its gclose read is out of scope and must raise in the sampling tier.
+% (the factored tier always refused it; the interactive tier now does too)
+catalog sensor_leaky 1.
+provenance text "a hazard priced by a port reading the gap class" "2026-10-09".
+layers (dyn).
+stages (tick).
+namespace sx produce (dyn).
+pred ck : sx.
+pred gclose : sx.
+pred crash : sx.
+pred ok : sx.
+weight rss reads {}.
+stage tick {
+  %% "the hazard fires with the rss-priced probability"
+  hit [dyn] : ck * $gclose -o crash  @w rss.
+  %% "the tick passes clean"
+  pass [dyn] : ck -o ok  @w ~rss.
+}
+#plugin sensor_plugin:make
+#init ck 1
+#init gclose 1
+#steps 2

@@ -1,0 +1,30 @@
+% Real-valued fixture catalog (PLUGIN-PORTS.md): the reservoir's REAL
+% level lives behind the ports; the catalog sees only the high class.
+% prain is the env's season clock (time-dependent); pspill reads the
+% declared class and the env level. Driver: reservoir_proto.py.
+catalog reservoir 1.
+provenance text "a reservoir: rain by season, spill priced from the real level behind the high class" "2026-10-09".
+layers (dyn).
+stages (day).
+namespace rv produce (dyn).
+pred ck : rv.
+pred highc : rv.
+pred inflow : rv.
+pred stored : rv.
+pred spilled : rv.
+pred okday : rv.
+weight prain reads {}.
+weight pspill reads {highc}.
+stage day {
+  %% "rain arrives by season" — the env's clock prices it
+  rain [dyn] : ck -o inflow  @w prain.
+  %% "or the day stays dry and the level draws down"
+  dry [dyn] : ck -o okday  @w ~prain.
+  %% "a full reservoir spills" — the real level prices it, behind the class
+  spill [dyn] : inflow * $highc -o spilled  @w pspill.
+  %% "otherwise the inflow is stored"
+  store [dyn] : inflow -o stored  @w ~pspill.
+}
+#plugin reservoir_plugin:make
+#init ck 1
+#steps 2
