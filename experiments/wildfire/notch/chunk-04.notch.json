@@ -1,0 +1,66 @@
+{
+ "world": "iter2-world/base.llp",
+ "transitions": [
+  "notch/chunk-04"
+ ],
+ "alpha": 0.0,
+ "explained": 290,
+ "missed": 0,
+ "rows": [
+  {
+   "port": "pign",
+   "args": [
+    "k0"
+   ],
+   "row": [],
+   "n": 330,
+   "fires": 6,
+   "prior": 0.5,
+   "notched": 0.01818181818181818
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k1"
+   ],
+   "row": [],
+   "n": 441,
+   "fires": 9,
+   "prior": 0.5,
+   "notched": 0.02040816326530612
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k2"
+   ],
+   "row": [],
+   "n": 149,
+   "fires": 11,
+   "prior": 0.5,
+   "notched": 0.0738255033557047
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k3"
+   ],
+   "row": [],
+   "n": 54,
+   "fires": 6,
+   "prior": 0.5,
+   "notched": 0.1111111111111111
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k4"
+   ],
+   "row": [],
+   "n": 2,
+   "fires": 0,
+   "prior": 0.5,
+   "notched": 0.0
+  }
+ ]
+}

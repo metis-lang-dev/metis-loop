@@ -1,0 +1,72 @@
+{
+ "rows": [
+  {
+   "port": "pign",
+   "args": [
+    "k0"
+   ],
+   "row": [],
+   "n": 3194,
+   "fires": 30,
+   "prior": 0.5,
+   "notched": 0.00939261114589856
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k1"
+   ],
+   "row": [],
+   "n": 3366,
+   "fires": 87,
+   "prior": 0.5,
+   "notched": 0.025846702317290554
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k2"
+   ],
+   "row": [],
+   "n": 1040,
+   "fires": 87,
+   "prior": 0.5,
+   "notched": 0.08365384615384615
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k3"
+   ],
+   "row": [],
+   "n": 280,
+   "fires": 41,
+   "prior": 0.5,
+   "notched": 0.14642857142857144
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k4"
+   ],
+   "row": [],
+   "n": 25,
+   "fires": 10,
+   "prior": 0.5,
+   "notched": 0.4
+  },
+  {
+   "port": "pign",
+   "args": [
+    "k5"
+   ],
+   "row": [],
+   "n": 5,
+   "fires": 3,
+   "prior": 0.5,
+   "notched": 0.6
+  }
+ ],
+ "explained": 2400,
+ "missed": 0
+}

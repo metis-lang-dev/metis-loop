@@ -1,0 +1,369 @@
+2026-10-10 12:39:58.637050: [info] initializing pvariable tensors:
+	COST_CUTOUT[], shape=(), dtype=float64
+	COST_PUTOUT[], shape=(), dtype=float64
+	PENALTY_TARGET_BURN[], shape=(), dtype=float64
+	PENALTY_NONTARGET_BURN[], shape=(), dtype=float64
+	NEIGHBOR['x_pos', 'y_pos', 'x_pos', 'y_pos'], shape=(3, 3, 3, 3), dtype=bool
+	TARGET['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	burning['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	burning'['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	out-of-fuel['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	out-of-fuel'['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	put-out['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+	cut-out['x_pos', 'y_pos'], shape=(3, 3), dtype=bool
+
+2026-10-10 12:39:58.637193: [info] computed fluent dependencies in CPFs:
+	next-state-fluent burning': {burning, out-of-fuel, put-out}
+	next-state-fluent out-of-fuel': {burning, cut-out, out-of-fuel}
+
+2026-10-10 12:39:58.637206: [info] computed order of CPF evaluation:
+	0: {burning', out-of-fuel'}
+
+2026-10-10 12:39:58.637292: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564bad0>
+	variable                =put-out
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637332: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'out-of-fuel'), args=(out-of-fuel, [?x, ?y]))
+	CPF to check          =out-of-fuel'
+
+2026-10-10 12:39:58.637362: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564bda0>
+	variable                =out-of-fuel
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637382: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'burning'), args=(burning, [?x, ?y]))
+	CPF to check          =burning'
+
+2026-10-10 12:39:58.637407: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564bef0>
+	variable                =burning
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637439: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564bf20>
+	variable                =TARGET
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637477: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542c440>
+	variable                =NEIGHBOR
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3, 3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637491: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'burning'), args=(burning, [?x2, ?y2]))
+	CPF to check          =burning'
+
+2026-10-10 12:39:58.637550: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542c620>
+	variable                =burning
+	variable evaluated at   =[('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(3, 3, 3, 3)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(3), np.int64(0), np.int64(1))
+
+2026-10-10 12:39:58.637568: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x2', 'x_pos')), ('typed_var', ('?y2', 'y_pos'))]
+	free object(s) in outer scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	aggregation operation         =exists
+	aggregation axes              =(2, 3)
+
+2026-10-10 12:39:58.637627: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542cb30>
+	variable                =NEIGHBOR
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3, 3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637642: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'burning'), args=(burning, [?x2, ?y2]))
+	CPF to check          =burning'
+
+2026-10-10 12:39:58.637670: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542cda0>
+	variable                =burning
+	variable evaluated at   =[('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(3, 3, 3, 3)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(3), np.int64(0), np.int64(1))
+
+2026-10-10 12:39:58.637683: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x2', 'x_pos')), ('typed_var', ('?y2', 'y_pos'))]
+	free object(s) in outer scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos'), ('?x2', 'x_pos'), ('?y2', 'y_pos')]
+	aggregation operation         =sum
+	aggregation axes              =(2, 3)
+
+2026-10-10 12:39:58.637699: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'burning'), args=(burning, [?x, ?y]))
+	CPF to check          =burning'
+
+2026-10-10 12:39:58.637719: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542c770>
+	variable                =burning
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637736: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'out-of-fuel'), args=(out-of-fuel, [?x, ?y]))
+	CPF to check          =out-of-fuel'
+
+2026-10-10 12:39:58.637756: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564b9b0>
+	variable                =out-of-fuel
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637780: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564b800>
+	variable                =burning
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637805: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542cb00>
+	variable                =TARGET
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637825: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542c980>
+	variable                =cut-out
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637871: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c564b1d0>
+	variable                =COST_CUTOUT
+	variable evaluated at   =[]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =(0, 1)
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637893: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d0a0>
+	variable                =cut-out
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637906: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x', 'x_pos')), ('typed_var', ('?y', 'y_pos'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	aggregation operation         =sum
+	aggregation axes              =(0, 1)
+
+2026-10-10 12:39:58.637928: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d130>
+	variable                =COST_PUTOUT
+	variable evaluated at   =[]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =(0, 1)
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637949: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d3a0>
+	variable                =put-out
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.637959: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x', 'x_pos')), ('typed_var', ('?y', 'y_pos'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	aggregation operation         =sum
+	aggregation axes              =(0, 1)
+
+2026-10-10 12:39:58.637980: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d400>
+	variable                =PENALTY_TARGET_BURN
+	variable evaluated at   =[]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =(0, 1)
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638004: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d6d0>
+	variable                =burning
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638023: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d7c0>
+	variable                =out-of-fuel
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638042: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d8b0>
+	variable                =TARGET
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638053: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x', 'x_pos')), ('typed_var', ('?y', 'y_pos'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	aggregation operation         =sum
+	aggregation axes              =(0, 1)
+
+2026-10-10 12:39:58.638074: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542d8e0>
+	variable                =PENALTY_NONTARGET_BURN
+	variable evaluated at   =[]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =(0, 1)
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638095: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542db80>
+	variable                =burning
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638117: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x7762c542dcd0>
+	variable                =TARGET
+	variable evaluated at   =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	free object(s) in scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(3, 3)
+	transform operation     =2 with argument(s) None
+
+2026-10-10 12:39:58.638128: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?x', 'x_pos')), ('typed_var', ('?y', 'y_pos'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?x', 'x_pos'), ('?y', 'y_pos')]
+	aggregation operation         =sum
+	aggregation axes              =(0, 1)
+
+2026-10-10 12:39:58.638141: [info] computed whether each CPF expression is fluent:
+	burning': True
+	out-of-fuel': True
+
+2026-10-10 12:39:58.638260: [info] computed simulation bounds:
+	burning___x1__y1: (np.float64(-inf), np.float64(inf))
+	burning___x1__y2: (np.float64(-inf), np.float64(inf))
+	burning___x1__y3: (np.float64(-inf), np.float64(inf))
+	burning___x2__y1: (np.float64(-inf), np.float64(inf))
+	burning___x2__y2: (np.float64(-inf), np.float64(inf))
+	burning___x2__y3: (np.float64(-inf), np.float64(inf))
+	burning___x3__y1: (np.float64(-inf), np.float64(inf))
+	burning___x3__y2: (np.float64(-inf), np.float64(inf))
+	burning___x3__y3: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x1__y1: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x1__y2: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x1__y3: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x2__y1: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x2__y2: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x2__y3: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x3__y1: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x3__y2: (np.float64(-inf), np.float64(inf))
+	out-of-fuel___x3__y3: (np.float64(-inf), np.float64(inf))
+	put-out___x1__y1: (np.float64(-inf), np.float64(inf))
+	put-out___x1__y2: (np.float64(-inf), np.float64(inf))
+	put-out___x1__y3: (np.float64(-inf), np.float64(inf))
+	put-out___x2__y1: (np.float64(-inf), np.float64(inf))
+	put-out___x2__y2: (np.float64(-inf), np.float64(inf))
+	put-out___x2__y3: (np.float64(-inf), np.float64(inf))
+	put-out___x3__y1: (np.float64(-inf), np.float64(inf))
+	put-out___x3__y2: (np.float64(-inf), np.float64(inf))
+	put-out___x3__y3: (np.float64(-inf), np.float64(inf))
+	cut-out___x1__y1: (np.float64(-inf), np.float64(inf))
+	cut-out___x1__y2: (np.float64(-inf), np.float64(inf))
+	cut-out___x1__y3: (np.float64(-inf), np.float64(inf))
+	cut-out___x2__y1: (np.float64(-inf), np.float64(inf))
+	cut-out___x2__y2: (np.float64(-inf), np.float64(inf))
+	cut-out___x2__y3: (np.float64(-inf), np.float64(inf))
+	cut-out___x3__y1: (np.float64(-inf), np.float64(inf))
+	cut-out___x3__y2: (np.float64(-inf), np.float64(inf))
+	cut-out___x3__y3: (np.float64(-inf), np.float64(inf))
+

@@ -1,0 +1,175 @@
+catalog wildfire 4.
+provenance text "the real wildfire (rddlrepository Wildfire_MDP_ippc2014, instance 1) as observed: burning and out_of_fuel per cell, put_out and cut_out actions, one tick per step; ignition revised to one rule priced by a fitted weight port pign(K) of the burning-neighbor count" "2026-10-10".
+layers (dyn).
+stages (open count act screen ignite).
+type xc {x1 x2 x3}.
+type yc {y1 y2 y3}.
+% k counts burning neighbors, 0..8
+type nbcount {k0..k8}.
+% position in a cell's neighbor list; s8 is past the end of the longest list
+type slot {s0..s8}.
+namespace wf produce (dyn).
+pred burning(xc, yc) : wf.
+pred not_burning(xc, yc) : wf.
+pred out_of_fuel(xc, yc) : wf.
+pred not_out_of_fuel(xc, yc) : wf.
+pred put_out(xc, yc) : wf.
+pred cut_out(xc, yc) : wf.
+pred tick : wf.
+pred walk(xc, yc) : wf.
+pred cell(xc, yc) : wf.
+pred fresh(xc, yc) : wf.
+pred held(xc, yc) : wf.
+pred tally(xc, yc, nbcount) : wf.
+pred scan(xc, yc, slot) : wf.
+bwd next(nbcount, nbcount).
+next(k0, k1).
+next(k1, k2).
+next(k2, k3).
+next(k3, k4).
+next(k4, k5).
+next(k5, k6).
+next(k6, k7).
+next(k7, k8).
+bwd nextslot(slot, slot).
+nextslot(s0, s1).
+nextslot(s1, s2).
+nextslot(s2, s3).
+nextslot(s3, s4).
+nextslot(s4, s5).
+nextslot(s5, s6).
+nextslot(s6, s7).
+nextslot(s7, s8).
+% the cells x1..x3 by y1..y3, visited once per step in this order
+bwd firstcell(xc, yc).
+firstcell(x1, y1).
+bwd nextcell(xc, yc, xc, yc).
+nextcell(x1, y1, x1, y2).
+nextcell(x1, y2, x1, y3).
+nextcell(x1, y3, x2, y1).
+nextcell(x2, y1, x2, y2).
+nextcell(x2, y2, x2, y3).
+nextcell(x2, y3, x3, y1).
+nextcell(x3, y1, x3, y2).
+nextcell(x3, y2, x3, y3).
+bwd lastcell(xc, yc).
+lastcell(x3, y3).
+% the instance's directed neighbor relation, each cell's list walked in order
+bwd nb(xc, yc, slot, xc, yc).
+nb(x1, y1, s0, x1, y2).
+nb(x1, y1, s1, x2, y1).
+nb(x1, y1, s2, x2, y2).
+nb(x1, y2, s0, x1, y1).
+nb(x1, y2, s1, x1, y3).
+nb(x1, y2, s2, x2, y1).
+nb(x1, y2, s3, x2, y2).
+nb(x1, y2, s4, x2, y3).
+nb(x1, y3, s0, x2, y2).
+nb(x1, y3, s1, x2, y3).
+nb(x2, y1, s0, x1, y1).
+nb(x2, y1, s1, x1, y2).
+nb(x2, y1, s2, x2, y2).
+nb(x2, y1, s3, x3, y1).
+nb(x2, y1, s4, x3, y2).
+nb(x2, y2, s0, x1, y1).
+nb(x2, y2, s1, x1, y2).
+nb(x2, y2, s2, x1, y3).
+nb(x2, y2, s3, x2, y1).
+nb(x2, y2, s4, x2, y3).
+nb(x2, y2, s5, x3, y1).
+nb(x2, y2, s6, x3, y2).
+nb(x2, y2, s7, x3, y3).
+nb(x2, y3, s0, x1, y2).
+nb(x2, y3, s1, x1, y3).
+nb(x2, y3, s2, x2, y2).
+nb(x2, y3, s3, x3, y2).
+nb(x2, y3, s4, x3, y3).
+nb(x3, y1, s0, x2, y1).
+nb(x3, y1, s1, x2, y2).
+nb(x3, y1, s2, x3, y2).
+nb(x3, y2, s0, x2, y1).
+nb(x3, y2, s1, x2, y2).
+nb(x3, y2, s2, x2, y3).
+nb(x3, y2, s3, x3, y1).
+nb(x3, y2, s4, x3, y3).
+nb(x3, y3, s0, x2, y2).
+nb(x3, y3, s1, x2, y3).
+nb(x3, y3, s2, x3, y2).
+% the slot just past the end of each cell's neighbor list
+bwd nbend(xc, yc, slot).
+nbend(x1, y1, s3).
+nbend(x1, y2, s5).
+nbend(x1, y3, s2).
+nbend(x2, y1, s5).
+nbend(x2, y2, s8).
+nbend(x2, y3, s5).
+nbend(x3, y1, s3).
+nbend(x3, y2, s5).
+nbend(x3, y3, s3).
+bwd target(xc, yc).
+target(x2, y2).
+target(x2, y3).
+target(x3, y1).
+bwd plain(xc, yc).
+plain(x1, y1).
+plain(x1, y2).
+plain(x1, y3).
+plain(x2, y1).
+plain(x3, y2).
+plain(x3, y3).
+% the ignition rate for a cell with K burning neighbors: DATA, fitted from the episodes at serve time
+weight pign(K) reads {}.
+stage open {
+  %% "a step starts from a state holding, for EACH observed fluent, either its atom (true) or not_<atom> (false) ... plus the action atoms taken that step ... and one tick atom"
+  begin [dyn] : tick * firstcell(X, Y) -o cell(X, Y) * walk(X, Y).
+  %% "for the cells X in x1 x2 x3, Y in y1 y2 y3"
+  visit [dyn] : walk(X, Y) * nextcell(X, Y, U, V) -o cell(U, V) * walk(U, V).
+  %% "for the cells X in x1 x2 x3, Y in y1 y2 y3"
+  close [dyn] : walk(X, Y) * lastcell(X, Y) -o ().
+}
+stage count {
+  %% "a cell that is not burning and not out_of_fuel starts burning ... a rate that depends only on k, the number of its neighbors burning at the start of the step"
+  ready [dyn] : cell(X, Y) * $not_burning(X, Y) * $not_out_of_fuel(X, Y) -o fresh(X, Y) * tally(X, Y, k0) * scan(X, Y, s0).
+  %% "Every cell that was burning at the start of a step is out_of_fuel at its end"
+  hold [dyn] : cell(X, Y) * $burning(X, Y) -o held(X, Y).
+  %% "A cell that is out_of_fuel and not burning never started burning."
+  spent [dyn] : cell(X, Y) * $not_burning(X, Y) * $out_of_fuel(X, Y) -o ().
+  %% "k, the number of its neighbors burning at the start of the step"
+  see_fire [dyn] : scan(X, Y, S) * tally(X, Y, K) * nb(X, Y, S, U, V) * $burning(U, V) * nextslot(S, S2) * next(K, K2) -o scan(X, Y, S2) * tally(X, Y, K2).
+  %% "k, the number of its neighbors burning at the start of the step"
+  see_none [dyn] : scan(X, Y, S) * nb(X, Y, S, U, V) * $not_burning(U, V) * nextslot(S, S2) -o scan(X, Y, S2).
+  %% "The instance's neighbor relation (directed: cell: its neighbors)"
+  scan_done [dyn] : scan(X, Y, S) * nbend(X, Y, S) -o ().
+}
+stage act {
+  %% "a burning cell stayed burning 1149 times and stopped 28 times, every stop in a step whose action was put_out on that cell"
+  douse [dyn] : put_out(X, Y) * burning(X, Y) -o not_burning(X, Y).
+  %% "put_out on a cell that is not burning changes nothing (record 0: put_out(x2,y2); record 33: put_out(x2,y1) while burning(x2,y2) starts)"
+  put_idle [dyn] : put_out(X, Y) * $not_burning(X, Y) -o ().
+  %% "Every cell that was burning at the start of a step is out_of_fuel at its end (1177 of 1177; record 10: burning(x1,y3) gains out_of_fuel(x1,y3))"
+  burn_fuel [dyn] : held(X, Y) * not_out_of_fuel(X, Y) -o out_of_fuel(X, Y).
+  %% "Every cell that was burning at the start of a step is out_of_fuel at its end"
+  burnt [dyn] : held(X, Y) * $out_of_fuel(X, Y) -o ().
+  %% "cut_out on a non-target cell makes it out_of_fuel (66 of 66; record 3: cut_out(x2,y1))"
+  cut [dyn] : cut_out(X, Y) * plain(X, Y) * not_out_of_fuel(X, Y) -o out_of_fuel(X, Y).
+  %% "cut_out on a non-target cell makes it out_of_fuel"
+  cut_bare [dyn] : cut_out(X, Y) * $out_of_fuel(X, Y) -o ().
+  %% "cut_out on a target cell that is not burning leaves it not_out_of_fuel (19 of 19)"
+  cut_target [dyn] : cut_out(X, Y) * target(X, Y) -o ().
+}
+stage screen {
+  %% "for target and non-target cells alike, except that a target with k=0 never starts"
+  calm_target_k0 [dyn] : fresh(X, Y) * tally(X, Y, k0) * target(X, Y) -o ().
+}
+stage ignite {
+  %% "The law is ONE rule over the count k for every cell that may start, its two outcomes (starts burning / stays not_burning) priced by a weight port pign(K) of the count and its complement"
+  catch [dyn] : fresh(X, Y) * tally(X, Y, K) * not_burning(X, Y) -o (burning(X, Y) @w pign(K) | not_burning(X, Y) @w ~pign(K)).
+}
+%% "the neighbors burning at the start of the step" are read before anything changes
+qui tally_up [dyn] : open -o count.
+%% "Many cells change within ONE step, all at once."
+qui apply [dyn] : count -o act.
+%% "except that a target with k=0 never starts"
+qui sift [dyn] : act -o screen.
+%% "How OFTEN a cell that is not burning and not out_of_fuel starts burning is a rate that depends only on k"
+qui spread [dyn] : screen -o ignite.

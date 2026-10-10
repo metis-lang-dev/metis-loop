@@ -1,0 +1,7 @@
+pign(k0) | (no scope) : 0.500 -> 0.013   (n=305, s=4, a0=0)
+pign(k1) | (no scope) : 0.500 -> 0.040   (n=274, s=11, a0=0)
+pign(k2) | (no scope) : 0.500 -> 0.115   (n=104, s=12, a0=0)
+pign(k3) | (no scope) : 0.500 -> 0.133   (n=60, s=8, a0=0)
+pign(k4) | (no scope) : 0.500 -> 0.750   (n=4, s=3, a0=0)
+pign(k5) | (no scope) : 0.500 -> 1.000   (n=1, s=1, a0=0)
+(transitions 269: explained by a sampled run 269, not reached within 20000 tries 0; 748 port draws)

@@ -1,0 +1,104 @@
+catalog wildfire 1.
+provenance text "a boolean version of the wildfire fighting domain (Karafyllidis & Thanailakis 1997, simplified by Zhenyu Yu, modified by Scott Sanner)" "2026-10-10".
+layers (dyn).
+stages (count spread manage reset).
+% illustrative 2x2 grid; the text says "size of n*n" without fixing n
+type cell {c00 c01 c10 c11}.
+% k ranges over 0..8 burning neighbors (Moore neighborhood)
+type nbcount {k0..k8}.
+namespace wf produce (dyn).
+pred burning(cell) : wf.
+pred extinguished(cell) : wf.
+pred fresh(cell) : wf.
+pred held(cell) : wf.
+pred tally(cell, nbcount) : wf.
+pred seen(cell, cell) : wf.
+pred unseen(cell, cell) : wf.
+pred intact(cell) : wf.
+pred lost(cell) : wf.
+pred crew : wf.
+pred spent : wf.
+bwd next(nbcount, nbcount).
+next(k0, k1).
+next(k1, k2).
+next(k2, k3).
+next(k3, k4).
+next(k4, k5).
+next(k5, k6).
+next(k6, k7).
+next(k7, k8).
+bwd neighbor(cell, cell).
+neighbor(c00, c01).
+neighbor(c00, c10).
+neighbor(c00, c11).
+neighbor(c01, c00).
+neighbor(c01, c10).
+neighbor(c01, c11).
+neighbor(c10, c00).
+neighbor(c10, c01).
+neighbor(c10, c11).
+neighbor(c11, c00).
+neighbor(c11, c01).
+neighbor(c11, c10).
+bwd target(cell).
+% illustrative: the text names "important targets" but not which cells
+target(c11).
+stage count {
+  %% "whether a cell would be on fire is determined by its neighbor grids ... where k is the number of neighbors on fire"
+  see_fire [dyn] : $burning(D) * neighbor(C, D) * unseen(C, D) * tally(C, K) * next(K, K2) -o seen(C, D) * tally(C, K2).
+  %% "where k is the number of neighbors on fire" (a put-out neighbor is no longer on fire)
+  unsee_fire [dyn] : $extinguished(D) * neighbor(C, D) * seen(C, D) * tally(C, K2) * next(K, K2) -o unseen(C, D) * tally(C, K).
+  %% "The decision task to a emergency manager is to control the fire and keep it away from important targets."
+  reach_target [dyn] : $burning(C) * target(C) * intact(C) -o lost(C).
+}
+stage spread {
+  %% "p(burning(xi, yj)=true) = 1 / (1 + exp(4.5 - k)) where k is the number of neighbors on fire"
+  % the logistic in k is not expressible as a literal weight without per-k
+  % rule variants; k is read here so the law can be attached as data, and
+  % the choice uses the default weights until then
+  ignite [dyn] : fresh(C) * $tally(C, K) -o (burning(C) @w 1 | held(C) @w 1).
+}
+stage manage {
+  %% "The decision task to a emergency manager is to control the fire"
+  put_out [dyn] : crew * burning(C) -o extinguished(C) * spent.
+  %% "The decision task to a emergency manager is to control the fire"
+  idle [dyn] : crew -o spent.
+}
+stage reset {
+  %% "whether a cell would be on fire is determined by its neighbor grids" (each step every unburnt cell is decided anew)
+  refresh [dyn] : held(C) -o fresh(C).
+  %% "The decision task to a emergency manager is to control the fire"
+  rest [dyn] : spent -o crew.
+}
+%% "whether a cell would be on fire is determined by its neighbor grids"
+qui counted [dyn] : count -o spread.
+%% "The decision task to a emergency manager is to control the fire"
+qui spreaded [dyn] : spread -o manage.
+%% "The decision task to a emergency manager is to control the fire"
+qui managed [dyn] : manage -o reset.
+%% "whether a cell would be on fire is determined by its neighbor grids"
+qui stepped [dyn] : reset -o count.
+% illustrative initial state: one cell on fire
+#init burning(c00) 1
+#init fresh(c01) 1
+#init fresh(c10) 1
+#init fresh(c11) 1
+#init tally(c00, k0) 1
+#init tally(c01, k0) 1
+#init tally(c10, k0) 1
+#init tally(c11, k0) 1
+#init unseen(c00, c01) 1
+#init unseen(c00, c10) 1
+#init unseen(c00, c11) 1
+#init unseen(c01, c00) 1
+#init unseen(c01, c10) 1
+#init unseen(c01, c11) 1
+#init unseen(c10, c00) 1
+#init unseen(c10, c01) 1
+#init unseen(c10, c11) 1
+#init unseen(c11, c00) 1
+#init unseen(c11, c01) 1
+#init unseen(c11, c10) 1
+#init intact(c11) 1
+#init crew 1
+#steps 40
