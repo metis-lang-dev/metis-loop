@@ -70,6 +70,32 @@ also their window into the loop.
    prior-mode measures, no invented weights — notching fits them
    later. (`formalize` drafts via the llm endpoint instead; the
    gate treats both the same.)
+
+   **Declarative over imperative — model the MECHANISM, not the
+   ledger.** The smell: a quantity of the text evaluated at
+   authoring time — per-value rule unrolling (`cost2`/`cost5`/
+   `cost8` variants), enumerated `max`/`min` pair facts, token
+   multiplicities (`wick * wick * ...`) encoding a number. That is
+   computation frozen into rules; it also distorts the measure
+   (consuming k tokens from a pool of C multiplies the event weight
+   by C(C,k)). Instead, make the quantity a PATH the world walks
+   and the rate DATA. Worked example (bridge-and-torch, metis-loop
+   experiments/bridge-torch/bridge-declarative.llp vs the imperative
+   bridge.llp): durations 1/2/5/8 became `bwd pace(person, mark)`
+   facts over a `bwd step(mark, mark)` chain; the torch-party
+   advances one mark per minute, each minute consuming ONE wick;
+   each walker steps off at their own pace mark; "moves at the
+   slower person's pace" is then EMERGENT — the torch lands when
+   the last walker is off (both capacity planks back). Deterministic
+   consequences ("would eat", "steps off") go in a settle stage
+   where enabled rules MUST fire before quiescence (the wgc
+   ferry/shore qui-tick; bridge extends it to board → stride →
+   settle). Statement constraints become resource shapes: "holds
+   two people" = two plank tokens, "the torch must be used" = the
+   walk consumes the torch to a lamp-in-transit. Test of success:
+   the puzzle's own question answered by the instruments (`query`
+   > 0 / = 0 exact; goal-record `replay` derives the schedule), with
+   every %%-quoted sentence mapping to ONE rule or ONE data relation.
 4. **Gate**: `gate` for a pack, `revise` for a base edit. On
    findings: repair and re-run, at most 4 rounds; every round's
    findings go in the candidate doc history. Push the final report

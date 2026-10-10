@@ -125,15 +125,54 @@ rddlrepository carries the AUTHOR's description for all 90 problems
 formalization session seeds those VERBATIM, nothing paraphrased.
 NOTE: the ippc2023 set is almost entirely continuous-fluent (HVAC,
 RaceCar, Reservoir, UAV, PowerGen, MarsRover, RecSim) — not metis
-material; the boolean, storied, notchable shelf is 2011/2014/2018:
+material; likewise gym/physics/Epidemic/Zombies/RedFinnedBlueEye.
 
-- Elevators_MDP (this experiment) — Bernoulli arrivals per floor.
-- Wildfire_MDP_ippc2014 — spatial spread + ignition probabilities.
-- Tamarisk_MDP_ippc2014 — invasive-species spread/eradication.
-- SkillTeaching_MDP — probabilistic student learning (storied).
-- CrossingTraffic_MDP — robot vs Bernoulli-arriving obstacles.
-- TriangleTireworld_MDP — the classic probabilistic-planning fable.
-- AcademicAdvising — course-passing probabilities.
-(SysAdmin, GoL, Navigation, Traffic already have metispy adapters.)
-Each is a candidate rerun of steps 1-2a once elevators proves the
-recipe.
+Fluent scan 2026-10-09 (state/action ranges vs non-fluent ranges;
+real NON-fluents are a feature — they are the ground truth the notch
+table is scored against, like elevators' ARRIVE-PARAM). The ideal
+recipe profile: all-boolean state/action fluents, real non-fluent
+parameters, a storied header, 10 instances for episode batches.
+
+TIER 1 — direct reruns of the elevators recipe (steps 1-2a), ranked:
+
+| domain                         | state  | notch targets        | header   |
+|--------------------------------|--------|----------------------|----------|
+| Wildfire_MDP_ippc2014          | 4 bool | logistic per k (see below) | 35 lines |
+| Tamarisk_MDP_ippc2014          | 4 bool | 17 real (richest)    | 5 + desc |
+| CrossingTraffic_MDP_ippc2011   | 6 bool | 1 real (arrival)     | 31 lines |
+| SkillTeaching_MDP_ippc2011     | 8 bool | 7 real               | 30 lines |
+| TriangleTireworld_MDP_ippc2014 | 8 bool | 1 real               | short    |
+| AcademicAdvising_MDP_ippc2014  | 3 bool | 5 real (pass probs)  | 17 lines |
+| Traffic_CTM_MDP_ippc2011       | 4 bool | 1 real               | 22 lines |
+
+Wildfire first (storied spatial spread, small vocabulary, structured
+notch table); Tamarisk second (17-parameter notch stress test);
+CrossingTraffic third (obstacles move every tick — re-poses the
+synchrony question with the bridge lockstep idiom in hand).
+GOTCHA: Tamarisk and TriangleTireworld headers are latin-1 (0x96
+en-dash) — the verbatim-provenance copy must read latin-1.
+CORRECTION (step 1, 2026-10-10): Wildfire's "4 real" non-fluents are
+COST/PENALTY (reward) parameters, not dynamics — metis grounds
+without reward. The dynamics ground truth is the header's ignition
+law p = 1/(1+e^(4.5−k)) in the burning-neighbor count k, scored per
+k; the born catalog carries k as a walked tally chain and the law
+attaches as a weight PORT (pign(K), reads {}), prior-flat base,
+notch overlay fitted per k from episodes (subject s-8f820524 step 1
+findings). Audit the other shelf rows' notch targets for the same
+reward-vs-dynamics confusion when their turn comes.
+
+TIER 2 — different tracks: CooperativeRecon_MDP_ippc2011 (14 bool
+state, 5 real — cold-start language card at scale); Eight_arcade
+(all-bool, deterministic) and TowerOfHanoi_arcade (bool + 2 int) —
+nothing to notch, but they are resource puzzles in the
+wgc/bridge-declarative class: goal-record-replay planner track.
+
+TIER 3 — stretch, needs an enum/int→atom mapping decision first:
+PushYourLuck (number state), EarthObservation (visibility enum),
+Sokoban (dir enum), Manufacturer (price enums, 20 bools — big),
+Pizza/Logistics (int state).
+
+(SysAdmin, GoL, Navigation, Traffic already have metispy adapters —
+they are the REDO-program diff candidates, not new experiments.)
+Nearly every Tier-1 domain has a POMDP twin — a later axis via the
+case `#unknown` directive once the MDP loop is proven.
