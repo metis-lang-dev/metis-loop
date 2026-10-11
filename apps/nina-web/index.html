@@ -67,9 +67,15 @@
           <input id="taskDetail" type="text" placeholder="detail for the next injected task (optional)"
                  class="flex-1 bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-fuchsia-500" />
         </div>
+        <!-- the rack (docs/RACK.md, rack step 2): per domain, mounted, records, open, last said; the switches mount/unmount -->
+        <div id="rackPane" hidden class="mt-2 border border-slate-700 rounded-lg px-2 py-1 bg-slate-950 font-mono text-[10px]">
+          <div class="flex items-baseline gap-2"><span class="text-fuchsia-300 font-bold uppercase tracking-wide">rack</span>
+            <span id="rackLast" class="text-slate-500 ml-auto"></span></div>
+          <div id="rackRows" class="space-y-px mt-0.5"></div>
+        </div>
         <!-- runtime intents (internal/kernel): explain / reset / escalate a record -->
         <form id="runtimeForm" class="mt-2 flex items-center gap-2">
-          <input id="runtimeIntent" type="text" autocomplete="off" placeholder="runtime intent — e.g. reset 0 (needs -kernel-host)"
+          <input id="runtimeIntent" type="text" autocomplete="off" placeholder="runtime intent — e.g. reset 0, or @kitchen_shared reset 0 (needs -kernel-host)"
                  class="flex-1 bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-[11px] font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-fuchsia-500" />
         </form>
       </section>

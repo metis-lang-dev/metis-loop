@@ -68,6 +68,7 @@
       }
       case 'command': eventAdd(m); break;
       case 'runtime': runtimeAdd(m); break;
+      case 'rack': rackShow(m); break;
       case 'pending': eventState(m.id, m.state); break;
       case 'role':
         if (m.master === true) { isMaster = true; micTok = m.mic_tok || ''; applyMic(); if (micWanted) openMic(); }
@@ -189,6 +190,34 @@
     card.appendChild(row);
     while (card.children.length > 30) card.removeChild(card.firstChild);
     card.scrollTop = card.scrollHeight;
+  }
+  // the rack pane: one row per domain tape — the switch mounts/unmounts it
+  // (rack_mount{text: path, state}); unmounted tapes are frozen, not cleared
+  function rackShow(m) {
+    $('rackPane').hidden = false;
+    $('rackLast').textContent = m.last ? `last insertion ${m.last}` : '';
+    const rows = $('rackRows');
+    rows.innerHTML = '';
+    for (const p of m.paths || []) {
+      const row = document.createElement('div');
+      row.className = 'flex items-baseline gap-2';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = p.mounted;
+      box.title = p.mounted ? 'mounted — uncheck to freeze this tape' : 'frozen — check to mount';
+      box.onchange = () => send({ ev: 'rack_mount', text: p.path, state: box.checked ? 'on' : 'off' });
+      const name = document.createElement('span');
+      name.className = p.mounted ? 'text-emerald-300 font-bold' : 'text-slate-500 font-bold';
+      name.textContent = p.path;
+      const stats = document.createElement('span');
+      stats.className = (p.open ? 'text-amber-300' : 'text-slate-500') + ' whitespace-nowrap';
+      stats.textContent = `${p.records} rec · ${p.tok} tok${p.open ? ` · ${p.open} open` : ''}${p.dropped ? ` · ${p.dropped} dropped frozen` : ''}`;
+      const said = document.createElement('span');
+      said.className = 'text-slate-300 truncate';
+      said.textContent = p.last_said ? `“${p.last_said}”` : '';
+      row.append(box, name, stats, said);
+      rows.appendChild(row);
+    }
   }
   $('runtimeForm').onsubmit = (e) => {
     e.preventDefault();
