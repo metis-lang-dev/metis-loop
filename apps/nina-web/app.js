@@ -67,6 +67,7 @@
         break;
       }
       case 'command': eventAdd(m); break;
+      case 'pending': eventState(m.id, m.state); break;
       case 'role':
         if (m.master === true) { isMaster = true; micTok = m.mic_tok || ''; applyMic(); if (micWanted) openMic(); }
         else if (m.master === false) { isMaster = false; micTok = ''; if (m.reason) log(`[MIC] ${m.reason}`, 'text-amber-400'); closeMic(false); applyMic(); }
@@ -141,27 +142,58 @@
     args.textContent = JSON.stringify(m.args || {});
     const btns = document.createElement('div');
     btns.className = 'flex gap-1.5 mt-1.5';
-    for (const r of ['done', 'failed', 'refused', 'expired']) {
+    // progress is a beat, not an outcome: it re-arms the harness's window
+    for (const r of ['progress', 'done', 'failed', 'refused', 'expired']) {
       const b = document.createElement('button');
       b.className = 'px-2 py-0.5 rounded text-[10px] font-mono border ' +
         (r === 'done' ? 'border-emerald-500/60 text-emerald-300 hover:bg-emerald-500/10'
           : r === 'refused' ? 'border-amber-500/60 text-amber-300 hover:bg-amber-500/10'
+          : r === 'progress' ? 'border-sky-500/60 text-sky-300 hover:bg-sky-500/10'
           : 'border-slate-600 text-slate-300 hover:bg-slate-800');
       b.textContent = r;
       b.onclick = () => {
         send({ ev: 'task', id: m.id, result: r, detail: $('taskDetail').value.trim() });
+        if (r === 'progress') return;
         for (const x of btns.children) x.disabled = true;
         btns.className += ' opacity-50';
         head.insertAdjacentHTML('beforeend', `<span class="text-slate-400">→ ${r}</span>`);
       };
       btns.appendChild(b);
     }
-    row.append(head, args, btns);
+    const state = document.createElement('div');
+    state.className = 'state font-mono text-[10px] mt-1 text-slate-500';
+    state.textContent = 'pending';
+    row.append(head, args, btns, state);
     card.appendChild(row);
     while (card.children.length > 30) card.removeChild(card.firstChild);
     card.scrollTop = card.scrollHeight;
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // the harness's view of a command: expired rows go grey (the harness no
+  // longer expects an outcome; one sent now is said as late), progress
+  // re-arms, answered/late are marked
+  function eventState(id, st) {
+    const row = $('eventsCard').querySelector(`[data-id="${id}"]`);
+    if (!row) return;
+    const lbl = row.querySelector('.state');
+    const ts = new Date().toLocaleTimeString('en-GB');
+    if (st === 'expired') {
+      row.classList.add('opacity-50');
+      lbl.textContent = `${ts} expired — the harness stopped waiting; an outcome now is "late news"`;
+      lbl.className = 'state font-mono text-[10px] mt-1 text-amber-400';
+    } else if (st === 'progress') {
+      row.classList.remove('opacity-50');
+      lbl.textContent = `${ts} progress — window re-armed`;
+      lbl.className = 'state font-mono text-[10px] mt-1 text-sky-400';
+    } else if (st === 'answered') {
+      lbl.textContent = `${ts} answered`;
+      lbl.className = 'state font-mono text-[10px] mt-1 text-emerald-400';
+    } else if (st === 'late') {
+      lbl.textContent = `${ts} answered late`;
+      lbl.className = 'state font-mono text-[10px] mt-1 text-amber-300';
+    }
+  }
 
   // ---------- player: tts header + binary chunks → WebAudio, gapless; tts_done when playback ends ----------
   const player = (() => {
