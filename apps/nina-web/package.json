@@ -1,0 +1,9 @@
+{
+  "name": "nina-web",
+  "private": true,
+  "description": "the harness UI (HARNESS.md §6): static files served by fsttm-go -ui-dir",
+  "scripts": {
+    "build": "npx tailwindcss@3.4.17 -i src/input.css -o styles.css --minify",
+    "watch": "npx tailwindcss@3.4.17 -i src/input.css -o styles.css --watch"
+  }
+}
