@@ -184,7 +184,7 @@
     const seq = m.sig && m.sig.seq != null ? `#${m.sig.seq}` : '';
     row.innerHTML = `<div class="flex items-baseline gap-2 font-mono text-[11px]"><span class="text-slate-500">${ts}</span>` +
       `<span class="${tone} font-bold">${esc(m.path || 'runtime')} · ${esc(m.kind)}</span>` +
-      `<span class="text-slate-500 ml-auto">${esc(seq)}${m.narrated ? ' · spoken' : ''}</span></div>` +
+      `<span class="text-slate-500 ml-auto">${esc(seq)}${m.narrated ? ' · narrated' : ''}</span></div>` +
       `<div class="font-mono text-[10px] text-slate-300 break-all mt-0.5">${esc(m.fact)}</div>`;
     card.appendChild(row);
     while (card.children.length > 30) card.removeChild(card.firstChild);
