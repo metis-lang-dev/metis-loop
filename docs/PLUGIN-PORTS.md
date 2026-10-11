@@ -124,7 +124,7 @@ comprehensive": what passes here transfers.
 3. A clock-only plugin for pure time-dependence (cron-world: atoms
    appear on schedule) — the minimal conformance test.
 
-## Conformance fixtures (metis-loop experiments/port-proto/, all green 2026-10-09)
+## Conformance fixtures (metis-catalog domains/ports/port-proto/, all green 2026-10-09; README there)
 
 1. `port_proto.py` + `sensor.llp` — weights/overlay/scope: env flip
    re-prices P[crash] 0.3→0.9 exactly; overlay 0.42 + pop; shows G5

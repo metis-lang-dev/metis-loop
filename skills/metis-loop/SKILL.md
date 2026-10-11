@@ -78,10 +78,11 @@ also their window into the loop.
    multiplicities (`wick * wick * ...`) encoding a number. That is
    computation frozen into rules; it also distorts the measure
    (consuming k tokens from a pool of C multiplies the event weight
-   by C(C,k)). Instead, make the quantity a PATH the world walks
-   and the rate DATA. Worked example (bridge-and-torch, metis-loop
-   experiments/bridge-torch/bridge-declarative.llp vs the imperative
-   bridge.llp): durations 1/2/5/8 became `bwd pace(person, mark)`
+   by the falling factorial C·(C−1)···(C−k+1) — ordered matchings,
+   measured in the bridge-torch transcript). Instead, make the quantity a PATH the world walks
+   and the rate DATA. Worked example (bridge-and-torch, metis-catalog
+   domains/planning/bridge-torch/bridge-declarative.llp vs the
+   imperative bridge.llp; its README carries the findings): durations 1/2/5/8 became `bwd pace(person, mark)`
    facts over a `bwd step(mark, mark)` chain; the torch-party
    advances one mark per minute, each minute consuming ONE wick;
    each walker steps off at their own pace mark; "moves at the

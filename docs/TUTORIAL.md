@@ -363,9 +363,12 @@ The whole improvement cycle, in one session (SPEC.md §1): the
 runtime logged an outcome no rule covers — a shepherd's flock came
 through a wolf night *safe*, and the meadow world cannot derive
 `safe` at all. The sink holds the record; the session turns it into
-an admitted pack and verifies the fix.
+an admitted pack and verifies the fix. The world, its sink and the
+recorded session live in metis-catalog `demo/synthetic-meadow/`
+(run from there; `meadow_plugin` binds the world's weight port `pk`
+at 0.5 — an unbound port refuses to serve).
 
-    $ metis meadow.llp
+    $ metis --plugin meadow_plugin:make meadow.llp
     llp> sink runs/sink.jsonl
     { ok: true, records: [{idx: 0, kind: "unmodeled", likelihood: 0,
                            steps: 6, observed: {safe: 1}}] }

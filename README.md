@@ -26,3 +26,10 @@ kernel-as-REPL architecture, the verbs, extension vs revision, the
 consistency ladder, transports, the debug sidecar, and the
 invariants. Built: the REPL + CLI, the Claude Code plugin
 (`skills/metis-loop`), and the web Loop Console.
+
+**Experiments live in metis-catalog.** The loop's concluded experiments
+(the RDDL shelf, bridge-torch, wolf-goat-cabbage, hanoi, the port-plugin
+fixtures, the pantry and meadow demos) moved on 2026-10-11 to sit next
+to the domains they produced, each with a README of what formalization
+taught. See the "Experiments" section of the metis-catalog README. This
+repo keeps only the loop machinery.
