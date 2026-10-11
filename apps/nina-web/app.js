@@ -267,8 +267,14 @@
     }
     return { start, chunk, end, stop, unlock, applyAudio };
   })();
-  $('btnAudio').onclick = () => player.unlock();
-  document.addEventListener('click', () => player.unlock(), { once: true });
+  // the unlock click takes focus away from the chat box: give it back, unless
+  // the first click went to another control (round-3 UI nit)
+  function unlockAndFocus() { player.unlock(); $('chatInput').focus(); }
+  $('btnAudio').onclick = unlockAndFocus;
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('button, input, textarea, select, label')) player.unlock();
+    else unlockAndFocus();
+  }, { once: true });
 
   // ---------- mic: grab the token, AudioWorklet → 640-byte frames → /ws_mic ----------
   let micWanted = false, micStream = null, micCtx = null, micNode = null;
