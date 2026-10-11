@@ -1,0 +1,44 @@
+######################################################
+New Trial
+######################################################
+timestamp,iteration,epoch,tamarisk-at___s1s1,tamarisk-at___s1s2,tamarisk-at___s2s1,tamarisk-at___s2s2,tamarisk-at___s3s1,tamarisk-at___s3s2,tamarisk-at___s4s1,tamarisk-at___s4s2,native-at___s1s1,native-at___s1s2,native-at___s2s1,native-at___s2s2,native-at___s3s1,native-at___s3s2,native-at___s4s1,native-at___s4s2,eradicate___r1,reward,done
+2026-10-11 11:28:54.336036,0,0,False,False,True,False,False,False,False,False,False,False,False,True,True,False,False,True,1,-7.24,False
+2026-10-11 11:28:54.336608,1,1,False,False,True,False,False,True,False,False,False,False,False,False,True,False,False,True,1,-6.99,False
+2026-10-11 11:28:54.337166,2,2,True,False,True,True,False,True,False,False,False,False,False,False,True,False,False,True,1,-12.49,False
+2026-10-11 11:28:54.337705,3,3,True,True,True,True,False,True,False,False,False,True,False,False,True,False,False,True,1,-18.4,False
+2026-10-11 11:28:54.338229,4,4,True,True,True,True,False,True,True,False,False,True,False,False,True,False,False,True,0,-17.75,False
+2026-10-11 11:28:54.338610,5,5,False,True,True,True,False,True,True,False,False,False,False,False,False,False,False,True,1,-23.49,False
+2026-10-11 11:28:54.339105,6,6,True,True,False,True,True,True,True,False,False,False,False,False,False,False,False,True,0,-23.0,False
+2026-10-11 11:28:54.339660,7,7,False,False,True,True,True,True,True,False,False,False,False,False,False,False,False,True,1,-23.74,False
+2026-10-11 11:28:54.340160,8,8,True,False,True,True,True,True,False,False,False,False,False,False,False,False,False,True,0,-18.0,False
+2026-10-11 11:28:54.340714,9,9,True,True,False,False,True,True,True,False,False,False,False,False,False,False,False,True,1,-18.49,False
+2026-10-11 11:28:54.341281,10,10,True,True,True,True,False,False,True,False,False,False,False,False,False,False,False,True,1,-18.49,False
+2026-10-11 11:28:54.341786,11,11,True,True,True,True,True,False,True,False,False,False,False,False,False,False,False,True,0,-18.0,False
+2026-10-11 11:28:54.342341,12,12,True,True,False,False,True,True,True,False,False,False,False,False,False,False,False,True,1,-23.74,False
+2026-10-11 11:28:54.342838,13,13,True,True,True,True,True,True,True,False,False,False,False,False,False,False,False,True,0,-18.0,False
+2026-10-11 11:28:54.343131,14,14,True,False,True,True,True,True,True,False,False,False,False,False,False,False,False,True,0,-23.5,False
+2026-10-11 11:28:54.343685,15,15,False,False,True,True,True,True,True,False,False,False,False,False,False,False,False,True,1,-23.74,False
+2026-10-11 11:28:54.344241,16,16,True,False,True,True,True,True,False,False,False,True,False,False,False,False,False,True,1,-18.49,False
+2026-10-11 11:28:54.344759,17,17,True,False,True,True,True,False,True,False,False,True,False,False,False,False,False,True,1,-18.65,False
+2026-10-11 11:28:54.345346,18,18,True,False,True,True,True,True,True,False,False,True,False,False,False,True,False,True,1,-24.049999999999997,False
+2026-10-11 11:28:54.345684,19,19,True,False,True,True,True,True,True,False,False,True,False,False,False,True,False,True,1,-23.9,False
+2026-10-11 11:28:54.346002,20,20,True,False,True,True,True,True,True,False,False,True,False,False,False,False,False,False,0,-23.0,False
+2026-10-11 11:28:54.346500,21,21,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.25,False
+2026-10-11 11:28:54.346811,22,22,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,1,-24.4,False
+2026-10-11 11:28:54.347099,23,23,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.5,False
+2026-10-11 11:28:54.347394,24,24,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.5,False
+2026-10-11 11:28:54.347701,25,25,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,1,-24.4,False
+2026-10-11 11:28:54.348048,26,26,True,False,True,False,True,True,False,False,False,True,False,False,False,False,False,False,1,-23.99,False
+2026-10-11 11:28:54.348580,27,27,True,False,True,True,True,False,True,False,False,True,False,False,False,False,False,False,1,-18.65,False
+2026-10-11 11:28:54.349077,28,28,False,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.0,False
+2026-10-11 11:28:54.349573,29,29,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-18.25,False
+2026-10-11 11:28:54.349869,30,30,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.5,False
+2026-10-11 11:28:54.350166,31,31,False,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.5,False
+2026-10-11 11:28:54.350659,32,32,False,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-18.25,False
+2026-10-11 11:28:54.351146,33,33,False,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-18.25,False
+2026-10-11 11:28:54.351667,34,34,True,False,True,True,True,True,True,True,True,True,False,False,False,False,False,False,1,-19.549999999999997,False
+2026-10-11 11:28:54.351995,35,35,True,False,True,True,True,True,True,True,True,True,False,False,False,False,False,False,1,-24.4,False
+2026-10-11 11:28:54.352308,36,36,True,False,True,True,True,True,True,True,False,True,False,False,False,False,False,False,0,-23.5,False
+2026-10-11 11:28:54.352661,37,37,True,False,False,False,True,True,True,True,False,True,False,False,False,False,False,False,1,-23.99,False
+2026-10-11 11:28:54.353188,38,38,True,False,False,True,True,True,True,False,False,True,True,True,False,False,False,False,1,-19.7,False
+2026-10-11 11:28:54.353764,39,39,True,False,False,True,True,True,False,False,False,True,True,False,False,False,False,False,1,-23.24,False

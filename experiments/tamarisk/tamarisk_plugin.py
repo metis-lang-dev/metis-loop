@@ -14,7 +14,10 @@ class TamariskPorts:
     def __init__(self, case):
         pass
 
-    PORTS = ("pdown", "pup", "pcompete")
+    # born (step 1): pdown pup pcompete; iter1 (step 2): the seat's
+    # global per-law ports
+    PORTS = ("pdown", "pup", "pcompete", "ptcomp", "pncomp", "perad",
+             "ptdie", "pndie", "ptborn", "psib", "prest", "pnborn")
 
     def flat(self, args, counts):
         return 0.5                       # prior-flat: notching fits it

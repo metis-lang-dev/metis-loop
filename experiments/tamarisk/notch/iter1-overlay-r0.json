@@ -1,0 +1,113 @@
+{
+ "world": "iter1-world/base.llp",
+ "round": 0,
+ "transitions": [
+  "transitions/iter0-i1-random-s1-n10.jsonl",
+  "transitions/train-i1-random-s1001-n50.jsonl"
+ ],
+ "alpha": 0.0,
+ "units": 19200,
+ "missed_units": 0,
+ "priced_by": "base",
+ "rows": [
+  {
+   "port": "pdown",
+   "args": [],
+   "row": [],
+   "n": 702,
+   "fires": 287,
+   "prior": 0.5,
+   "notched": 0.40883190883190884
+  },
+  {
+   "port": "perad",
+   "args": [],
+   "row": [],
+   "n": 614,
+   "fires": 549,
+   "prior": 0.5,
+   "notched": 0.8941368078175895
+  },
+  {
+   "port": "pnborn",
+   "args": [],
+   "row": [],
+   "n": 2669,
+   "fires": 252,
+   "prior": 0.5,
+   "notched": 0.09441738478831023
+  },
+  {
+   "port": "pncomp",
+   "args": [],
+   "row": [],
+   "n": 305,
+   "fires": 61,
+   "prior": 0.5,
+   "notched": 0.2
+  },
+  {
+   "port": "pndie",
+   "args": [],
+   "row": [],
+   "n": 4955,
+   "fires": 244,
+   "prior": 0.5,
+   "notched": 0.04924318869828456
+  },
+  {
+   "port": "prest",
+   "args": [],
+   "row": [],
+   "n": 183,
+   "fires": 168,
+   "prior": 0.5,
+   "notched": 0.9180327868852459
+  },
+  {
+   "port": "psib",
+   "args": [],
+   "row": [],
+   "n": 356,
+   "fires": 123,
+   "prior": 0.5,
+   "notched": 0.3455056179775281
+  },
+  {
+   "port": "ptborn",
+   "args": [],
+   "row": [],
+   "n": 2662,
+   "fires": 817,
+   "prior": 0.5,
+   "notched": 0.3069120961682945
+  },
+  {
+   "port": "ptcomp",
+   "args": [],
+   "row": [],
+   "n": 305,
+   "fires": 240,
+   "prior": 0.5,
+   "notched": 0.7868852459016393
+  },
+  {
+   "port": "ptdie",
+   "args": [],
+   "row": [],
+   "n": 10148,
+   "fires": 464,
+   "prior": 0.5,
+   "notched": 0.04572329523058731
+  },
+  {
+   "port": "pup",
+   "args": [],
+   "row": [],
+   "n": 939,
+   "fires": 129,
+   "prior": 0.5,
+   "notched": 0.13738019169329074
+  }
+ ]
+}

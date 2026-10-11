@@ -1,0 +1,113 @@
+{
+ "world": "iter1-world/base.llp",
+ "round": 6,
+ "transitions": [
+  "transitions/iter0-i1-random-s1-n10.jsonl",
+  "transitions/train-i1-random-s1001-n50.jsonl"
+ ],
+ "alpha": 0.0,
+ "units": 19200,
+ "missed_units": 0,
+ "priced_by": "notch/iter1-overlay-r5.json",
+ "rows": [
+  {
+   "port": "pdown",
+   "args": [],
+   "row": [],
+   "n": 1042,
+   "fires": 630,
+   "prior": 0.5877712031558168,
+   "notched": 0.6046065259117083
+  },
+  {
+   "port": "perad",
+   "args": [],
+   "row": [],
+   "n": 614,
+   "fires": 549,
+   "prior": 0.8941368078175881,
+   "notched": 0.8941368078175895
+  },
+  {
+   "port": "pnborn",
+   "args": [],
+   "row": [],
+   "n": 2669,
+   "fires": 252,
+   "prior": 0.09441738478830652,
+   "notched": 0.09441738478831023
+  },
+  {
+   "port": "pncomp",
+   "args": [],
+   "row": [],
+   "n": 305,
+   "fires": 61,
+   "prior": 0.20000000000000107,
+   "notched": 0.2
+  },
+  {
+   "port": "pndie",
+   "args": [],
+   "row": [],
+   "n": 4955,
+   "fires": 244,
+   "prior": 0.04924318869828427,
+   "notched": 0.04924318869828456
+  },
+  {
+   "port": "prest",
+   "args": [],
+   "row": [],
+   "n": 183,
+   "fires": 168,
+   "prior": 0.918032786885248,
+   "notched": 0.9180327868852459
+  },
+  {
+   "port": "psib",
+   "args": [],
+   "row": [],
+   "n": 460,
+   "fires": 261,
+   "prior": 0.5533333333333362,
+   "notched": 0.5673913043478261
+  },
+  {
+   "port": "ptborn",
+   "args": [],
+   "row": [],
+   "n": 2662,
+   "fires": 384,
+   "prior": 0.16378662659654852,
+   "notched": 0.14425244177310292
+  },
+  {
+   "port": "ptcomp",
+   "args": [],
+   "row": [],
+   "n": 305,
+   "fires": 240,
+   "prior": 0.7868852459016357,
+   "notched": 0.7868852459016393
+  },
+  {
+   "port": "ptdie",
+   "args": [],
+   "row": [],
+   "n": 10148,
+   "fires": 464,
+   "prior": 0.04572329523058482,
+   "notched": 0.04572329523058731
+  },
+  {
+   "port": "pup",
+   "args": [],
+   "row": [],
+   "n": 884,
+   "fires": 81,
+   "prior": 0.08522727272727222,
+   "notched": 0.0916289592760181
+  }
+ ]
+}

@@ -1,0 +1,210 @@
+catalog tamarisk 1.
+provenance text "Observed tamarisk river (rddlrepository Tamarisk_MDP_ippc2014, instance 1): synchronous per-slot tamarisk and native dynamics under eradicate/restore" "2026-10-11".
+layers (dyn).
+stages (snap rouse act fate write).
+% the instance is data: four reaches, two slots per reach, as observed
+type reach {r1 r2 r3 r4}.
+type slot {s1s1 s1s2 s2s1 s2s2 s3s1 s3s2 s4s1 s4s2}.
+% scan positions: a path over every slot, ending at p9
+type pos {p1 p2 p3 p4 p5 p6 p7 p8 p9}.
+namespace tr produce (dyn).
+% observed fluents, actions and tick
+pred tamarisk_at(slot) : tr.
+pred not_tamarisk_at(slot) : tr.
+pred native_at(slot) : tr.
+pred not_native_at(slot) : tr.
+pred eradicate(reach) : tr.
+pred restore(reach) : tr.
+pred tick : tr.
+% the world's own atoms: the start-of-step snapshot, per-slot work, per-reach action flags
+pred old_t(slot) : tr.
+pred old_nt(slot) : tr.
+pred old_n(slot) : tr.
+pred old_nn(slot) : tr.
+pred tdue(slot) : tr.
+pred ndue(slot) : tr.
+pred open(slot) : tr.
+pred erad(reach) : tr.
+pred noerad(reach) : tr.
+pred rest(reach) : tr.
+pred norest(reach) : tr.
+pred scan(slot, pos) : tr.
+pred set_t(slot) : tr.
+pred set_nt(slot) : tr.
+pred set_n(slot) : tr.
+pred set_nn(slot) : tr.
+bwd on(slot, reach).
+on(s1s1, r1).
+on(s1s2, r1).
+on(s2s1, r2).
+on(s2s2, r2).
+on(s3s1, r3).
+on(s3s2, r3).
+on(s4s1, r4).
+on(s4s2, r4).
+% one slot per reach opens that reach's action flags
+bwd lead(slot, reach).
+lead(s1s1, r1).
+lead(s2s1, r2).
+lead(s3s1, r3).
+lead(s4s1, r4).
+% down(U, D): D is the reach just downstream of U
+bwd down(reach, reach).
+down(r1, r2).
+down(r2, r3).
+down(r3, r4).
+% reaches neither equal nor adjacent
+bwd apart(reach, reach).
+apart(r1, r3).
+apart(r3, r1).
+apart(r1, r4).
+apart(r4, r1).
+apart(r2, r4).
+apart(r4, r2).
+bwd at(pos, slot).
+at(p1, s1s1).
+at(p2, s1s2).
+at(p3, s2s1).
+at(p4, s2s2).
+at(p5, s3s1).
+at(p6, s3s2).
+at(p7, s4s1).
+at(p8, s4s2).
+bwd nxt(pos, pos).
+nxt(p1, p2).
+nxt(p2, p3).
+nxt(p3, p4).
+nxt(p4, p5).
+nxt(p5, p6).
+nxt(p6, p7).
+nxt(p7, p8).
+nxt(p8, p9).
+bwd stop(pos).
+stop(p9).
+weight ptcomp reads {}.
+weight pncomp reads {}.
+weight perad reads {}.
+weight ptdie reads {}.
+weight pndie reads {}.
+weight ptborn reads {}.
+weight psib reads {}.
+weight pdown reads {}.
+weight pup reads {}.
+weight prest reads {}.
+weight pnborn reads {}.
+stage snap {
+  %% "Every slot changes within ONE step, all at once, each by what held at the START of the step"
+  snap_t [dyn] : tamarisk_at(S) -o old_t(S) * tdue(S) * open(S).
+  %% "Every slot changes within ONE step, all at once, each by what held at the START of the step"
+  snap_nt [dyn] : not_tamarisk_at(S) -o old_nt(S) * tdue(S) * open(S).
+  %% "Every slot changes within ONE step, all at once, each by what held at the START of the step"
+  snap_n [dyn] : native_at(S) -o old_n(S) * ndue(S).
+  %% "Every slot changes within ONE step, all at once, each by what held at the START of the step"
+  snap_nn [dyn] : not_native_at(S) -o old_nn(S) * ndue(S).
+}
+stage rouse {
+  %% "plus the action atoms taken that step (zero or one: eradicate(R) or restore(R), R in r1 r2 r3 r4)"
+  rouse_reach [dyn] : open(S) * lead(S, R) -o noerad(R) * norest(R).
+}
+stage act {
+  %% "eradicate on its reach"
+  take_eradicate [dyn] : eradicate(R) * noerad(R) -o erad(R).
+  %% "restore on its reach"
+  take_restore [dyn] : restore(R) * norest(R) -o rest(R).
+  %% "and one tick atom"
+  take_tick [dyn] : tick -o ().
+}
+stage fate {
+  %% "(1) a slot holding both at the start is a competition: tamarisk stays with one rate and native stays with another, independently of each other, whatever the action"
+  t_compete [dyn] : tdue(S) * $old_t(S) * $old_n(S) -o (set_t(S) @w ptcomp | set_nt(S) @w ~ptcomp).
+  %% "(1) a slot holding both at the start is a competition: tamarisk stays with one rate and native stays with another, independently of each other, whatever the action"
+  n_compete [dyn] : ndue(S) * $old_t(S) * $old_n(S) -o (set_n(S) @w pncomp | set_nn(S) @w ~pncomp).
+  %% "(2) A slot holding tamarisk and no native: eradicate on its reach removes the tamarisk at a rate (sometimes it survives)"
+  t_eradicate [dyn] : tdue(S) * $old_t(S) * $old_nn(S) * on(S, R) * $erad(R) -o (set_nt(S) @w perad | set_t(S) @w ~perad).
+  %% "without eradicate on its reach the tamarisk sometimes dies by itself, at a rate"
+  t_wither [dyn] : tdue(S) * $old_t(S) * $old_nn(S) * on(S, R) * $noerad(R) -o (set_nt(S) @w ptdie | set_t(S) @w ~ptdie).
+  %% "(2) A slot holding tamarisk and no native" — no native arrives where tamarisk stands alone
+  n_under_tamarisk [dyn] : ndue(S) * $old_t(S) * $old_nn(S) -o set_nn(S).
+  %% "(3) A slot holding native and no tamarisk: restore on its reach keeps the native for sure"
+  n_kept [dyn] : ndue(S) * $old_nt(S) * $old_n(S) * on(S, R) * $rest(R) -o set_n(S).
+  %% "otherwise the native sometimes dies by itself, at a rate"
+  n_wither [dyn] : ndue(S) * $old_nt(S) * $old_n(S) * on(S, R) * $norest(R) -o (set_nn(S) @w pndie | set_n(S) @w ~pndie).
+  %% "(3) A slot holding native and no tamarisk" — no tamarisk arrives where native stands alone
+  t_under_native [dyn] : tdue(S) * $old_nt(S) * $old_n(S) -o set_nt(S).
+  %% "(4) An empty slot, for tamarisk: with eradicate on its reach no tamarisk arrives that step"
+  t_barred [dyn] : tdue(S) * $old_nt(S) * $old_nn(S) * on(S, R) * $erad(R) -o set_nt(S).
+  %% "otherwise tamarisk may arrive by itself (at a rate)"
+  t_born [dyn] : tdue(S) * $old_nt(S) * $old_nn(S) * on(S, R) * $noerad(R) -o (set_t(S) @w ptborn | scan(S, p1) @w ~ptborn).
+  %% "EACH tamarisk at the start in the other slot of the same reach ... is a separate independent chance of seeding it"
+  seed_sib [dyn] : scan(S, P) * at(P, X) * $old_t(X) * on(S, R) * on(X, R) * S <> X * nxt(P, Q) -o (set_t(S) @w psib | scan(S, Q) @w ~psib).
+  %% "a source upstream (spreading downstream)" "each has its own rate"
+  seed_down [dyn] : scan(S, P) * at(P, X) * $old_t(X) * on(S, R) * on(X, U) * down(U, R) * nxt(P, Q) -o (set_t(S) @w pdown | scan(S, Q) @w ~pdown).
+  %% "a source downstream (spreading upstream, observed rarer)" "each has its own rate"
+  seed_up [dyn] : scan(S, P) * at(P, X) * $old_t(X) * on(S, R) * on(X, D) * down(R, D) * nxt(P, Q) -o (set_t(S) @w pup | scan(S, Q) @w ~pup).
+  %% "in the other slot of the same reach, in a slot of the reach just upstream, or in a slot of the reach just downstream" — a slot without tamarisk at the start is no source
+  pass_bare [dyn] : scan(S, P) * at(P, X) * $old_nt(X) * nxt(P, Q) -o scan(S, Q).
+  %% "in the other slot of the same reach, in a slot of the reach just upstream, or in a slot of the reach just downstream" — a farther tamarisk is no source
+  pass_far [dyn] : scan(S, P) * at(P, X) * $old_t(X) * on(S, R) * on(X, U) * apart(R, U) * nxt(P, Q) -o scan(S, Q).
+  %% "the more such sources, the more often it arrives" — every source tried and none seeded: no tamarisk arrives
+  seed_none [dyn] : scan(S, P) * stop(P) -o set_nt(S).
+  %% "(5) An empty slot, for native, independently of tamarisk: with restore on its reach a native arrives at a rate (sometimes restore fails)"
+  n_planted [dyn] : ndue(S) * $old_nt(S) * $old_nn(S) * on(S, R) * $rest(R) -o (set_n(S) @w prest | set_nn(S) @w ~prest).
+  %% "otherwise a native sometimes arrives by itself, at a rate; tamarisk and native can arrive in the same step and then both are held"
+  n_born [dyn] : ndue(S) * $old_nt(S) * $old_nn(S) * on(S, R) * $norest(R) -o (set_n(S) @w pnborn | set_nn(S) @w ~pnborn).
+}
+stage write {
+  %% "The next state is read when nothing more can happen, and must again hold, for each observed fluent, exactly one of the atom or not_<atom>"
+  write_t [dyn] : set_t(S) -o tamarisk_at(S).
+  %% "The next state is read when nothing more can happen, and must again hold, for each observed fluent, exactly one of the atom or not_<atom>"
+  write_nt [dyn] : set_nt(S) -o not_tamarisk_at(S).
+  %% "The next state is read when nothing more can happen, and must again hold, for each observed fluent, exactly one of the atom or not_<atom>"
+  write_n [dyn] : set_n(S) -o native_at(S).
+  %% "The next state is read when nothing more can happen, and must again hold, for each observed fluent, exactly one of the atom or not_<atom>"
+  write_nn [dyn] : set_nn(S) -o not_native_at(S).
+  %% "a plant that arrives this step seeds nothing until the next" — the start-of-step snapshot is spent
+  drop_t [dyn] : old_t(S) -o ().
+  %% "a plant that arrives this step seeds nothing until the next" — the start-of-step snapshot is spent
+  drop_nt [dyn] : old_nt(S) -o ().
+  %% "a plant that arrives this step seeds nothing until the next" — the start-of-step snapshot is spent
+  drop_n [dyn] : old_n(S) -o ().
+  %% "a plant that arrives this step seeds nothing until the next" — the start-of-step snapshot is spent
+  drop_nn [dyn] : old_nn(S) -o ().
+  %% "the observed next state never depends on them"
+  drop_open [dyn] : open(S) -o ().
+  %% "the observed next state never depends on them"
+  drop_erad [dyn] : erad(R) -o ().
+  %% "the observed next state never depends on them"
+  drop_noerad [dyn] : noerad(R) -o ().
+  %% "the observed next state never depends on them"
+  drop_rest [dyn] : rest(R) -o ().
+  %% "the observed next state never depends on them"
+  drop_norest [dyn] : norest(R) -o ().
+}
+%% "a step starts from a state holding, for EACH observed fluent, either its atom (true) or not_<atom> (false)"
+qui snapped [dyn] : snap -o rouse.
+%% "plus the action atoms taken that step (zero or one: eradicate(R) or restore(R), R in r1 r2 r3 r4)"
+qui roused [dyn] : rouse -o act.
+%% "Every slot changes within ONE step, all at once, each by what held at the START of the step"
+qui acted [dyn] : act -o fate.
+%% "The next state is read when nothing more can happen"
+qui settled [dyn] : fate -o write.
+% illustrative initial state
+#init tamarisk_at(s1s1) 1
+#init not_native_at(s1s1) 1
+#init tamarisk_at(s1s2) 1
+#init native_at(s1s2) 1
+#init not_tamarisk_at(s2s1) 1
+#init native_at(s2s1) 1
+#init not_tamarisk_at(s2s2) 1
+#init not_native_at(s2s2) 1
+#init not_tamarisk_at(s3s1) 1
+#init native_at(s3s1) 1
+#init not_tamarisk_at(s3s2) 1
+#init not_native_at(s3s2) 1
+#init tamarisk_at(s4s1) 1
+#init not_native_at(s4s1) 1
+#init not_tamarisk_at(s4s2) 1
+#init native_at(s4s2) 1
+#init restore(r2) 1
+#init tick 1
+#steps 400

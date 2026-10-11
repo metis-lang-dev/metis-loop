@@ -1,0 +1,29 @@
+{
+ "world": "iter1-world/base.llp",
+ "transitions": "transitions/heldout-i1-random-s101-n10.jsonl",
+ "overlay": "notch/iter1-overlay.json",
+ "runs": 200,
+ "logloss_per_step": 2.717,
+ "floor_per_step": 2.648,
+ "excess_per_step": 0.069,
+ "joint_hit_frac": 0.89,
+ "unsettled_runs": 0,
+ "per_atom": {
+  "native-at___s1s1": 0.0976,
+  "native-at___s1s2": 0.1186,
+  "native-at___s2s1": 0.0859,
+  "native-at___s2s2": 0.1696,
+  "native-at___s3s1": 0.1212,
+  "native-at___s3s2": 0.1122,
+  "native-at___s4s1": 0.1387,
+  "native-at___s4s2": 0.1084,
+  "tamarisk-at___s1s1": 0.2491,
+  "tamarisk-at___s1s2": 0.2493,
+  "tamarisk-at___s2s1": 0.2997,
+  "tamarisk-at___s2s2": 0.2037,
+  "tamarisk-at___s3s1": 0.0909,
+  "tamarisk-at___s3s2": 0.2325,
+  "tamarisk-at___s4s1": 0.2584,
+  "tamarisk-at___s4s2": 0.1806
+ }
+}

@@ -1,0 +1,960 @@
+2026-10-11 11:28:54.770710: [info] initializing pvariable tensors:
+	ERADICATION-RATE[], shape=(), dtype=float64
+	RESTORATION-RATE[], shape=(), dtype=float64
+	DOWNSTREAM-SPREAD-RATE[], shape=(), dtype=float64
+	UPSTREAM-SPREAD-RATE[], shape=(), dtype=float64
+	DEATH-RATE-TAMARISK[], shape=(), dtype=float64
+	DEATH-RATE-NATIVE[], shape=(), dtype=float64
+	EXOGENOUS-PROD-RATE-NATIVE[], shape=(), dtype=float64
+	EXOGENOUS-PROD-RATE-TAMARISK[], shape=(), dtype=float64
+	COMPETITION-WIN-RATE-NATIVE[], shape=(), dtype=float64
+	COMPETITION-WIN-RATE-TAMARISK[], shape=(), dtype=float64
+	COST-PER-INVADED-REACH[], shape=(), dtype=float64
+	COST-PER-TREE[], shape=(), dtype=float64
+	COST-PER-EMPTY-SLOT[], shape=(), dtype=float64
+	ERADICATION-COST[], shape=(), dtype=float64
+	RESTORATION-COST[], shape=(), dtype=float64
+	RESTORATION-COST-FOR-EMPTY-SLOT[], shape=(), dtype=float64
+	RESTORATION-COST-FOR-INVADED-SLOT[], shape=(), dtype=float64
+	SLOT-AT-REACH['slot', 'reach'], shape=(8, 4), dtype=bool
+	DOWNSTREAM-REACH['reach', 'reach'], shape=(4, 4), dtype=bool
+	tamarisk-at['slot'], shape=(8,), dtype=bool
+	tamarisk-at'['slot'], shape=(8,), dtype=bool
+	native-at['slot'], shape=(8,), dtype=bool
+	native-at'['slot'], shape=(8,), dtype=bool
+	eradicate['reach'], shape=(4,), dtype=bool
+	restore['reach'], shape=(4,), dtype=bool
+
+2026-10-11 11:28:54.770931: [info] computed fluent dependencies in CPFs:
+	next-state-fluent tamarisk-at': {eradicate, native-at, tamarisk-at}
+	next-state-fluent native-at': {native-at, restore, tamarisk-at}
+
+2026-10-11 11:28:54.770943: [info] computed order of CPF evaluation:
+	0: {native-at', tamarisk-at'}
+
+2026-10-11 11:28:54.770976: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771019: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57740>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771039: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771067: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57b90>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771106: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c350>
+	variable                =COMPETITION-WIN-RATE-NATIVE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771127: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771148: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3cfe0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771162: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771185: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d280>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771221: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e8a0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771273: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ea80>
+	variable                =restore
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 8)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.771287: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-11 11:28:54.771309: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771334: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ec60>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771348: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771365: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ed80>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771396: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f0b0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771424: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f140>
+	variable                =restore
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 8)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.771437: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-11 11:28:54.771461: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ef30>
+	variable                =RESTORATION-RATE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771476: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771496: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f2f0>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771524: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f3e0>
+	variable                =DEATH-RATE-NATIVE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771539: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771558: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f650>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771570: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771584: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f770>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771602: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f7d0>
+	variable                =EXOGENOUS-PROD-RATE-NATIVE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771613: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'native-at'), args=(native-at, [?s]))
+	CPF to check          =native-at'
+
+2026-10-11 11:28:54.771627: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f9b0>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771649: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771666: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df56e10>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771683: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57bc0>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771701: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57bf0>
+	variable                =COMPETITION-WIN-RATE-TAMARISK
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771715: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771730: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57e60>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771758: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29df57f80>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771784: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c230>
+	variable                =eradicate
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 8)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.771818: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c560>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s2', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(8, 4, 8)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.771831: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s2]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771854: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c5c0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s2', 'slot')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(1, 2)
+	broadcast shape         =(8, 8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(2), np.int64(0))
+
+2026-10-11 11:28:54.771867: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?s2', 'slot'))]
+	free object(s) in outer scope =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	aggregation operation         =forall
+	aggregation axes              =(2,)
+
+2026-10-11 11:28:54.771875: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-11 11:28:54.771891: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.771908: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c620>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771934: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c950>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.771958: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c9e0>
+	variable                =eradicate
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 8)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.771989: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3cd40>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s2', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(8, 4, 8)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772001: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s2]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772023: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3cda0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s2', 'slot')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(1, 2)
+	broadcast shape         =(8, 8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(2), np.int64(0))
+
+2026-10-11 11:28:54.772033: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?s2', 'slot'))]
+	free object(s) in outer scope =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	aggregation operation         =forall
+	aggregation axes              =(2,)
+
+2026-10-11 11:28:54.772043: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-11 11:28:54.772067: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3c8f0>
+	variable                =ERADICATION-RATE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772080: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772096: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ce90>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772119: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3cf80>
+	variable                =DEATH-RATE-TAMARISK
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772132: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772148: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d1c0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772166: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d2b0>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772185: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d2e0>
+	variable                =EXOGENOUS-PROD-RATE-TAMARISK
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772208: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d430>
+	variable                =EXOGENOUS-PROD-RATE-TAMARISK
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772247: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3d9d0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(8, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772274: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3dac0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s2', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2,)
+	broadcast shape         =(8, 4, 8)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772334: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s2]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772360: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3dc70>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s2', 'slot')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(1, 2)
+	broadcast shape         =(8, 8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(2), np.int64(0))
+
+2026-10-11 11:28:54.772387: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3dd00>
+	variable                =DOWNSTREAM-SPREAD-RATE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(0, 1, 2)
+	broadcast shape         =(8, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772404: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach')), ('typed_var', ('?s2', 'slot'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach'), ('?s2', 'slot')]
+	aggregation operation         =prod
+	aggregation axes              =(1, 2)
+
+2026-10-11 11:28:54.772434: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e0f0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(8, 4, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772461: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e1e0>
+	variable                =DOWNSTREAM-REACH
+	variable evaluated at   =[('?r', 'reach'), ('?r2', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(4, 4, 8, 8)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(0), np.int64(1), np.int64(3))
+
+2026-10-11 11:28:54.772486: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e2a0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s2', 'slot'), ('?r2', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(8, 4, 8, 4)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(3), np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772500: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s2]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772521: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e2d0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s2', 'slot')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(1, 2, 3)
+	broadcast shape         =(8, 8, 4, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(2), np.int64(3), np.int64(0))
+
+2026-10-11 11:28:54.772547: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e360>
+	variable                =DOWNSTREAM-SPREAD-RATE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(0, 1, 2, 3)
+	broadcast shape         =(8, 4, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772565: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach')), ('typed_var', ('?r2', 'reach')), ('typed_var', ('?s2', 'slot'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	aggregation operation         =prod
+	aggregation axes              =(1, 2, 3)
+
+2026-10-11 11:28:54.772594: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e720>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(8, 4, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772619: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e810>
+	variable                =DOWNSTREAM-REACH
+	variable evaluated at   =[('?r2', 'reach'), ('?r', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(4, 4, 8, 8)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(1), np.int64(0), np.int64(3))
+
+2026-10-11 11:28:54.772645: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e8d0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s2', 'slot'), ('?r2', 'reach')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(2, 3)
+	broadcast shape         =(8, 4, 8, 4)
+	transform operation     =1 with argument(s) (np.int64(2), np.int64(3), np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772657: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s2]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772681: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e900>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s2', 'slot')]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(1, 2, 3)
+	broadcast shape         =(8, 8, 4, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(2), np.int64(3), np.int64(0))
+
+2026-10-11 11:28:54.772710: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e990>
+	variable                =UPSTREAM-SPREAD-RATE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	slice                   =()
+	new axes to append      =(0, 1, 2, 3)
+	broadcast shape         =(8, 4, 4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772727: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach')), ('typed_var', ('?r2', 'reach')), ('typed_var', ('?s2', 'slot'))]
+	free object(s) in outer scope =[('?s', 'slot')]
+	free object(s) in inner scope =[('?s', 'slot'), ('?r', 'reach'), ('?r2', 'reach'), ('?s2', 'slot')]
+	aggregation operation         =prod
+	aggregation axes              =(1, 2, 3)
+
+2026-10-11 11:28:54.772739: [warning] cannot establish whether CPF is fluent:
+	address of expression =Expression(etype=('pvar', 'tamarisk-at'), args=(tamarisk-at, [?s]))
+	CPF to check          =tamarisk-at'
+
+2026-10-11 11:28:54.772756: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3e5a0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772785: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ca40>
+	variable                =COST-PER-INVADED-REACH
+	variable evaluated at   =[]
+	free object(s) in scope =[('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772817: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f7a0>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772842: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f740>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.772852: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?s', 'slot'))]
+	free object(s) in outer scope =[('?r', 'reach')]
+	free object(s) in inner scope =[('?r', 'reach'), ('?s', 'slot')]
+	aggregation operation         =exists
+	aggregation axes              =(1,)
+
+2026-10-11 11:28:54.772861: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?r', 'reach')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-11 11:28:54.772882: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f800>
+	variable                =COST-PER-TREE
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772903: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f620>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772912: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?s', 'slot'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?s', 'slot')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-11 11:28:54.772931: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3f8f0>
+	variable                =COST-PER-EMPTY-SLOT
+	variable evaluated at   =[]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772952: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3fcb0>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772969: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3fdd0>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.772980: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?s', 'slot'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?s', 'slot')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-11 11:28:54.773000: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3fd70>
+	variable                =ERADICATION-COST
+	variable evaluated at   =[]
+	free object(s) in scope =[('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773019: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd3ff20>
+	variable                =eradicate
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773027: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?r', 'reach')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-11 11:28:54.773048: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40050>
+	variable                =RESTORATION-COST
+	variable evaluated at   =[]
+	free object(s) in scope =[('?r', 'reach')]
+	slice                   =()
+	new axes to append      =(0,)
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773067: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40200>
+	variable                =restore
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?r', 'reach')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(4,)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773076: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?r', 'reach')]
+	aggregation operation         =sum
+	aggregation axes              =(0,)
+
+2026-10-11 11:28:54.773096: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40440>
+	variable                =RESTORATION-COST-FOR-EMPTY-SLOT
+	variable evaluated at   =[]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(0, 1)
+	broadcast shape         =(4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773117: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd406b0>
+	variable                =restore
+	variable evaluated at   =[('?r', 'reach')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(4, 8)
+	transform operation     =2 with argument(s) None
+
+2026-10-11 11:28:54.773141: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40800>
+	variable                =SLOT-AT-REACH
+	variable evaluated at   =[('?s', 'slot'), ('?r', 'reach')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =()
+	broadcast shape         =(8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.773165: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40860>
+	variable                =tamarisk-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.773188: [info] computing info for pvariable tensor transformation:
+	address of expression   =<pyRDDLGym.core.parser.expr.Expression object at 0x76c29dd40950>
+	variable                =native-at
+	variable evaluated at   =[('?s', 'slot')]
+	free object(s) in scope =[('?r', 'reach'), ('?s', 'slot')]
+	slice                   =()
+	new axes to append      =(1,)
+	broadcast shape         =(8, 4)
+	transform operation     =1 with argument(s) (np.int64(1), np.int64(0))
+
+2026-10-11 11:28:54.773200: [info] computing object info for aggregation:
+	aggregation variables(s)      =[('typed_var', ('?r', 'reach')), ('typed_var', ('?s', 'slot'))]
+	free object(s) in outer scope =[]
+	free object(s) in inner scope =[('?r', 'reach'), ('?s', 'slot')]
+	aggregation operation         =sum
+	aggregation axes              =(0, 1)
+
+2026-10-11 11:28:54.773211: [info] computed whether each CPF expression is fluent:
+	native-at': True
+	tamarisk-at': True
+
+2026-10-11 11:28:54.773304: [info] computed simulation bounds:
+	tamarisk-at___s1s1: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s1s2: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s2s1: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s2s2: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s3s1: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s3s2: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s4s1: (np.float64(-inf), np.float64(inf))
+	tamarisk-at___s4s2: (np.float64(-inf), np.float64(inf))
+	native-at___s1s1: (np.float64(-inf), np.float64(inf))
+	native-at___s1s2: (np.float64(-inf), np.float64(inf))
+	native-at___s2s1: (np.float64(-inf), np.float64(inf))
+	native-at___s2s2: (np.float64(-inf), np.float64(inf))
+	native-at___s3s1: (np.float64(-inf), np.float64(inf))
+	native-at___s3s2: (np.float64(-inf), np.float64(inf))
+	native-at___s4s1: (np.float64(-inf), np.float64(inf))
+	native-at___s4s2: (np.float64(-inf), np.float64(inf))
+	eradicate___r1: (np.float64(-inf), np.float64(inf))
+	eradicate___r2: (np.float64(-inf), np.float64(inf))
+	eradicate___r3: (np.float64(-inf), np.float64(inf))
+	eradicate___r4: (np.float64(-inf), np.float64(inf))
+	restore___r1: (np.float64(-inf), np.float64(inf))
+	restore___r2: (np.float64(-inf), np.float64(inf))
+	restore___r3: (np.float64(-inf), np.float64(inf))
+	restore___r4: (np.float64(-inf), np.float64(inf))
+
