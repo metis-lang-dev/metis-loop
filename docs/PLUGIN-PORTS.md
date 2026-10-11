@@ -64,7 +64,24 @@ class PortPlugin(Protocol):
     def restore(self, snap: object) -> None
         # REQUIRED. fork/back/undo/reset/whatif snapshot the env
         # with the world or the counterfactual instruments LIE.
+    def observe(self, counts: dict) -> dict[str, int]
+        # OPTIONAL — the SENSOR face (runtime-wire, metispy d2188e7):
+        # the env's reading over the atoms it can sense. A pure
+        # function of the env (no mutation). The runtime's `watch`
+        # reads it after every fired event and on every observe-only
+        # beat; a reading that differs from the session is scored by
+        # the kernel's surprise_record from the last consistent
+        # checkpoint (unmodeled -> a loop record, the surprise
+        # signal, observe-only). A plugin without it is never
+        # surprised.
 ```
+
+Three faces, three directions: `tick` is what the world SENDS
+(exogenous input, applied unconditionally as an env row), `on_event`
+is what the runtime DOES (actuation), `observe` is what the runtime
+CHECKS (a reading tested against the model, never applied). Input
+the catalog does not model belongs in `tick`; state the catalog
+claims to predict belongs in `observe`.
 
 Env state mutates ONLY in tick/on_event; snapshot is total. That
 purity+snapshot pair is exactly the determinism contract the theia
