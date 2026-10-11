@@ -67,6 +67,7 @@
         break;
       }
       case 'command': eventAdd(m); break;
+      case 'runtime': runtimeAdd(m); break;
       case 'pending': eventState(m.id, m.state); break;
       case 'role':
         if (m.master === true) { isMaster = true; micTok = m.mic_tok || ''; applyMic(); if (micWanted) openMic(); }
@@ -168,6 +169,34 @@
     while (card.children.length > 30) card.removeChild(card.firstChild);
     card.scrollTop = card.scrollHeight;
   }
+  // a runtime signal (internal/kernel): the adapter's fact, whether the
+  // dialog speaks it, the signal verbatim on hover; no buttons — the
+  // runtime answers itself
+  function runtimeAdd(m) {
+    const card = $('eventsCard');
+    if (card.firstElementChild && card.firstElementChild.classList.contains('italic')) card.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'border border-slate-700 rounded-lg px-2 py-1 bg-slate-950';
+    row.title = JSON.stringify(m.sig);
+    const ts = new Date(m.t ? m.t * 1000 : Date.now()).toLocaleTimeString('en-GB');
+    const tone = m.kind === 'surprise' ? 'text-amber-300' : m.kind === 'result' ? 'text-sky-300'
+      : m.narrated ? 'text-emerald-300' : 'text-slate-400';
+    const seq = m.sig && m.sig.seq != null ? `#${m.sig.seq}` : '';
+    row.innerHTML = `<div class="flex items-baseline gap-2 font-mono text-[11px]"><span class="text-slate-500">${ts}</span>` +
+      `<span class="${tone} font-bold">${esc(m.path || 'runtime')} · ${esc(m.kind)}</span>` +
+      `<span class="text-slate-500 ml-auto">${esc(seq)}${m.narrated ? ' · spoken' : ''}</span></div>` +
+      `<div class="font-mono text-[10px] text-slate-300 break-all mt-0.5">${esc(m.fact)}</div>`;
+    card.appendChild(row);
+    while (card.children.length > 30) card.removeChild(card.firstChild);
+    card.scrollTop = card.scrollHeight;
+  }
+  $('runtimeForm').onsubmit = (e) => {
+    e.preventDefault();
+    const inp = $('runtimeIntent'), text = inp.value.trim();
+    if (!text) return;
+    send({ ev: 'runtime_intent', text });
+    inp.value = '';
+  };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // the harness's view of a command: expired rows go grey (the harness no
