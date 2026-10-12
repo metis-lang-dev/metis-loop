@@ -211,12 +211,22 @@
       name.textContent = p.name ? `${p.name} (${p.path})` : p.path; // RAG §9.1: the person's words, the path beside
       const stats = document.createElement('span');
       stats.className = (p.open ? 'text-amber-300' : 'text-slate-500') + ' whitespace-nowrap';
-      stats.textContent = `${p.records} rec · ${p.tok} tok${p.open ? ` · ${p.open} open` : ''}${p.dropped ? ` · ${p.dropped} dropped frozen` : ''}`;
+      stats.textContent = `${p.records} rec · tape ${p.tok} tok${p.script_tok ? ` · script ${p.script_tok} tok` : ''}${p.open ? ` · ${p.open} open` : ''}${p.dropped ? ` · ${p.dropped} dropped frozen` : ''}`;
       const said = document.createElement('span');
       said.className = 'text-slate-300 truncate';
       said.textContent = p.last_said ? `“${p.last_said}”` : '';
       row.append(box, name, stats, said);
       rows.appendChild(row);
+      if (p.last_fragment) {
+        // narration streaming (RAG §11): the agent's last fragment, its own
+        // sentence, and the form the orchestrator got it in
+        const nar = document.createElement('div');
+        nar.className = 'text-slate-300 truncate';
+        nar.style.paddingLeft = '1.5rem';
+        nar.title = `${p.last_fragment}\n→ ${p.last_sentence || '(no sentence)'}\npassed ${p.last_form}`;
+        nar.textContent = `${p.last_form} · ${p.last_sentence ? `“${p.last_sentence}”` : p.last_fragment}`;
+        rows.appendChild(nar);
+      }
       if (p.mirror) {
         // the full mirror line, beliefs included: the pane's only (RAG §9.3)
         const mir = document.createElement('div');
