@@ -208,7 +208,7 @@
       box.onchange = () => send({ ev: 'rack_mount', text: p.path, state: box.checked ? 'on' : 'off' });
       const name = document.createElement('span');
       name.className = p.mounted ? 'text-emerald-300 font-bold' : 'text-slate-500 font-bold';
-      name.textContent = p.path;
+      name.textContent = p.name ? `${p.name} (${p.path})` : p.path; // RAG §9.1: the person's words, the path beside
       const stats = document.createElement('span');
       stats.className = (p.open ? 'text-amber-300' : 'text-slate-500') + ' whitespace-nowrap';
       stats.textContent = `${p.records} rec · ${p.tok} tok${p.open ? ` · ${p.open} open` : ''}${p.dropped ? ` · ${p.dropped} dropped frozen` : ''}`;
@@ -217,6 +217,15 @@
       said.textContent = p.last_said ? `“${p.last_said}”` : '';
       row.append(box, name, stats, said);
       rows.appendChild(row);
+      if (p.mirror) {
+        // the full mirror line, beliefs included: the pane's only (RAG §9.3)
+        const mir = document.createElement('div');
+        mir.className = 'text-slate-500 truncate';
+        mir.style.paddingLeft = '1.5rem';
+        mir.title = p.mirror;
+        mir.textContent = p.mirror;
+        rows.appendChild(mir);
+      }
     }
   }
   $('runtimeForm').onsubmit = (e) => {
