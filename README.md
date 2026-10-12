@@ -21,6 +21,8 @@ serves; the shell is `metis`, the old batch verbs merged into the
 kernel REPL) — plus `loop.*`
 compatibility shims re-exporting `metis.loop.*`.
 
+**The voice / dialog UI is fsttm-web** (metis-lang-dev/fsttm-web), served by metis-agent: `apps/nina-web` is retired (agent-framework, 2026-10-12).
+
 **The spec lives in ONE file: [docs/SPEC.md](docs/SPEC.md)** — the
 kernel-as-REPL architecture, the verbs, extension vs revision, the
 consistency ladder, transports, the debug sidecar, and the
