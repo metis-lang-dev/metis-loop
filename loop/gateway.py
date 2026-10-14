@@ -19,6 +19,10 @@ Frames (JSON, one per message):
                                           editor's working copy (§4a)
                  {ch:"repl", type:"recompile", session}  rebuild from it
                  {ch:"repl", type:"close",  session}
+                 {ch:"repl", type:"records"} -> {ch:"meta", type:"records", records}
+                 {ch:"repl", type:"sink", session, file}  a checkout records file into the session
+                 {ch:"repl", type:"new", name, line, req}  domains/<name>/ made, then opened
+                 {ch:"repl", type:"save", session[, token]}  -> {type:"save", files:[{path,new,diff}], token[, written]}
                  {ch:"chat", type:"say"|"stop"|"history", session, text}
                                           (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
@@ -326,13 +330,50 @@ class Gateway:
             if other is not ws:
                 await self._send(other, self._source_frame(s))
 
+    async def files(self, ws, ip, msg):
+        """The checkout's files (e2e-workflow step 1): records sank by
+        the domain agents (list; `sink` one into a session), `new`
+        domain, `save` the working copy (a diff first, the token of
+        that diff to write it). Nothing is committed."""
+        typ, loop = msg.get("type"), asyncio.get_running_loop()
+        s = self.sessions.get(msg.get("session", ""))
+        try:
+            if typ == "records":
+                rows = await loop.run_in_executor(None, self.srv.records)
+                return await self._send(ws, {"ch": "meta", "type": "records", "records": rows})
+            if typ == "new":
+                if self.cfg["mode"] == "shared":
+                    raise ValueError("new writes the operator's checkout: personal mode only")
+                llp = await loop.run_in_executor(None, self.srv.new_domain, msg.get("name"), msg.get("line"))
+                await self._send(ws, {"ch": "meta", "type": "domains", "domains": self.srv.domains()})
+                return await self.open(ws, ip, {"llp": llp, "req": msg.get("req")})
+            if not s or ws not in s.subs:
+                raise ValueError("no open session")
+            if typ == "sink":
+                out = await loop.run_in_executor(s.pool, self.srv.load_sink, s.sid, str(msg.get("file") or ""))
+                return await self._send(ws, {"ch": "repl", "type": "sink", "session": s.sid, **out})
+            # save: the plan (diffs + token), or with token the write
+            if self.cfg["mode"] == "shared":
+                raise ValueError("save writes the operator's checkout: personal mode only")
+            w = s.work
+            if msg.get("token"):
+                out = await loop.run_in_executor(None, self.srv.save_apply, w, str(msg["token"]))
+                w["certified"] = "checkout"
+                await self._broadcast(s, self._source_frame(s))
+            else:
+                out = await loop.run_in_executor(None, self.srv.save_plan, w)
+            return await self._send(ws, {"ch": "repl", "type": "save", "session": s.sid, **out})
+        except ValueError as e:
+            return await self._send(ws, {"ch": "repl", "type": "error", "session": msg.get("session"),
+                                         "req": msg.get("req"), "error": str(e)})
+
     async def recompile(self, s: "Sess") -> dict:
         """Build the session again from the working copy + packs (in
         memory). Success: a new interpreter, epoch + 1, the copy
         certified (locally); failure: the error, the old world kept."""
         w = s.work
         spec = {"source": w["copy"], "name": w["name"] or "scratch",
-                "packs": w["packs"]}
+                "packs": w["packs"], "host": bool((getattr(s, "spec", None) or {}).get("host"))}
         loop = asyncio.get_running_loop()
         ep = self.srv.epochs.get(s.sid, 1)
         fields = await loop.run_in_executor(s.pool, self.srv.open_session,
@@ -582,6 +623,8 @@ class Gateway:
                     continue
                 if typ == "open":
                     await self.open(ws, ip, msg)
+                elif typ in ("records", "sink", "new", "save"):    # e2e-workflow step 1
+                    await self.files(ws, ip, msg)
                 elif typ == "intent":
                     await self.intent(ws, msg)
                 elif typ == "stop":

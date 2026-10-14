@@ -57,7 +57,7 @@ def test_working_copy_editor_panels_and_dictation():
     assert 'indexedDB.open("loopconsole"' in PAGE
     for d in ("claude", "catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'store.set("loopconsole.docks"' in PAGE
+    assert 'store.set("loopconsole.docks.v2"' in PAGE   # v2: the Records dock shows (e2e step 1)
     assert "#chatq{flex:1;background:var(--bg);color:var(--fg)" in PAGE
     assert "window.SpeechRecognition||window.webkitSpeechRecognition" in PAGE
     assert "Google's speech service" in PAGE

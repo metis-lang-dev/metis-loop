@@ -25,6 +25,7 @@ four calls. The epoch (start 1) bumps when the world under a window
 changes — a reset, or a new program key — and the page clears its
 stream on a bump."""
 import io
+import json
 import os
 import time
 from pathlib import Path
@@ -40,10 +41,33 @@ def catalog_root() -> Path:
     return Path(__file__).resolve().parents[2] / "metis-catalog"
 
 
+# `new <name>`: the skeleton program (the header, #init, one commented rule
+# with its %% line — the narrator and the mapper read the %% line)
+SKELETON = """% {name} — {line}
+% Made in the loop console (new). Say in prose what there is, what can
+% happen and what the person can ask; formalize writes the rules.
+catalog {name} 1.
+provenance text "{line}" "{date}".
+layers (dyn).
+stages (main).
+
+namespace {name} produce (dyn).
+
+pred idle : {name}.
+pred awake : {name}.
+
+stage main {{
+  %% I wake up.
+  wake [dyn] : idle -o awake.
+}}
+
+#init idle 1
+"""
+
 MAX_SOURCE = 256 * 1024     # an in-memory catalog's byte cap
 
 
-def _source_repl(path: Path, source: str, seed: int):
+def _source_repl(path: Path, source: str, seed: int, plugin=None):
     """A Repl over catalog TEXT, compiled in memory (CONSOLE-WS §4a):
     no temp file, nothing on disk. `path` only names it and anchors
     includes (resolved against the checkout); the kernel is untouched —
@@ -60,7 +84,7 @@ def _source_repl(path: Path, source: str, seed: int):
             return text, doc, embedded_case(text)
     r = SourceRepl.__new__(SourceRepl)
     r._source = source
-    SourceRepl.__init__(r, path, seed=seed, stdout=io.StringIO())
+    SourceRepl.__init__(r, path, seed=seed, stdout=io.StringIO(), plugin=plugin, host=bool(plugin))
     return r
 
 
@@ -202,7 +226,12 @@ class ConsoleServer:
         if total > MAX_SOURCE:
             raise ValueError(f"catalog source over {MAX_SOURCE // 1024} KiB")
         name = str(doc.get("name") or "scratch").strip() or "scratch"
-        r = _source_repl(self._source_path(name), src, self.seed)
+        anchor = self._source_path(name)
+        spec = None
+        if doc.get("host") and anchor.is_file():    # a hosted checkout domain recompiled from its copy
+            from .catalog_index import entry, _table
+            spec = entry(self.root.resolve(), anchor, _table(self.root.resolve()))["host"]
+        r = _source_repl(anchor, src, self.seed, plugin=spec)
         reports = []
         for k, pk in enumerate(packs, 1):
             psrc = str(pk.get("source") or "")
@@ -270,6 +299,130 @@ class ConsoleServer:
         return {"posting": self.scrub(posting), "session": session}
 
     # -- the drain as one pure mapping (the serving session is glue) ----
+
+    # -- e2e-workflow step 1: records from files, new, save -------------
+
+    def records(self):
+        """Every surprise record the domain agents sank in the checkout
+        (domains/<…>/records/<session>.jsonl, one record per line with
+        its close), newest first; escalated ones carry mined_text."""
+        out = []
+        for f in self.root.rglob("records/*.jsonl"):
+            if ".git" in f.parts:
+                continue
+            rel = f.relative_to(self.root).as_posix()
+            dom = f.parent.parent.relative_to(self.root).as_posix()
+            try:
+                lines = [ln for ln in f.read_text(errors="replace").splitlines()
+                         if ln.strip() and not ln.startswith("#")]
+            except OSError:
+                continue
+            for i, ln in enumerate(lines):
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue
+                close = r.get("close") or {}
+                out.append({"file": rel, "i": i, "domain": dom, "session": f.stem,
+                            "ts": r.get("ts") or close.get("ts") or "",
+                            "kind": r.get("kind"), "record": r.get("record"),
+                            "status": close.get("status") or ("escalated" if r.get("escalated") else "open"),
+                            "escalated": bool(r.get("escalated") or close.get("status") == "escalated"),
+                            "mined_text": r.get("mined_text") or "", "beat": close.get("beat", r.get("beat")),
+                            "observed": r.get("observed") or {}, "catalog": r.get("catalog_hash") or r.get("program_key") or ""})
+        return sorted(out, key=lambda e: (str(e["ts"]), e["file"], e["i"]), reverse=True)
+
+    def _under(self, rel: str, must: str = "") -> Path:
+        p = (self.root / (rel or "")).resolve()
+        if not p.is_relative_to(self.root.resolve()) or (must and must not in p.as_posix()):
+            raise ValueError(f"'{rel}' is not a {must.strip('/') or 'checkout'} file of the checkout")
+        return p
+
+    def load_sink(self, sid: str, rel: str) -> dict:
+        """`sink` for a session, from a checkout records file (the verb
+        takes a path, so it stays off the wire: the server names the file)."""
+        p = self._under(rel, "/records/")
+        if p.suffix != ".jsonl" or not p.is_file():
+            raise ValueError(f"no records file '{rel}'")
+        if sid not in self.shells:
+            raise ValueError(f"no open session '{sid}'")
+        return self.scrub(self.shells[sid].cmd_sink(str(p)))
+
+    NAME = __import__("re").compile(r"^[a-z][a-z0-9_]{1,31}$")
+
+    def new_domain(self, name: str, line: str = "") -> str:
+        """domains/<name>/: domain.yaml, a skeleton <name>.llp (the
+        header, #init, one commented rule with its %% line), README.md
+        with the display line. Returns the program's name for open."""
+        name = (name or "").strip()
+        if not self.NAME.match(name):
+            raise ValueError("a domain name is lower case, a-z 0-9 _, 2–32 characters, a letter first")
+        d = self.root / "domains" / name
+        if d.exists():
+            raise ValueError(f"domains/{name} exists already — open it from the list")
+        line = " ".join((line or f"the {name} domain").split())[:160]
+        d.mkdir(parents=True)
+        (d / "domain.yaml").write_text(
+            f"name: {name}\ndisplay: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
+            f"program: {name}.llp\ndocs: README.md\nrecords: records/\n")
+        (d / f"{name}.llp").write_text(SKELETON.format(name=name, line=line.replace('"', "'"),
+                                                       date=time.strftime("%Y-%m-%d")))
+        (d / "README.md").write_text(f"# {name} — {line}\n\nA new domain, made in the loop console. "
+                                     "Describe what there is, what can happen and what the person can ask.\n")
+        return f"domains/{name}/{name}"
+
+    def save_plan(self, work: dict) -> dict:
+        """What `save` would write: the working copy over its checkout
+        program, each pack as <domain>/packs/<name>.llp — each with its
+        unified diff. `token` names exactly this plan (save checks it)."""
+        import difflib
+        import hashlib
+        name = str(work.get("name") or "")
+        try:
+            prog = self.resolve(name)
+        except ValueError:
+            raise ValueError("save writes a checkout domain: this copy is in memory only "
+                             "(start one with `new`, or open a catalog from the list)")
+        files = []
+
+        def plan(path: Path, text: str):
+            old = path.read_text() if path.is_file() else ""
+            if old == text:
+                return
+            rel = path.relative_to(self.root.resolve()).as_posix()
+            diff = "".join(difflib.unified_diff(old.splitlines(True), text.splitlines(True),
+                                                f"a/{rel}", f"b/{rel}"))
+            files.append({"path": rel, "new": not path.is_file(), "diff": diff, "text": text})
+        plan(prog, str(work.get("copy") or ""))
+        safe = __import__("re").compile(r"[^a-z0-9_]+")
+        for k, pk in enumerate(work.get("packs") or [], 1):
+            stem = safe.sub("_", str(pk.get("name") or f"pack{k}").lower()).strip("_") or f"pack{k}"
+            plan(prog.parent / "packs" / f"{stem}.llp", str(pk.get("source") or ""))
+        token = hashlib.sha256(json.dumps([(f["path"], f["text"]) for f in files]).encode()).hexdigest()[:16]
+        return {"files": [{k: v for k, v in f.items() if k != "text"} for f in files], "token": token}
+
+    def save_apply(self, work: dict, token: str) -> dict:
+        """Write the plan the viewer saw (its token), never anything else;
+        never a git commit (that stays the operator's)."""
+        plan = self.save_plan(work)
+        if not token or plan["token"] != token:
+            raise ValueError("the copy changed since the diff was shown — review the new diff")
+        texts = self._plan_texts(work)
+        for f in plan["files"]:
+            p = self._under(f["path"])
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(texts[f["path"]])
+        return {"written": [f["path"] for f in plan["files"]], "token": token}
+
+    def _plan_texts(self, work: dict) -> dict:
+        prog = self.resolve(str(work.get("name") or ""))
+        root = self.root.resolve()
+        out = {prog.relative_to(root).as_posix(): str(work.get("copy") or "")}
+        safe = __import__("re").compile(r"[^a-z0-9_]+")
+        for k, pk in enumerate(work.get("packs") or [], 1):
+            stem = safe.sub("_", str(pk.get("name") or f"pack{k}").lower()).strip("_") or f"pack{k}"
+            out[(prog.parent / "packs" / f"{stem}.llp").relative_to(root).as_posix()] = str(pk.get("source") or "")
+        return out
 
     def domains_doc(self) -> dict:
         """The `meta/domains` write (the db transport's CATALOG panel)."""
