@@ -58,6 +58,7 @@ jobs:
         if: env.HAVE_READ_TOKEN == 'true'
         run: |
           pip install -e ./metispy
+          pip install -e ./metis-catalog     # the CATALOG panel's loader (metis_catalog: the manifests)
           pip install -e './metis-loop[console]' pytest
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         if: env.HAVE_READ_TOKEN == 'true'

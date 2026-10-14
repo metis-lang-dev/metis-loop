@@ -215,8 +215,8 @@ class ConsoleServer:
             # spec from the wire: D4), attached as an operator's --host
             spec = None
             if doc.get("host"):
-                from .catalog_index import entry, _table
-                spec = entry(self.root.resolve(), path, _table(self.root.resolve()))["host"]
+                from .catalog_index import host_of
+                spec = host_of(self.root.resolve(), rel)
             r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
             return r, rel + (f" + {spec}" if spec else ""), []
         src = str(doc["source"])
@@ -229,8 +229,8 @@ class ConsoleServer:
         anchor = self._source_path(name)
         spec = None
         if doc.get("host") and anchor.is_file():    # a hosted checkout domain recompiled from its copy
-            from .catalog_index import entry, _table
-            spec = entry(self.root.resolve(), anchor, _table(self.root.resolve()))["host"]
+            from .catalog_index import host_of
+            spec = host_of(self.root.resolve(), anchor.relative_to(self.root.resolve()).with_suffix("").as_posix())
         r = _source_repl(anchor, src, self.seed, plugin=spec)
         reports = []
         for k, pk in enumerate(packs, 1):

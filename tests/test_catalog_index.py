@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from loop.catalog_index import entry, index, _table
+from loop.catalog_index import index
 from loop.console_serve import ConsoleServer, catalog_root
 
 PAGE = (Path(__file__).resolve().parents[1] / "console/loop_console.html").read_text()
@@ -26,10 +26,11 @@ def test_index_lists_the_domains_first_with_what_they_have(srv):
     dog, kit, wf = by["domains/dog/dog"], by["domains/kitchen/kitchen"], by["domains/rddl/wildfire"]
     assert dog["kind"] == kit["kind"] == wf["kind"] == "domain"
     assert dog["host"] == "dog_host.py:make" and dog["readme"] == "domains/dog/README.md"
-    assert dog["line"].startswith("dog — the quadruped robot dog") and dog["readme_text"].startswith("# dog")
-    assert kit["host"] == "metis.domains.kitchen.host:make" and kit["line"].startswith("Overcooked-AI")
+    assert dog["line"].startswith("a robot dog") and dog["readme_text"].startswith("# dog")      # the manifest's line
+    assert kit["host"] == "metis.domains.kitchen.host:make" and kit["line"].startswith("the kitchen: the first cook")
     assert wf["host"] == "wildfire/wildfire_plugin.py:make" and wf["notch"] == "wildfire.notch.json"
-    assert wf["has"] == {"host": True, "notch": True, "readme": True}
+    assert {k: wf["has"][k] for k in ("host", "notch", "readme")} == {"host": True, "notch": True, "readme": True}
+    assert wf["manifest"] == "domains/rddl/wildfire/domain.yaml" and dog["has"]["intent"] and not wf["has"]["intent"]
     # drafts and plain catalogs are listed, not as domains; a dir's table row
     # is not lent to its several files
     assert by["domains/rddl/wildfire/iter1-world/base"]["kind"] == "catalog"
