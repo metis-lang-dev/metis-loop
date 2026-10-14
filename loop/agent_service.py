@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 TOOLS = ("repl", "ctx", "transcript", "source_read", "source_edit",
-         "pack_create", "recompile")
+         "pack_create", "recompile", "intents_read", "intents_propose")
 ALLOWED = tuple(f"mcp__metis__{t}" for t in TOOLS)
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
 
@@ -48,7 +48,10 @@ old_str, new_str)` replaces one exact, unique piece of text,
 `pack_create(name, source)` adds a pack, `recompile()` rebuilds the
 session from copy + packs (until then the copy is UNCERTIFIED; a failed
 recompile returns the findings and keeps the old world). The viewer sees
-every edit live in their editor. At most 10 tool calls per answer —
+every edit live in their editor. A domain's INTENTS (what the person may
+ask it in the agent): `intents_read()` gives its intent.yaml or a draft
+from the program, `intents_propose(text)` checks a whole new one and shows
+the person the diff (they write it with `intents save`). At most 10 tool calls per answer —
 prefer ctx/transcript when they answer the question. You have no other
 tools: no files, no shell, no web."""
 
@@ -300,9 +303,46 @@ class AgentService:
             return _ok(out) if out.get("ok") else _err(
                 "recompile failed (old world kept): " + str(out.get("error")))
 
+        async def intents_read(args):
+            over = counted()
+            if over:
+                return over
+            s, _, err = work_of("copy")
+            if err:
+                return _err(err)
+            from . import intents as it
+            try:
+                out = await asyncio.get_running_loop().run_in_executor(None, it.read, gw.srv, s.work.get("name"))
+            except ValueError as e:
+                return _err(str(e))
+            return _ok({"domain": out["domain"], "draft": out["draft"], "text": truncate(out["text"])})
+
+        async def intents_propose(args):
+            over = counted()
+            if over:
+                return over
+            s, _, err = work_of("copy")
+            if err:
+                return _err(err)
+            from . import intents as it
+            try:
+                p = await asyncio.get_running_loop().run_in_executor(
+                    None, it.propose, gw.srv, s.work.get("name"), str(args.get("text") or ""))
+            except ValueError as e:
+                return _err(str(e))
+            s.intents_pending = p
+            # the person sees the diff in the console log, as `intents show` prints it
+            await gw._broadcast(s, {"ch": "repl", "type": "posting", "session": s.sid, "id": "i" + p["token"][:8],
+                                    "cmd": ":intents show", "actor": "claude", "status": "done",
+                                    "result": gw.intents_text(p), "json": {"ok": p["ok"]}}, log=True)
+            return _ok({"ok": p["ok"], "mapped": p["mapped"], "misses": p["misses"],
+                        "diff_lines": len(p["diff"].splitlines()),
+                        "note": "shown to the person; `intents save` writes it, `intents check` runs the check"})
+
         return {"repl": repl, "ctx": ctx, "transcript": transcript,
                 "source_read": source_read, "source_edit": source_edit,
-                "pack_create": pack_create, "recompile": recompile}
+                "pack_create": pack_create, "recompile": recompile,
+                "intents_read": intents_read, "intents_propose": intents_propose}
 
     def _server(self, chat: Chat):
         from claude_agent_sdk import create_sdk_mcp_server, tool
@@ -335,6 +375,15 @@ class AgentService:
             tool("recompile", "Rebuild the session from the working copy + "
                  "packs (in memory). Returns the new key, or the findings "
                  "and keeps the old world.", {})(fns["recompile"]),
+            tool("intents_read", "The open domain's intent.yaml (metis-catalog CATALOG.md "
+                 "\"intent.yaml\": what the person may ask it, the mapper's and the replier's "
+                 "tables), or — when it has none — a draft made from the program's cmd_* atoms "
+                 "and %% lines (draft: true).", {})(fns["intents_read"]),
+            tool("intents_propose", "Propose the WHOLE intent.yaml (text). It is checked: it must "
+                 "generate the grammar and prompts, and every example must map to a command atom "
+                 "of the program. Returns ok and the misses; the person sees the diff and writes it "
+                 "with `intents save` — you never write the checkout.",
+                 {"text": str})(fns["intents_propose"]),
         ]
         return create_sdk_mcp_server("metis", tools=tools)
 

@@ -1,0 +1,86 @@
+"""e2e-workflow s-143c3088 step 2 (d): `intents` in the loop console — a
+domain's intent.yaml drafted from its program, proposed (it must generate
+and every example map to a command atom, checked by metis-agent's generic
+domain agent), shown as a diff, written with its generated files. On a
+scratch checkout with a small plant."""
+import shutil
+from pathlib import Path
+
+import pytest
+
+from loop import intents as it
+from loop.console_serve import ConsoleServer
+
+SIB = Path(__file__).resolve().parents[2]
+GEN = SIB / "metis-catalog/tools/intents.py"
+AGENT_PY = SIB / "metis-agent/py/.venv/bin/python"
+
+pytestmark = pytest.mark.skipif(not (GEN.exists() and AGENT_PY.exists()),
+                                reason="needs the metis-catalog and metis-agent checkouts beside this one")
+
+PLANT = """catalog plant 1.
+provenance text "a potted plant that dries out; the person waters it or asks how it is" "2026-10-14".
+layers (dyn).
+stages (serve).
+
+pred dry : plant.
+pred wet : plant.
+pred cmd_water : plant.
+pred cmd_check : plant.
+pred done(act) : plant.
+pred refused(act) : plant.
+type act {water check}.
+
+namespace plant produce (dyn).
+
+stage serve {
+  %% I water the plant.
+  water [dyn] : cmd_water * dry -o wet * done(water).
+  %% The plant does not need water: it is wet.
+  water_wet [dyn] : cmd_water * $wet -o refused(water).
+  %% I tell you how the plant is.
+  check [dyn] : cmd_check -o done(check).
+}
+
+#init dry 1
+"""
+
+
+@pytest.fixture
+def srv(tmp_path, monkeypatch):
+    monkeypatch.setenv("METIS_AGENT_PY", str(AGENT_PY))     # the venv is not beside a scratch checkout
+    (tmp_path / "tools").mkdir()
+    shutil.copy(GEN, tmp_path / "tools/intents.py")
+    s = ConsoleServer(tmp_path)
+    s.new_domain("plant", "a potted plant that dries out")
+    (tmp_path / "domains/plant/plant.llp").write_text(PLANT)
+    return s
+
+
+def test_draft_propose_save(srv, tmp_path):
+    name = "domains/plant/plant"
+    r = it.read(srv, name)
+    assert r["draft"] and "verb: WATER" in r["text"] and "I water the plant." in r["text"]
+    p = it.propose(srv, name, r["text"])
+    assert p["ok"], p["misses"]
+    assert p["new"] and p["path"] == "domains/plant/intent.yaml" and "+verbs:" in p["diff"]
+    assert not (tmp_path / "domains/plant/intent.yaml").exists()          # shown, not written
+    bad = it.propose(srv, name, r["text"].replace("atom: cmd_water", "atom: cmd_nope"))
+    assert not bad["ok"] and bad["misses"]                                  # an example that maps to no atom
+    with pytest.raises(ValueError, match="does not generate"):
+        it.propose(srv, name, "verbs: [}")
+    with pytest.raises(ValueError, match="no such proposal"):
+        it.save(srv, p, "wrong")
+    out = it.save(srv, p, p["token"])
+    assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",
+                              "domains/plant/intent/plant-prompt.txt", "domains/plant/intent/plant-spoken.txt"]
+    g = (tmp_path / "domains/plant/intent/plant.gbnf").read_text()
+    assert '"\\"WATER\\""' in g and '"\\"CHECK\\""' in g
+    assert not it.read(srv, name)["draft"]
+
+
+def test_intents_need_a_domain_directory(srv):
+    with pytest.raises(ValueError, match="in memory only"):
+        it.read(srv, "scratch thing")
+    with pytest.raises(ValueError, match="no intent.yaml yet"):
+        it.check(srv, "domains/plant/plant")

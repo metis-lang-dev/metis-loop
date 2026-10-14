@@ -435,7 +435,68 @@ class Gateway:
         actor = str(msg.get("actor") or "viewer")[:40]
         if actor == "claude":                # only the backend agent is
             actor = "viewer"                 # claude> — never the page
+        if str(msg.get("cmd") or "").strip().lstrip(":").split(" ", 1)[0] == "intents":
+            return await self.intents(s, str(msg.get("cmd")), actor, iid)
         await self.enqueue(s, msg.get("cmd"), actor, iid)
+
+    INTENTS_ASK = (
+        "Draft this domain's intent.yaml (metis-catalog CATALOG.md \"intent.yaml\"): call "
+        "intents_read for the current file or a skeleton made from the program's cmd_* atoms and "
+        "%% lines, read the program with source_read where the meanings need it, then give the "
+        "person a few natural utterances per verb as examples, open-vocabulary slots where the "
+        "person names things, and call intents_propose with the WHOLE file. Fix what it reports. "
+        "Then tell the person: `intents save` writes it, `intents check` runs the check.")
+
+    async def intents(self, s: "Sess", cmd: str, actor: str, iid: str):
+        """`intents` (e2e-workflow step 2, loop/intents.py): Claude drafts
+        the domain's intent.yaml; `intents show` the proposal's diff,
+        `intents save` writes it and its generated files, `intents check`
+        the corpus (or the examples) on the intent model. Gateway-side: it
+        never reaches the kernel REPL. Personal mode only (it writes the
+        operator's checkout and runs the operator's model)."""
+        from . import intents as it
+        item = {"id": iid, "cmd": cmd.strip(), "actor": actor, "ts": _now()}
+        await self._broadcast(s, {"ch": "repl", "type": "queued", "session": s.sid, **item}, log=True)
+        sub = cmd.strip().lstrip(":").split()[1:]
+        loop, ok = asyncio.get_running_loop(), True
+        try:
+            if self.cfg["mode"] == "shared":
+                raise ValueError("intents writes the operator's checkout and runs its model: personal mode only")
+            name = str(s.work.get("name") or "")
+            if not sub:
+                if not self.agent:
+                    raise ValueError("intents is drafted by Claude: the agent seat is off on this instance")
+                err = await self.agent.say(s.sid, self.INTENTS_ASK)
+                if err:
+                    raise ValueError(err["error"])
+                result = "asked Claude to draft intent.yaml — see the chat; then `intents show`, `intents save`"
+            elif sub[0] == "show":
+                p = getattr(s, "intents_pending", None)
+                if not p:
+                    raise ValueError("no proposal yet — `intents` asks Claude for one")
+                result = self.intents_text(p)
+            elif sub[0] == "save":
+                out = await loop.run_in_executor(None, it.save, self.srv, getattr(s, "intents_pending", None),
+                                                 (getattr(s, "intents_pending", None) or {}).get("token"))
+                s.intents_pending = None
+                result = "wrote " + ", ".join(out["written"]) + " (not committed)"
+            elif sub[0] == "check":
+                out = await loop.run_in_executor(None, it.check, self.srv, name)
+                ok, result = out["ok"], out["output"]
+            else:
+                raise ValueError("usage: intents | intents show | intents save | intents check")
+        except ValueError as e:
+            ok, result = False, str(e)
+        post = {"status": "done" if ok else "error", "result": result,
+                "json": {"ok": ok}, "epoch": self.srv.epochs.get(s.sid), "done_ts": _now()}
+        await self._broadcast(s, {"ch": "repl", "type": "posting", "session": s.sid, **item, **post}, log=True)
+
+    @staticmethod
+    def intents_text(p):
+        head = "%s intent.yaml proposed (%s) — %s%s" % (
+            p["domain"], "new" if p["new"] else "changed", p["mapped"],
+            "" if p["ok"] else "; misses:\n  " + "\n  ".join(p["misses"]))
+        return head + "\n" + (p["diff"] or "(no change)") + "\n`intents save` writes it"
 
     async def submit(self, s: "Sess", cmd: str, actor: str) -> dict:
         """Queue a line and await its posting (the Agent Service's repl
