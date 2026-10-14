@@ -9,6 +9,7 @@ on ONE port (D1), grown from console/dev_serve.py.
 Frames (JSON, one per message):
 
     page -> gw   {ch:"repl", type:"open",   llp, req}      new session
+                 {ch:"repl", type:"open",   llp, host:true, req}  …with the host the index names
                  {ch:"repl", type:"open",   source, name, req}  from catalog
                                           TEXT, compiled in memory (§4a)
                  {ch:"repl", type:"open",   session}       re-attach
@@ -21,6 +22,8 @@ Frames (JSON, one per message):
                  {ch:"chat", type:"say"|"stop"|"history", session, text}
                                           (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
+                 {ch:"meta", type:"domains", domains}  the CATALOG panel
+                                          (catalog_index: line, has, readme_text)
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
                  {ch:"repl", type:"queued",  session, id, cmd, actor, ts}
                  {ch:"repl", type:"posting", session, id, cmd, actor, ts, …intent_posting}
@@ -257,7 +260,7 @@ class Gateway:
         llp = str(msg.get("llp") or "")
         spec = ({"source": msg["source"], "name": msg.get("name"),
                  "packs": msg.get("packs") or []}
-                if msg.get("source") is not None else {"llp": llp})
+                if msg.get("source") is not None else {"llp": llp, "host": bool(msg.get("host"))})
         fields = await loop.run_in_executor(
             None, self.srv.open_session, sid, spec)
         if fields.get("status") == "closed":
@@ -547,6 +550,10 @@ class Gateway:
         ip = (ws.remote_address or ("?",))[0]
         await self._send(ws, {"ch": "meta", "type": "manifest",
                               **manifest(self.cfg)})
+        # the CATALOG panel's list, then the names (catalogs stays the
+        # last frame of the greeting: a page waits for it)
+        await self._send(ws, {"ch": "meta", "type": "domains",
+                              "domains": self.srv.domains()})
         await self._send(ws, {"ch": "meta", "type": "catalogs",
                               "names": self.srv.catalogs()})
         try:

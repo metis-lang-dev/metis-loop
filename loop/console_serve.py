@@ -90,6 +90,14 @@ class ConsoleServer:
                       for p in self.root.rglob("*.llp")
                       if ".git" not in p.parts)
 
+    def domains(self):
+        """The CATALOG panel's list (catalog_index): every catalog with
+        its display line and what it has, the domains first; a domain
+        carries its README's opening (readme_text) for the panel."""
+        from .catalog_index import index, readme_head
+        return [{**e, "readme_text": readme_head(self.root, e["readme"])} if e["readme"] else e
+                for e in index(self.root)]
+
     def resolve(self, llp: str) -> Path:
         """A catalog name -> its file in the checkout: the full
         relative name (with or without .llp), or a unique basename
@@ -177,9 +185,16 @@ class ConsoleServer:
         from metis.lang.repl import Repl
         if doc.get("source") is None:
             path = self.resolve(doc.get("llp", ""))
-            r = Repl(path, seed=self.seed, stdout=io.StringIO())
-            return r, str(path.relative_to(self.root.resolve())
-                          .with_suffix("")), []
+            rel = str(path.relative_to(self.root.resolve()).with_suffix(""))
+            # {llp, host: true} — the one-click open of the CATALOG panel:
+            # the host the INDEX names for this checkout file (never a
+            # spec from the wire: D4), attached as an operator's --host
+            spec = None
+            if doc.get("host"):
+                from .catalog_index import entry, _table
+                spec = entry(self.root.resolve(), path, _table(self.root.resolve()))["host"]
+            r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
+            return r, rel + (f" + {spec}" if spec else ""), []
         src = str(doc["source"])
         packs = list(doc.get("packs") or [])
         total = len(src.encode()) + sum(len(str(p.get("source", "")).encode())
@@ -255,6 +270,10 @@ class ConsoleServer:
         return {"posting": self.scrub(posting), "session": session}
 
     # -- the drain as one pure mapping (the serving session is glue) ----
+
+    def domains_doc(self) -> dict:
+        """The `meta/domains` write (the db transport's CATALOG panel)."""
+        return {"path": "meta/domains", "data": {"domains": self.domains(), "ts": _now()}}
 
     def catalogs_doc(self) -> dict:
         """The `meta/catalogs` write: {path, data: {names, ts}}."""

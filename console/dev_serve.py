@@ -190,6 +190,7 @@ def main(argv=None):
     store, srv = Store(), ConsoleServer()
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     store.docs["meta/catalogs"] = srv.catalogs_doc()["data"]
+    store.docs["meta/domains"] = srv.domains_doc()["data"]
     if ns.demo:
         store.docs["candidates/c-demo"] = {
             "record_id": "r-demo", "status": "pending", "ok": True,
