@@ -77,7 +77,10 @@ def _agent(srv, *args):
     py, cwd = agent_python(srv.root)
     r = subprocess.run([py, "-m", "metis_agent.intent_check", *args], cwd=cwd,
                        capture_output=True, text=True, timeout=900)
-    return r.returncode, (r.stdout + r.stderr).strip()
+    out = r.stdout.strip()                      # the rows and the score; the model's log is stderr
+    if r.returncode and not out:
+        out = r.stderr.strip()[-2000:]
+    return r.returncode, out
 
 
 def propose(srv, name, text):
