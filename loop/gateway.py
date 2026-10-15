@@ -299,9 +299,10 @@ class Gateway:
             cert = "local"
         else:
             path = self.srv.resolve(spec.get("llp", ""))
+            # the copy is the checkout's: the program and its packs (the served program)
             copy, name, packs, cert = path.read_text(), str(
                 path.relative_to(self.srv.root.resolve()).with_suffix("")), \
-                [], "checkout"
+                [{"name": p.stem, "source": p.read_text()} for p in self.srv.checkout_packs(path)], "checkout"
         s.work = {"name": name, "copy": copy, "packs": packs,
                   "certified": cert, "error": None}
 
@@ -376,7 +377,8 @@ class Gateway:
         certified (locally); failure: the error, the old world kept."""
         w = s.work
         spec = {"source": w["copy"], "name": w["name"] or "scratch",
-                "packs": w["packs"], "host": bool((getattr(s, "spec", None) or {}).get("host"))}
+                "packs": w["packs"], "host": bool((getattr(s, "spec", None) or {}).get("host")),
+                "keep_loop": True}          # the sunk records and the selected record go on
         loop = asyncio.get_running_loop()
         ep = self.srv.epochs.get(s.sid, 1)
         fields = await loop.run_in_executor(s.pool, self.srv.open_session,

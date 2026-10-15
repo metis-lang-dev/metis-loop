@@ -218,7 +218,14 @@ class ConsoleServer:
                 from .catalog_index import host_of
                 spec = host_of(self.root.resolve(), rel)
             r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
-            return r, rel + (f" + {spec}" if spec else ""), []
+            # the served program is the program plus its packs (human-loop
+            # step 1): a domain's packs/*.llp merged as a session's are
+            packs = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_packs(path)]
+            reports = self._merge_packs(r, packs)
+            label = rel + (f" + {spec}" if spec else "")
+            if reports:
+                label += f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
+            return r, label, reports
         src = str(doc["source"])
         packs = list(doc.get("packs") or [])
         total = len(src.encode()) + sum(len(str(p.get("source", "")).encode())
@@ -232,6 +239,16 @@ class ConsoleServer:
             from .catalog_index import host_of
             spec = host_of(self.root.resolve(), anchor.relative_to(self.root.resolve()).with_suffix("").as_posix())
         r = _source_repl(anchor, src, self.seed, plugin=spec)
+        reports = self._merge_packs(r, packs)
+        label = name.removesuffix(".llp") + " (in memory" + (
+            f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
+            if reports else "") + ")"
+        return r, label, reports
+
+    def _merge_packs(self, r, packs) -> list:
+        """Each pack `{source, name}` gated as a pack against the program and
+        merged into THIS session (llp → gate → accept); the reports. Raises
+        ValueError with the findings when one is not admitted."""
         reports = []
         for k, pk in enumerate(packs, 1):
             psrc = str(pk.get("source") or "")
@@ -249,10 +266,42 @@ class ConsoleServer:
             reports.append({"name": pname, "ok": True,
                             "key": acc.get("key")})
             r.loop.text = ""
-        label = name.removesuffix(".llp") + " (in memory" + (
-            f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
-            if reports else "") + ")"
-        return r, label, reports
+        return reports
+
+    def checkout_packs(self, path: Path) -> list:
+        """A checkout program's packs: packs/*.llp beside the domain
+        manifest that names this program, in name order (metis_catalog's
+        Domain.packs() — where apply writes them); none for a program no
+        manifest names."""
+        d = path.parent
+        m = d / "domain.yaml"
+        if not m.is_file():
+            return []
+        try:
+            import yaml
+            man = yaml.safe_load(m.read_text()) or {}
+        except Exception:                           # noqa: BLE001 — a manifest mid-write: no packs
+            return []
+        prog = (d / str(man.get("program") or "")).resolve() if man.get("program") else None
+        if prog != path.resolve() or not (d / "packs").is_dir():
+            return []
+        return sorted((d / "packs").glob("*.llp"))
+
+    @staticmethod
+    def _carry_loop(old, new):
+        """A recompile keeps the session's loop: the sunk records, the
+        selected record (its scene restored by selecting it again) and the
+        loop's text — Claude checks a candidate against the record it
+        explains (human-loop step 1, the architect's A6 finding)."""
+        lo = getattr(old, "loop", None)
+        if lo is None or not lo.records:
+            return
+        new.loop.records = list(lo.records)
+        i = lo.rec_idx
+        if i is not None and 0 <= i < len(lo.records):
+            new.cmd_record(str(i))
+        if lo.text:
+            new.loop.text = lo.text
 
     def open_session(self, sid: str, doc: dict) -> dict:
         """Bind an interpreter to sessions/{sid} from `{llp: name}` (a
@@ -267,6 +316,8 @@ class ConsoleServer:
         except Exception as e:                      # noqa: BLE001
             return {"status": "closed", "error": self.scrub(str(e)),
                     "last_ts": _now()}
+        if doc.get("keep_loop") and sid in self.shells:     # a recompile: the loop goes on
+            self._carry_loop(self.shells[sid], r)
         self.shells[sid] = r
         self.epochs[sid] = 1
         out = self._fields(sid)

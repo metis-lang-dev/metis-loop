@@ -68,3 +68,74 @@ def test_records_listed_newest_first_and_sunk_into_a_session(srv, tmp_path):
     for bad in ("domains/plant/plant.llp", "../etc/passwd", "domains/plant/records/nope.jsonl"):
         with pytest.raises(ValueError):
             srv.load_sink("s", bad)
+
+
+SOIL = """catalog plant 1.
+layers (dyn).
+stages (main).
+namespace plant produce (dyn).
+pred moist : plant.
+pred dry : plant.
+pred sun : plant.
+stage main {
+  %% The sun dries me out.
+  dry_out [dyn] : moist * sun -o dry.
+}
+#init moist 1
+"""
+VISITOR = """% a visitor waters the plant
+catalog visitor 1.
+extends plant.
+stage main {
+  %% A visitor has watered me.
+  visitor_waters [dyn] : dry -o moist.
+}
+"""
+
+
+def test_a_domains_packs_are_opened_with_it(srv, tmp_path):
+    """human-loop step 1 (the architect's ruling): the served program is the
+    program plus its packs/*.llp — the one-click open merges them (the key
+    is the union), as a session's packs are; a program no manifest names
+    gets none."""
+    llp = srv.new_domain("plant", "a plant")
+    d = tmp_path / "domains/plant"
+    (d / "plant.llp").write_text(SOIL)
+    plain_key = srv.build({"llp": llp})[0].key
+    (d / "packs").mkdir()
+    (d / "packs/visitor.llp").write_text(VISITOR)
+    r, label, reports = srv.build({"llp": llp})
+    assert [x["name"] for x in reports] == ["visitor"] and r.key != plain_key and label.endswith("+ 1 pack")
+    assert [p.name for p in srv.checkout_packs(d / "plant.llp")] == ["visitor.llp"]
+    (tmp_path / "loose.llp").write_text(SOIL)
+    assert srv.checkout_packs(tmp_path / "loose.llp") == []
+    # save/apply plans nothing for an unchanged copy + its packs as opened
+    work = {"name": llp, "copy": SOIL, "packs": [{"name": "visitor", "source": VISITOR}]}
+    assert srv.save_plan(work)["files"] == []
+
+
+def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
+    """The architect's A6 finding: a recompile started a fresh session and
+    dropped the sunk records — Claude could not check its candidate against
+    the selected record. Now the records, the selection (its scene) and the
+    loop's text go on across a recompile (keep_loop), not across an open."""
+    llp = srv.new_domain("plant", "a plant")
+    (tmp_path / "domains/plant/plant.llp").write_text(SOIL)
+    assert srv.open_session("s", {"llp": llp})["status"] != "closed"
+    rec = tmp_path / "domains/plant/records/s1.jsonl"
+    rec.parent.mkdir()
+    rec.write_text(json.dumps({"kind": "unmodeled", "observed": {"moist": 1}, "init": {"dry": 1},
+                               "record": 0, "session": "s1", "mined_text": "a visitor watered it",
+                               "close": {"status": "escalated", "beat": 4}}) + "\n")
+    assert srv.load_sink("s", "domains/plant/records/s1.jsonl")["ok"]
+    sh = srv.shells["s"]
+    assert sh.cmd_record("0")["ok"] and sh.loop.rec_idx == 0
+    sh.loop.text = "a visitor waters the plant when it is dry"
+    out = srv.open_session("s", {"source": SOIL, "name": llp, "packs": [{"name": "visitor", "source": VISITOR}],
+                                 "keep_loop": True})
+    assert out["status"] != "closed"
+    new = srv.shells["s"]
+    assert new is not sh and len(new.loop.records) == 1 and new.loop.rec_idx == 0
+    assert new.loop.text == "a visitor waters the plant when it is dry" and new.case["init"] == {"dry": 1}
+    srv.open_session("s", {"llp": llp})                                      # an open is a new session: none
+    assert not srv.shells["s"].loop.records
