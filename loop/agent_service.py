@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 TOOLS = ("repl", "ctx", "transcript", "source_read", "source_edit",
-         "pack_create", "recompile", "intents_read", "intents_propose")
+         "pack_create", "recompile", "apply", "intents_read", "intents_propose")
 ALLOWED = tuple(f"mcp__metis__{t}" for t in TOOLS)
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
 
@@ -42,12 +42,16 @@ transcript as claude>), `ctx()` returns the context at this stop without
 a REPL round, `transcript(n)` returns the last n console lines (yours and
 the viewer's). The WORKING COPY — the viewer's private, in-memory copy of
 the catalog plus extension packs (each pack `extends` the copy and only
-adds; the real catalog is never touched): `source_read(target)` shows it
+adds; the real catalog is touched only by apply()): `source_read(target)` shows it
 with line numbers (target "copy" or "pack:N"), `source_edit(target,
 old_str, new_str)` replaces one exact, unique piece of text,
 `pack_create(name, source)` adds a pack, `recompile()` rebuilds the
 session from copy + packs (until then the copy is UNCERTIFIED; a failed
-recompile returns the findings and keeps the old world). The viewer sees
+recompile returns the findings and keeps the old world). `apply()` writes
+a CERTIFIED copy (and its packs) into the catalog source — the operator's
+checkout, the host side's verb: the person's "apply to catalog" — and
+shows them the diff; metis-agent sees the change. Apply only when the
+person asked for it or agreed, and say what you wrote. The viewer sees
 every edit live in their editor. A domain's INTENTS (what the person may
 ask it in the agent): `intents_read()` gives its intent.yaml or a draft
 from the program, `intents_propose(text)` checks a whole new one and shows
@@ -319,6 +323,40 @@ class AgentService:
             return _ok(out) if out.get("ok") else _err(
                 "recompile failed (old world kept): " + str(out.get("error")))
 
+        async def apply(args):
+            """The copy and its packs written into the catalog source (the
+            save the person's "apply to catalog" does), only after a
+            recompile certified THIS copy; the diff is posted to the console
+            so the person sees what was written. Personal mode only."""
+            over = counted()
+            if over:
+                return over
+            s, _, err = work_of("copy")
+            if err:
+                return _err(err)
+            if gw.cfg.get("mode") == "shared":
+                return _err("apply writes the operator's checkout: personal mode only")
+            w = s.work
+            if w.get("certified") not in ("local", "checkout"):
+                return _err("the copy is uncertified: recompile() first — apply writes only a copy that compiled")
+            loop = asyncio.get_running_loop()
+            try:
+                plan = await loop.run_in_executor(None, gw.srv.save_plan, w)
+                if not plan["files"]:
+                    return _ok({"written": [], "note": "nothing to apply: the copy and its packs equal the checkout"})
+                out = await loop.run_in_executor(None, gw.srv.save_apply, w, plan["token"])
+            except ValueError as e:
+                return _err(str(e))
+            w["certified"] = "checkout"
+            await gw._broadcast(s, gw._source_frame(s))
+            diff = "".join(f["diff"] for f in plan["files"])
+            await gw._broadcast(s, {"ch": "repl", "type": "posting", "session": s.sid, "id": "a" + plan["token"][:8],
+                                    "cmd": ":apply", "actor": "claude", "status": "done",
+                                    "result": "applied " + ", ".join(out["written"]) + " (not committed)\n" + diff,
+                                    "json": {"ok": True, "written": out["written"]}}, log=True)
+            return _ok({"written": out["written"], "diff_lines": len(diff.splitlines()),
+                        "note": "written to the catalog source and shown to the person; say what you wrote"})
+
         async def intents_read(args):
             over = counted()
             if over:
@@ -357,7 +395,7 @@ class AgentService:
 
         return {"repl": repl, "ctx": ctx, "transcript": transcript,
                 "source_read": source_read, "source_edit": source_edit,
-                "pack_create": pack_create, "recompile": recompile,
+                "pack_create": pack_create, "recompile": recompile, "apply": apply,
                 "intents_read": intents_read, "intents_propose": intents_propose}
 
     def _server(self, chat: Chat):
@@ -391,6 +429,11 @@ class AgentService:
             tool("recompile", "Rebuild the session from the working copy + "
                  "packs (in memory). Returns the new key, or the findings "
                  "and keeps the old world.", {})(fns["recompile"]),
+            tool("apply", "Write the working copy and its packs into the catalog source (the "
+                 "operator's checkout: the program over its file, packs under <domain>/packs/) — "
+                 "only after recompile() certified this copy. The diff is shown to the person; "
+                 "metis-agent sees the change. Never a git commit. Say what you wrote.",
+                 {})(fns["apply"]),
             tool("intents_read", "The open domain's intent.yaml (metis-catalog CATALOG.md "
                  "\"intent.yaml\": what the person may ask it, the mapper's and the replier's "
                  "tables), or — when it has none — a draft made from the program's cmd_* atoms "

@@ -144,9 +144,9 @@ details summary{cursor:pointer;color:var(--dim)}
   </div>
 </header>
 <div id="banner" role="status" hidden></div>
-<div id="savewin" role="dialog" aria-label="save to the checkout" hidden>
-  <header><b>SAVE</b><span class="empty" id="savesub">the working copy into the operator's checkout — read the diff, then write</span><span class="grow"></span>
-    <button class="btn" id="savego">write these files</button><button class="btn" id="savex">cancel</button></header>
+<div id="savewin" role="dialog" aria-label="apply to the catalog" hidden>
+  <header><b>APPLY</b><span class="empty" id="savesub">the working copy into the catalog source (the operator's checkout) — read the diff, then apply; metis-agent sees the change</span><span class="grow"></span>
+    <button class="btn" id="savego">apply these files</button><button class="btn" id="savex">cancel</button></header>
   <div class="body" id="savebody"></div>
 </div>
 <main>
@@ -493,7 +493,7 @@ async function queue(cmd,actor,quiet){
   if(GW&&!quiet){                     // §4a: terminal verbs, web meanings
     const [verb,...rest]=cmd.split(/\s+/);
     if(verb==="edit"){openEditor("copy",{rule:rest[0]});return null}
-    if(verb==="save"){saveWork();return null}
+    if(verb==="save"||verb==="apply"){saveWork();return null}
     if(verb==="export"){downloadWork();return null}}
   if(GW){
     if(!wsUp)return fail("Not connected to the console backend — reconnecting…");
@@ -1003,12 +1003,12 @@ function afterSink(f){
   queue("record "+r.i);
   const p=$("#prompt");p.value="mine "+String(r.mined_text||"").replace(/\s*\n\s*/g," ").trim();p.focus()}
 function saveWork(){
-  if(!GW||!sid){banner("save needs an open session on the console backend",4000);return}
+  if(!GW||!sid){banner("apply needs an open session on the console backend (on the web: download)",4000);return}
   if(work){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs})}
   wsSend({ch:"repl",type:"save",session:sid})}
 function showSave(f){
   if(f.written){$("#savewin").hidden=true;saveTok=null;
-    banner("saved: "+f.written.join(", ")+" — git is yours (nothing committed)",7000);return}
+    banner("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)",7000);return}
   saveTok=f.token;
   const files=f.files||[];
   $("#savebody").innerHTML=files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
@@ -1050,7 +1050,7 @@ function renderCatalogDock(){
   el.innerHTML=`<div class="ph">OPEN · the working copy</div><div class="wrow"><b>${esc(baseName())}.llp</b><span class="badge ${cls}">${esc(label)}</span>
       <span class="empty">${work.key?"key "+esc(String(work.key).slice(0,12))+"…":""}</span></div>
     <div class="wrow"><button class="btn" data-cw="edit">edit copy</button><button class="btn" data-cw="pack">+ pack</button>
-      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="write the copy and its packs into the operator's checkout — the diff first; never a git commit">save</button><button class="btn" data-cw="download">download all</button></div>
+      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="apply the copy and its packs to the catalog source (the operator's checkout): the diff first, then one click; never a git commit — metis-agent sees the change and proposes the reload">apply to catalog</button><button class="btn" data-cw="download">download all</button></div>
     ${work.error?`<pre class="err">${esc(work.error)}</pre>`:""}
     <div class="ph" style="margin-top:6px">PACKS on top of the copy (each extends it, only adds)</div>
     <div class="plist">${work.packs.length?work.packs.map((p,k)=>`<div class="pk"><span class="nm">${esc(p.name)}</span>

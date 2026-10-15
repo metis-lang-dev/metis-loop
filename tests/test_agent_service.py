@@ -240,3 +240,41 @@ def test_chat_needs_a_session_when_the_seat_exists(agent):
         ws.send(json.dumps({"ch": "chat", "type": "say", "text": "hi"}))
         err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
         assert err["type"] == "error" and err["error"] == "open a session first"
+
+
+def test_apply_writes_only_a_certified_copy_and_shows_the_diff(tmp_path):
+    """human-loop step 1: `apply()` is the chat's "apply to catalog" — the
+    copy written into the catalog source only after a recompile certified
+    it, the diff posted to the console (the person sees what was written);
+    nothing to apply on an unchanged copy. On a scratch checkout."""
+    from loop.console_serve import ConsoleServer
+    srv = ConsoleServer(tmp_path)
+    llp = srv.new_domain("plant", "a plant")
+    path = tmp_path / "domains/plant/plant.llp"
+    r = Running(srv, mode="personal")
+    r.gw.agent.client_factory = FakeClient
+    FakeClient.hang = False
+    FakeClient.script = [
+        ("apply", {}),                                                       # unchanged: nothing to apply
+        ("source_edit", {"target": "copy", "old_str": "%% I wake up.", "new_str": "%% I wake up slowly."}),
+        ("apply", {}),                                                       # uncertified: refused
+        ("recompile", {}),
+        ("apply", {}),                                                       # written
+    ]
+    try:
+        with r.ws() as ws:
+            sid = open3(ws, llp)["session"]
+            got = say(ws, sid, "make it wake up slowly and apply it")
+            parts = got[-1]["text"].split(" | ")
+            assert [p[:3] for p in parts] == ["Don", "ok ", "ERR", "ok ", "ok "]
+            assert '"written": []' in parts[0]                              # the notes are cut at 40 chars
+            post = [f for f in got if f.get("type") == "posting" and f.get("cmd") == ":apply"]
+            assert len(post) == 1 and "+  %% I wake up slowly." in post[0]["result"] and post[0]["actor"] == "claude"
+            assert [f for f in got if f.get("type") == "source"][-1]["certified"] == "checkout"
+        assert "%% I wake up slowly." in path.read_text()
+    finally:
+        r.close()
+
+
+def test_apply_is_one_of_the_seats_tools():
+    assert "mcp__metis__apply" in ALLOWED
