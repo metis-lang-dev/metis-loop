@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 TOOLS = ("repl", "ctx", "transcript", "source_read", "source_edit",
-         "pack_create", "recompile", "apply", "intents_read", "intents_propose")
+         "extension_create", "recompile", "apply", "intents_read", "intents_propose")
 ALLOWED = tuple(f"mcp__metis__{t}" for t in TOOLS)
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
 
@@ -41,14 +41,14 @@ session: `repl(line)` runs one REPL line (prefix ":"; it appears in the
 transcript as claude>), `ctx()` returns the context at this stop without
 a REPL round, `transcript(n)` returns the last n console lines (yours and
 the viewer's). The WORKING COPY — the viewer's private, in-memory copy of
-the catalog plus extension packs (each pack `extends` the copy and only
+the catalog plus extensions (each extension `extends` the copy and only
 adds; the real catalog is touched only by apply()): `source_read(target)` shows it
-with line numbers (target "copy" or "pack:N"), `source_edit(target,
+with line numbers (target "copy" or "extension:N"), `source_edit(target,
 old_str, new_str)` replaces one exact, unique piece of text,
-`pack_create(name, source)` adds a pack, `recompile()` rebuilds the
-session from copy + packs (until then the copy is UNCERTIFIED; a failed
+`extension_create(name, source)` adds an extension, `recompile()` rebuilds the
+session from copy + extensions (until then the copy is UNCERTIFIED; a failed
 recompile returns the findings and keeps the old world). `apply()` writes
-a CERTIFIED copy (and its packs) into the catalog source — the operator's
+a CERTIFIED copy (and its extensions) into the catalog source — the operator's
 checkout, the host side's verb: the person's "apply to catalog" — and
 shows them the diff; metis-agent sees the change. Apply only when the
 person asked for it or agreed, and say what you wrote. The viewer sees
@@ -241,15 +241,15 @@ class AgentService:
             t = str(target or "copy")
             if t == "copy":
                 return s, ("copy", None), None
-            if t.startswith("pack:") and t[5:].isdigit() and \
-                    1 <= int(t[5:]) <= len(s.work["packs"]):
-                return s, ("pack", int(t[5:]) - 1), None
+            if t.startswith("extension:") and t[5:].isdigit() and \
+                    1 <= int(t[5:]) <= len(s.work["extensions"]):
+                return s, ("extension", int(t[5:]) - 1), None
             return None, None, (f"no target {t!r} — use 'copy' or "
-                                f"'pack:1'..'pack:{len(s.work['packs'])}'")
+                                f"'extension:1'..'extension:{len(s.work['extensions'])}'")
 
         def text_of(s, where):
             return s.work["copy"] if where[0] == "copy" else \
-                s.work["packs"][where[1]]["source"]
+                s.work["extensions"][where[1]]["source"]
 
         async def source_read(args):
             over = counted()
@@ -284,14 +284,14 @@ class AgentService:
             if where[0] == "copy":
                 s.work["copy"] = text
             else:
-                s.work["packs"][where[1]]["source"] = text
+                s.work["extensions"][where[1]]["source"] = text
             s.work["certified"] = None
             await gw._broadcast(s, gw._source_frame(s))
             return _ok({"edited": args.get("target") or "copy",
                         "certified": None,
                         "note": "uncertified until recompile()"})
 
-        async def pack_create(args):
+        async def extension_create(args):
             over = counted()
             if over:
                 return over
@@ -300,14 +300,14 @@ class AgentService:
                 return _err(err)
             src = str(args.get("source") or "")
             if "extends" not in src:
-                return _err("a pack must declare `extends <the copy's "
+                return _err("a extension must declare `extends <the copy's "
                             "catalog name>.`")
-            s.work["packs"].append({"name": str(args.get("name") or
-                                                f"pack {len(s.work['packs']) + 1}"),
+            s.work["extensions"].append({"name": str(args.get("name") or
+                                                f"extension {len(s.work['extensions']) + 1}"),
                                     "source": src})
             s.work["certified"] = None
             await gw._broadcast(s, gw._source_frame(s))
-            return _ok({"created": f"pack:{len(s.work['packs'])}",
+            return _ok({"created": f"extension:{len(s.work['extensions'])}",
                         "note": "uncertified until recompile()"})
 
         async def recompile(args):
@@ -324,7 +324,7 @@ class AgentService:
                 "recompile failed (old world kept): " + str(out.get("error")))
 
         async def apply(args):
-            """The copy and its packs written into the catalog source (the
+            """The copy and its extensions written into the catalog source (the
             save the person's "apply to catalog" does), only after a
             recompile certified THIS copy; the diff is posted to the console
             so the person sees what was written. Personal mode only."""
@@ -343,7 +343,7 @@ class AgentService:
             try:
                 plan = await loop.run_in_executor(None, gw.srv.save_plan, w)
                 if not plan["files"]:
-                    return _ok({"written": [], "note": "nothing to apply: the copy and its packs equal the checkout"})
+                    return _ok({"written": [], "note": "nothing to apply: the copy and its extensions equal the checkout"})
                 out = await loop.run_in_executor(None, gw.srv.save_apply, w, plan["token"])
             except ValueError as e:
                 return _err(str(e))
@@ -395,7 +395,7 @@ class AgentService:
 
         return {"repl": repl, "ctx": ctx, "transcript": transcript,
                 "source_read": source_read, "source_edit": source_edit,
-                "pack_create": pack_create, "recompile": recompile, "apply": apply,
+                "extension_create": extension_create, "recompile": recompile, "apply": apply,
                 "intents_read": intents_read, "intents_propose": intents_propose}
 
     def _server(self, chat: Chat):
@@ -414,23 +414,23 @@ class AgentService:
                  "results, viewer's and yours).", {"n": int})(
                      fns["transcript"]),
             tool("source_read", "The working copy with line numbers: "
-                 "target 'copy' or 'pack:N'; optional start/end lines.",
+                 "target 'copy' or 'extension:N'; optional start/end lines.",
                  {"target": str, "start": int, "end": int})(
                      fns["source_read"]),
             tool("source_edit", "Replace ONE exact, unique piece of the "
-                 "working copy (target 'copy' or 'pack:N'). The copy is "
+                 "working copy (target 'copy' or 'extension:N'). The copy is "
                  "uncertified until recompile().",
                  {"target": str, "old_str": str, "new_str": str})(
                      fns["source_edit"]),
-            tool("pack_create", "Add an extension pack on top of the copy: "
+            tool("extension_create", "Add an extension on top of the copy: "
                  "full LLP text starting with `catalog <name> 1.` and "
                  "`extends <the copy's catalog name>.`; it may only ADD.",
-                 {"name": str, "source": str})(fns["pack_create"]),
+                 {"name": str, "source": str})(fns["extension_create"]),
             tool("recompile", "Rebuild the session from the working copy + "
-                 "packs (in memory). Returns the new key, or the findings "
+                 "extensions (in memory). Returns the new key, or the findings "
                  "and keeps the old world.", {})(fns["recompile"]),
-            tool("apply", "Write the working copy and its packs into the catalog source (the "
-                 "operator's checkout: the program over its file, packs under <domain>/packs/) — "
+            tool("apply", "Write the working copy and its extensions into the catalog source (the "
+                 "operator's checkout: the program over its file, extensions under <domain>/extensions/) — "
                  "only after recompile() certified this copy. The diff is shown to the person; "
                  "metis-agent sees the change. Never a git commit. Say what you wrote.",
                  {})(fns["apply"]),

@@ -1,7 +1,7 @@
 """The working copy (docs/CONSOLE-WS.md §4a, simplified): on open the
-catalog text is the session's copy; edits and extension packs mirror to
+catalog text is the session's copy; edits and extensions mirror to
 the gateway's memory and uncertify it; `recompile` rebuilds the session
-from copy + packs (each pack gated as a pack, merged in memory, never
+from copy + extensions (each extension gated as an extension, merged in memory, never
 committed) — on failure the old world is kept and the error shown."""
 import json
 
@@ -9,18 +9,18 @@ import pytest
 
 from loop.console_serve import ConsoleServer, catalog_root
 
-PACK = """% the pigs tire: a pack on top of the copy
+PACK = """% the pigs tire: an extension on top of the copy
 catalog three-pigs-ext1 1.
 extends three-pigs.
 provenance hand "web console" "2026-10-07".
 namespace ext1 produce (story).
 pred example1 : ext1.
 stage go {
-  %% an example rule the pack adds
+  %% an example rule the extension adds
   example1 [story] : example1 -o example1.
 }
 """
-# undocumented rule: the pack gate rejects it (a genuine finding, not
+# undocumented rule: the extension gate rejects it (a genuine finding, not
 # the namespace-rights question)
 BAD = """% broken on purpose
 catalog bad 1.
@@ -37,14 +37,14 @@ def srv():
     return ConsoleServer(catalog_root())
 
 
-def test_build_from_source_with_a_pack(srv):
+def test_build_from_source_with_an_extension(srv):
     src = srv.resolve("3lp").read_text()
     r, label, reps = srv.build({"source": src, "name": "three-pigs",
-                                "packs": [{"name": "tired", "source": PACK}]})
-    assert label == "three-pigs (in memory + 1 pack)"
+                                "extensions": [{"name": "tired", "source": PACK}]})
+    assert label == "three-pigs (in memory + 1 extension)"
     assert reps[0]["name"] == "tired" and reps[0]["ok"]
     out = srv.open_session("w2", {"source": src, "name": "three-pigs",
-                                  "packs": [{"name": "tired", "source": PACK}]})
+                                  "extensions": [{"name": "tired", "source": PACK}]})
     assert out["status"] == "running"
     listed = srv.serve_one("w2", "list")["posting"]["result"]
     assert "example1" in listed and "blow_brick" in listed
@@ -52,13 +52,13 @@ def test_build_from_source_with_a_pack(srv):
     assert "example1" not in srv.resolve("3lp").read_text()
 
 
-def test_build_rejects_a_bad_pack_and_open_keeps_the_old_world(srv):
+def test_build_rejects_a_bad_extension_and_open_keeps_the_old_world(srv):
     src = srv.resolve("3lp").read_text()
-    with pytest.raises(ValueError, match="pack 'bad' not admitted: .*%% doc"):
-        srv.build({"source": src, "packs": [{"name": "bad", "source": BAD}]})
+    with pytest.raises(ValueError, match="extension 'bad' not admitted: .*%% doc"):
+        srv.build({"source": src, "extensions": [{"name": "bad", "source": BAD}]})
     assert srv.open_session("w1", {"llp": "3lp"})["status"] == "running"
     key = srv.shells["w1"].key
-    out = srv.open_session("w1", {"source": src, "packs": [
+    out = srv.open_session("w1", {"source": src, "extensions": [
         {"name": "bad", "source": BAD}]})
     assert out["status"] == "closed" and "not admitted" in out["error"]
     assert srv.shells["w1"].key == key            # old interpreter kept
@@ -86,7 +86,7 @@ def test_source_frame_work_mirror_and_recompile(gw):
     with gw.ws() as a, gw.ws() as b:
         sess, src = _open(a)
         sid = sess["session"]
-        assert src["certified"] == "checkout" and src["packs"] == []
+        assert src["certified"] == "checkout" and src["extensions"] == []
         assert "catalog three-pigs" in src["copy"] and src["key"]
         frames(b, lambda f: f.get("type") == "catalogs")
         b.send(json.dumps({"ch": "repl", "type": "open", "session": sid}))
@@ -94,9 +94,9 @@ def test_source_frame_work_mirror_and_recompile(gw):
 
         a.send(json.dumps({"ch": "repl", "type": "work", "session": sid,
                            "copy": src["copy"] + "\n% an edit\n",
-                           "packs": [{"name": "tired", "source": PACK}]}))
+                           "extensions": [{"name": "tired", "source": PACK}]}))
         m = frames(b, lambda f: f.get("type") == "source")[-1]
-        assert m["certified"] is None and m["packs"][0]["name"] == "tired"
+        assert m["certified"] is None and m["extensions"][0]["name"] == "tired"
         assert m["copy"].endswith("% an edit\n")
 
         a.send(json.dumps({"ch": "repl", "type": "recompile",
@@ -118,7 +118,7 @@ def test_recompile_failure_keeps_the_session(gw):
         sess, src = _open(a)
         sid = sess["session"]
         a.send(json.dumps({"ch": "repl", "type": "work", "session": sid,
-                           "packs": [{"name": "bad", "source": BAD}]}))
+                           "extensions": [{"name": "bad", "source": BAD}]}))
         a.send(json.dumps({"ch": "repl", "type": "recompile",
                            "session": sid}))
         m = frames(a, lambda f: f.get("type") == "source")[-1]

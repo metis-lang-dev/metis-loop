@@ -19,7 +19,9 @@ def test_new_makes_a_domain_that_opens_and_runs(srv, tmp_path):
     d = tmp_path / "domains/plant"
     assert llp == "domains/plant/plant" and sorted(p.name for p in d.iterdir()) == ["README.md", "domain.yaml", "plant.llp"]
     y = (d / "domain.yaml").read_text()
-    assert "name: plant" in y and 'line: "a potted plant that dries out"' in y and "program: plant.llp" in y
+    assert "display: the plant" in y and 'line: "a potted plant that dries out"' in y and "program: plant.llp" in y
+    import metis_catalog
+    assert metis_catalog.get("plant", tmp_path).name == "plant"            # the package's keys only: the loader takes it
     assert "%% I wake up." in (d / "plant.llp").read_text()                 # the rule with its %% line
     assert srv.open_session("s", {"llp": llp})["status"] == "running"
     assert srv.serve_one("s", "run 5")["posting"]["status"] == "done" and srv.shells["s"].counts == {"awake": 1}
@@ -33,16 +35,16 @@ def test_save_shows_the_diff_and_writes_only_what_was_shown(srv, tmp_path):
     llp = srv.new_domain("plant", "a plant")
     path = tmp_path / "domains/plant/plant.llp"
     work = {"name": llp, "copy": path.read_text().replace("%% I wake up.", "%% I wake up slowly."),
-            "packs": [{"name": "Visitor Waters", "source": "% a pack\n"}]}
+            "extensions": [{"name": "Visitor Waters", "source": "% an extension\n"}]}
     plan = srv.save_plan(work)
-    assert [f["path"] for f in plan["files"]] == ["domains/plant/plant.llp", "domains/plant/packs/visitor_waters.llp"]
+    assert [f["path"] for f in plan["files"]] == ["domains/plant/plant.llp", "domains/plant/extensions/visitor_waters.llp"]
     assert "-  %% I wake up." in plan["files"][0]["diff"] and "+  %% I wake up slowly." in plan["files"][0]["diff"]
     assert plan["files"][1]["new"]
     with pytest.raises(ValueError, match="changed since"):
         srv.save_apply({**work, "copy": work["copy"] + "\n"}, plan["token"])   # not the diff the viewer saw
     assert "slowly" not in path.read_text()
     out = srv.save_apply(work, plan["token"])
-    assert out["written"] == ["domains/plant/plant.llp", "domains/plant/packs/visitor_waters.llp"]
+    assert out["written"] == ["domains/plant/plant.llp", "domains/plant/extensions/visitor_waters.llp"]
     assert "slowly" in path.read_text() and srv.save_plan(work)["files"] == []   # saved: nothing left to save
     with pytest.raises(ValueError, match="in memory only"):
         srv.save_plan({"name": "scratch thing", "copy": "x"})
@@ -95,24 +97,24 @@ stage main {
 """
 
 
-def test_a_domains_packs_are_opened_with_it(srv, tmp_path):
+def test_a_domains_extensions_are_opened_with_it(srv, tmp_path):
     """human-loop step 1 (the architect's ruling): the served program is the
-    program plus its packs/*.llp — the one-click open merges them (the key
-    is the union), as a session's packs are; a program no manifest names
+    program plus its extensions/*.llp — the one-click open merges them (the key
+    is the union), as a session's extensions are; a program no manifest names
     gets none."""
     llp = srv.new_domain("plant", "a plant")
     d = tmp_path / "domains/plant"
     (d / "plant.llp").write_text(SOIL)
     plain_key = srv.build({"llp": llp})[0].key
-    (d / "packs").mkdir()
-    (d / "packs/visitor.llp").write_text(VISITOR)
+    (d / "extensions").mkdir()
+    (d / "extensions/visitor.llp").write_text(VISITOR)
     r, label, reports = srv.build({"llp": llp})
-    assert [x["name"] for x in reports] == ["visitor"] and r.key != plain_key and label.endswith("+ 1 pack")
-    assert [p.name for p in srv.checkout_packs(d / "plant.llp")] == ["visitor.llp"]
+    assert [x["name"] for x in reports] == ["visitor"] and r.key != plain_key and label.endswith("+ 1 extension")
+    assert [p.name for p in srv.checkout_extensions(d / "plant.llp")] == ["visitor.llp"]
     (tmp_path / "loose.llp").write_text(SOIL)
-    assert srv.checkout_packs(tmp_path / "loose.llp") == []
-    # save/apply plans nothing for an unchanged copy + its packs as opened
-    work = {"name": llp, "copy": SOIL, "packs": [{"name": "visitor", "source": VISITOR}]}
+    assert srv.checkout_extensions(tmp_path / "loose.llp") == []
+    # save/apply plans nothing for an unchanged copy + its extensions as opened
+    work = {"name": llp, "copy": SOIL, "extensions": [{"name": "visitor", "source": VISITOR}]}
     assert srv.save_plan(work)["files"] == []
 
 
@@ -133,7 +135,7 @@ def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
     sh = srv.shells["s"]
     assert sh.cmd_record("0")["ok"] and sh.loop.rec_idx == 0
     sh.loop.text = "a visitor waters the plant when it is dry"
-    out = srv.open_session("s", {"source": SOIL, "name": llp, "packs": [{"name": "visitor", "source": VISITOR}],
+    out = srv.open_session("s", {"source": SOIL, "name": llp, "extensions": [{"name": "visitor", "source": VISITOR}],
                                  "keep_loop": True})
     assert out["status"] != "closed"
     new = srv.shells["s"]
@@ -143,20 +145,20 @@ def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
     assert not srv.shells["s"].loop.records
 
 
-def test_the_manifests_serves_names_the_packs(srv, tmp_path):
+def test_the_manifests_serves_names_the_extensions(srv, tmp_path):
     """runtime-binding Q1 (the architect's ruling): the manifest's `serves:`
-    is the served program — the packs it lists after this program are opened,
-    one in packs/ it leaves out is not; a manifest serving another file (the
+    is the served program — the extensions it lists after this program are opened,
+    one in extensions/ it leaves out is not; a manifest serving another file (the
     kitchen's pair scene) gives this program none."""
     import yaml
     llp = srv.new_domain("plant", "a plant")
     d = tmp_path / "domains/plant"
     (d / "plant.llp").write_text(SOIL)
-    (d / "packs").mkdir()
-    (d / "packs/visitor.llp").write_text(VISITOR)
-    (d / "packs/zz_draft.llp").write_text(VISITOR)
+    (d / "extensions").mkdir()
+    (d / "extensions/visitor.llp").write_text(VISITOR)
+    (d / "extensions/zz_draft.llp").write_text(VISITOR)
     man = yaml.safe_load((d / "domain.yaml").read_text())
-    (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["plant.llp", "packs/visitor.llp"]}))
-    assert [p.name for p in srv.checkout_packs(d / "plant.llp")] == ["visitor.llp"]
+    (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["plant.llp", "extensions/visitor.llp"]}))
+    assert [p.name for p in srv.checkout_extensions(d / "plant.llp")] == ["visitor.llp"]
     (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["metis.domains.kitchen:catalogs/kitchen_host.llp"]}))
-    assert srv.checkout_packs(d / "plant.llp") == []
+    assert srv.checkout_extensions(d / "plant.llp") == []

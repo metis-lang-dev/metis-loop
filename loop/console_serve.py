@@ -187,8 +187,8 @@ class ConsoleServer:
                 (safe.removesuffix(".llp") or "scratch") + ".llp")
 
     @staticmethod
-    def _pack_text(src: str) -> str:
-        """A pack's approved text = its leading `%` comment block (the
+    def _extension_text(src: str) -> str:
+        """A extension's approved text = its leading `%` comment block (the
         `load` convention) — what its %% docs quote at the gate."""
         head = []
         for line in src.splitlines():
@@ -196,15 +196,15 @@ class ConsoleServer:
                 head.append(line.lstrip("%").strip())
             elif line.strip():
                 break
-        return "\n".join(head) or "extension pack"
+        return "\n".join(head) or "extension"
 
     def build(self, doc: dict):
         """A Repl for `{llp}` (a checkout catalog) or `{source, name,
-        packs?}` — catalog TEXT compiled in memory, then each pack
-        (`{source, name}`) gated as a pack against it and merged into
+        extensions?}` — catalog TEXT compiled in memory, then each extension
+        (`{source, name}`) gated as an extension against it and merged into
         THIS session only (the loop's own llp → gate → accept, called
         here — `accept` stays off the wire; nothing is committed).
-        Returns (repl, llp label, pack reports); raises ValueError with
+        Returns (repl, llp label, extension reports); raises ValueError with
         the findings on any failure."""
         from metis.lang.repl import Repl
         if doc.get("source") is None:
@@ -218,18 +218,18 @@ class ConsoleServer:
                 from .catalog_index import host_of
                 spec = host_of(self.root.resolve(), rel)
             r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
-            # the served program is the program plus its packs (human-loop
-            # step 1): a domain's packs/*.llp merged as a session's are
-            packs = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_packs(path)]
-            reports = self._merge_packs(r, packs)
+            # the served program is the program plus its extensions (human-loop
+            # step 1): a domain's extensions/*.llp merged as a session's are
+            extensions = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_extensions(path)]
+            reports = self._merge_extensions(r, extensions)
             label = rel + (f" + {spec}" if spec else "")
             if reports:
-                label += f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
+                label += f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
             return r, label, reports
         src = str(doc["source"])
-        packs = list(doc.get("packs") or [])
+        extensions = list(doc.get("extensions") or [])
         total = len(src.encode()) + sum(len(str(p.get("source", "")).encode())
-                                        for p in packs)
+                                        for p in extensions)
         if total > MAX_SOURCE:
             raise ValueError(f"catalog source over {MAX_SOURCE // 1024} KiB")
         name = str(doc.get("name") or "scratch").strip() or "scratch"
@@ -239,28 +239,28 @@ class ConsoleServer:
             from .catalog_index import host_of
             spec = host_of(self.root.resolve(), anchor.relative_to(self.root.resolve()).with_suffix("").as_posix())
         r = _source_repl(anchor, src, self.seed, plugin=spec)
-        reports = self._merge_packs(r, packs)
+        reports = self._merge_extensions(r, extensions)
         label = name.removesuffix(".llp") + " (in memory" + (
-            f" + {len(reports)} pack{'s' if len(reports) != 1 else ''}"
+            f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
             if reports else "") + ")"
         return r, label, reports
 
-    def _merge_packs(self, r, packs) -> list:
-        """Each pack `{source, name}` gated as a pack against the program and
+    def _merge_extensions(self, r, extensions) -> list:
+        """Each extension `{source, name}` gated as an extension against the program and
         merged into THIS session (llp → gate → accept); the reports. Raises
         ValueError with the findings when one is not admitted."""
         reports = []
-        for k, pk in enumerate(packs, 1):
+        for k, pk in enumerate(extensions, 1):
             psrc = str(pk.get("source") or "")
-            pname = str(pk.get("name") or f"pack {k}")
+            pname = str(pk.get("name") or f"extension {k}")
             if not psrc.strip():
                 continue
-            r.cmd_text(self._pack_text(psrc))
+            r.cmd_text(self._extension_text(psrc))
             r.cmd_llp(psrc)
             rep = r.cmd_gate("")
             if not rep.get("ok"):
                 found = rep.get("findings") or [rep.get("error", "rejected")]
-                raise ValueError(f"pack '{pname}' not admitted: " +
+                raise ValueError(f"extension '{pname}' not admitted: " +
                                  "; ".join(map(str, found))[:1500])
             acc = r.cmd_accept("")
             reports.append({"name": pname, "ok": True,
@@ -268,12 +268,12 @@ class ConsoleServer:
             r.loop.text = ""
         return reports
 
-    def checkout_packs(self, path: Path) -> list:
-        """A checkout program's packs, from the domain manifest beside it
+    def checkout_extensions(self, path: Path) -> list:
+        """A checkout program's extensions, from the domain manifest beside it
         only (runtime-binding Q1): its `serves: [files]` after the program
         when the first one is this program, else none; without `serves`,
-        packs/*.llp in name order (metis_catalog's Domain.serves() —
-        packs/ is where apply writes them); none for a program no manifest
+        extensions/*.llp in name order (metis_catalog's Domain.serves() —
+        extensions/ is where apply writes them); none for a program no manifest
         names."""
         d = path.parent
         m = d / "domain.yaml"
@@ -282,16 +282,16 @@ class ConsoleServer:
         try:
             import yaml
             man = yaml.safe_load(m.read_text()) or {}
-        except Exception:                           # noqa: BLE001 — a manifest mid-write: no packs
+        except Exception:                           # noqa: BLE001 — a manifest mid-write: no extensions
             return []
         serves = man.get("serves")
         if serves:                                  # a pkg.mod:path is never this checkout's program
             files = [(d / str(f)).resolve() for f in serves]
             return files[1:] if files[0] == path.resolve() else []
         prog = (d / str(man.get("program") or "")).resolve() if man.get("program") else None
-        if prog != path.resolve() or not (d / "packs").is_dir():
+        if prog != path.resolve() or not (d / "extensions").is_dir():
             return []
-        return sorted((d / "packs").glob("*.llp"))
+        return sorted((d / "extensions").glob("*.llp"))
 
     @staticmethod
     def _carry_loop(old, new):
@@ -311,10 +311,10 @@ class ConsoleServer:
 
     def open_session(self, sid: str, doc: dict) -> dict:
         """Bind an interpreter to sessions/{sid} from `{llp: name}` (a
-        checkout catalog) or `{source, name, packs?}` (CONSOLE-WS §4a:
-        a copy and its extension packs, compiled in memory — never on
+        checkout catalog) or `{source, name, extensions?}` (CONSOLE-WS §4a:
+        a copy and its extensions, compiled in memory — never on
         the operator's disk). The live interpreter is replaced only
-        when everything compiles and every pack is admitted; a failure
+        when everything compiles and every extension is admitted; a failure
         comes back as {status: "closed", error} and leaves an existing
         session as it was."""
         try:
@@ -329,7 +329,7 @@ class ConsoleServer:
         out = self._fields(sid)
         out["llp"] = llp
         if reports:
-            out["packs"] = reports
+            out["extensions"] = reports
         return out
 
     def serve_one(self, sid: str, cmd: str) -> dict:
@@ -414,8 +414,9 @@ class ConsoleServer:
     NAME = __import__("re").compile(r"^[a-z][a-z0-9_]{1,31}$")
 
     def new_domain(self, name: str, line: str = "") -> str:
-        """domains/<name>/: domain.yaml, a skeleton <name>.llp (the
-        header, #init, one commented rule with its %% line), README.md
+        """domains/<name>/: domain.yaml (the package's keys: its name is
+        the directory's, README.md by convention), a skeleton <name>.llp
+        (the header, #init, one commented rule with its %% line), README.md
         with the display line. Returns the program's name for open."""
         name = (name or "").strip()
         if not self.NAME.match(name):
@@ -426,8 +427,8 @@ class ConsoleServer:
         line = " ".join((line or f"the {name} domain").split())[:160]
         d.mkdir(parents=True)
         (d / "domain.yaml").write_text(
-            f"name: {name}\ndisplay: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
-            f"program: {name}.llp\ndocs: README.md\nrecords: records/\n")
+            f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
+            f"program: {name}.llp\nrecords: records/\n")
         (d / f"{name}.llp").write_text(SKELETON.format(name=name, line=line.replace('"', "'"),
                                                        date=time.strftime("%Y-%m-%d")))
         (d / "README.md").write_text(f"# {name} — {line}\n\nA new domain, made in the loop console. "
@@ -436,7 +437,7 @@ class ConsoleServer:
 
     def save_plan(self, work: dict) -> dict:
         """What `save` would write: the working copy over its checkout
-        program, each pack as <domain>/packs/<name>.llp — each with its
+        program, each extension as <domain>/extensions/<name>.llp — each with its
         unified diff. `token` names exactly this plan (save checks it)."""
         import difflib
         import hashlib
@@ -458,9 +459,9 @@ class ConsoleServer:
             files.append({"path": rel, "new": not path.is_file(), "diff": diff, "text": text})
         plan(prog, str(work.get("copy") or ""))
         safe = __import__("re").compile(r"[^a-z0-9_]+")
-        for k, pk in enumerate(work.get("packs") or [], 1):
-            stem = safe.sub("_", str(pk.get("name") or f"pack{k}").lower()).strip("_") or f"pack{k}"
-            plan(prog.parent / "packs" / f"{stem}.llp", str(pk.get("source") or ""))
+        for k, pk in enumerate(work.get("extensions") or [], 1):
+            stem = safe.sub("_", str(pk.get("name") or f"extension{k}").lower()).strip("_") or f"extension{k}"
+            plan(prog.parent / "extensions" / f"{stem}.llp", str(pk.get("source") or ""))
         token = hashlib.sha256(json.dumps([(f["path"], f["text"]) for f in files]).encode()).hexdigest()[:16]
         return {"files": [{k: v for k, v in f.items() if k != "text"} for f in files], "token": token}
 
@@ -482,9 +483,9 @@ class ConsoleServer:
         root = self.root.resolve()
         out = {prog.relative_to(root).as_posix(): str(work.get("copy") or "")}
         safe = __import__("re").compile(r"[^a-z0-9_]+")
-        for k, pk in enumerate(work.get("packs") or [], 1):
-            stem = safe.sub("_", str(pk.get("name") or f"pack{k}").lower()).strip("_") or f"pack{k}"
-            out[(prog.parent / "packs" / f"{stem}.llp").relative_to(root).as_posix()] = str(pk.get("source") or "")
+        for k, pk in enumerate(work.get("extensions") or [], 1):
+            stem = safe.sub("_", str(pk.get("name") or f"extension{k}").lower()).strip("_") or f"extension{k}"
+            out[(prog.parent / "extensions" / f"{stem}.llp").relative_to(root).as_posix()] = str(pk.get("source") or "")
         return out
 
     def domains_doc(self) -> dict:

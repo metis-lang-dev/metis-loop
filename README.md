@@ -5,7 +5,7 @@
 The explanation / formalization loop for metis catalogs:
 
     surprise records → mined text → formalize (LLM) → gated candidate
-    pack → repair loop → human-approved catalog change
+    extension → repair loop → human-approved catalog change
 
 and the reverse reading, explanation: MAP event read-back and
 surprise narratives over a running catalog.

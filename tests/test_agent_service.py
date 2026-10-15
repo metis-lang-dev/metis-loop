@@ -197,10 +197,10 @@ def test_live_turn_on_the_operators_login():
         r.close()
 
 
-def test_source_tools_edit_pack_and_recompile(agent):
-    """§4a: Claude reads/edits the working copy and adds a pack (memory
+def test_source_tools_edit_extension_and_recompile(agent):
+    """§4a: Claude reads/edits the working copy and adds an extension (memory
     only), every window sees the source frames, recompile certifies it
-    locally; ambiguous edits, pack without extends, bad targets fail."""
+    locally; ambiguous edits, extension without extends, bad targets fail."""
     from test_working_copy import PACK
     FakeClient.hang = False
     FakeClient.script = [
@@ -210,9 +210,9 @@ def test_source_tools_edit_pack_and_recompile(agent):
         ("source_edit", {"target": "copy",
                          "old_str": "% Port of interactive-lp",
                          "new_str": "% Ported from interactive-lp"}),
-        ("pack_create", {"name": "nope", "source": "catalog x 1."}),
-        ("pack_create", {"name": "tired", "source": PACK}),
-        ("source_read", {"target": "pack:9"}),
+        ("extension_create", {"name": "nope", "source": "catalog x 1."}),
+        ("extension_create", {"name": "tired", "source": PACK}),
+        ("source_read", {"target": "extension:9"}),
         ("recompile", {}),
     ]
     with agent.ws() as ws:
@@ -226,7 +226,7 @@ def test_source_tools_edit_pack_and_recompile(agent):
         assert srcs[0]["certified"] is None           # after the edit
         assert srcs[-1]["certified"] == "local"       # after recompile
         assert srcs[-1]["copy"].startswith("% Ported from interactive-lp")
-        assert [p["name"] for p in srcs[-1]["packs"]] == ["tired"]
+        assert [p["name"] for p in srcs[-1]["extensions"]] == ["tired"]
         assert any(f.get("type") == "session" and f.get("recompiled")
                    for f in got)
     # the checkout itself is untouched

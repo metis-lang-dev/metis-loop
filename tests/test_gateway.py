@@ -321,23 +321,23 @@ def test_interventions_served_in_shared_mode_and_whatif_run_capped():
         r.close()
 
 
-def test_the_copy_of_a_domain_carries_its_packs(tmp_path):
+def test_the_copy_of_a_domain_carries_its_extensions(tmp_path):
     """human-loop step 1: the one-click open's working copy is the program
-    AND its packs (the served program), certified as the catalog's."""
+    AND its extensions (the served program), certified as the catalog's."""
     from loop.console_serve import ConsoleServer
     from test_workflow_files import SOIL, VISITOR
     srv = ConsoleServer(tmp_path)
     llp = srv.new_domain("plant", "a plant")
     d = tmp_path / "domains/plant"
     (d / "plant.llp").write_text(SOIL)
-    (d / "packs").mkdir()
-    (d / "packs/visitor.llp").write_text(VISITOR)
+    (d / "extensions").mkdir()
+    (d / "extensions/visitor.llp").write_text(VISITOR)
     r = Running(srv, mode="personal")
     try:
         with r.ws() as ws:
             frames(ws, lambda f: f.get("type") == "catalogs")
             ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp, "req": "r1"}))
             src = frames(ws, lambda f: f.get("type") == "source")[-1]
-            assert src["packs"] == [{"name": "visitor", "source": VISITOR}] and src["certified"] == "checkout"
+            assert src["extensions"] == [{"name": "visitor", "source": VISITOR}] and src["certified"] == "checkout"
     finally:
         r.close()

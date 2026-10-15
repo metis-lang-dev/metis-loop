@@ -210,10 +210,10 @@ console-serve; the artifact is the shared window."
   operator's disk (§3).
 - **Step-4 amendments (user, during the step, recorded post-hoc)**:
   §4a landed in the user's simplified form — the working copy lives
-  in IndexedDB + gateway memory, packs gate on top of it through the
+  in IndexedDB + gateway memory, extensions gate on top of it through the
   loop's own road (`accept` into THIS session only, never the wire),
   recompile = "certified local" or the old world kept; the agent
-  gains source_read / source_edit / pack_create / recompile behind
+  gains source_read / source_edit / extension_create / recompile behind
   the same single-authority gate. UI amendments: CodeMirror 6 as
   floating editors from ONE vendored esbuild bundle (CDN double-
   loads @codemirror/state; artifact surface falls back to textarea),
@@ -223,8 +223,8 @@ console-serve; the artifact is the shared window."
   Web Speech, feature-detected, the Chrome-audio-to-Google notice in
   its title; local Whisper-on-WebGPU a proposed follow-up).
   Doctrine correction found in the step: containment is NAMESPACE
-  PRODUCE-RIGHTS — a pack writes what the base grants its layer; the
-  preamble's "packs never produce base atoms" overstated the gate
+  PRODUCE-RIGHTS — an extension writes what the base grants its layer; the
+  preamble's "extensions never produce base atoms" overstated the gate
   and was corrected (the gate is the semantics; prompts follow it).
 - **D5 — RESOLVED: steps as proposed, plus step 4 (user)** —
   1 gateway + session manager + page WS client (REPL-only, both

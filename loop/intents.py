@@ -114,38 +114,27 @@ def propose(srv, name, text):
 
 
 def manifest_intent(d, n, files):
-    """The manifest's intent: keys for the generated files (CATALOG.md:
-    spec, grammar, prompt, examples{gemma4}, corpus when there is one) —
-    what metis-agent reads a domain's intent material from. A manifest
-    without intent: gets the block appended (its text, comments and order
-    kept); one that has it is the operator's: left as it is, and the keys it
-    lacks are said. Returns (written, lacking)."""
+    """The manifest's intent: {spec: intent.yaml} — the generated files sit
+    at their fixed names in intent/ and are not named in the manifest
+    (CATALOG.md, catalog-entry step 2). A manifest without intent: gets the
+    line appended (its text, comments and order kept); one that has it is
+    left as it is. Returns (written, lacking): lacking names a spec it
+    points elsewhere than intent.yaml."""
     import yaml
-    keys = {"spec": "intent.yaml"}
-    for fn in files:
-        if fn.endswith(".gbnf"):
-            keys["grammar"] = "intent/" + fn
-        elif fn.endswith("-prompt.txt"):
-            keys["prompt"] = "intent/" + fn
-        elif fn.endswith("-spoken.txt"):
-            keys["examples"] = {"gemma4": "intent/" + fn}
-    if (d / "intent" / f"{n}-corpus.tsv").is_file():
-        keys["corpus"] = f"intent/{n}-corpus.tsv"
     f = d / "domain.yaml"
-    text = f.read_text() if f.is_file() else f"name: {n}\n"
+    text = f.read_text() if f.is_file() else ""
     m = yaml.safe_load(text) or {}
     have = m.get("intent")
     if isinstance(have, dict):
-        return False, [k for k in keys if k not in have]
-    block = ["intent:"] + ["    %s: %s" % (k, "{gemma4: %s}" % v["gemma4"] if isinstance(v, dict) else v)
-                           for k, v in keys.items()]
-    f.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(block) + "\n")
+        return False, ([] if have.get("spec") == "intent.yaml" else ["spec"])
+    f.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "intent: {spec: intent.yaml}\n")
     return True, []
 
 
 def save(srv, pending, token):
-    """Write the proposal `token` names, generate its files, and name them
-    in the manifest (its intent: keys) so metis-agent reads them."""
+    """Write the proposal `token` names, generate its files at their fixed
+    names, and name the spec in the manifest (intent: {spec}) so
+    metis-agent reads them."""
     if not pending or pending.get("token") != token:
         raise ValueError("no such proposal — ask Claude for one (`intents`), then `intents save`")
     d, n = domain_of(srv, pending["domain"])

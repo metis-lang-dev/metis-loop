@@ -16,7 +16,7 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"open",   session}       re-attach
                  {ch:"repl", type:"intent", session, id, cmd, actor}
                  {ch:"repl", type:"stop",   session}
-                 {ch:"repl", type:"work",   session, copy?, packs?}  the
+                 {ch:"repl", type:"work",   session, copy?, extensions?}  the
                                           editor's working copy (§4a)
                  {ch:"repl", type:"recompile", session}  rebuild from it
                  {ch:"repl", type:"close",  session}
@@ -32,7 +32,7 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
                  {ch:"repl", type:"queued",  session, id, cmd, actor, ts}
                  {ch:"repl", type:"posting", session, id, cmd, actor, ts, …intent_posting}
-                 {ch:"repl", type:"source",  session, name, copy, packs,
+                 {ch:"repl", type:"source",  session, name, copy, extensions,
                                           certified: checkout|local|null, error, key}
                  {ch:"…",    type:"error",   error, session?, id?}
 
@@ -266,7 +266,7 @@ class Gateway:
         sid = "w" + secrets.token_urlsafe(9).replace("-", "x").replace("_", "y")
         llp = str(msg.get("llp") or "")
         spec = ({"source": msg["source"], "name": msg.get("name"),
-                 "packs": msg.get("packs") or []}
+                 "extensions": msg.get("extensions") or []}
                 if msg.get("source") is not None else {"llp": llp, "host": bool(msg.get("host"))})
         fields = await loop.run_in_executor(
             None, self.srv.open_session, sid, spec)
@@ -288,22 +288,22 @@ class Gateway:
     # -- the working copy (CONSOLE-WS §4a, the user's simple model) -----
     #    open → the catalog's text is the copy (certified: it IS the
     #    checkout's); edits make it uncertified until a recompile builds
-    #    a session from it (+ its extension packs) cleanly. The page keeps
+    #    a session from it (+ its extensions) cleanly. The page keeps
     #    it in IndexedDB; the gateway mirrors it in MEMORY for the agent's
     #    source tools. Nothing reaches the operator's disk.
 
     def _init_work(self, s: "Sess", spec: dict):
         if spec.get("source") is not None:
             copy, name = str(spec["source"]), str(spec.get("name") or "")
-            packs = [dict(p) for p in spec.get("packs") or []]
+            extensions = [dict(p) for p in spec.get("extensions") or []]
             cert = "local"
         else:
             path = self.srv.resolve(spec.get("llp", ""))
-            # the copy is the checkout's: the program and its packs (the served program)
-            copy, name, packs, cert = path.read_text(), str(
+            # the copy is the checkout's: the program and its extensions (the served program)
+            copy, name, extensions, cert = path.read_text(), str(
                 path.relative_to(self.srv.root.resolve()).with_suffix("")), \
-                [{"name": p.stem, "source": p.read_text()} for p in self.srv.checkout_packs(path)], "checkout"
-        s.work = {"name": name, "copy": copy, "packs": packs,
+                [{"name": p.stem, "source": p.read_text()} for p in self.srv.checkout_extensions(path)], "checkout"
+        s.work = {"name": name, "copy": copy, "extensions": extensions,
                   "certified": cert, "error": None}
 
     def _source_frame(self, s: "Sess") -> dict:
@@ -317,7 +317,7 @@ class Gateway:
                 "key": key}
 
     async def work(self, ws, msg):
-        """The page's editor changed the copy or a pack: mirror it (the
+        """The page's editor changed the copy or an extension: mirror it (the
         agent sees the same text) and mark it uncertified."""
         s = self.sessions.get(msg.get("session", ""))
         if not s or ws not in s.subs:
@@ -325,10 +325,10 @@ class Gateway:
         w = s.work
         if "copy" in msg and msg["copy"] != w["copy"]:
             w["copy"], w["certified"] = str(msg["copy"]), None
-        if "packs" in msg and msg["packs"] != w["packs"]:
-            w["packs"] = [{"name": str(p.get("name") or f"pack {k}"),
+        if "extensions" in msg and msg["extensions"] != w["extensions"]:
+            w["extensions"] = [{"name": str(p.get("name") or f"extension {k}"),
                            "source": str(p.get("source") or "")}
-                          for k, p in enumerate(msg["packs"], 1)]
+                          for k, p in enumerate(msg["extensions"], 1)]
             w["certified"] = None
         for other in list(s.subs):
             if other is not ws:
@@ -372,12 +372,12 @@ class Gateway:
                                          "req": msg.get("req"), "error": str(e)})
 
     async def recompile(self, s: "Sess") -> dict:
-        """Build the session again from the working copy + packs (in
+        """Build the session again from the working copy + extensions (in
         memory). Success: a new interpreter, epoch + 1, the copy
         certified (locally); failure: the error, the old world kept."""
         w = s.work
         spec = {"source": w["copy"], "name": w["name"] or "scratch",
-                "packs": w["packs"], "host": bool((getattr(s, "spec", None) or {}).get("host")),
+                "extensions": w["extensions"], "host": bool((getattr(s, "spec", None) or {}).get("host")),
                 "keep_loop": True}          # the sunk records and the selected record go on
         loop = asyncio.get_running_loop()
         ep = self.srv.epochs.get(s.sid, 1)
@@ -395,7 +395,7 @@ class Gateway:
         await self._broadcast(s, self._session_frame(s, recompiled=True))
         await self._broadcast(s, self._source_frame(s))
         return {"ok": True, "key": self.srv.shells[s.sid].key,
-                "packs": fields.get("packs", [])}
+                "extensions": fields.get("extensions", [])}
 
     def _seat(self, sid: str):
         """D3: in personal mode the session's narrate seat goes to the

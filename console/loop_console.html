@@ -191,9 +191,9 @@ details summary{cursor:pointer;color:var(--dim)}
         </div>
       </div>
     </section>
-    <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and packs">
-      <header><span class="tw">▾</span><span class="tt">CATALOG · working copy &amp; packs</span><button class="x" title="hide">✕</button></header>
-      <div class="dbody" id="catdock"><div class="empty">Open a catalog — its working copy and extension packs show here.</div></div>
+    <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and extensions">
+      <header><span class="tw">▾</span><span class="tt">CATALOG · working copy &amp; extensions</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody" id="catdock"><div class="empty">Open a catalog — its working copy and extensions show here.</div></div>
     </section>
     <section class="dock" id="dock-candidates" data-dock="candidates" aria-label="candidates">
       <header><span class="tw">▾</span><span class="tt">CANDIDATES</span><button class="x" title="hide">✕</button></header>
@@ -206,7 +206,7 @@ details summary{cursor:pointer;color:var(--dim)}
   </aside>
   <nav id="strip" aria-label="tool windows">
     <button data-strip="claude" title="Claude">Claude</button>
-    <button data-strip="catalog" title="working copy and packs">Catalog</button>
+    <button data-strip="catalog" title="working copy and extensions">Catalog</button>
     <button data-strip="candidates" title="candidates">Candidates</button>
     <button data-strip="records" title="surprise records">Records</button>
   </nav>
@@ -618,10 +618,10 @@ How to read what comes back:
   exact tier may refuse on its state budget — report that, never guess a number.
 
 == Formalization skill (the loop) ==
-surprise record → mine the gap as a short factual %% text → a candidate LLP pack
-(a pack WRITES only what the base's namespaces grant its layer — the
+surprise record → mine the gap as a short factual %% text → a candidate LLP extension
+(an extension WRITES only what the base's namespaces grant its layer — the
 gate's containment check enforces those produce-rights; a base that
-grants nothing means the pack only reads base atoms and produces its
+grants nothing means the extension only reads base atoms and produces its
 own) → :gate (the cascade decides) →
 on findings, repair FROM THE DIAGNOSTICS (:findings), never by rewriting the base
 → the HUMAN approves in the console's candidate buttons. You never approve:
@@ -846,7 +846,7 @@ function applyManifest(){
    simple model): open → the catalog's text is copied into IndexedDB
    (certified: it IS the checkout's); edits are stored there and make it
    UNCERTIFIED until [recompile] builds the session from it (+ extension
-   packs on top) cleanly; [download] takes it home to merge by the one
+   extensions on top) cleanly; [download] takes it home to merge by the one
    road. Editors are floating, non-modal windows — the REPL and the chat
    stay live beside them. Claude's source tools edit the same copy. */
 let work=null;const wins=new Map();let cmLib=null,cmTried=false,workTimer=null;
@@ -868,20 +868,21 @@ function certOf(w){const st=GW?" · STALE (not applied)":"";
   :w.certified==="local"?["local","certified · local"+st]:["unc","uncertified — recompile"+st]}
 function staleCopy(path){return !!(GW&&work&&String(work.name||"")===path&&work.certified!=="checkout")}
 let offeredCopy=null;          // a browser-kept edited copy offered, not applied (under a record click)
-function sameCopy(a,b){return a.copy===b.copy&&JSON.stringify((a.packs||[]).map(p=>[p.name,p.source]))===JSON.stringify((b.packs||[]).map(p=>[p.name,p.source]))}
+function sameCopy(a,b){return a.copy===b.copy&&JSON.stringify((a.extensions||[]).map(p=>[p.name,p.source]))===JSON.stringify((b.extensions||[]).map(p=>[p.name,p.source]))}
 function restoreCopy(saved){
-  work.copy=saved.copy;work.packs=saved.packs||[];work.certified=null;offeredCopy=null;
-  wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+  work.copy=saved.copy;work.extensions=saved.extensions||[];work.certified=null;offeredCopy=null;
+  wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});
   idb.put(work);refreshEditors();renderCatalogDock()}
 async function onSource(f){
   const first=!work||work.name!==f.name;
-  work={name:f.name,copy:f.copy,packs:f.packs||[],certified:f.certified,error:f.error,key:f.key};
+  work={name:f.name,copy:f.copy,extensions:f.extensions||[],certified:f.certified,error:f.error,key:f.key};
   const underRecord=pendingRec||recordOpen;
   if((first||underRecord)&&f.certified==="checkout"){   // reopen: keep your edits (a record click re-opens the same domain)
     const saved=await idb.get(f.name);
+    if(saved&&!saved.extensions&&saved.packs){saved.extensions=saved.packs;delete saved.packs}   // kept by this browser before the rename (catalog-entry step 2)
     if(saved&&!sameCopy(saved,f)&&saved.certified!=="checkout"){
       if(underRecord){
-        // a record click opens the CATALOG's program and packs, never the browser
+        // a record click opens the CATALOG's program and extensions, never the browser
         // copy (human-loop step 1, the architect's ruling): the copy is offered
         offeredCopy=saved;recordOpen=false;
         banner("your edited copy of "+f.name+" is kept in this browser — “restore my edits” on the working-copy panel applies it",8000);
@@ -890,10 +891,10 @@ async function onSource(f){
       banner("restored your edited copy of "+f.name+" from this browser — uncertified until you recompile it",8000);return}}
   recordOpen=false;offeredCopy=null;
   idb.put(work);refreshEditors();renderCatalogDock()}
-function workTarget(t){return t==="copy"?work.copy:(work.packs[+t.split(":")[1]-1]||{}).source||""}
-function setWorkTarget(t,text){if(t==="copy")work.copy=text;else{const p=work.packs[+t.split(":")[1]-1];if(p)p.source=text}}
+function workTarget(t){return t==="copy"?work.copy:(work.extensions[+t.split(":")[1]-1]||{}).source||""}
+function setWorkTarget(t,text){if(t==="copy")work.copy=text;else{const p=work.extensions[+t.split(":")[1]-1];if(p)p.source=text}}
 function onEdit(t,text){if(!work)return;setWorkTarget(t,text);work.certified=null;work.error=null;idb.put(work);paintWin(t);renderCatalogDock();
-  clearTimeout(workTimer);workTimer=setTimeout(()=>wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs}),500)}
+  clearTimeout(workTimer);workTimer=setTimeout(()=>wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions}),500)}
 async function loadCM(){
   if(cmTried)return cmLib;cmTried=true;
   /* ONE bundle (console/vendor/codemirror.js, built with esbuild from
@@ -914,7 +915,7 @@ async function loadCM(){
     cmLib={EditorView:cm.EditorView,basicSetup:cm.basicSetup,ext:[llp,dark.oneDark],mod:cm}}
   catch(e){cmLib=null;banner("CodeMirror unavailable (offline?) — plain editor instead",5000)}
   return cmLib}
-function winTitle(t){return t==="copy"?(work.name||"copy")+".llp":((work.packs[+t.split(":")[1]-1]||{}).name||t)+" (pack on top of the copy)"}
+function winTitle(t){return t==="copy"?(work.name||"copy")+".llp":((work.extensions[+t.split(":")[1]-1]||{}).name||t)+" (extension on top of the copy)"}
 function paintWin(t){const w=wins.get(t);if(!w||!work)return;const [cls,label]=certOf(work);
   w.el.querySelector(".badge").className="badge "+cls;w.el.querySelector(".badge").textContent=label;
   w.el.querySelector(".t").textContent=winTitle(t);const f=w.el.querySelector(".ffoot");
@@ -924,13 +925,13 @@ function refreshEditors(){for(const [t,w] of wins){const want=workTarget(t);
 let zTop=30;
 async function openEditor(t,opt){
   opt=opt||{};if(!work){banner("Open a catalog first — its copy is what the editor shows.",4000);return}
-  if(t.startsWith("pack:")&&!work.packs[+t.split(":")[1]-1]){banner("no "+t,3000);return}
+  if(t.startsWith("extension:")&&!work.extensions[+t.split(":")[1]-1]){banner("no "+t,3000);return}
   let w=wins.get(t);
   if(!w){const el=document.createElement("section");el.className="fwin";el.setAttribute("aria-label","editor "+t);
     const n=wins.size;el.style.left=(80+n*28)+"px";el.style.top=(70+n*28)+"px";el.style.width="640px";el.style.height="420px";
     el.innerHTML=`<div class="fhead"><span class="t"></span><span class="badge"></span>
-      <button class="btn" data-w="recompile" title="build the session from this copy + packs">recompile</button>
-      ${t==="copy"?'<button class="btn" data-w="pack" title="a new extension pack on top of the copy">+ pack</button>':""}
+      <button class="btn" data-w="recompile" title="build the session from this copy + extensions">recompile</button>
+      ${t==="copy"?'<button class="btn" data-w="extension" title="a new extension on top of the copy">+ extension</button>':""}
       <button class="btn" data-w="download">download</button><button class="btn" data-w="min" title="minimize">_</button><button class="btn" data-w="close">✕</button></div>
       <div class="fbody"></div><div class="ffoot"></div>`;
     document.body.appendChild(el);
@@ -952,9 +953,9 @@ async function openEditor(t,opt){
     head.addEventListener("click",e=>{const b=e.target.closest("[data-w]");if(!b)return;const a=b.dataset.w;
       if(a==="close"){if(view)view.destroy();el.remove();wins.delete(t)}
       else if(a==="min")el.classList.toggle("min");
-      else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+      else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});
         wsSend({ch:"repl",type:"recompile",session:sid});w.el.querySelector(".ffoot").textContent="recompiling…"}
-      else if(a==="pack")newPack();else if(a==="download")downloadText(t)})}
+      else if(a==="extension")newExtension();else if(a==="download")downloadText(t)})}
   w.el.style.zIndex=++zTop;w.el.classList.remove("min");paintWin(t);
   if(opt.rule)gotoRule(w,opt.rule)}
 function gotoRule(w,rule){
@@ -964,10 +965,10 @@ function gotoRule(w,rule){
     w.view.dispatch({selection:{anchor:ln.from,head:ln.to},scrollIntoView:true});w.view.focus()}
   else{const ta=w.el.querySelector("textarea");const at=lines.slice(0,k).join("\n").length+(k?1:0);
     ta.focus();ta.setSelectionRange(at,at+lines[k].length)}}
-function newPack(){
-  const c=(sess&&sess.ctx)||{};const base=c.catalog||"base";const n=work.packs.length+1;
+function newExtension(){
+  const c=(sess&&sess.ctx)||{};const base=c.catalog||"base";const n=work.extensions.length+1;
   const today=new Date().toISOString().slice(0,10);
-  work.packs.push({name:base+"-ext"+n,source:`% <one line: what this pack adds — what was observed>
+  work.extensions.push({name:base+"-ext"+n,source:`% <one line: what this extension adds — what was observed>
 catalog ${base}-ext${n} 1.
 extends ${base}.
 provenance hand "web console" "${today}".
@@ -978,15 +979,15 @@ stage ${c.stage&&c.stage!=="(done)"?c.stage:"go"} {
   example${n} [story] : example${n} -o example${n}.
 }
 `});
-  work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
-  openEditor("pack:"+n)}
+  work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});
+  openEditor("extension:"+n)}
 function saveBlob(name,text){
   const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));const a=document.createElement("a");
   a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000)}
 function baseName(){return String(work.name||"copy").split("/").pop()}
-function downloadText(t){if(!work)return;saveBlob(t==="copy"?baseName()+".llp":(work.packs[+t.split(":")[1]-1].name||"pack")+".llp",workTarget(t))}
+function downloadText(t){if(!work)return;saveBlob(t==="copy"?baseName()+".llp":(work.extensions[+t.split(":")[1]-1].name||"extension")+".llp",workTarget(t))}
 function downloadWork(){if(!work){banner("nothing to save — open a catalog first",3000);return}
-  downloadText("copy");work.packs.forEach((p,k)=>setTimeout(()=>downloadText("pack:"+(k+1)),300*(k+1)))}
+  downloadText("copy");work.extensions.forEach((p,k)=>setTimeout(()=>downloadText("extension:"+(k+1)),300*(k+1)))}
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: fsttm-web lib/shell.js) ---- */
@@ -996,7 +997,7 @@ const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v2",store,defa
 const applyDocks=dockUI.apply;
 
 /* the CATALOG panel: the catalogs of metis-catalog (the domains first, one
-   click opens program + host + notch), then the open copy's state and packs */
+   click opens program + host + notch), then the open copy's state and extensions */
 /* ---- e2e step 1: records from the checkout, new, save ---- */
 function renderRecords(){
   const el=$("#records");if(!GW)return;
@@ -1011,7 +1012,7 @@ function renderRecords(){
 function pickRecord(r){
   // the record's domain must be the open session's: open it first (with its host), then sink + record
   const dom=domainList.find(d=>d.path.startsWith(r.domain+"/"));
-  // on it: the session runs the CATALOG's program and packs (certified · catalog), never a browser copy
+  // on it: the session runs the CATALOG's program and extensions (certified · catalog), never a browser copy
   const onIt=sess&&sess.status!=="closed"&&dom&&String((sess.ctx&&sess.ctx.file)||"").replace(/\.llp$/,"")===dom.path
     &&work&&work.name===dom.path&&work.certified==="checkout";
   pendingRec=r;
@@ -1028,7 +1029,7 @@ function afterSink(f){
   const p=$("#prompt");p.value="mine "+String(r.mined_text||"").replace(/\s*\n\s*/g," ").trim();p.focus()}
 function saveWork(){
   if(!GW||!sid){banner("apply needs an open session on the console backend (on the web: download)",4000);return}
-  if(work){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs})}
+  if(work){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions})}
   wsSend({ch:"repl",type:"save",session:sid})}
 function showSave(f){
   if(f.written){$("#savewin").hidden=true;saveTok=null;
@@ -1037,7 +1038,7 @@ function showSave(f){
   const files=f.files||[];
   $("#savebody").innerHTML=files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
       <pre>${esc(x.diff).split("\n").map(l=>l.startsWith("+")&&!l.startsWith("+++")?`<span class="add">${l}</span>`:l.startsWith("-")&&!l.startsWith("---")?`<span class="del">${l}</span>`:l.startsWith("@@")?`<span class="hunk">${l}</span>`:l).join("\n")}</pre></div>`).join("")
-    :'<div class="empty">Nothing to save: the copy and its packs equal the checkout.</div>';
+    :'<div class="empty">Nothing to save: the copy and its extensions equal the checkout.</div>';
   $("#savego").disabled=!files.length;$("#savewin").hidden=false}
 $("#savex").addEventListener("click",()=>{$("#savewin").hidden=true;saveTok=null});
 $("#savego").addEventListener("click",()=>{if(saveTok&&sid)wsSend({ch:"repl",type:"save",session:sid,token:saveTok})});
@@ -1070,18 +1071,18 @@ function renderDomainList(){
 function renderCatalogDock(){
   const el=$("#catdock");
   const list=renderDomainList();
-  if(!GW||!work){el.innerHTML=list+(GW?"":'<div class="empty" style="margin-top:8px">The working copy and packs need the console backend (metis-loop console-serve).</div>');return}
+  if(!GW||!work){el.innerHTML=list+(GW?"":'<div class="empty" style="margin-top:8px">The working copy and extensions need the console backend (metis-loop console-serve).</div>');return}
   const [cls,label]=certOf(work);
   el.innerHTML=`<div class="ph">OPEN · the working copy</div><div class="wrow"><b>${esc(baseName())}.llp</b><span class="badge ${cls}">${esc(label)}</span>
       <span class="empty">${work.key?"key "+esc(String(work.key).slice(0,12))+"…":""}</span></div>
-    <div class="wrow"><button class="btn" data-cw="edit">edit copy</button><button class="btn" data-cw="pack">+ pack</button>
-      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="apply the copy and its packs to the catalog source (the operator's checkout): the diff first, then one click; never a git commit — metis-agent sees the change and proposes the reload">apply to catalog</button><button class="btn" data-cw="download">download all</button>${offeredCopy?'<button class="btn" data-cw="restore" title="the edited copy this browser kept: apply it over the catalog\'s (uncertified until you recompile)">restore my edits</button>':""}</div>
+    <div class="wrow"><button class="btn" data-cw="edit">edit copy</button><button class="btn" data-cw="extension">+ extension</button>
+      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="apply the copy and its extensions to the catalog source (the operator's checkout): the diff first, then one click; never a git commit — metis-agent sees the change and proposes the reload">apply to catalog</button><button class="btn" data-cw="download">download all</button>${offeredCopy?'<button class="btn" data-cw="restore" title="the edited copy this browser kept: apply it over the catalog\'s (uncertified until you recompile)">restore my edits</button>':""}</div>
     ${work.error?`<pre class="err">${esc(work.error)}</pre>`:""}
-    <div class="ph" style="margin-top:6px">PACKS on top of the copy (each extends it, only adds)</div>
-    <div class="plist">${work.packs.length?work.packs.map((p,k)=>`<div class="pk"><span class="nm">${esc(p.name)}</span>
+    <div class="ph" style="margin-top:6px">EXTENSIONS on top of the copy (each extends it, only adds)</div>
+    <div class="plist">${work.extensions.length?work.extensions.map((p,k)=>`<div class="pk"><span class="nm">${esc(p.name)}</span>
       <button class="btn" data-cw="open" data-k="${k+1}">open</button><button class="btn" data-cw="dl" data-k="${k+1}">download</button>
       <button class="btn" data-cw="rm" data-k="${k+1}" title="remove (uncertifies the copy)">remove</button></div>`).join("")
-      :'<div class="empty">none — [+ pack] starts one on top of the copy</div>'}</div>
+      :'<div class="empty">none — [+ extension] starts one on top of the copy</div>'}</div>
     <div class="empty" style="margin-top:8px">Edits live in this browser (IndexedDB) and in the backend's memory — never on the server's disk. Download and merge by the one road: candidate → gates → approval → commit.</div>
     <div style="margin-top:10px">${list}</div>`}
 $("#catdock").addEventListener("click",e=>{const d=e.target.closest("[data-dom]");
@@ -1089,11 +1090,11 @@ $("#catdock").addEventListener("click",e=>{const d=e.target.closest("[data-dom]"
 $("#catdock").addEventListener("keydown",e=>{const d=e.target.closest("[data-dom]");
   if(d&&(e.key==="Enter"||e.key===" ")&&e.target===d){e.preventDefault();openCatalog({path:d.dataset.dom,host:!!d.dataset.host})}});
 $("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
-  if(a==="edit")openEditor("copy");else if(a==="pack")newPack();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
-  else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});wsSend({ch:"repl",type:"recompile",session:sid})}
-  else if(a==="open")openEditor("pack:"+k);else if(a==="dl")downloadText("pack:"+k);
-  else if(a==="rm"){const t="pack:"+k;if(wins.has(t)){const w=wins.get(t);if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}
-    work.packs.splice(+k-1,1);work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+  if(a==="edit")openEditor("copy");else if(a==="extension")newExtension();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
+  else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});wsSend({ch:"repl",type:"recompile",session:sid})}
+  else if(a==="open")openEditor("extension:"+k);else if(a==="dl")downloadText("extension:"+k);
+  else if(a==="rm"){const t="extension:"+k;if(wins.has(t)){const w=wins.get(t);if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}
+    work.extensions.splice(+k-1,1);work.certified=null;idb.put(work);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});
     renderCatalogDock()}});
 
 /* ---- wiring (static layout first; capabilities light up later) ---- */

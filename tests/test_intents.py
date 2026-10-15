@@ -78,12 +78,16 @@ def test_draft_propose_save(srv, tmp_path):
     assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",
                               "domains/plant/intent/plant-prompt.txt", "domains/plant/intent/plant-spoken.txt",
                               "domains/plant/domain.yaml"]
-    # the manifest names them (what metis-agent reads the intent material from), its own text kept
+    # the manifest names the spec only (the generated files at their fixed names), its own text kept,
+    # and the loader derives them (catalog-entry step 2)
     import yaml
+    import metis_catalog
     mtext = (tmp_path / "domains/plant/domain.yaml").read_text()
     m = yaml.safe_load(mtext)
-    assert m["intent"] == {"spec": "intent.yaml", "grammar": "intent/plant.gbnf", "prompt": "intent/plant-prompt.txt",
-                           "examples": {"gemma4": "intent/plant-spoken.txt"}} and m["name"] == "plant"
+    assert m["intent"] == {"spec": "intent.yaml"} and m["display"] == "the plant"
+    got = metis_catalog.get("plant", tmp_path).intent
+    assert (got["grammar"].name, got["prompt"].name, got["examples"]["gemma4"].name) == \
+        ("plant.gbnf", "plant-prompt.txt", "plant-spoken.txt")
     out2 = it.save(srv, p, p["token"])                                     # again: the operator's block stands
     assert "domains/plant/domain.yaml" not in out2["written"] and "manifest_lacks" not in out2
     assert (tmp_path / "domains/plant/domain.yaml").read_text() == mtext

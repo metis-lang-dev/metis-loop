@@ -113,8 +113,9 @@ also their window into the loop.
    project memory; sync with the ArtifactData tool (collections
    `surprise`, `candidates`; approvals arrive as `status: approved`).
 6. **Approval**: never approve yourself. The human approves in the
-   console (or in chat). On `status: approved`: commit text + pack
-   to metis-catalog (packs/, with the text as the commit body),
+   console (or in chat). On `status: approved`: commit text + the
+   extension to its domain package in metis-catalog
+   (`domains/<name>/extensions/`, with the text as the commit body),
    re-run the catalog gates (`ci/check.sh`), and replay the record
    corpus against the merged catalog — the record's likelihood must
    become positive (`fixed: true`); report the new trace. On
