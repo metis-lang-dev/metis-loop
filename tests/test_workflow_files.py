@@ -63,6 +63,8 @@ def test_records_listed_newest_first_and_sunk_into_a_session(srv, tmp_path):
     srv.open_session("s", {"llp": llp})
     out = srv.load_sink("s", "domains/plant/records/s1.jsonl")
     assert out["ok"] and len(out["records"]) == 2
+    # the page selects the clicked row by its identity, never by its line
+    assert out["ids"] == [[r["record"], r["ts"]] for r in sorted(rows, key=lambda r: r["i"])]
     assert srv.serve_one("s", "record 1")["posting"]["status"] == "done"
     assert srv.shells["s"].loop.text == "a visitor watered it"                # record N adopts the mined text
     for bad in ("domains/plant/plant.llp", "../etc/passwd", "domains/plant/records/nope.jsonl"):

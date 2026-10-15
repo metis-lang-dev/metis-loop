@@ -397,7 +397,13 @@ class ConsoleServer:
             raise ValueError(f"no records file '{rel}'")
         if sid not in self.shells:
             raise ValueError(f"no open session '{sid}'")
-        return self.scrub(self.shells[sid].cmd_sink(str(p)))
+        out = self.shells[sid].cmd_sink(str(p))
+        # each loaded record's identity (its record number and time, as the
+        # Records dock lists it): the page selects the clicked record by it,
+        # never by its line (human-loop step 1, the architect's A6 finding)
+        out["ids"] = [[r.get("record"), r.get("ts") or (r.get("close") or {}).get("ts") or ""]
+                      for r in self.shells[sid].loop.records]
+        return self.scrub(out)
 
     NAME = __import__("re").compile(r"^[a-z][a-z0-9_]{1,31}$")
 
