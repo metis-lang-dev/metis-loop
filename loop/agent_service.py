@@ -16,7 +16,7 @@ browser.
   operator's host), strict MCP config, a can_use_tool gate that denies
   anything but the three, no user/project settings loaded, and
   `--no-session-persistence` — nothing written to disk (D4).
-- Caps: ≤ `agent_tool_calls` (10) tool calls per turn, a per-command
+- Caps: ≤ `agent_tool_calls` (10; the preamble states the configured value) tool calls per turn, a per-command
   timeout, `max_turns`; [stop] interrupts the SDK turn AND the running
   kernel command.
 - History: in memory per session (D4) — a reload restores both panes
@@ -51,13 +51,29 @@ recompile returns the findings and keeps the old world). The viewer sees
 every edit live in their editor. A domain's INTENTS (what the person may
 ask it in the agent): `intents_read()` gives its intent.yaml or a draft
 from the program, `intents_propose(text)` checks a whole new one and shows
-the person the diff (they write it with `intents save`). At most 10 tool calls per answer —
-prefer ctx/transcript when they answer the question. You have no other
-tools: no files, no shell, no web."""
+the person the diff (they write it with `intents save`).
+
+DIRECTIVES (spec §8): a line whose first non-blank character is `#` is
+the interpreter's, not the compiler's (the program key does not change);
+the body is one case-manifest line. The world's starting tokens are
+`#init <atom> <count>` lines, one per atom, anywhere in the file (by
+convention after the stages): `#init hand_free 1`, `#init pot_space 3`,
+`#init at(door) 1`. A catalog with no #init lines opens EMPTY and
+quiescent (its host or scene seeds it elsewhere) — to run it here, add
+#init lines with source_edit (append after the last `}`) and recompile;
+never invent declaration syntax for this. The other directives: `#steps
+<n>`, `#seeds <n>`, `#query <atom>`, `#unknown <atom>`, `#lik <atom>=<v>`,
+`#interactive <stage>`; `#plugin <spec>` and `#notch <file>` are the
+served host's and stay as they are.
+
+At most {cap} tool calls per answer — prefer ctx/transcript when they
+answer the question. You have no other tools: no files, no shell, no web."""
 
 
-def preamble() -> str:
-    """v1's PREAMBLE, extracted from the page (the single source)."""
+def preamble(cfg: Optional[dict] = None) -> str:
+    """v1's PREAMBLE, extracted from the page (the single source), plus the
+    backend's addendum with the [console] cap the gate enforces."""
+    cap = int((cfg or {}).get("agent_tool_calls", 10))
     src = PAGE.read_text()
     ver = re.search(r'const PREAMBLE_VERSION="([^"]*)"', src)
     m = re.search(r"const PREAMBLE=`(.*?)`;\n", src, re.S)
@@ -65,7 +81,7 @@ def preamble() -> str:
         raise RuntimeError("PREAMBLE not found in the console page")
     text = m.group(1).replace("${PREAMBLE_VERSION}",
                               ver.group(1) if ver else "?")
-    return text.replace("\\`", "`") + ADDENDUM
+    return text.replace("\\`", "`") + ADDENDUM.replace("{cap}", str(cap))
 
 
 def available() -> Optional[str]:
@@ -137,7 +153,7 @@ class AgentService:
         self.gw, self.cfg = gw, cfg
         self.chats: Dict[str, Chat] = {}
         self.client_factory = client_factory       # tests inject a fake
-        self.system = preamble()
+        self.system = preamble(cfg)
 
     # -- tools (pre-scoped to one session) -------------------------------
 

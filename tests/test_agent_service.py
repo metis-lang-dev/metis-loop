@@ -152,7 +152,10 @@ def test_sdk_options_are_contained():
         assert not o.allowed_tools            # the gate decides every call
         assert o.setting_sources == []
         assert "no-session-persistence" in o.extra_args
-        assert o.system_prompt == preamble() and "no shell, no web" in o.system_prompt
+        assert o.system_prompt == preamble(svc.cfg) and "no shell, no web" in o.system_prompt
+        assert f"At most {svc.cfg.get('agent_tool_calls', 10)} tool calls" in o.system_prompt
+        assert "#init <atom> <count>" in o.system_prompt       # the directives are taught
+        assert "At most 25 tool calls" in preamble({"agent_tool_calls": 25})
         deny = asyncio.run(o.can_use_tool("Bash", {}, None))
         allow = asyncio.run(o.can_use_tool("mcp__metis__repl", {}, None))
         assert type(deny).__name__ == "PermissionResultDeny"
