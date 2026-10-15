@@ -31,6 +31,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+from loop import shell_lib  # noqa: E402
 from loop.console_serve import ConsoleServer  # noqa: E402
 
 SHIM = r"""
@@ -219,6 +220,12 @@ def main(argv=None):
         def do_GET(self):
             if self.path.split("?")[0] in ("/", "/index.html"):
                 self._send(200, html, "text/html; charset=utf-8")
+            elif self.path.startswith("/lib/"):     # the shell (fsttm-web lib/)
+                got = shell_lib.get(self.path.split("?")[0][len("/lib/"):])
+                if got is None:
+                    self._send(404, "not found", "text/plain")
+                else:
+                    self._send(200, *got)
             elif self.path == "/_store":          # debugging aid
                 with store.lock:
                     self._send(200, json.dumps(store.docs, indent=1,

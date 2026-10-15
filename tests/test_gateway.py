@@ -251,6 +251,24 @@ def test_vendor_bundles_served_and_nothing_else():
         r.close()
 
 
+def test_the_shell_served_without_the_token():
+    """/lib/: the page's shell (fsttm-web lib/shell.css, shell.js) — public
+    code, served before the token check; flat names of the library only."""
+    r = Running(mode="shared", token="t0k")
+    try:
+        for name, ctype in (("shell.css", "text/css"), ("shell.js", "javascript")):
+            with urllib.request.urlopen(f"http://{r.url}/lib/{name}") as f:
+                assert f.status == 200 and ctype in f.headers["Content-Type"]
+                assert b"MetisShell" in f.read() or name == "shell.css"
+        for bad in ("nope.css", "..%2F..%2Fpackage.json", "fixtures/x.json", ".hidden.js"):
+            with pytest.raises(urllib.error.HTTPError):
+                urllib.request.urlopen(f"http://{r.url}/lib/{bad}")
+        with pytest.raises(urllib.error.HTTPError):          # the page itself still needs it
+            urllib.request.urlopen(f"http://{r.url}/")
+    finally:
+        r.close()
+
+
 def test_shared_mode_never_shows_the_operators_paths():
     """Web output names catalogs relative to the checkout
     ("domains/fiction/3lp.llp"), never the operator's filesystem — every

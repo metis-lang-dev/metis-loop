@@ -4,6 +4,7 @@ on ONE port (D1), grown from console/dev_serve.py.
 
     GET /            the page (loop_console.html) with the gateway flag
     GET /healthz     liveness
+    GET /lib/<name>  the consoles' shell and fsttm-web's library (shell_lib; no token: public code)
     WS  /ws          one multiplexed socket per browser window
 
 Frames (JSON, one per message):
@@ -63,6 +64,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
+from . import shell_lib
 from .console_serve import ConsoleServer
 
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
@@ -779,6 +781,11 @@ class Gateway:
                 ("X-Content-Type-Options", "nosniff")]), b)
         if route == "/healthz":
             return respond(HTTPStatus.OK, "ok\n")
+        if route.startswith("/lib/"):                   # the shell: the page's own code, no token
+            got = shell_lib.get(route[len("/lib/"):])
+            if got is None:
+                return respond(HTTPStatus.NOT_FOUND, "not found\n")
+            return respond(HTTPStatus.OK, *got)
         if not self._token_ok(path):
             return respond(HTTPStatus.FORBIDDEN,
                            "this console needs its access token "
@@ -848,6 +855,11 @@ def main(argv=None) -> int:
         from .catalog_index import check
         check()
     except ImportError as e:
+        print(f"console-serve: {e}", file=sys.stderr)
+        return 1
+    try:                        # the page's shell (fsttm-web lib/shell.css, shell.js)
+        shell_lib.check()
+    except FileNotFoundError as e:
         print(f"console-serve: {e}", file=sys.stderr)
         return 1
     gw = Gateway(cfg)

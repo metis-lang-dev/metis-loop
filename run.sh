@@ -10,11 +10,13 @@
 #
 #   VENV=../.venv  PORT=8770  BIND=127.0.0.1  MODE=personal|shared  TOKEN=…
 #   METIS_CATALOG=<checkout>   (default: the sibling ../metis-catalog)
+#   FSTTM_WEB=<checkout>       the page's shell, lib/shell.css + shell.js (default: the sibling ../fsttm-web)
 #
 # The python is the workspace venv (perotheia-packages/.venv: metispy,
 # metis-loop[console] editable) unless VENV says otherwise. The catalog's
 # loader (metis_catalog, a sibling checkout, not on PyPI) is pip-installed
-# editable on first start — the CATALOG panel reads it.
+# editable on first start — the CATALOG panel reads it; so is fsttm-web
+# (fsttm_web), whose lib/shell.css + shell.js are the page's shell, at /lib/.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 RUN="$ROOT/.run"
@@ -57,6 +59,12 @@ if running; then echo "already running (pid $(cat "$PID")) — $URL"; exit 0; fi
 [ -d "$CATALOG/domains" ] || { echo "no metis-catalog checkout at $CATALOG (set METIS_CATALOG)" >&2; exit 1; }
 "$PY" -c "import metis, loop" 2>/dev/null || { echo "the venv at $VENV lacks metispy / metis-loop: $VENV/bin/pip install -e ../metispy -e '$ROOT[console]'" >&2; exit 1; }
 "$PY" -c "import websockets" 2>/dev/null || { echo "installing metis-loop[console] into $VENV …"; "$VENV/bin/pip" install -q -e "$ROOT[console]"; }
+FSTTM="${FSTTM_WEB:-$(cd "$ROOT/.." && pwd)/fsttm-web}"
+if ! "$PY" -c "import fsttm_web" 2>/dev/null; then
+  [ -f "$FSTTM/lib/shell.css" ] || { echo "no fsttm-web checkout at $FSTTM (the page's shell; set FSTTM_WEB)" >&2; exit 1; }
+  echo "installing the page's shell (pip install -e $FSTTM) into $VENV …"
+  "$VENV/bin/pip" install -q -e "$FSTTM"
+fi
 if ! "$PY" -c "import metis_catalog" 2>/dev/null; then
   echo "installing the catalog's loader (pip install -e $CATALOG) into $VENV …"
   "$VENV/bin/pip" install -q -e "$CATALOG"

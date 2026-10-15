@@ -26,7 +26,7 @@ jobs:
       # metis-loop imports metispy and its tests read metis-catalog —
       # both PRIVATE; GITHUB_TOKEN cannot read them. The suite runs when
       # the repo secret METIS_READ_TOKEN (fine-grained PAT, Contents:
-      # read on metis-lang-dev/metispy + metis-lang-dev/metis-catalog)
+      # read on metis-lang-dev/metispy + metis-catalog + fsttm-web)
       # exists; otherwise the job says so instead of passing silently.
       - name: Checkout metispy (private)
         if: env.HAVE_READ_TOKEN == 'true'
@@ -48,6 +48,13 @@ jobs:
           repository: metis-lang-dev/metis-catalog
           token: ${{ secrets.METIS_READ_TOKEN }}
           path: metis-catalog
+      - name: Checkout fsttm-web (private; the page's shell, lib/shell.css + shell.js)
+        if: env.HAVE_READ_TOKEN == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/fsttm-web
+          token: ${{ secrets.METIS_READ_TOKEN }}
+          path: fsttm-web
       - uses: actions/setup-python@v5
         if: env.HAVE_READ_TOKEN == 'true'
         with:
@@ -59,6 +66,7 @@ jobs:
         run: |
           pip install -e ./metispy
           pip install -e ./metis-catalog     # the CATALOG panel's loader (metis_catalog: the manifests)
+          pip install -e ./fsttm-web         # the consoles' shell at /lib/ (fsttm_web.LIB)
           pip install -e './metis-loop[console]' pytest
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         if: env.HAVE_READ_TOKEN == 'true'
@@ -67,5 +75,5 @@ jobs:
       - name: Suite NOT run (no METIS_READ_TOKEN)
         if: env.HAVE_READ_TOKEN != 'true'
         run: |
-          echo "::warning::metis-loop suite skipped: add repo secret METIS_READ_TOKEN (fine-grained PAT, Contents: read on metis-lang-dev/metispy and metis-lang-dev/metis-catalog)"
-          echo "### metis-loop suite NOT run — secret METIS_READ_TOKEN missing (Contents: read on metispy + metis-catalog)" >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::metis-loop suite skipped: add repo secret METIS_READ_TOKEN (fine-grained PAT, Contents: read on metis-lang-dev/metispy, metis-catalog and fsttm-web)"
+          echo "### metis-loop suite NOT run — secret METIS_READ_TOKEN missing (Contents: read on metispy + metis-catalog + fsttm-web)" >> "$GITHUB_STEP_SUMMARY"

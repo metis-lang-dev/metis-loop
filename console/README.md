@@ -13,6 +13,16 @@ URL so the db (collections `surprise`, `candidates`, `intents`,
 `sessions`, and the `meta/catalogs` doc — CONSOLE.md §5; the old
 `catalogs` mirror is retired) and open views carry over.
 
+The shell — the top bar (`#band`), the tool panels (`.dock`) with the
+strip that toggles them, the splitter and the colour tokens — is not in
+this file: it is fsttm-web's `lib/shell.css` + `lib/shell.js`
+(domain-catalog s-2a2bc758 step 3), the same files the metis-agent
+console loads, so the two consoles are one family. The page links them
+relative (`lib/…`): the gateway and `dev_serve.py` serve them at `/lib/`
+(`loop/shell_lib.py`: `$FSTTM_WEB_LIB`, else the `fsttm_web` package,
+else the sibling checkout); an artifact publish passes them as files
+(`files: {"lib/shell.css": …/fsttm-web/lib/shell.css, "lib/shell.js": …}`).
+
 Contract with the loop (SPEC §6): the page renders records/candidates/
 catalogs read-only, writes ONLY candidate decisions (approve/reject)
 and `intents` docs (viewer-typed REPL lines); a loop session drains

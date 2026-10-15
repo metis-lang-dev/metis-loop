@@ -12,8 +12,20 @@ PAGE = (Path(__file__).resolve().parents[1]
 def test_skeleton_free_title_style_first_one_script():
     assert PAGE.lstrip().startswith("<title>")
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
-    assert PAGE.count("<script") == 1
+    # one inline script; the shell (fsttm-web lib/) linked relative, before the page's own
+    assert PAGE.count("<script") == 2 and PAGE.count("<script>") == 1
+    assert PAGE.index('<link rel="stylesheet" href="lib/shell.css">') < PAGE.index("<style>")
+    assert PAGE.index('<script src="lib/shell.js"></script>') < PAGE.index("<script>")
     assert not re.search(r"<!doctype|<html\b|<head\b|<body\b", PAGE, re.I)
+
+
+def test_the_shell_is_fsttm_webs_not_a_copy():
+    """domain-catalog step 3: the band, the docks, the strip and the colour
+    tokens come from fsttm-web's lib/shell.css + shell.js (the metis-agent
+    console loads the same files); the page keeps no copy of them."""
+    assert ":root{" not in PAGE and "#strip{" not in PAGE and ".dock{" not in PAGE
+    assert "MetisShell.docks({" in PAGE and "MetisShell.splitter()" in PAGE
+    assert '<span class="brand">' in PAGE
 
 
 def test_capabilities_only_through_use_and_no_dev_shim():
@@ -57,7 +69,7 @@ def test_working_copy_editor_panels_and_dictation():
     assert 'indexedDB.open("loopconsole"' in PAGE
     for d in ("claude", "catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'store.set("loopconsole.docks.v2"' in PAGE   # v2: the Records dock shows (e2e step 1)
+    assert 'key:"loopconsole.docks.v2"' in PAGE   # v2: the Records dock shows (e2e step 1)
     assert "#chatq{flex:1;background:var(--bg);color:var(--fg)" in PAGE
     assert "window.SpeechRecognition||window.webkitSpeechRecognition" in PAGE
     assert "Google's speech service" in PAGE
