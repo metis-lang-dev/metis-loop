@@ -141,3 +141,22 @@ def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
     assert new.loop.text == "a visitor waters the plant when it is dry" and new.case["init"] == {"dry": 1}
     srv.open_session("s", {"llp": llp})                                      # an open is a new session: none
     assert not srv.shells["s"].loop.records
+
+
+def test_the_manifests_serves_names_the_packs(srv, tmp_path):
+    """runtime-binding Q1 (the architect's ruling): the manifest's `serves:`
+    is the served program — the packs it lists after this program are opened,
+    one in packs/ it leaves out is not; a manifest serving another file (the
+    kitchen's pair scene) gives this program none."""
+    import yaml
+    llp = srv.new_domain("plant", "a plant")
+    d = tmp_path / "domains/plant"
+    (d / "plant.llp").write_text(SOIL)
+    (d / "packs").mkdir()
+    (d / "packs/visitor.llp").write_text(VISITOR)
+    (d / "packs/zz_draft.llp").write_text(VISITOR)
+    man = yaml.safe_load((d / "domain.yaml").read_text())
+    (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["plant.llp", "packs/visitor.llp"]}))
+    assert [p.name for p in srv.checkout_packs(d / "plant.llp")] == ["visitor.llp"]
+    (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["metis.domains.kitchen:catalogs/kitchen_host.llp"]}))
+    assert srv.checkout_packs(d / "plant.llp") == []

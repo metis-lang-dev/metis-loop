@@ -269,10 +269,12 @@ class ConsoleServer:
         return reports
 
     def checkout_packs(self, path: Path) -> list:
-        """A checkout program's packs: packs/*.llp beside the domain
-        manifest that names this program, in name order (metis_catalog's
-        Domain.packs() — where apply writes them); none for a program no
-        manifest names."""
+        """A checkout program's packs, from the domain manifest beside it
+        only (runtime-binding Q1): its `serves: [files]` after the program
+        when the first one is this program, else none; without `serves`,
+        packs/*.llp in name order (metis_catalog's Domain.serves() —
+        packs/ is where apply writes them); none for a program no manifest
+        names."""
         d = path.parent
         m = d / "domain.yaml"
         if not m.is_file():
@@ -282,6 +284,10 @@ class ConsoleServer:
             man = yaml.safe_load(m.read_text()) or {}
         except Exception:                           # noqa: BLE001 — a manifest mid-write: no packs
             return []
+        serves = man.get("serves")
+        if serves:                                  # a pkg.mod:path is never this checkout's program
+            files = [(d / str(f)).resolve() for f in serves]
+            return files[1:] if files[0] == path.resolve() else []
         prog = (d / str(man.get("program") or "")).resolve() if man.get("program") else None
         if prog != path.resolve() or not (d / "packs").is_dir():
             return []
