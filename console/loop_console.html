@@ -235,7 +235,7 @@ let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
 const GW=window.LOOP_GATEWAY||null;
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
-let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],fileRecs=null,saveTok=null,pendingRec=null;
+let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],fileRecs=null,saveTok=null,pendingRec=null,recordOpen=false;
 let unsubSess=null,unsubInt=null,openInsp=null;
 let lenses=new Set(store.get("loopconsole.lenses",["rules","measure"]));
 let hist=store.get("loopconsole.hist",[]),hpos=hist.length;
@@ -867,15 +867,28 @@ function certOf(w){const st=GW?" · STALE (not applied)":"";
   return w.error?["err","recompile failed"+st]:w.certified==="checkout"?["checkout","certified · catalog"]
   :w.certified==="local"?["local","certified · local"+st]:["unc","uncertified — recompile"+st]}
 function staleCopy(path){return !!(GW&&work&&String(work.name||"")===path&&work.certified!=="checkout")}
+let offeredCopy=null;          // a browser-kept edited copy offered, not applied (under a record click)
+function sameCopy(a,b){return a.copy===b.copy&&JSON.stringify((a.packs||[]).map(p=>[p.name,p.source]))===JSON.stringify((b.packs||[]).map(p=>[p.name,p.source]))}
+function restoreCopy(saved){
+  work.copy=saved.copy;work.packs=saved.packs||[];work.certified=null;offeredCopy=null;
+  wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
+  idb.put(work);refreshEditors();renderCatalogDock()}
 async function onSource(f){
   const first=!work||work.name!==f.name;
   work={name:f.name,copy:f.copy,packs:f.packs||[],certified:f.certified,error:f.error,key:f.key};
-  if(first&&f.certified==="checkout"){            // reopen: keep your edits
+  const underRecord=pendingRec||recordOpen;
+  if((first||underRecord)&&f.certified==="checkout"){   // reopen: keep your edits (a record click re-opens the same domain)
     const saved=await idb.get(f.name);
-    if(saved&&(saved.copy!==f.copy||(saved.packs||[]).length)&&saved.certified!=="checkout"){
-      work.copy=saved.copy;work.packs=saved.packs||[];work.certified=null;
-      wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});
-      banner("restored your edited copy of "+f.name+" from this browser — uncertified until you recompile it",8000)}}
+    if(saved&&!sameCopy(saved,f)&&saved.certified!=="checkout"){
+      if(underRecord){
+        // a record click opens the CATALOG's program and packs, never the browser
+        // copy (human-loop step 1, the architect's ruling): the copy is offered
+        offeredCopy=saved;recordOpen=false;
+        banner("your edited copy of "+f.name+" is kept in this browser — “restore my edits” on the working-copy panel applies it",8000);
+        refreshEditors();renderCatalogDock();return}
+      restoreCopy(saved);
+      banner("restored your edited copy of "+f.name+" from this browser — uncertified until you recompile it",8000);return}}
+  recordOpen=false;offeredCopy=null;
   idb.put(work);refreshEditors();renderCatalogDock()}
 function workTarget(t){return t==="copy"?work.copy:(work.packs[+t.split(":")[1]-1]||{}).source||""}
 function setWorkTarget(t,text){if(t==="copy")work.copy=text;else{const p=work.packs[+t.split(":")[1]-1];if(p)p.source=text}}
@@ -998,15 +1011,20 @@ function renderRecords(){
 function pickRecord(r){
   // the record's domain must be the open session's: open it first (with its host), then sink + record
   const dom=domainList.find(d=>d.path.startsWith(r.domain+"/"));
-  const onIt=sess&&sess.status!=="closed"&&dom&&String((sess.ctx&&sess.ctx.file)||"").replace(/\.llp$/,"")===dom.path;
+  // on it: the session runs the CATALOG's program and packs (certified · catalog), never a browser copy
+  const onIt=sess&&sess.status!=="closed"&&dom&&String((sess.ctx&&sess.ctx.file)||"").replace(/\.llp$/,"")===dom.path
+    &&work&&work.name===dom.path&&work.certified==="checkout";
   pendingRec=r;
   if(!onIt){if(!dom){banner("no catalog for "+r.domain+" in the list",5000);pendingRec=null;return}
-    openCatalog({path:dom.path,host:!!dom.host});return}
+    recordOpen=true;openCatalog({path:dom.path,host:!!dom.host});return}
   wsSend({ch:"repl",type:"sink",session:sid,file:r.file})}
 function afterSink(f){
   const r=pendingRec;pendingRec=null;if(!r)return;
   banner(`${(f.records||[]).length} record(s) from ${r.file} loaded`,3000);
-  queue("record "+r.i);
+  // the record by its identity (number and time), never by its line in the file
+  const ids=f.ids||[];let k=ids.findIndex(([n,ts])=>String(n)===String(r.record)&&String(ts)===String(r.ts||""));
+  if(k<0)k=ids.length?ids.length-1:r.i;
+  queue("record "+k);
   const p=$("#prompt");p.value="mine "+String(r.mined_text||"").replace(/\s*\n\s*/g," ").trim();p.focus()}
 function saveWork(){
   if(!GW||!sid){banner("apply needs an open session on the console backend (on the web: download)",4000);return}
@@ -1057,7 +1075,7 @@ function renderCatalogDock(){
   el.innerHTML=`<div class="ph">OPEN · the working copy</div><div class="wrow"><b>${esc(baseName())}.llp</b><span class="badge ${cls}">${esc(label)}</span>
       <span class="empty">${work.key?"key "+esc(String(work.key).slice(0,12))+"…":""}</span></div>
     <div class="wrow"><button class="btn" data-cw="edit">edit copy</button><button class="btn" data-cw="pack">+ pack</button>
-      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="apply the copy and its packs to the catalog source (the operator's checkout): the diff first, then one click; never a git commit — metis-agent sees the change and proposes the reload">apply to catalog</button><button class="btn" data-cw="download">download all</button></div>
+      <button class="btn" data-cw="recompile">recompile</button><button class="btn" data-cw="save" title="apply the copy and its packs to the catalog source (the operator's checkout): the diff first, then one click; never a git commit — metis-agent sees the change and proposes the reload">apply to catalog</button><button class="btn" data-cw="download">download all</button>${offeredCopy?'<button class="btn" data-cw="restore" title="the edited copy this browser kept: apply it over the catalog\'s (uncertified until you recompile)">restore my edits</button>':""}</div>
     ${work.error?`<pre class="err">${esc(work.error)}</pre>`:""}
     <div class="ph" style="margin-top:6px">PACKS on top of the copy (each extends it, only adds)</div>
     <div class="plist">${work.packs.length?work.packs.map((p,k)=>`<div class="pk"><span class="nm">${esc(p.name)}</span>
@@ -1071,7 +1089,7 @@ $("#catdock").addEventListener("click",e=>{const d=e.target.closest("[data-dom]"
 $("#catdock").addEventListener("keydown",e=>{const d=e.target.closest("[data-dom]");
   if(d&&(e.key==="Enter"||e.key===" ")&&e.target===d){e.preventDefault();openCatalog({path:d.dataset.dom,host:!!d.dataset.host})}});
 $("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
-  if(a==="edit")openEditor("copy");else if(a==="pack")newPack();else if(a==="download")downloadWork();else if(a==="save")saveWork();
+  if(a==="edit")openEditor("copy");else if(a==="pack")newPack();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
   else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,packs:work.packs});wsSend({ch:"repl",type:"recompile",session:sid})}
   else if(a==="open")openEditor("pack:"+k);else if(a==="dl")downloadText("pack:"+k);
   else if(a==="rm"){const t="pack:"+k;if(wins.has(t)){const w=wins.get(t);if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}
