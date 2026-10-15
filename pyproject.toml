@@ -7,7 +7,9 @@ dependencies = []
 
 [project.optional-dependencies]
 # `metis-loop console-serve` (docs/CONSOLE-WS.md): the gateway
-console = ["websockets>=13"]
+# (+ the catalog's loader: pip install -e ../metis-catalog, a sibling checkout,
+# not on PyPI — pyyaml here so the loader's path fallback works without it)
+console = ["websockets>=13", "pyyaml>=6"]
 # the console's agent seat (personal mode, CONSOLE-WS §3)
 agent = ["websockets>=13", "claude-agent-sdk"]
 

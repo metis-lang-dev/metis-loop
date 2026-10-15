@@ -53,6 +53,7 @@ import asyncio
 import ctypes
 import json
 import secrets
+import sys
 import threading
 import time
 from collections import deque
@@ -843,6 +844,12 @@ def main(argv=None) -> int:
         print("console-serve: shared mode on a non-local bind without a "
               "token — anyone who can reach it can run catalogs (no AI "
               "is ever served in shared mode).")
+    try:                        # the CATALOG panel's loader, before any page connects
+        from .catalog_index import check
+        check()
+    except ImportError as e:
+        print(f"console-serve: {e}", file=sys.stderr)
+        return 1
     gw = Gateway(cfg)
     if ns.mock_agent and gw.agent:
         from .agent_service import MockClient

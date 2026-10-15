@@ -7,13 +7,27 @@ import sys
 from pathlib import Path
 
 
+SIBLING = Path(__file__).resolve().parents[2] / "metis-catalog"
+INSTALL = ("the catalog's loader is missing: pip install -e " + str(SIBLING)
+           + "  (metis-loop/run.sh does it; it needs pyyaml)")
+
+
 def _mc():
     try:
         import metis_catalog
     except ImportError:          # the sibling checkout (perotheia-packages/metis-catalog)
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "metis-catalog"))
-        import metis_catalog
+        if str(SIBLING) not in sys.path:
+            sys.path.insert(0, str(SIBLING))
+        try:
+            import metis_catalog
+        except ImportError as e:  # the package or its pyyaml
+            raise ImportError(f"{INSTALL} — {e}") from None
     return metis_catalog
+
+
+def check():
+    """At startup: the loader imports, or the one-line fix (an ImportError)."""
+    _mc()
 
 
 def index(root):
