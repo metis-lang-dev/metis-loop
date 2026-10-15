@@ -101,14 +101,16 @@ def propose(srv, name, text):
         rc, out = _agent(srv, n, "--no-model", "--root", str(tmp / "domains"))
     finally:
         subprocess.run(["rm", "-rf", str(tmp)])
+    prog = d / f"{n}.llp"       # an ask must ask: its command's rules only read the state (CATALOG.md asks)
+    asks = gen.asks_problems(spec, prog.read_text()) if prog.is_file() and hasattr(gen, "asks_problems") else []
     f = d / "intent.yaml"
     old = f.read_text() if f.is_file() else ""
     rel = f.relative_to(srv.root.resolve()).as_posix()
     diff = "".join(difflib.unified_diff(old.splitlines(True), text.splitlines(True), f"a/{rel}", f"b/{rel}"))
     token = hashlib.sha256((rel + "\0" + text).encode()).hexdigest()[:16]
-    misses = [l for l in out.splitlines() if l.startswith("MISS")]
+    misses = [l for l in out.splitlines() if l.startswith("MISS")] + ["ASKS " + a for a in asks]
     return {"domain": n, "path": rel, "new": not f.is_file(), "diff": diff, "token": token,
-            "mapped": out.splitlines()[-1] if out else "", "misses": misses, "ok": rc == 0, "text": text}
+            "mapped": out.splitlines()[-1] if out else "", "misses": misses, "ok": rc == 0 and not asks, "text": text}
 
 
 def manifest_intent(d, n, files):

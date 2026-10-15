@@ -447,7 +447,9 @@ class Gateway:
         "intents_read for the current file or a skeleton made from the program's cmd_* atoms and "
         "%% lines, read the program with source_read where the meanings need it, then give the "
         "person a few natural utterances per verb as examples, open-vocabulary slots where the "
-        "person names things, and call intents_propose with the WHOLE file. Fix what it reports. "
+        "person names things, keep under `asks` only the candidate verbs the person asks as a "
+        "question (how it is, where a thing is) and drop the actions, and call intents_propose "
+        "with the WHOLE file. Fix what it reports. "
         "Then tell the person: `intents save` writes it, `intents check` runs the check.")
 
     async def intents(self, s: "Sess", cmd: str, actor: str, iid: str):

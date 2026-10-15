@@ -67,6 +67,9 @@ def test_draft_propose_save(srv, tmp_path):
     assert not (tmp_path / "domains/plant/intent.yaml").exists()          # shown, not written
     bad = it.propose(srv, name, r["text"].replace("atom: cmd_water", "atom: cmd_nope"))
     assert not bad["ok"] and bad["misses"]                                  # an example that maps to no atom
+    assert "asks:\n- CHECK" in r["text"]                                    # the draft's candidate: check only reads
+    ask = it.propose(srv, name, r["text"] + "asks: [WATER]\n")             # an ask that changes the state
+    assert not ask["ok"] and any(m.startswith("ASKS asks WATER: rule water consumes dry") for m in ask["misses"])
     with pytest.raises(ValueError, match="does not generate"):
         it.propose(srv, name, "verbs: [}")
     with pytest.raises(ValueError, match="no such proposal"):
