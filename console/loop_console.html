@@ -829,6 +829,7 @@ function applyManifest(){
     " · narrate: "+(se.narrate||"off")+" · formalize: "+(se.formalize||"off")].join("\n");
   const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
   const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
+  renderRecords();wsSend({ch:"repl",type:"records"});   // the file-backed Records dock, whatever the seats
   $("#chatin").hidden=chat!=="agent";
   if(chat==="agent"){$("#chatsub").textContent="the agent on this host (the operator's login); it acts only through the REPL — its lines show as claude> on the left";
     $("#chatstate").textContent="";if(sid)wsSend({ch:"chat",type:"history",session:sid});return}
@@ -838,8 +839,7 @@ function applyManifest(){
   $("#chatstate").innerHTML=m.mode!=="shared"
     ?"agent chat unavailable on this host — "+esc(m.chat_unavailable||"not configured")
     :"AI chat is not served on this shared instance — it would run on the operator's credentials. Claude for you lives on"+link+" (billed to you).";
-  $("#cands").innerHTML=`<div class="empty">approvals live on${link}.</div>`;
-  renderRecords();wsSend({ch:"repl",type:"records"})}
+  $("#cands").innerHTML=`<div class="empty">approvals live on${link}.</div>`}
 
 /* ---- the working copy + floating editors (CONSOLE-WS §4a, the user's
    simple model): open → the catalog's text is copied into IndexedDB
