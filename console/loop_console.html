@@ -73,7 +73,8 @@ pre.err{color:var(--red)}
 #promptrow .p{color:var(--cyan)}
 #prompt{flex:1;background:transparent;border:none;outline:none}
 .cand{border-top:1px solid var(--line);padding:5px 0}
-/* e2e step 1: file-backed records, new, save */
+/* e2e step 1: file-backed records, new, save; human-loop: the copy not applied */
+.dlist .tag.stale{color:var(--yellow);border-color:#4d3f1f}
 .rec{border-top:1px solid var(--line);padding:4px 0;cursor:pointer}.rec:hover{background:var(--sel)}
 .rec .hd{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}.rec .mt{color:var(--dim);white-space:pre-wrap;margin-top:2px;max-height:5.5em;overflow:hidden}
 .rec.esc .st{color:var(--red);border-color:#5a2a2a}.rec .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line)}
@@ -859,8 +860,13 @@ const idb={db:null,
       q.onsuccess=()=>ok(q.result||null);q.onerror=()=>ok(null)}catch(e){ok(null)}})},
   async put(rec){const db=await this.open();if(!db)return;
     try{db.transaction("work","readwrite").objectStore("work").put({...rec,updated:new Date().toISOString()})}catch(e){}}};
-function certOf(w){return w.error?["err","recompile failed"]:w.certified==="checkout"?["checkout","certified · catalog"]
-  :w.certified==="local"?["local","certified · local"]:["unc","uncertified — recompile"]}
+/* STALE (human-loop step 1, the user): the working copy differs from the
+   catalog file — not yet applied; "certified · catalog" is the copy that IS
+   the catalog's (opened, or applied) */
+function certOf(w){const st=GW?" · STALE (not applied)":"";
+  return w.error?["err","recompile failed"+st]:w.certified==="checkout"?["checkout","certified · catalog"]
+  :w.certified==="local"?["local","certified · local"+st]:["unc","uncertified — recompile"+st]}
+function staleCopy(path){return !!(GW&&work&&String(work.name||"")===path&&work.certified!=="checkout")}
 async function onSource(f){
   const first=!work||work.name!==f.name;
   work={name:f.name,copy:f.copy,packs:f.packs||[],certified:f.certified,error:f.error,key:f.key};
@@ -1028,10 +1034,11 @@ function renderDomainList(){
   if(!domainList.length)return '<div class="empty">No catalog list from the backend yet.</div>';
   const tag=(on,t,title)=>`<span class="tag${on?"":" off"}" title="${esc(title)}">${t}</span>`;
   const doms=domainList.filter(d=>d.kind==="domain"),cats=domainList.filter(d=>d.kind!=="domain");
-  const row=d=>`<div class="dm" data-dom="${esc(d.path)}" data-host="${d.host?1:""}" tabindex="0" role="button"
+  const row=d=>`<div class="dm${work&&String(work.name||"")===d.path?" cur":""}" data-dom="${esc(d.path)}" data-host="${d.host?1:""}" tabindex="0" role="button"
       title="open ${esc(d.path)}.llp${d.host?" with its host "+esc(d.host):""}${d.notch?" and the notch "+esc(d.notch):""}">
     <div class="hd"><span class="nm">${esc(d.name)}</span>
       ${tag(d.has.host,"host",d.host||"no host")}${tag(d.has.notch,"notch",d.notch||"no notch")}${tag(d.has.readme,"readme",d.readme||"no README")}
+      ${staleCopy(d.path)?'<span class="tag stale" title="the working copy differs from the catalog file: apply it (the working-copy panel)">STALE · not applied</span>':""}
       <span class="empty">${esc(d.path)}</span></div>
     <div class="ln">${esc(d.line||"")}</div>
     ${d.readme_text?`<details><summary>README</summary><div class="rd">${esc(d.readme_text)}</div></details>`:""}</div>`;
