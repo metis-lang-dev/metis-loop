@@ -73,7 +73,17 @@ def test_draft_propose_save(srv, tmp_path):
         it.save(srv, p, "wrong")
     out = it.save(srv, p, p["token"])
     assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",
-                              "domains/plant/intent/plant-prompt.txt", "domains/plant/intent/plant-spoken.txt"]
+                              "domains/plant/intent/plant-prompt.txt", "domains/plant/intent/plant-spoken.txt",
+                              "domains/plant/domain.yaml"]
+    # the manifest names them (what metis-agent reads the intent material from), its own text kept
+    import yaml
+    mtext = (tmp_path / "domains/plant/domain.yaml").read_text()
+    m = yaml.safe_load(mtext)
+    assert m["intent"] == {"spec": "intent.yaml", "grammar": "intent/plant.gbnf", "prompt": "intent/plant-prompt.txt",
+                           "examples": {"gemma4": "intent/plant-spoken.txt"}} and m["name"] == "plant"
+    out2 = it.save(srv, p, p["token"])                                     # again: the operator's block stands
+    assert "domains/plant/domain.yaml" not in out2["written"] and "manifest_lacks" not in out2
+    assert (tmp_path / "domains/plant/domain.yaml").read_text() == mtext
     g = (tmp_path / "domains/plant/intent/plant.gbnf").read_text()
     assert '"\\"WATER\\""' in g and '"\\"CHECK\\""' in g
     assert not it.read(srv, name)["draft"]

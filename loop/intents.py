@@ -111,8 +111,39 @@ def propose(srv, name, text):
             "mapped": out.splitlines()[-1] if out else "", "misses": misses, "ok": rc == 0, "text": text}
 
 
+def manifest_intent(d, n, files):
+    """The manifest's intent: keys for the generated files (CATALOG.md:
+    spec, grammar, prompt, examples{gemma4}, corpus when there is one) —
+    what metis-agent reads a domain's intent material from. A manifest
+    without intent: gets the block appended (its text, comments and order
+    kept); one that has it is the operator's: left as it is, and the keys it
+    lacks are said. Returns (written, lacking)."""
+    import yaml
+    keys = {"spec": "intent.yaml"}
+    for fn in files:
+        if fn.endswith(".gbnf"):
+            keys["grammar"] = "intent/" + fn
+        elif fn.endswith("-prompt.txt"):
+            keys["prompt"] = "intent/" + fn
+        elif fn.endswith("-spoken.txt"):
+            keys["examples"] = {"gemma4": "intent/" + fn}
+    if (d / "intent" / f"{n}-corpus.tsv").is_file():
+        keys["corpus"] = f"intent/{n}-corpus.tsv"
+    f = d / "domain.yaml"
+    text = f.read_text() if f.is_file() else f"name: {n}\n"
+    m = yaml.safe_load(text) or {}
+    have = m.get("intent")
+    if isinstance(have, dict):
+        return False, [k for k in keys if k not in have]
+    block = ["intent:"] + ["    %s: %s" % (k, "{gemma4: %s}" % v["gemma4"] if isinstance(v, dict) else v)
+                           for k, v in keys.items()]
+    f.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(block) + "\n")
+    return True, []
+
+
 def save(srv, pending, token):
-    """Write the proposal `token` names, then generate its files."""
+    """Write the proposal `token` names, generate its files, and name them
+    in the manifest (its intent: keys) so metis-agent reads them."""
     if not pending or pending.get("token") != token:
         raise ValueError("no such proposal — ask Claude for one (`intents`), then `intents save`")
     d, n = domain_of(srv, pending["domain"])
@@ -120,10 +151,17 @@ def save(srv, pending, token):
     gen = generator(srv.root)
     written = []
     (d / "intent").mkdir(exist_ok=True)
-    for fn, text in gen.files(n).items():
+    files = gen.files(n)
+    for fn, text in files.items():
         (d / "intent" / fn).write_text(text)
         written.append((d / "intent" / fn).relative_to(srv.root.resolve()).as_posix())
-    return {"domain": n, "written": [pending["path"]] + written}
+    wrote, lacking = manifest_intent(d, n, files)
+    if wrote:
+        written.append((d / "domain.yaml").relative_to(srv.root.resolve()).as_posix())
+    out = {"domain": n, "written": [pending["path"]] + written}
+    if lacking:
+        out["manifest_lacks"] = lacking        # its intent: is the operator's: not touched
+    return out
 
 
 def check(srv, name, model=None):
