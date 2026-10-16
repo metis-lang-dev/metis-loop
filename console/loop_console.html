@@ -9,7 +9,7 @@
 #chatlog{flex:1;overflow:auto;min-height:0}
 .plist .pk{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:3px 0}
 .plist .pk .nm{flex:1}
-/* the shell (band, docks, strip, splitter, tokens, the catalog rows): fsttm-web lib/shell.css */
+/* the shell (band, docks, strip, splitter, tokens, the catalog rows): lib/shell.css, this console's copy */
 .turn{margin:0 0 8px}
 .turn .who{color:var(--dim);font-size:11px}
 .turn.user .who{color:var(--cyan)}.turn.assistant .who{color:var(--purple)}
@@ -991,7 +991,7 @@ function downloadWork(){if(!work){banner("nothing to save — open a catalog fir
   downloadText("copy");work.extensions.forEach((p,k)=>setTimeout(()=>downloadText("extension:"+(k+1)),300*(k+1)))}
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
-   shell: fsttm-web lib/shell.js) ---- */
+   shell: lib/shell.js, this console's copy) ---- */
 const DOCKS=["claude","catalog","candidates","records"];
 const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v2",store,defaults:{claude:{shown:true,open:true},catalog:{shown:true,open:true},
   candidates:{shown:!GW,open:false},records:{shown:true,open:true}}});

@@ -256,7 +256,7 @@ def test_vendor_bundles_served_and_nothing_else():
 
 
 def test_the_shell_served_without_the_token():
-    """/lib/: the page's shell (fsttm-web lib/shell.css, shell.js) — public
+    """/lib/: the page's shell (console/lib/shell.css, shell.js) — public
     code, served before the token check; flat names of the library only."""
     r = Running(mode="shared", token="t0k")
     try:

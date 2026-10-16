@@ -220,7 +220,7 @@ def main(argv=None):
         def do_GET(self):
             if self.path.split("?")[0] in ("/", "/index.html"):
                 self._send(200, html, "text/html; charset=utf-8")
-            elif self.path.startswith("/lib/"):     # the shell (fsttm-web lib/)
+            elif self.path.startswith("/lib/"):     # the shell (console/lib/)
                 got = shell_lib.get(self.path.split("?")[0][len("/lib/"):])
                 if got is None:
                     self._send(404, "not found", "text/plain")

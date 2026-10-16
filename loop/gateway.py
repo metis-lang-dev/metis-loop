@@ -4,7 +4,7 @@ on ONE port (D1), grown from console/dev_serve.py.
 
     GET /            the page (loop_console.html) with the gateway flag
     GET /healthz     liveness
-    GET /lib/<name>  the consoles' shell and fsttm-web's library (shell_lib; no token: public code)
+    GET /lib/<name>  the console's shell, console/lib/ (shell_lib; no token: public code)
     WS  /ws          one multiplexed socket per browser window
 
 Frames (JSON, one per message):
@@ -870,7 +870,7 @@ def main(argv=None) -> int:
     except ImportError as e:
         print(f"console-serve: {e}", file=sys.stderr)
         return 1
-    try:                        # the page's shell (fsttm-web lib/shell.css, shell.js)
+    try:                        # the page's shell (console/lib/shell.css, shell.js)
         shell_lib.check()
     except FileNotFoundError as e:
         print(f"console-serve: {e}", file=sys.stderr)
