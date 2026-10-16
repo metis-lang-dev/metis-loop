@@ -41,6 +41,11 @@ Messages (JSON, one per frame):
     {ch:"chat",  type:"say", text}            (page->gw, personal mode)
     {ch:"chat",  type:"token"|"tool"|"done"|"error", ...}     (gw->page)
     {ch:"meta",  type:"manifest", modes...; type:"catalogs", names}
+    {ch:"meta",  type:"agent", url, up, domains:{name:{state, changed}}}
+                 the band's AGENT field (human-loop step 3; personal mode,
+                 opt-in --metis-agent): metis-agent's state of each served
+                 domain — live · stale (changed on disk, not reloaded) ·
+                 reloaded — from its own /ws catalog frames; up false = down
 
 The posting payload is `intent_posting`'s dict verbatim (CONSOLE §4)
 — the page's renderers do not change. The whitelist is enforced

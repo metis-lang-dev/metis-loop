@@ -33,6 +33,13 @@ def test_the_shell_is_the_consoles_own():
     assert '<span class="brand">' in PAGE
 
 
+def test_the_band_has_the_agents_field():
+    """human-loop step 3: AGENT, hidden until the gateway sends meta/agent."""
+    assert '<span id="b-agentw" hidden' in PAGE and 'id="b-agent"' in PAGE
+    assert 'f.type==="agent"){agentM=f;renderAgent()' in PAGE
+    assert "renderAgent();" in PAGE[PAGE.index("function renderBand(){"):]
+
+
 def test_capabilities_only_through_use_and_no_dev_shim():
     assert not re.search(r"window\.claude\.", PAGE)
     for cap in ('"db"', '"user"', '"sample"'):

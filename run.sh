@@ -10,6 +10,8 @@
 #
 #   VENV=../.venv  PORT=8770  BIND=127.0.0.1  MODE=personal|shared  TOKEN=…
 #   METIS_CATALOG=<checkout>   (default: the sibling ../metis-catalog)
+#   METIS_AGENT_WS=<ws url>    the band's AGENT field: metis-agent's console wire
+#                              (default ws://127.0.0.1:8395/ws in personal mode; empty: off)
 #
 # The python is the workspace venv (perotheia-packages/.venv: metispy,
 # metis-loop[console] editable) unless VENV says otherwise. The catalog's
@@ -66,7 +68,8 @@ fi
 mkdir -p "$RUN"
 [ -s "$LOG" ] && mv "$LOG" "$RUN/gateway-$(date -r "$LOG" +%Y%m%d-%H%M%S).log"
 cd "$ROOT"
-METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${TOKEN:+--token "$TOKEN"} >"$LOG" 2>&1 &
+AGENT_WS="${METIS_AGENT_WS-ws://127.0.0.1:8395/ws}"; [ "$MODE" = personal ] || AGENT_WS=""
+METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} >"$LOG" 2>&1 &
 echo $! >"$PID"
 
 for _ in $(seq 1 60); do

@@ -83,6 +83,9 @@ DEFAULTS = {
     # the kernel's configured endpoint (ollama)
     "narrate": "sdk", "narrate_model": "claude-haiku-4-5",
     "narrate_thinking": 1024,       # tokens; 0 = off (fast, unfaithful)
+    # the band's AGENT field (human-loop step 3): metis-agent's console wire,
+    # e.g. "ws://127.0.0.1:8395/ws"; "" = off; never in shared mode
+    "metis_agent": "",
 }
 # the LLM seats: never through the operator's credentials in shared mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
@@ -203,6 +206,11 @@ class Gateway:
         self.srv = srv or ConsoleServer()
         self.sessions: Dict[str, Sess] = {}
         self.rates: Dict[object, deque] = {}
+        self.pages = set()
+        self.agent_state = None
+        if cfg.get("metis_agent") and cfg["mode"] == "personal":
+            from .agent_state import AgentState
+            self.agent_state = AgentState(cfg["metis_agent"])
         self.agent = None
         if agent_seat(cfg)[0] == "agent":
             from .agent_service import AgentService
@@ -672,8 +680,11 @@ class Gateway:
         # last frame of the greeting: a page waits for it)
         await self._send(ws, {"ch": "meta", "type": "domains",
                               "domains": self.srv.domains()})
+        if self.agent_state:            # the band's AGENT field (step 3)
+            await self._send(ws, self.agent_state.frame())
         await self._send(ws, {"ch": "meta", "type": "catalogs",
                               "names": self.srv.catalogs()})
+        self.pages.add(ws)
         try:
             async for raw in ws:
                 try:
@@ -726,6 +737,7 @@ class Gateway:
                     await self._send(ws, {"ch": "repl", "type": "error",
                                           "error": f"unknown type {typ!r}"})
         finally:
+            self.pages.discard(ws)
             for s in self.sessions.values():
                 s.subs.discard(ws)
 
@@ -831,12 +843,20 @@ class Gateway:
                         self.cfg["idle_secs"]) / 4)))
                     await self.sweep()
             sw = asyncio.create_task(sweeper())
+            ag = None
+            if self.agent_state:
+                async def to_pages(frame):
+                    for ws in list(self.pages):
+                        await self._send(ws, frame)
+                ag = asyncio.create_task(self.agent_state.run(to_pages))
             if ready:
                 ready.set()
             try:
                 await (stop.wait() if stop else asyncio.Future())
             finally:
                 sw.cancel()
+                if ag:
+                    ag.cancel()
                 for sid in list(self.sessions):
                     await self.close(sid, "server stopped")
 
@@ -851,13 +871,17 @@ def main(argv=None) -> int:
     ap.add_argument("--bind")
     ap.add_argument("--mode", choices=["personal", "shared"])
     ap.add_argument("--token")
+    ap.add_argument("--metis-agent", metavar="WS_URL",
+                    help="metis-agent's console wire (ws://127.0.0.1:8395/ws): "
+                         "the band shows the agent's state of the open domain "
+                         "(personal mode)")
     ap.add_argument("--mock-agent", action="store_true",
                     help="DEV ONLY: a canned chat client (never a model) "
                          "for driving the page without spending anyone's "
                          "subscription")
     ns = ap.parse_args(argv)
     cfg = load_config(port=ns.port, bind=ns.bind, mode=ns.mode,
-                      token=ns.token)
+                      token=ns.token, metis_agent=ns.metis_agent)
     if cfg["mode"] == "shared" and cfg["bind"] not in ("127.0.0.1",
                                                        "localhost") \
             and not cfg["token"]:

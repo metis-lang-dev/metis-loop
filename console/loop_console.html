@@ -4,6 +4,8 @@
 .dots{color:var(--cyan);letter-spacing:1px}
 .st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
 .st-done,.st-closed{color:var(--gray)}.st-opening{color:var(--cyan)}
+/* human-loop step 3: the agent's state of the open domain */
+.ag-live{color:var(--green)}.ag-stale{color:var(--yellow)}.ag-reloaded{color:var(--cyan)}.ag-down,.ag-none{color:var(--gray)}
 #dock-claude .dbody{display:flex;flex-direction:column;overflow:hidden}
 #dock-claude.collapsed .dbody{display:none}
 #chatlog{flex:1;overflow:auto;min-height:0}
@@ -127,6 +129,7 @@ details summary{cursor:pointer;color:var(--dim)}
     <span><b>STAGE</b><span class="v" id="b-stage">—</span></span>
     <span><b>BEAT</b><span class="v" id="b-beat">—</span></span>
     <span><b>EPISODE</b><span class="v" id="b-ep">—</span></span>
+    <span id="b-agentw" hidden title="metis-agent's state of this domain"><b>AGENT</b><span class="v" id="b-agent">—</span></span>
     <span id="b-status" class="v">no session</span>
     <span class="v" id="b-fired"></span>
     <span id="sessbar">
@@ -248,8 +251,21 @@ function dots(n){return n<=5?"●".repeat(n):"●×"+n}
 function markOpenDomain(){   // the CATALOG panel's row of the open session (a class flip: no re-render)
   const open=sess&&sess.status!=="closed"?String((sess.ctx&&sess.ctx.file)||$("#catin").value.trim()).replace(/\.llp$/,""):"";
   document.querySelectorAll("#catdock [data-dom]").forEach(e=>e.classList.toggle("cur",!!open&&e.dataset.dom===open))}
+/* the band's AGENT field (human-loop step 3): metis-agent's state of the open
+   domain, from the gateway's meta/agent frame (absent: the field is hidden) */
+let agentM=null;
+function sessDomain(){const m=/^domains\/([^/]+)\//.exec(String(sess&&sess.llp||""));
+  return m?m[1]:(sess&&sess.ctx&&sess.ctx.catalog)||null}
+function renderAgent(){
+  const w=$("#b-agentw"),v=$("#b-agent");w.hidden=!agentM;if(!agentM)return;
+  const d=sessDomain(),row=d&&(agentM.domains||{})[d];
+  const st=!agentM.up?"down":!d?"—":row?row.state:"not served";
+  v.textContent=st;v.className="v ag-"+(row?row.state:agentM.up?"none":"down");
+  w.title=!agentM.up?"metis-agent is not reachable at "+agentM.url
+    :row&&row.changed?"changed on disk, not reloaded: "+row.changed
+    :row?"metis-agent serves "+d+": "+row.state:"metis-agent does not serve "+(d||"this catalog")}
 function renderBand(){
-  markOpenDomain();
+  markOpenDomain();renderAgent();
   const c=sess&&sess.ctx;
   $("#b-sid").textContent=sid?("session "+sid):"";
   const st=sess?(sess.status||"opening"):"no session";
@@ -765,6 +781,7 @@ function wsHandle(f){
   if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
   if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="records"){fileRecs=f.records||[];renderRecords();return}
+  if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();return}
   if(f.ch==="repl"&&f.type==="sink"){if(f.session===sid)afterSink(f);return}
   if(f.ch==="repl"&&f.type==="save"){if(f.session===sid)showSave(f);return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
