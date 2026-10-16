@@ -45,7 +45,11 @@ Messages (JSON, one per frame):
 The posting payload is `intent_posting`'s dict verbatim (CONSOLE §4)
 — the page's renderers do not change. The whitelist is enforced
 gateway-side with the SAME `parse_intent`; `accept` and paths stay
-structurally absent. Config: the metis dot file gains `[console]`
+structurally absent. Its orchestrator verbs (state, ctx, events, why,
+findings; the surprise verbs explain, reset RECORD, escalate) come from
+metispy's REPL API (`metis --tools-json`), and the manifest's `verbs`
+carries each one's description: the chip's title is the line the
+orchestrator's model reads (repl-tools step 4). Config: the metis dot file gains `[console]`
 (port, bind, mode, token?, session caps).
 
 ## 2. Session Manager

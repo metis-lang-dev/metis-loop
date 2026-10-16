@@ -825,7 +825,8 @@ function renderBusy(){
 function applyManifest(){
   const m=manifestM;if(!m)return;
   $("#b-mode").hidden=false;$("#b-modev").textContent=m.mode+(m.mode==="shared"?" · REPL only":"");
-  const se=m.seats||{};
+  const se=m.seats||{},vb=m.verbs||{};   // a declared verb's chip says the model's line
+  document.querySelectorAll("#chips [data-cmd]").forEach(c=>{const v=vb[c.dataset.cmd.split(" ")[0]];if(v)c.title=v});
   $("#b-mode").title=[m.policy||"","seats — repl: yes · chat: "+(se.chat?"agent ("+(m.chat_model||"?")+")":"off")+
     " · narrate: "+(se.narrate||"off")+" · formalize: "+(se.formalize||"off")].join("\n");
   const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;

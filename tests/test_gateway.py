@@ -90,6 +90,10 @@ def test_round_trip_queue_posting_and_reattach(personal):
     with personal.ws() as ws:
         man = json.loads(ws.recv(timeout=5))
         assert man["type"] == "manifest" and man["mode"] == "personal"
+        # repl-tools step 4: the declared verbs carry the REPL API's lines
+        from metis.lang.repl_api import REPL_API
+        assert man["verbs"] == {t["name"]: t["description"] for t in REPL_API
+                                if t["served_by"] in ("repl", "watch")}
         s = open3(ws)
         assert (s["type"], s["req"], s["status"]) == \
             ("session", "r1", "running")

@@ -137,6 +137,14 @@ def narrate_seat(cfg: dict):
     return "llm (ollama)", None
 
 
+def verb_lines() -> dict:
+    """The REPL API's line for each verb it declares to the loop (its
+    reads and surprise verbs, metis.loop.wire DECLARED; repl-tools step
+    4): a chip's title is the line the orchestrator's model reads."""
+    from metis.loop.wire import DECLARED
+    return {n: t["description"] for n, t in sorted(DECLARED.items())}
+
+
 def manifest(cfg: dict) -> dict:
     """What this instance serves — the page renders only these (§4)."""
     shared = cfg["mode"] == "shared"
@@ -153,6 +161,7 @@ def manifest(cfg: dict) -> dict:
         "chat_model": (cfg.get("agent_model") or "the CLI default")
         if seat == "agent" else None,
         "chat_pointer": cfg["artifact_url"] or None,
+        "verbs": verb_lines(),
         "caps": {k: cfg[k] for k in ("max_sessions", "max_sessions_per_ip",
                                      "max_run_steps", "idle_secs",
                                      "rate_per_min")},
