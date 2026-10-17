@@ -1,0 +1,13 @@
+/* The CATALOG panel's own styles (catalog-sdk s-bc1718e3; catalog.js beside
+   it). The rows themselves (.dlist .dm/.hd/.nm/.ln/.tag/.cat, details, .rd)
+   are the console's shell.css; this adds what the panel shows on them: the
+   domain's state chip, its actions, the changed-on-disk line, the stale tag,
+   the foot. Uses the shell's colour tokens. */
+.dlist .dm .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line);color:var(--dim)}
+.dlist .dm .st.active{color:var(--green);border-color:#2a4d33}
+.dlist .dm .st.task{color:var(--cyan);border-color:currentColor}
+.dlist .dm .st.surprise{color:var(--red);border-color:#5a2a2a}
+.dlist .dm .acts{margin-left:auto;display:flex;gap:4px}
+.dlist .dm .chg{color:var(--yellow);margin-top:1px}
+.dlist .tag.stale{color:var(--yellow);border-color:#4d3f1f}
+.dlist .foot{border-top:1px solid var(--line);padding-top:4px;margin-top:2px}
