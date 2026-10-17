@@ -122,6 +122,11 @@ def test_the_manifest_goes_through_the_loaders_check(scratch):
     assert text.count("\n") == old.count("\n") + 1                # one line replaced, one appended
     with pytest.raises(ValueError, match="reload is propose or auto"):
         catalog.plan("dog", manifest={"reload": "sometimes"}, r=scratch)
+    # the loader's containment, read where the manifest will live (needs metis-catalog ae1e3b2)
+    if "root" in __import__("inspect").signature(catalog.loader().check_manifest).parameters:
+        with pytest.raises(ValueError, match="leaves the catalog root"):
+            catalog.plan("dog", manifest={"notch": "../../../../etc/passwd"}, r=scratch)
+        assert catalog.plan("dog", manifest={"notch": "../plant/x.notch.json"}, r=scratch)   # a neighbour's file
 
 
 def test_a_new_domain(scratch):

@@ -338,14 +338,17 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
         if whole is None and not mf.is_file() and "program" not in keys:   # a new domain: its program named
             keys["program"] = prog.relative_to(d).as_posix()
         text = _manifest_text(whole if whole is not None else (mf.read_text() if mf.is_file() else ""), keys)
-        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as t:
-            t.write(text)
-        try:
-            check_manifest(t.name)
-        except Exception as e:
-            raise ValueError(str(e).replace(t.name, f"{name}/domain.yaml")) from None
-        finally:
-            os.unlink(t.name)
+        # checked where it will live: a scratch tree with the package at its
+        # depth under the root (domains/…), so the loader's containment rule
+        # (its paths stay inside the catalog root) reads it as it will
+        with tempfile.TemporaryDirectory(prefix="manifest-") as tmp:
+            t = Path(tmp) / Path(d).resolve().relative_to(r) / "domain.yaml"
+            t.parent.mkdir(parents=True)
+            t.write_text(text)
+            try:
+                check_manifest(t)
+            except Exception as e:
+                raise ValueError(str(e).replace(str(t), f"{name}/domain.yaml").replace(tmp, str(r))) from None
         files[mf] = text
     out = []
     for p, text in files.items():
