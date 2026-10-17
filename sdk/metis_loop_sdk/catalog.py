@@ -17,7 +17,7 @@ metis-catalog and this module, and no consumer.
     catalog.apply("dog", program=…, extensions={…}, intents=…, manifest={…})
                                     # the one validated write: never a commit
 
-    python -m metis_loop_sdk.catalog list|get|intents|fingerprint|apply|widget … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|widget … --json
 
 The catalog widget (the CATALOG panel both consoles show) lives in
 metis-loop's web/catalog/ (web/: the shared web widgets); the SDK carries the
@@ -413,9 +413,11 @@ def main(argv=None):
     ls.add_argument("--consoles", action="store_true", help="the agent console's rows (partners as their own rows)")
     g = sub.add_parser("get", help="one domain: its manifest and what the loader derives")
     g.add_argument("name")
-    it = sub.add_parser("intents", help="the domain's intent material; --skeleton: a first intent.yaml")
+    it = sub.add_parser("intents", help="the domain's intent material; --spec: with intent.yaml read; "
+                                        "--skeleton: a first intent.yaml")
     it.add_argument("name")
     it.add_argument("--skeleton", action="store_true")
+    it.add_argument("--spec", action="store_true", help="intent.yaml itself, read (null without one)")
     fp = sub.add_parser("fingerprint", help="the hash over what a reload takes")
     fp.add_argument("name")
     a_ = sub.add_parser("apply", help="the one validated write (never a commit); --dry-run: the plan and its diff")
@@ -451,8 +453,14 @@ def main(argv=None):
         elif a.cmd == "get":
             out = describe(a.name, r)
         elif a.cmd == "intents":
-            out = {"name": a.name, "skeleton": skeleton(a.name, r)} if a.skeleton else \
-                {"name": a.name, "intent": _jsonable(intents(a.name, r))}
+            if a.skeleton:
+                out = {"name": a.name, "skeleton": skeleton(a.name, r)}
+            else:
+                it_ = intents(a.name, r)
+                out = {"name": a.name, "intent": _jsonable(it_)}
+                if a.spec:
+                    sp = it_.get("spec") or get(a.name, r).dir / "intent.yaml"
+                    out["spec"] = yaml.safe_load(sp.read_text()) if sp.is_file() else None
         elif a.cmd == "fingerprint":
             out = {"name": a.name, "fingerprint": fingerprint(a.name, r)}
         elif a.cmd == "root":

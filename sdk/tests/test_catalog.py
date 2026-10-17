@@ -157,6 +157,10 @@ def test_the_cli_in_json(scratch):
     assert rc == 0 and rows == json.loads(json.dumps(catalog.listing(scratch), default=str))
     rc, dog, _ = _cli("get", "dog", "--json", root=scratch)
     assert rc == 0 and dog["fingerprint"] == catalog.fingerprint("dog", scratch) and dog["has"]["intent"]
+    rc, it, _ = _cli("intents", "dog", "--spec", "--json", root=scratch)
+    import yaml
+    assert rc == 0 and it["spec"] == yaml.safe_load((scratch / "domains/dog/intent.yaml").read_text())
+    assert it["intent"]["spec"].endswith("domains/dog/intent.yaml")
     rc, sk, _ = _cli("intents", "plant", "--skeleton", "--json", root=scratch)
     assert rc == 0 and sk["skeleton"] == catalog.skeleton("plant", scratch)
     prog = (scratch / "domains/dog/dog.llp").read_text() + "% cli\n"
