@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from metis_loop_sdk.models import claude, ollama
+from metis_loop_sdk.models import claude, ollama, openai
 from metis_loop_sdk.models.__main__ import main as cli
 
 
@@ -214,3 +214,153 @@ def test_ollama_probe_ps_failing_is_unknown(monkeypatch):
     monkeypatch.setattr(ollama, "_get", get)
     r = ollama.probe("http://x", "m")
     assert r["up"] and r["on_gpu"] is None and "/api/ps does not answer" in r["why"]
+
+
+# -- openai: the OpenAI-compatible command face (a local capture server, a fake key) --
+
+FAKE_KEY = "sk-or-v1-" + "0" * 64          # never a real key: the tests talk to 127.0.0.1 only
+
+
+class Capture:
+    """A stand-in /chat/completions: records each request (path, headers,
+    body) and answers from a script of (status, json) pairs, the last
+    one repeated."""
+
+    def __init__(self, *script):
+        self.script, self.got = list(script) or [(200, {"choices": [{"message": {"content": "ok"}}]})], []
+        me = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_POST(self):
+                me.got.append({"path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()},
+                               "body": json.loads(self.rfile.read(int(self.headers["content-length"])))})
+                status, obj = me.script.pop(0) if len(me.script) > 1 else me.script[0]
+                b = json.dumps(obj).encode()
+                self.send_response(status)
+                self.send_header("content-length", str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+        self.url = "http://127.0.0.1:%d/v1" % self.srv.server_port
+
+    def close(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+def answer(content, **usage):
+    return (200, {"model": "m", "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
+                  "usage": dict({"prompt_tokens": 10, "completion_tokens": 5}, **usage)})
+
+
+def test_openai_body_dialects():
+    b = openai.body("draft", "deepseek/deepseek-v4-pro", openai.OPENROUTER)
+    assert b == {"model": "deepseek/deepseek-v4-pro", "messages": [{"role": "user", "content": "draft"}],
+                 "stream": False, "max_tokens": 2048, "temperature": 0,
+                 "reasoning": {"effort": "none"}, "provider": {"data_collection": "deny"}}
+    b = openai.body("draft", "metis-gemma4-e4b", "http://127.0.0.1:11434/v1")
+    assert b["reasoning_effort"] == "none" and "reasoning" not in b and "provider" not in b
+    b = openai.body("d", "m", openai.OPENROUTER, reasoning="default", data_collection="allow")
+    assert "reasoning" not in b and b["provider"] == {"data_collection": "allow"}
+    assert "reasoning_effort" not in openai.body("d", "m", "http://x/v1", reasoning="default")
+    assert openai.body("d", "m", "http://x/v1", reasoning="high")["reasoning_effort"] == "high"
+    for n in (0, openai.MAX_TOKENS + 1):
+        with pytest.raises(ValueError, match="max_tokens"):
+            openai.body("d", "m", "http://x/v1", max_tokens=n)
+    assert openai.key_env(openai.OPENROUTER) == "OPENROUTER_API_KEY"
+    assert openai.key_env("http://127.0.0.1:11434/v1") is None
+    assert openai.key_env("http://127.0.0.1:11434/v1", "MY_KEY") == "MY_KEY"
+
+
+def test_openai_complete_sends_the_key_only_where_named(tmp_path):
+    c = Capture(answer("<think>hm</think>\npred lit : lamp.", cost=0.00012))
+    log = tmp_path / "records" / "calls.jsonl"          # its directory made on the first call
+    try:
+        env = {"OPENAI_API_KEY": FAKE_KEY}          # in the environment, but not named: Ollama gets no key
+        assert openai.complete("draft", "m", c.url, env=env) == "pred lit : lamp."
+        assert c.got[-1]["path"] == "/v1/chat/completions"
+        assert "authorization" not in c.got[-1]["headers"]
+        assert c.got[-1]["body"]["reasoning_effort"] == "none" and c.got[-1]["body"]["max_tokens"] == 2048
+        openai.complete("draft", "m", c.url, key_var="MY_KEY", max_tokens=512, env={"MY_KEY": FAKE_KEY}, log=str(log))
+        assert c.got[-1]["headers"]["authorization"] == "Bearer " + FAKE_KEY
+        assert c.got[-1]["body"]["max_tokens"] == 512
+        rec = json.loads(log.read_text())
+        assert rec["cost"] == 0.00012 and rec["completion_tokens"] == 5 and rec["finish_reason"] == "stop"
+        assert FAKE_KEY not in log.read_text()
+        with pytest.raises(RuntimeError, match="MY_KEY is not set"):
+            openai.complete("draft", "m", c.url, key_var="MY_KEY", env={})
+    finally:
+        c.close()
+
+
+def test_openai_openrouter_dialect_on_the_wire(monkeypatch):
+    c = Capture(answer("pred lit : lamp."))
+    monkeypatch.setattr(openai, "is_openrouter", lambda url: True)      # the capture server plays OpenRouter
+    try:
+        assert openai.complete("draft", "deepseek/deepseek-v4-pro", c.url,
+                               env={"OPENROUTER_API_KEY": FAKE_KEY}) == "pred lit : lamp."
+        g = c.got[-1]
+        assert g["headers"]["authorization"] == "Bearer " + FAKE_KEY
+        assert g["body"]["reasoning"] == {"effort": "none"} and g["body"]["provider"] == {"data_collection": "deny"}
+        with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY is not set"):
+            openai.complete("draft", "m", c.url, env={})
+    finally:
+        c.close()
+
+
+def test_openai_errors_are_masked_and_hiccups_retried(monkeypatch):
+    monkeypatch.setattr(openai.time, "sleep", lambda s: None)
+    env = {"K": FAKE_KEY}
+    c = Capture((503, {"error": "busy"}), answer("pred lit : lamp."))
+    try:
+        assert openai.complete("d", "m", c.url, key_var="K", env=env) == "pred lit : lamp."
+        assert len(c.got) == 2                                          # one retry
+    finally:
+        c.close()
+    c = Capture((401, {"error": {"message": "bad key %s" % FAKE_KEY}}))
+    try:
+        with pytest.raises(RuntimeError) as e:
+            openai.complete("d", "m", c.url, key_var="K", env=env)
+        assert "HTTP 401" in str(e.value) and FAKE_KEY not in str(e.value) and "sk-…" in str(e.value)
+        assert len(c.got) == 1                                          # not retried
+    finally:
+        c.close()
+    c = Capture((200, {"error": {"message": "no provider for this request"}}))
+    try:
+        with pytest.raises(RuntimeError, match="no provider"):
+            openai.complete("d", "m", c.url, env={})
+    finally:
+        c.close()
+    c = Capture((200, {"choices": [{"message": {"content": None, "reasoning": "…"}, "finish_reason": "length"}]}))
+    try:
+        with pytest.raises(RuntimeError, match="no content.*length"):
+            openai.complete("d", "m", c.url, env={})
+    finally:
+        c.close()
+    with pytest.raises(RuntimeError, match="127.0.0.1"):                # nothing listens there now
+        openai.complete("d", "m", c.url, env={}, retries=0, timeout=5)
+
+
+def test_openai_cli(capsys, monkeypatch):
+    import io
+    c = Capture(answer("pred lit : lamp."), (401, {"error": "bad key %s" % FAKE_KEY}))
+    monkeypatch.setenv("K", FAKE_KEY)
+    try:
+        monkeypatch.setattr("sys.stdin", io.StringIO("draft"))
+        assert cli(["openai-command", "--base-url", c.url, "--model", "m", "--key-env", "K", "--max-tokens", "300"]) == 0
+        assert capsys.readouterr().out == "pred lit : lamp."
+        assert c.got[-1]["body"]["messages"][0]["content"] == "draft" and c.got[-1]["body"]["max_tokens"] == 300
+        monkeypatch.setattr("sys.stdin", io.StringIO("draft"))
+        assert cli(["openai-command", "--base-url", c.url, "--model", "m", "--key-env", "K"]) == 1
+        err = capsys.readouterr().err
+        assert "HTTP 401" in err and FAKE_KEY not in err
+    finally:
+        c.close()
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    assert cli(["openai-command", "--model", "m"]) == 2
+    with pytest.raises(SystemExit):
+        cli(["openai-command", "--base-url", c.url, "--model", "m", "--reasoning", "lots"])
