@@ -81,7 +81,7 @@ jobs:
         run: |
           python -m venv /tmp/sdk
           /tmp/sdk/bin/pip install ./metispy ./metis-catalog
-          /tmp/sdk/bin/pip install './metis-loop/sdk[test]'
+          /tmp/sdk/bin/pip install './metis-loop/sdk[test,claude]'   # [claude]: the command face's option tests run too
       - name: No human loop in the venv
         run: '! /tmp/sdk/bin/python -c "import loop"'
       - name: The wheel carries the CATALOG widget, byte for byte web/catalog/ (files, not a link)

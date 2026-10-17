@@ -173,6 +173,9 @@ def test_ollama_probe():
         assert r["on_gpu"] is False and "restart it" in r["why"] and "NVIDIA RTX" in r["why"]
         r = ollama.probe(o.url, "metis-gemma4-e4b", gpu_present=lambda: None)
         assert r["on_gpu"] is False and "no NVIDIA GPU" in r["why"]
+        o.ps = [dict(gpu, size_vram=2 << 30)]
+        r = ollama.probe(o.url, "metis-gemma4-e4b")
+        assert r["on_gpu"] is False and "split: only 33% of 6144 MiB" in r["why"]
         o.ps = []
         r = ollama.probe(o.url, "metis-gemma4-e4b")
         assert r["on_gpu"] is None and "not loaded" in r["why"]
@@ -198,3 +201,16 @@ def test_ollama_cli(capsys, monkeypatch):
         assert cli(["ollama-probe", "--url", o.url]) == 2
     finally:
         o.close()
+    capsys.readouterr()
+    assert cli(["ollama-probe", "--url", o.url, "--model", "m"]) == 2      # down: a JSON answer, exit 2
+    assert "does not answer" in json.loads(capsys.readouterr().out)["why"]
+
+
+def test_ollama_probe_ps_failing_is_unknown(monkeypatch):
+    def get(url, path, timeout):
+        if path == "/api/ps":
+            raise OSError("reset by peer")
+        return {"version": "0.24.0"}
+    monkeypatch.setattr(ollama, "_get", get)
+    r = ollama.probe("http://x", "m")
+    assert r["up"] and r["on_gpu"] is None and "/api/ps does not answer" in r["why"]

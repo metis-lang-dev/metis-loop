@@ -60,7 +60,8 @@ def _gpu_present() -> Optional[str]:
 def probe(url: str = DEFAULT_URL, model: Optional[str] = None, load: bool = False,
           timeout: float = 120, gpu_present: Optional[Callable] = None) -> dict:
     """{"url", "up", "version", "loaded": [{name, size, size_vram, gpu}],
-    "model", "on_gpu": True | False | None, "why"}. load=True loads the model
+    "model", "on_gpu": True (all of it in VRAM) | False (on the CPU, or
+    split) | None (unknown), "why"}. load=True loads the model
     first (an empty generate, kept 5 min) — a GPU job: one at a time."""
     gpu_present = gpu_present or _gpu_present
     out = {"url": url, "up": False, "version": None, "loaded": [], "model": model, "on_gpu": None, "why": ""}
@@ -79,7 +80,12 @@ def probe(url: str = DEFAULT_URL, model: Optional[str] = None, load: bool = Fals
         except (OSError, ValueError) as e:
             out["why"] = "loading %s failed: %s" % (model, e)
             return out
-    for m in _get(url, "/api/ps", 10).get("models") or []:
+    try:
+        ps = _get(url, "/api/ps", 10).get("models") or []
+    except (OSError, ValueError) as e:
+        out["why"] = "the server's /api/ps does not answer: %s" % e
+        return out
+    for m in ps:
         size, vram = m.get("size") or 0, m.get("size_vram") or 0
         out["loaded"].append({"name": m.get("name"), "size": size, "size_vram": vram,
                               "gpu": round(vram / size, 3) if size else 0.0})
@@ -91,9 +97,12 @@ def probe(url: str = DEFAULT_URL, model: Optional[str] = None, load: bool = Fals
         out["why"] = "%s is not loaded (load=True / --load loads it)" % model
         return out
     m = hit[0]
-    out["on_gpu"] = m["size_vram"] > 0
+    out["on_gpu"] = m["size_vram"] >= m["size"] > 0       # a partial offload is not on the GPU: it runs at CPU speed
     if out["on_gpu"]:
         out["why"] = "%s: %.0f%% of %d MiB in VRAM" % (m["name"], 100 * m["gpu"], m["size"] >> 20)
+    elif m["size_vram"] > 0:
+        out["why"] = ("%s is split: only %.0f%% of %d MiB in VRAM, the rest on the CPU (the GPU's memory is short: "
+                      "another model or process holds it?)" % (m["name"], 100 * m["gpu"], m["size"] >> 20))
     else:
         gpu = gpu_present()
         out["why"] = ("%s runs on the CPU although the host has a GPU (%s): the server most likely probed for it "
