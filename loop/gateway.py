@@ -5,6 +5,8 @@ on ONE port (D1), grown from console/dev_serve.py.
     GET /            the page (loop_console.html) with the gateway flag
     GET /healthz     liveness
     GET /lib/<name>  the console's shell, console/lib/ (shell_lib; no token: public code)
+    GET /sdk/catalog/<name>  the CATALOG widget (catalog.js, catalog.css) from the installed
+                     loop SDK (metis_loop_sdk.catalog.WIDGET_DIR; no token: public code)
     WS  /ws          one multiplexed socket per browser window
 
 Frames (JSON, one per message):
@@ -28,7 +30,7 @@ Frames (JSON, one per message):
                                           (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
                  {ch:"meta", type:"domains", domains}  the CATALOG panel
-                                          (catalog_index: line, has, readme_text)
+                                          (the SDK's catalog.index: line, has, readme_text)
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
                  {ch:"repl", type:"queued",  session, id, cmd, actor, ts}
                  {ch:"repl", type:"posting", session, id, cmd, actor, ts, …intent_posting}
@@ -63,6 +65,8 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import parse_qs, urlparse
+
+from metis_loop_sdk.catalog import WIDGET_URL, widget_file
 
 from . import shell_lib
 from .console_serve import ConsoleServer
@@ -813,6 +817,11 @@ class Gateway:
             if got is None:
                 return respond(HTTPStatus.NOT_FOUND, "not found\n")
             return respond(HTTPStatus.OK, *got)
+        if route.startswith(WIDGET_URL):                # the CATALOG widget, from the installed SDK: public code
+            got = widget_file(route[len(WIDGET_URL):])
+            if got is None:
+                return respond(HTTPStatus.NOT_FOUND, "not found\n")
+            return respond(HTTPStatus.OK, *got)
         if not self._token_ok(path):
             return respond(HTTPStatus.FORBIDDEN,
                            "this console needs its access token "
@@ -891,8 +900,8 @@ def main(argv=None) -> int:
               "token — anyone who can reach it can run catalogs (no AI "
               "is ever served in shared mode).")
     try:                        # the CATALOG panel's loader, before any page connects
-        from .catalog_index import check
-        check()
+        from metis_loop_sdk import catalog
+        catalog.loader()
     except ImportError as e:
         print(f"console-serve: {e}", file=sys.stderr)
         return 1

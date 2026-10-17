@@ -273,6 +273,24 @@ def test_the_shell_served_without_the_token():
         r.close()
 
 
+def test_the_catalog_widget_served_from_the_sdk():
+    """/sdk/catalog/: the loop SDK's CATALOG widget (catalog-sdk s-bc1718e3),
+    the installed package's bytes — public code, before the token check; its
+    two files only."""
+    from metis_loop_sdk import catalog
+    r = Running(mode="shared", token="t0k")
+    try:
+        for name, ctype in (("catalog.js", "javascript"), ("catalog.css", "text/css")):
+            with urllib.request.urlopen(f"http://{r.url}/sdk/catalog/{name}") as f:
+                assert f.status == 200 and ctype in f.headers["Content-Type"]
+                assert f.read().decode() == (catalog.WIDGET_DIR / name).read_text()
+        for bad in ("catalog.py", "..%2Fcatalog.py", "nope.js", ""):
+            with pytest.raises(urllib.error.HTTPError):
+                urllib.request.urlopen(f"http://{r.url}/sdk/catalog/{bad}")
+    finally:
+        r.close()
+
+
 def test_shared_mode_never_shows_the_operators_paths():
     """Web output names catalogs relative to the checkout
     ("domains/fiction/3lp.llp"), never the operator's filesystem — every

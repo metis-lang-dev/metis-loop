@@ -81,11 +81,11 @@ def test_draft_propose_save(srv, tmp_path):
     # the manifest names the spec only (the generated files at their fixed names), its own text kept,
     # and the loader derives them (catalog-entry step 2)
     import yaml
-    import metis_catalog
+    from metis_loop_sdk import catalog
     mtext = (tmp_path / "domains/plant/domain.yaml").read_text()
     m = yaml.safe_load(mtext)
     assert m["intent"] == {"spec": "intent.yaml"} and m["display"] == "the plant"
-    got = metis_catalog.get("plant", tmp_path).intent
+    got = catalog.get("plant", tmp_path).intent
     assert (got["grammar"].name, got["prompt"].name, got["examples"]["gemma4"].name) == \
         ("plant.gbnf", "plant-prompt.txt", "plant-spoken.txt")
     out2 = it.save(srv, p, p["token"])                                     # again: the operator's block stands

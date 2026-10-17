@@ -31,14 +31,13 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
+from metis_loop_sdk import catalog
+
 
 def catalog_root() -> Path:
-    """$METIS_CATALOG, else the metis-catalog checkout beside this
-    package (perotheia-packages/metis-catalog)."""
-    env = os.environ.get("METIS_CATALOG")
-    if env:
-        return Path(env)
-    return Path(__file__).resolve().parents[2] / "metis-catalog"
+    """The catalog root, by the loop SDK's one rule (metis_loop_sdk.catalog.root:
+    $METIS_CATALOG, else the metis-catalog checkout beside this one)."""
+    return catalog.root()
 
 
 # `new <name>`: the skeleton program (the header, #init, one commented rule
@@ -115,12 +114,11 @@ class ConsoleServer:
                       if ".git" not in p.parts)
 
     def domains(self):
-        """The CATALOG panel's list (catalog_index): every catalog with
-        its display line and what it has, the domains first; a domain
+        """The CATALOG panel's list (the SDK's catalog.index): every catalog
+        with its display line and what it has, the domains first; a domain
         carries its README's opening (readme_text) for the panel."""
-        from .catalog_index import index, readme_head
-        return [{**e, "readme_text": readme_head(self.root, e["readme"])} if e["readme"] else e
-                for e in index(self.root)]
+        return [{**e, "readme_text": catalog.readme_head(e["readme"], r=self.root)} if e["readme"] else e
+                for e in catalog.index(self.root)]
 
     def resolve(self, llp: str) -> Path:
         """A catalog name -> its file in the checkout: the full
@@ -215,8 +213,7 @@ class ConsoleServer:
             # spec from the wire: D4), attached as an operator's --host
             spec = None
             if doc.get("host"):
-                from .catalog_index import host_of
-                spec = host_of(self.root.resolve(), rel)
+                spec = catalog.host_of(rel, self.root)
             r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
             # the served program is the program plus its extensions (human-loop
             # step 1): a domain's extensions/*.llp merged as a session's are
@@ -236,8 +233,7 @@ class ConsoleServer:
         anchor = self._source_path(name)
         spec = None
         if doc.get("host") and anchor.is_file():    # a hosted checkout domain recompiled from its copy
-            from .catalog_index import host_of
-            spec = host_of(self.root.resolve(), anchor.relative_to(self.root.resolve()).with_suffix("").as_posix())
+            spec = catalog.host_of(anchor.relative_to(self.root.resolve()).with_suffix("").as_posix(), self.root)
         r = _source_repl(anchor, src, self.seed, plugin=spec)
         reports = self._merge_extensions(r, extensions)
         label = name.removesuffix(".llp") + " (in memory" + (
@@ -270,28 +266,10 @@ class ConsoleServer:
 
     def checkout_extensions(self, path: Path) -> list:
         """A checkout program's extensions, from the domain manifest beside it
-        only (runtime-binding Q1): its `serves: [files]` after the program
-        when the first one is this program, else none; without `serves`,
-        extensions/*.llp in name order (metis_catalog's Domain.serves() —
-        extensions/ is where apply writes them); none for a program no manifest
-        names."""
-        d = path.parent
-        m = d / "domain.yaml"
-        if not m.is_file():
-            return []
-        try:
-            import yaml
-            man = yaml.safe_load(m.read_text()) or {}
-        except Exception:                           # noqa: BLE001 — a manifest mid-write: no extensions
-            return []
-        serves = man.get("serves")
-        if serves:                                  # a pkg.mod:path is never this checkout's program
-            files = [(d / str(f)).resolve() for f in serves]
-            return files[1:] if files[0] == path.resolve() else []
-        prog = (d / str(man.get("program") or "")).resolve() if man.get("program") else None
-        if prog != path.resolve() or not (d / "extensions").is_dir():
-            return []
-        return sorted((d / "extensions").glob("*.llp"))
+        only (runtime-binding Q1; the SDK's catalog.extensions_of): its served
+        files after the program when the program is the first of them, else
+        none; none for a program no manifest names."""
+        return catalog.extensions_of(path, self.root)
 
     @staticmethod
     def _carry_loop(old, new):
@@ -425,68 +403,47 @@ class ConsoleServer:
         if d.exists():
             raise ValueError(f"domains/{name} exists already — open it from the list")
         line = " ".join((line or f"the {name} domain").split())[:160]
-        d.mkdir(parents=True)
-        (d / "domain.yaml").write_text(
-            f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
-            f"program: {name}.llp\nrecords: records/\n")
-        (d / f"{name}.llp").write_text(SKELETON.format(name=name, line=line.replace('"', "'"),
-                                                       date=time.strftime("%Y-%m-%d")))
-        (d / "README.md").write_text(f"# {name} — {line}\n\nA new domain, made in the loop console. "
-                                     "Describe what there is, what can happen and what the person can ask.\n")
+        catalog.apply(name, r=self.root,       # the one validated write (the manifest checked by the loader)
+                      manifest=f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
+                               f"program: {name}.llp\nrecords: records/\n",
+                      program=SKELETON.format(name=name, line=line.replace('"', "'"), date=time.strftime("%Y-%m-%d")),
+                      readme=f"# {name} — {line}\n\nA new domain, made in the loop console. "
+                             "Describe what there is, what can happen and what the person can ask.\n")
         return f"domains/{name}/{name}"
 
     def save_plan(self, work: dict) -> dict:
         """What `save` would write: the working copy over its checkout
         program, each extension as <domain>/extensions/<name>.llp — each with its
-        unified diff. `token` names exactly this plan (save checks it)."""
-        import difflib
+        unified diff (the SDK's catalog.plan). `token` names exactly this plan
+        (save checks it)."""
         import hashlib
-        name = str(work.get("name") or "")
-        try:
-            prog = self.resolve(name)
-        except ValueError:
-            raise ValueError("save writes a checkout domain: this copy is in memory only "
-                             "(start one with `new`, or open a catalog from the list)")
-        files = []
-
-        def plan(path: Path, text: str):
-            old = path.read_text() if path.is_file() else ""
-            if old == text:
-                return
-            rel = path.relative_to(self.root.resolve()).as_posix()
-            diff = "".join(difflib.unified_diff(old.splitlines(True), text.splitlines(True),
-                                                f"a/{rel}", f"b/{rel}"))
-            files.append({"path": rel, "new": not path.is_file(), "diff": diff, "text": text})
-        plan(prog, str(work.get("copy") or ""))
-        safe = __import__("re").compile(r"[^a-z0-9_]+")
-        for k, pk in enumerate(work.get("extensions") or [], 1):
-            stem = safe.sub("_", str(pk.get("name") or f"extension{k}").lower()).strip("_") or f"extension{k}"
-            plan(prog.parent / "extensions" / f"{stem}.llp", str(pk.get("source") or ""))
+        files = self._plan(work)
         token = hashlib.sha256(json.dumps([(f["path"], f["text"]) for f in files]).encode()).hexdigest()[:16]
         return {"files": [{k: v for k, v in f.items() if k != "text"} for f in files], "token": token}
 
     def save_apply(self, work: dict, token: str) -> dict:
         """Write the plan the viewer saw (its token), never anything else;
-        never a git commit (that stays the operator's)."""
+        never a git commit (that stays the operator's): the SDK's catalog.apply."""
         plan = self.save_plan(work)
         if not token or plan["token"] != token:
             raise ValueError("the copy changed since the diff was shown — review the new diff")
-        texts = self._plan_texts(work)
-        for f in plan["files"]:
-            p = self._under(f["path"])
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(texts[f["path"]])
-        return {"written": [f["path"] for f in plan["files"]], "token": token}
+        out = catalog.apply(*self._plan_args(work), r=self.root)
+        return {"written": out["written"], "token": token}
 
-    def _plan_texts(self, work: dict) -> dict:
-        prog = self.resolve(str(work.get("name") or ""))
-        root = self.root.resolve()
-        out = {prog.relative_to(root).as_posix(): str(work.get("copy") or "")}
-        safe = __import__("re").compile(r"[^a-z0-9_]+")
-        for k, pk in enumerate(work.get("extensions") or [], 1):
-            stem = safe.sub("_", str(pk.get("name") or f"extension{k}").lower()).strip("_") or f"extension{k}"
-            out[(prog.parent / "extensions" / f"{stem}.llp").relative_to(root).as_posix()] = str(pk.get("source") or "")
-        return out
+    def _plan_args(self, work: dict):
+        """(the program's catalog path, its text, {extension name: text})."""
+        try:
+            prog = self.resolve(str(work.get("name") or ""))
+        except ValueError:
+            raise ValueError("save writes a checkout domain: this copy is in memory only "
+                             "(start one with `new`, or open a catalog from the list)")
+        rel = prog.relative_to(self.root.resolve()).with_suffix("").as_posix()
+        exts = {str(pk.get("name") or f"extension{k}"): str(pk.get("source") or "")
+                for k, pk in enumerate(work.get("extensions") or [], 1)}
+        return rel, str(work.get("copy") or ""), exts
+
+    def _plan(self, work: dict) -> list:
+        return catalog.plan(*self._plan_args(work), r=self.root)
 
     def domains_doc(self) -> dict:
         """The `meta/domains` write (the db transport's CATALOG panel)."""

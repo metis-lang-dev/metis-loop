@@ -7,26 +7,26 @@ through the generated prompt and grammar on the intent model, every answer
 mapped to a command atom.
 
 The generator is metis-catalog's tools/intents.py (CATALOG.md
-"intent.yaml"); the mapper and the model run in metis-agent's py venv
-(metis_agent.intent_check), beside this checkout or at $METIS_AGENT_PY.
+"intent.yaml"), reached through the loop SDK (metis_loop_sdk.catalog: the
+generator, and the write — catalog.apply); the mapper and the model run in
+metis-agent's py venv (metis_agent.intent_check), beside this checkout or at
+$METIS_AGENT_PY.
 """
 import difflib
 import hashlib
-import importlib.util
 import os
 import subprocess
 import tempfile
 from pathlib import Path
 
+from metis_loop_sdk import catalog
+
 
 def generator(root):
-    p = Path(root).resolve() / "tools" / "intents.py"
-    if not p.is_file():
-        raise ValueError(f"no intent generator at {p} (metis-catalog tools/intents.py)")
-    spec = importlib.util.spec_from_file_location("metis_catalog_intents", p)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    try:
+        return catalog.generator(root)
+    except FileNotFoundError as e:
+        raise ValueError(str(e)) from None
 
 
 def agent_python(root):
@@ -113,46 +113,25 @@ def propose(srv, name, text):
             "mapped": out.splitlines()[-1] if out else "", "misses": misses, "ok": rc == 0 and not asks, "text": text}
 
 
-def manifest_intent(d, n, files):
-    """The manifest's intent: {spec: intent.yaml} — the generated files sit
-    at their fixed names in intent/ and are not named in the manifest
-    (CATALOG.md, catalog-entry step 2). A manifest without intent: gets the
-    line appended (its text, comments and order kept); one that has it is
-    left as it is. Returns (written, lacking): lacking names a spec it
-    points elsewhere than intent.yaml."""
-    import yaml
-    f = d / "domain.yaml"
-    text = f.read_text() if f.is_file() else ""
-    m = yaml.safe_load(text) or {}
-    have = m.get("intent")
-    if isinstance(have, dict):
-        return False, ([] if have.get("spec") == "intent.yaml" else ["spec"])
-    f.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "intent: {spec: intent.yaml}\n")
-    return True, []
-
-
 def save(srv, pending, token):
     """Write the proposal `token` names, generate its files at their fixed
     names, and name the spec in the manifest (intent: {spec}) so
-    metis-agent reads them."""
+    metis-agent reads them: the SDK's catalog.apply (the manifest checked by
+    the loader). A manifest whose intent: names another spec is the
+    operator's: not touched, reported as manifest_lacks."""
     if not pending or pending.get("token") != token:
         raise ValueError("no such proposal — ask Claude for one (`intents`), then `intents save`")
     d, n = domain_of(srv, pending["domain"])
-    (d / "intent.yaml").write_text(pending["text"])
-    gen = generator(srv.root)
-    written = []
-    (d / "intent").mkdir(exist_ok=True)
-    files = gen.files(n)
-    for fn, text in files.items():
-        (d / "intent" / fn).write_text(text)
-        written.append((d / "intent" / fn).relative_to(srv.root.resolve()).as_posix())
-    wrote, lacking = manifest_intent(d, n, files)
-    if wrote:
-        written.append((d / "domain.yaml").relative_to(srv.root.resolve()).as_posix())
-    out = {"domain": n, "written": [pending["path"]] + written}
+    import yaml
+    f = d / "domain.yaml"
+    have = (yaml.safe_load(f.read_text()) or {}).get("intent") if f.is_file() else None
+    lacking = ["spec"] if isinstance(have, dict) and have.get("spec") != "intent.yaml" else []
+    out = catalog.apply(n, intents=pending["text"], r=srv.root)
+    written = [pending["path"]] + [p for p in out["written"] if p != pending["path"]]
+    res = {"domain": n, "written": written}
     if lacking:
-        out["manifest_lacks"] = lacking        # its intent: is the operator's: not touched
-    return out
+        res["manifest_lacks"] = lacking        # its intent: is the operator's: not touched
+    return res
 
 
 def check(srv, name, model=None):

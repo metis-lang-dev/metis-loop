@@ -12,10 +12,13 @@ PAGE = (Path(__file__).resolve().parents[1]
 def test_skeleton_free_title_style_first_one_script():
     assert PAGE.lstrip().startswith("<title>")
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
-    # one inline script; the shell (console/lib/) linked relative, before the page's own
-    assert PAGE.count("<script") == 2 and PAGE.count("<script>") == 1
+    # one inline script; the shell (console/lib/) and the SDK's CATALOG widget
+    # (sdk/catalog/) linked relative, before the page's own
+    assert PAGE.count("<script") == 3 and PAGE.count("<script>") == 1
     assert PAGE.index('<link rel="stylesheet" href="lib/shell.css">') < PAGE.index("<style>")
+    assert PAGE.index('<link rel="stylesheet" href="sdk/catalog/catalog.css">') < PAGE.index("<style>")
     assert PAGE.index('<script src="lib/shell.js"></script>') < PAGE.index("<script>")
+    assert PAGE.index('<script src="sdk/catalog/catalog.js"></script>') < PAGE.index("<script>")
     assert not re.search(r"<!doctype|<html\b|<head\b|<body\b", PAGE, re.I)
 
 
@@ -117,3 +120,19 @@ def test_graph_renders_in_page_from_the_verbs_dot():
     assert "<summary>DOT source</summary>" in PAGE
     vz = Path(__file__).resolve().parents[1] / "console/vendor/viz.js"
     assert vz.stat().st_size > 500_000 and "renderSVGElement" in vz.read_text()
+
+
+def test_the_catalog_list_is_the_sdks_widget():
+    """catalog-sdk s-bc1718e3: the CATALOG panel's list is the loop SDK's
+    widget (MetisCatalog.render, the same component the metis-agent console
+    shows), served from the installed SDK; the page keeps only its own extras
+    (the stale tag, the path, the new-domain form) and no row markup of its own."""
+    from metis_loop_sdk import catalog
+    assert "MetisCatalog.render(box,domainList," in PAGE
+    assert 'class="dm' not in PAGE and "data-dom=" not in PAGE
+    # its box is its own: the open box's datalist is #catlist (the widget once rendered into it)
+    assert PAGE.count('id="catrows"') == 1 and '$("#catrows")' in PAGE and PAGE.count('id="catlist"') == 1
+    js, css = catalog.widget_file("catalog.js"), catalog.widget_file("catalog.css")
+    assert "window.MetisCatalog" in js[0] and js[1].startswith("text/javascript")
+    assert ".tag.stale" in css[0] and css[1].startswith("text/css")
+    assert catalog.widget_file("../catalog.py") is None and catalog.widget_file("x.js") is None

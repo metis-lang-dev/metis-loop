@@ -1,5 +1,6 @@
 <title>Loop Console</title>
 <link rel="stylesheet" href="lib/shell.css">
+<link rel="stylesheet" href="sdk/catalog/catalog.css">
 <style>
 .dots{color:var(--cyan);letter-spacing:1px}
 .st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
@@ -76,7 +77,6 @@ pre.err{color:var(--red)}
 #prompt{flex:1;background:transparent;border:none;outline:none}
 .cand{border-top:1px solid var(--line);padding:5px 0}
 /* e2e step 1: file-backed records, new, save; human-loop: the copy not applied */
-.dlist .tag.stale{color:var(--yellow);border-color:#4d3f1f}
 .rec{border-top:1px solid var(--line);padding:4px 0;cursor:pointer}.rec:hover{background:var(--sel)}
 .rec .hd{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}.rec .mt{color:var(--dim);white-space:pre-wrap;margin-top:2px;max-height:5.5em;overflow:hidden}
 .rec.esc .st{color:var(--red);border-color:#5a2a2a}.rec .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line)}
@@ -216,6 +216,7 @@ details summary{cursor:pointer;color:var(--dim)}
 </main>
 
 <script src="lib/shell.js"></script>
+<script src="sdk/catalog/catalog.js"></script>
 <script>
 "use strict";
 /* The Loop Console (metis-loop docs/CONSOLE.md): a state inspector over
@@ -1067,29 +1068,31 @@ $("#catdock").addEventListener("submit",e=>{const f=e.target.closest("#newdom");
   const name=f.nm.value.trim(),line=f.ln.value.trim();if(!name){f.nm.focus();return}
   if(!wsUp){banner("Not connected to the console backend",4000);return}
   pendingReq="r"+Math.random().toString(36).slice(2,8);wsSend({ch:"repl",type:"new",name,line,req:pendingReq})});
+/* the list itself is the loop SDK's CATALOG widget (sdk/catalog/catalog.js,
+   MetisCatalog.render: the same component the metis-agent console shows);
+   this console adds the stale tag, the path, the new-domain form */
 function renderDomainList(){
-  if(!domainList.length)return '<div class="empty">No catalog list from the backend yet.</div>';
-  const tag=(on,t,title)=>`<span class="tag${on?"":" off"}" title="${esc(title)}">${t}</span>`;
-  const doms=domainList.filter(d=>d.kind==="domain"),cats=domainList.filter(d=>d.kind!=="domain");
-  const row=d=>`<div class="dm${work&&String(work.name||"")===d.path?" cur":""}" data-dom="${esc(d.path)}" data-host="${d.host?1:""}" tabindex="0" role="button"
-      title="open ${esc(d.path)}.llp${d.host?" with its host "+esc(d.host):""}${d.notch?" and the notch "+esc(d.notch):""}">
-    <div class="hd"><span class="nm">${esc(d.name)}</span>
-      ${tag(d.has.host,"host",d.host||"no host")}${tag(d.has.notch,"notch",d.notch||"no notch")}${tag(d.has.readme,"readme",d.readme||"no README")}
-      ${staleCopy(d.path)?'<span class="tag stale" title="the working copy differs from the catalog file: apply it (the working-copy panel)">STALE · not applied</span>':""}
-      <span class="empty">${esc(d.path)}</span></div>
-    <div class="ln">${esc(d.line||"")}</div>
-    ${d.readme_text?`<details><summary>README</summary><div class="rd">${esc(d.readme_text)}</div></details>`:""}</div>`;
   const nf=GW&&(!manifestM||manifestM.mode!=="shared")?`<form class="newdom" id="newdom"><input class="nm" name="nm" placeholder="new domain" aria-label="new domain name" autocomplete="off" pattern="[a-z][a-z0-9_]{1,31}">
       <input class="ln" name="ln" placeholder="its display line — what it is, what the person can ask" aria-label="display line"><button class="btn">new</button></form>`:"";
-  return nf+`<div class="ph">DOMAINS · ${doms.length} — one click opens the program with its host and notch</div>
-    <div class="dlist">${doms.map(row).join("")}
-    <details style="margin-top:6px"><summary>other catalogs (${cats.length}) — the program alone</summary>
-      ${cats.map(d=>`<div class="cat" data-dom="${esc(d.path)}" tabindex="0" role="button" title="open ${esc(d.path)}.llp">
-        <span class="nm">${esc(d.path)}</span><span class="ln">${esc(d.line||"")}</span></div>`).join("")}</details></div>`}
+  return (domainList.length?nf:"")+'<div id="catrows"></div>'}
+function fillDomainList(){
+  const box=$("#catrows");if(!box)return;
+  if(!window.MetisCatalog){box.innerHTML='<div class="empty">The catalog widget did not load (sdk/catalog/catalog.js: the loop SDK).</div>';return}
+  const el=MetisCatalog.el;
+  MetisCatalog.render(box,domainList,{
+    tags:["host","notch","readme"],
+    head:doms=>`DOMAINS · ${doms.length} — one click opens the program with its host and notch`,
+    current:d=>!!work&&String(work.name||"")===d.path,
+    title:d=>`open ${d.path}.llp${d.host?" with its host "+d.host:""}${d.notch?" and the notch "+d.notch:""}`,
+    decorate:(d,parts)=>{
+      if(staleCopy(d.path))parts.head.push(el("span",{class:"tag stale",title:"the working copy differs from the catalog file: apply it (the working-copy panel)"},"STALE · not applied"));
+      parts.head.push(el("span",{class:"empty"},d.path))},
+    others:true,
+    onOpen:d=>openCatalog({path:d.path,host:!!d.host})})}
 function renderCatalogDock(){
   const el=$("#catdock");
   const list=renderDomainList();
-  if(!GW||!work){el.innerHTML=list+(GW?"":'<div class="empty" style="margin-top:8px">The working copy and extensions need the console backend (metis-loop console-serve).</div>');return}
+  if(!GW||!work){el.innerHTML=list+(GW?"":'<div class="empty" style="margin-top:8px">The working copy and extensions need the console backend (metis-loop console-serve).</div>');fillDomainList();return}
   const [cls,label]=certOf(work);
   el.innerHTML=`<div class="ph">OPEN · the working copy</div><div class="wrow"><b>${esc(baseName())}.llp</b><span class="badge ${cls}">${esc(label)}</span>
       <span class="empty">${work.key?"key "+esc(String(work.key).slice(0,12))+"…":""}</span></div>
@@ -1102,11 +1105,7 @@ function renderCatalogDock(){
       <button class="btn" data-cw="rm" data-k="${k+1}" title="remove (uncertifies the copy)">remove</button></div>`).join("")
       :'<div class="empty">none — [+ extension] starts one on top of the copy</div>'}</div>
     <div class="empty" style="margin-top:8px">Edits live in this browser (IndexedDB) and in the backend's memory — never on the server's disk. Download and merge by the one road: candidate → gates → approval → commit.</div>
-    <div style="margin-top:10px">${list}</div>`}
-$("#catdock").addEventListener("click",e=>{const d=e.target.closest("[data-dom]");
-  if(d&&!e.target.closest("summary,.rd")){openCatalog({path:d.dataset.dom,host:!!d.dataset.host});return}});
-$("#catdock").addEventListener("keydown",e=>{const d=e.target.closest("[data-dom]");
-  if(d&&(e.key==="Enter"||e.key===" ")&&e.target===d){e.preventDefault();openCatalog({path:d.dataset.dom,host:!!d.dataset.host})}});
+    <div style="margin-top:10px">${list}</div>`;fillDomainList()}
 $("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
   if(a==="edit")openEditor("copy");else if(a==="extension")newExtension();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
   else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});wsSend({ch:"repl",type:"recompile",session:sid})}

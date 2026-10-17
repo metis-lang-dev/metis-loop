@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from loop import shell_lib  # noqa: E402
+from metis_loop_sdk.catalog import WIDGET_URL, widget_file  # noqa: E402
 from loop.console_serve import ConsoleServer  # noqa: E402
 
 SHIM = r"""
@@ -222,6 +223,12 @@ def main(argv=None):
                 self._send(200, html, "text/html; charset=utf-8")
             elif self.path.startswith("/lib/"):     # the shell (console/lib/)
                 got = shell_lib.get(self.path.split("?")[0][len("/lib/"):])
+                if got is None:
+                    self._send(404, "not found", "text/plain")
+                else:
+                    self._send(200, *got)
+            elif self.path.startswith(WIDGET_URL):  # the CATALOG widget, from the installed loop SDK
+                got = widget_file(self.path.split("?")[0][len(WIDGET_URL):])
                 if got is None:
                     self._send(404, "not found", "text/plain")
                 else:

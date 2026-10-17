@@ -15,9 +15,11 @@
 #
 # The python is the workspace venv (perotheia-packages/.venv: metispy,
 # metis-loop[console] editable) unless VENV says otherwise. The catalog's
-# loader (metis_catalog, a sibling checkout, not on PyPI) is pip-installed
-# editable on first start — the CATALOG panel reads it. The page's shell
-# (console/lib/shell.css + shell.js) is this repo's own copy, served at /lib/.
+# loader (metis_catalog, a sibling checkout, not on PyPI) and the loop SDK
+# (./sdk, metis_loop_sdk: the one access to the catalog, the CATALOG widget,
+# the model adapters) are pip-installed editable on first start. The page's
+# shell (console/lib/shell.css + shell.js) is this repo's own copy, served at
+# /lib/; the CATALOG widget is the SDK's, served at /sdk/catalog/.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 RUN="$ROOT/.run"
@@ -60,9 +62,13 @@ if running; then echo "already running (pid $(cat "$PID")) — $URL"; exit 0; fi
 [ -d "$CATALOG/domains" ] || { echo "no metis-catalog checkout at $CATALOG (set METIS_CATALOG)" >&2; exit 1; }
 "$PY" -c "import metis, loop" 2>/dev/null || { echo "the venv at $VENV lacks metispy / metis-loop: $VENV/bin/pip install -e ../metispy -e '$ROOT[console]'" >&2; exit 1; }
 "$PY" -c "import websockets" 2>/dev/null || { echo "installing metis-loop[console] into $VENV …"; "$VENV/bin/pip" install -q -e "$ROOT[console]"; }
-if ! "$PY" -c "import metis_catalog" 2>/dev/null; then
+if ! "$PY" -c "import metis_loop_sdk.catalog as c; c.loader()" 2>/dev/null; then
   echo "installing the catalog's loader (pip install -e $CATALOG) into $VENV …"
   "$VENV/bin/pip" install -q -e "$CATALOG"
+fi
+if ! "$PY" -c "import metis_loop_sdk.catalog" 2>/dev/null; then   # after the loader: the SDK names it as a dependency
+  echo "installing the loop SDK (pip install -e $ROOT/sdk) into $VENV …"
+  "$VENV/bin/pip" install -q -e "$ROOT/sdk"
 fi
 
 mkdir -p "$RUN"

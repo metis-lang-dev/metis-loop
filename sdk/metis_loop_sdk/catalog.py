@@ -217,6 +217,31 @@ def fingerprint(name, r=None):
     return h.hexdigest()
 
 
+def extensions_of(program, r=None):
+    """A program file's extensions, by the manifest beside it only
+    (runtime-binding Q1): the domain's served files after the program when
+    the program is the first of them (Domain.serves()), else none — none for
+    a program no manifest names, or a manifest that does not read (mid-write)."""
+    program = Path(program).resolve()
+    mf = program.parent / "domain.yaml"
+    if not mf.is_file():
+        return []
+    try:
+        d = loader().Domain(program.parent.name, program.parent, check_manifest(mf))
+        served = d.serves()
+    except Exception:                       # noqa: BLE001 — a manifest mid-write, a missing package
+        return []
+    return list(served[1:]) if served and served[0] == program else []
+
+
+def widget_file(name):
+    """(text, content type) of one widget file for WIDGET_URL<name>, or None."""
+    if name not in WIDGET_FILES:
+        return None
+    return (WIDGET_DIR / name).read_text(), ("text/javascript; charset=utf-8" if name.endswith(".js")
+                                              else "text/css; charset=utf-8")
+
+
 # ── the one validated write ──────────────────────────────────────────────────
 
 def _program_of(name, r):
@@ -264,14 +289,14 @@ def _manifest_text(old, keys):
     return "".join(lines)
 
 
-def plan(name, program=None, extensions=None, intents=None, manifest=None, r=None):
+def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, r=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
     {name: text} written as <dir>/extensions/<name>.llp; intents
     intent.yaml's text (its generated files in intent/, and intent: {spec}
     named in the manifest); manifest {key: value} set in domain.yaml (or
-    its whole text, a str). The
+    its whole text, a str); readme the domain's README.md. The
     manifest is checked with the loader's check_manifest and the intents
     must generate before anything is planned."""
     import re
@@ -286,6 +311,10 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, r=Non
         files[prog.parent / "extensions" / f"{stem}.llp"] = text
     whole = manifest if isinstance(manifest, str) else None      # domain.yaml's whole text
     keys = {} if whole is not None else dict(manifest or {})
+    if readme is not None:
+        if d is None:
+            raise ValueError(f"{name}: a README belongs to a domain directory")
+        files[d / "README.md"] = readme
     if intents is not None:
         if d is None:
             raise ValueError(f"{name}: intents belong to a domain directory (domains/<name>/)")
@@ -329,13 +358,13 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, r=Non
     return out
 
 
-def apply(name, program=None, extensions=None, intents=None, manifest=None, r=None):
+def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, r=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
-    files = plan(name, program, extensions, intents, manifest, r)
+    files = plan(name, program, extensions, intents, manifest, readme, r)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
