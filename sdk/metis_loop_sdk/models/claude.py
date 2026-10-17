@@ -22,9 +22,7 @@ in an empty directory, so the model sees only what the seat sends. It was
 metis-agent's claude_seat.py (SPECIALIST.md §4), which now subclasses it
 for the specialist's cont protocol. Two call protocols:
   REPL  `REPL: <verb> <arg>` — one string argument (the REPL's lines)
-  JSON  `CALL: <tool> {json}` — named arguments (the chat endpoint's tools)
-
-The chat face is chat.py, over the seat."""
+  JSON  `CALL: <tool> {json}` — named arguments (JSON-schema tools)"""
 import json
 import os
 import re

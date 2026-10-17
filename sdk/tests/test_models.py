@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from metis_loop_sdk.models import chat, claude, ollama
+from metis_loop_sdk.models import claude, ollama
 from metis_loop_sdk.models.__main__ import main as cli
 
 
@@ -111,133 +111,6 @@ def test_seat_ask_opens_then_resumes():
     assert sent[0][0].startswith("You help.\n\nHow to call a tool") and "- t: a tool" in sent[0][0]
     s.ask("You help.", tools, "Q2?", first=True)
     assert s.session != sess                      # a first turn is a new session
-
-
-# -- claude: the chat face -------------------------------------------------
-
-class FakeSeat(claude.Seat):
-    """A seat whose claude -p is a script; it records what it was sent."""
-
-    def __init__(self, script, sent, **kw):
-        super().__init__(cwd="/tmp", protocol=claude.JsonLines, **kw)
-        self.script, self.sent = iter(script), sent
-
-    def _call(self, sys_text, prompt, first):
-        self.sent.append({"session": self.session, "first": first, "prompt": prompt, "system": sys_text})
-        self.usage = {"input_tokens": 10, "cache_read_input_tokens": 90, "output_tokens": 5}
-        return next(self.script), "end_turn", 1.0
-
-
-TOOLS = [{"type": "function", "function": {"name": "domain_clock", "description": "Advance time.",
-                                           "parameters": {"type": "object", "properties": {"n": {"type": "integer"}}}}},
-         {"type": "function", "function": {"name": "domain_state", "description": "Read the state.",
-                                           "parameters": {"type": "object", "properties": {}}}}]
-
-
-def endpoint(script, sent):
-    seats = []
-
-    def factory(model):
-        seats.append(FakeSeat(script, sent, model=model))
-        return seats[-1]
-    return chat.Endpoint(model="sonnet", seat_factory=factory), seats
-
-
-def test_chat_a_conversation_is_one_session_resumed():
-    sent = []
-    ep, seats = endpoint(['Advancing.\nCALL: domain_clock {"n": 2}', "CALL: domain_state {}", "The lamp is dark."], sent)
-    msgs = [{"role": "system", "content": "You run the loop."}, {"role": "user", "content": "Switch it on."}]
-    r = ep.complete({"model": "opus", "messages": msgs, "tools": TOOLS})
-    cid, name, args = r["tool_call"]
-    assert (name, args, r["content"], r["finish_reason"]) == ("domain_clock", {"n": 2}, "Advancing.", "tool_calls")
-    assert sent[-1]["first"] and sent[-1]["prompt"] == "Switch it on." and seats[0].model == "opus"
-    assert "You run the loop." in sent[-1]["system"] and "- domain_state: Read the state." in sent[-1]["system"]
-    assert r["usage"] == {"prompt_tokens": 100, "completion_tokens": 5, "total_tokens": 105,
-                          "prompt_tokens_details": {"cached_tokens": 90}}
-    # the client echoes the reply (its own serialization) and adds the tool's result
-    msgs += [{"role": "assistant", "content": [{"type": "text", "text": "Advancing."}],
-              "tool_calls": [{"id": cid, "type": "function",
-                              "function": {"name": "domain_clock", "arguments": '{ "n" : 2 }'}}]},
-             {"role": "tool", "tool_call_id": cid, "content": "clock: beat 2"}]
-    r = ep.complete({"model": "opus", "messages": msgs, "tools": TOOLS})
-    assert len(seats) == 1 and not sent[-1]["first"] and sent[-1]["session"] == sent[0]["session"]
-    assert sent[-1]["prompt"] == "The result of domain_clock:\nclock: beat 2"
-    cid2 = r["tool_call"][0]
-    msgs += [{"role": "assistant", "content": None, "tool_calls": [
-        {"id": cid2, "type": "function", "function": {"name": "domain_state", "arguments": "{}"}}]},
-             {"role": "tool", "tool_call_id": cid2, "content": "dark 1"},
-             {"role": "user", "content": "And now?"}]
-    r = ep.complete({"model": "opus", "messages": msgs, "tools": TOOLS})
-    assert len(seats) == 1 and sent[-1]["prompt"] == "The result of domain_state:\ndark 1\n\nAnd now?"
-    assert r["tool_call"] is None and r["content"] == "The lamp is dark." and r["finish_reason"] == "stop"
-
-
-def test_chat_an_unknown_conversation_starts_a_session_with_its_history():
-    sent = []
-    ep, seats = endpoint(["Fine."], sent)
-    msgs = [{"role": "user", "content": "Hi."},
-            {"role": "assistant", "content": "", "tool_calls": [
-                {"id": "c1", "type": "function", "function": {"name": "domain_state", "arguments": "{}"}}]},
-            {"role": "tool", "tool_call_id": "c1", "content": "dark 1"}]
-    ep.complete({"messages": msgs, "tools": TOOLS})
-    p = sent[-1]["prompt"]
-    assert sent[-1]["first"] and seats[0].model == "sonnet"
-    assert "[the person]\nHi." in p and "[you]\nCALL: domain_state {}" in p and "[the result of domain_state]\ndark 1" in p
-
-
-def test_chat_a_bad_call_is_asked_again_once():
-    sent = []
-    ep, _ = endpoint(["CALL: repl_check {}", 'CALL: domain_clock {"n": 1}'], sent)
-    r = ep.complete({"messages": [{"role": "user", "content": "go"}], "tools": TOOLS})
-    assert r["tool_call"][1:] == ("domain_clock", {"n": 1})
-    assert "there is no tool 'repl_check'" in sent[1]["prompt"] and "domain_clock, domain_state" in sent[1]["prompt"]
-    sent.clear()
-    ep, _ = endpoint(["CALL: domain_clock {n: 1}", "CALL: domain_clock {n: 1}"], sent)
-    r = ep.complete({"messages": [{"role": "user", "content": "go"}], "tools": TOOLS})
-    assert len(sent) == 2 and "not one JSON object" in sent[1]["prompt"]
-    assert r["tool_call"] is None and r["finish_reason"] == "stop"   # still bad: the text is the answer
-
-
-def test_chat_over_http_streams_as_openai_does():
-    sent = []
-    ep, _ = endpoint(['On it.\nCALL: domain_clock {"n": 4}', "plain answer"], sent)
-    box = {}
-    t = threading.Thread(target=chat.serve, args=(ep, 0), kwargs={"ready": lambda s: box.update(srv=s)}, daemon=True)
-    t.start()
-    while "srv" not in box:
-        pass
-    url = "http://127.0.0.1:%d/v1" % box["srv"].server_port
-    try:
-        with urllib.request.urlopen(url + "/models", timeout=5) as r:
-            assert json.loads(r.read())["data"][0]["id"] == "sonnet"
-        body = {"model": "opus", "stream": True, "stream_options": {"include_usage": True}, "tools": TOOLS,
-                "messages": [{"role": "user", "content": "go"}]}
-        req = urllib.request.Request(url + "/chat/completions", data=json.dumps(body).encode(),
-                                     headers={"content-type": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as r:
-            assert r.headers["content-type"] == "text/event-stream"
-            raw = r.read().decode()
-        events = [ln[6:] for ln in raw.split("\n\n") if ln.startswith("data: ")]
-        assert events[-1] == "[DONE]"
-        chunks = [json.loads(e) for e in events[:-1]]
-        assert chunks[0]["choices"][0]["delta"] == {"role": "assistant", "content": "On it."}
-        tc = chunks[1]["choices"][0]["delta"]["tool_calls"][0]
-        assert tc["index"] == 0 and tc["function"] == {"name": "domain_clock", "arguments": '{"n": 4}'}
-        assert chunks[2]["choices"][0]["finish_reason"] == "tool_calls"
-        assert chunks[3]["choices"] == [] and chunks[3]["usage"]["total_tokens"] == 105
-        body = {"messages": [{"role": "user", "content": "other"}]}
-        req = urllib.request.Request(url + "/chat/completions", data=json.dumps(body).encode())
-        with urllib.request.urlopen(req, timeout=5) as r:
-            d = json.loads(r.read())
-        assert d["choices"][0]["message"] == {"role": "assistant", "content": "plain answer"}
-        assert d["choices"][0]["finish_reason"] == "stop"
-    finally:
-        box["srv"].shutdown()
-
-
-def test_chat_is_loopback_only():
-    with pytest.raises(ValueError, match="loopback only"):
-        chat.serve(chat.Endpoint(), 0, "0.0.0.0")
 
 
 # -- ollama ------------------------------------------------------------------

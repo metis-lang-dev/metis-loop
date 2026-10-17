@@ -54,7 +54,7 @@ def _gpu_present() -> Optional[str]:
         out = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=10).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
-    return out.splitlines()[0] if out else None
+    return out.splitlines()[0].split(" (UUID")[0] if out else None
 
 
 def probe(url: str = DEFAULT_URL, model: Optional[str] = None, load: bool = False,
