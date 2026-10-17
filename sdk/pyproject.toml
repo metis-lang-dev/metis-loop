@@ -30,7 +30,11 @@ test = ["pytest"]
 include = ["metis_loop_sdk*"]
 
 [tool.setuptools.package-data]
-# the catalog widget's JS/CSS (catalog-sdk s-bc1718e3)
+# the catalog widget's JS/CSS (catalog-sdk s-bc1718e3): metis_loop_sdk/widget is
+# a link to the checkout's web/catalog/ (web/: the shared web widgets); the wheel
+# setuptools builds from the checkout (pip install ./sdk, or the git URL's
+# #subdirectory=sdk) holds the files themselves. An sdist would carry the link,
+# not the files: build wheels from the checkout.
 metis_loop_sdk = ["widget/*"]
 
 [tool.pytest.ini_options]

@@ -19,7 +19,10 @@ metis-catalog and this module, and no consumer.
 
     python -m metis_loop_sdk.catalog list|get|intents|fingerprint|apply|widget … --json
 
-The catalog widget (the CATALOG panel both consoles show) is package data:
+The catalog widget (the CATALOG panel both consoles show) lives in
+metis-loop's web/catalog/ (web/: the shared web widgets); the SDK carries the
+same bytes as package data — metis_loop_sdk/widget is a link to it, and a
+built wheel holds its files (the sdk-alone CI job checks them byte for byte).
 WIDGET_DIR holds catalog.js and catalog.css, served at WIDGET_URL; its rows
 are index() / listing().
 """
@@ -40,7 +43,7 @@ SIBLING = Path(__file__).resolve().parents[3] / "metis-catalog"
 INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install -e <metis-catalog checkout>"
            "  (metis-loop/run.sh and metis-agent/run.sh do it; it needs pyyaml)")
 
-WIDGET_DIR = Path(__file__).resolve().parent / "widget"
+WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the checkout: ../../web/catalog
 WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
 WIDGET_FILES = ("catalog.js", "catalog.css")
 

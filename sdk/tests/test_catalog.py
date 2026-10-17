@@ -172,3 +172,14 @@ def test_the_widget_is_package_data():
     assert "window.MetisCatalog" in (catalog.WIDGET_DIR / "catalog.js").read_text()
     rc, w, _ = _cli("widget")
     assert rc == 0 and w["url"] == catalog.WIDGET_URL and Path(w["dir"]) == catalog.WIDGET_DIR
+
+
+def test_the_widget_is_web_catalogs_bytes():
+    """The widget lives in metis-loop web/catalog/ (the shared web widgets);
+    the SDK carries the same bytes, here (editable: the link) and in an
+    installed wheel (CI's sdk-alone job runs this from outside the checkout)."""
+    web = Path(os.environ.get("METIS_LOOP_WEB") or Path(__file__).resolve().parents[2] / "web") / "catalog"
+    if not web.is_dir():
+        pytest.skip(f"no metis-loop web/catalog at {web} (METIS_LOOP_WEB)")
+    for f in catalog.WIDGET_FILES:
+        assert (catalog.WIDGET_DIR / f).read_bytes() == (web / f).read_bytes()

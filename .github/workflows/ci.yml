@@ -84,6 +84,20 @@ jobs:
           /tmp/sdk/bin/pip install './metis-loop/sdk[test]'
       - name: No human loop in the venv
         run: '! /tmp/sdk/bin/python -c "import loop"'
+      - name: The wheel carries the CATALOG widget, byte for byte web/catalog/ (files, not a link)
+        run: |
+          /tmp/sdk/bin/python - "$GITHUB_WORKSPACE/metis-loop/web/catalog" <<'EOF'
+          import sys
+          from pathlib import Path
+          from metis_loop_sdk import catalog
+          web = Path(sys.argv[1])
+          assert "site-packages" in str(catalog.WIDGET_DIR), catalog.WIDGET_DIR
+          for f in catalog.WIDGET_FILES:
+              got = catalog.WIDGET_DIR / f
+              assert got.is_file() and not got.is_symlink(), got
+              assert got.read_bytes() == (web / f).read_bytes(), f
+              print("widget", f, "=", web / f, len(got.read_bytes()), "bytes")
+          EOF
       - name: SDK suite (from outside the checkout, so the installed package is what runs)
         working-directory: /tmp
         run: /tmp/sdk/bin/python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/metis-loop/sdk/tests"

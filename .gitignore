@@ -5,3 +5,4 @@ __pycache__/
 
 # run.sh (start/stop/status/log)
 .run/
+sdk/build/

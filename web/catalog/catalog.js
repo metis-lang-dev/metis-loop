@@ -1,7 +1,9 @@
 /* The CATALOG panel's list (catalog-sdk s-bc1718e3): one component for both
    consoles, the metis-loop console and the metis-agent console (py and Go
-   backends). Package data of metis_loop_sdk (metis-loop/sdk), served from the
-   installed SDK at /sdk/catalog/catalog.js — the user's one exception to
+   backends). It lives in metis-loop web/catalog/ (the shared web widgets);
+   the loop SDK carries the same bytes (metis_loop_sdk/widget, a link here, its
+   wheel the files), served from the installed SDK at /sdk/catalog/catalog.js
+   — the user's one exception to
    copies-only, kept to the catalog panel. Its rows are the SDK's catalog
    index() (the loop console) or listing() (the agent console): the domains
    first, with their display line and what each has.
