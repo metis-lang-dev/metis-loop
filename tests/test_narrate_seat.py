@@ -1,9 +1,10 @@
 """The narrate seat on the SDK (CONSOLE-WS §4, D3): the gateway points a
-personal session's LLM endpoint at loop.sdk_narrate through the
+personal session's LLM endpoint at the loop SDK's claude command face
+(`python -m metis_loop_sdk.models claude-command`; its options, the
+completion and their tests: sdk/tests/test_models.py) through the
 kernel's own `command:` backend — kernel untouched, no tools, nothing
 persisted; shared mode never gets it; `narrate = "llm"` keeps ollama.
 A real Haiku narration is opt-in (METIS_AGENT_LIVE=1)."""
-import asyncio
 import json
 import os
 
@@ -12,54 +13,14 @@ import pytest
 pytest.importorskip("websockets")
 pytest.importorskip("claude_agent_sdk")
 
-import loop.sdk_narrate as sn  # noqa: E402
 from loop.gateway import DEFAULTS, narrate_seat  # noqa: E402
 from test_gateway import Running, frames, open3, send  # noqa: E402
-
-
-def test_options_are_tool_free_and_persist_nothing():
-    o = sn.options("claude-haiku-4-5")
-    assert o.tools == [] and o.strict_mcp_config and not o.mcp_servers
-    assert o.setting_sources == [] and o.max_turns == 1
-    assert "no-session-persistence" in o.extra_args
-    assert o.model == "claude-haiku-4-5"
-    assert o.thinking == {"type": "enabled", "budget_tokens": 1024}
-    assert sn.options("m", 0).thinking == {"type": "disabled"}
-
-
-def test_complete_collects_text_and_raises_on_error(monkeypatch):
-    class TextBlock:
-        def __init__(self, t):
-            self.text = t
-
-    class AssistantMessage:
-        def __init__(self, *ts):
-            self.content = [TextBlock(t) for t in ts]
-
-    class ResultMessage:
-        def __init__(self, err=False):
-            self.is_error, self.subtype, self.result = err, "x", "boom"
-
-    def fake(script):
-        async def query(prompt, options):
-            assert options.tools == []
-            for m in script:
-                yield m
-        return query
-    import claude_agent_sdk
-    monkeypatch.setattr(claude_agent_sdk, "query",
-                        fake([AssistantMessage("The pigs ", "built."),
-                              ResultMessage()]))
-    assert asyncio.run(sn.complete("p")) == "The pigs built."
-    monkeypatch.setattr(claude_agent_sdk, "query", fake([ResultMessage(True)]))
-    with pytest.raises(RuntimeError, match="boom"):
-        asyncio.run(sn.complete("p"))
 
 
 def test_seat_is_personal_only_and_configurable():
     label, spec = narrate_seat(dict(DEFAULTS))
     assert label == "claude-haiku-4-5 (SDK)"
-    assert spec.startswith("command:") and "loop.sdk_narrate" in spec
+    assert spec.startswith("command:") and "-m metis_loop_sdk.models claude-command" in spec
     assert spec.endswith("--thinking 1024")
     assert narrate_seat(dict(DEFAULTS, mode="shared")) == (None, None)
     assert narrate_seat(dict(DEFAULTS, narrate="llm")) == ("llm (ollama)", None)
@@ -72,7 +33,7 @@ def test_gateway_sets_the_seat_on_personal_sessions_only():
             man = json.loads(ws.recv(timeout=5))
             assert man["seats"]["narrate"] == "claude-haiku-4-5 (SDK)"
             sid = open3(ws)["session"]
-            assert "loop.sdk_narrate" in r.gw.srv.shells[sid].llm
+            assert "metis_loop_sdk.models claude-command" in r.gw.srv.shells[sid].llm
             # the page cannot move the seat to an arbitrary command
             p = send(ws, sid, ":llm command:sh -c id", "x1")[-1]
             assert p["status"] == "refused"
@@ -82,7 +43,7 @@ def test_gateway_sets_the_seat_on_personal_sessions_only():
     try:
         with r.ws() as ws:
             sid = open3(ws)["session"]
-            assert "sdk_narrate" not in (r.gw.srv.shells[sid].llm or "")
+            assert "metis_loop_sdk" not in (r.gw.srv.shells[sid].llm or "")
     finally:
         r.close()
 
@@ -104,7 +65,7 @@ def test_live_narration_on_haiku():
             p = post[-1]
             assert p["status"] == "done", p["result"]
             assert p["json"]["source"] == "session"
-            assert "sdk_narrate" in p["json"]["llm"]
+            assert "claude-command" in p["json"]["llm"]
             assert len(p["json"]["narration"]) > 80
             print("\n--- Haiku narration ---\n" + p["json"]["narration"])
     finally:

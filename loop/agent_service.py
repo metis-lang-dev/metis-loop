@@ -28,6 +28,8 @@ import re
 from pathlib import Path
 from typing import Dict, Optional
 
+from metis_loop_sdk.models import claude
+
 TOOLS = ("repl", "ctx", "transcript", "source_read", "source_edit",
          "extension_create", "recompile", "apply", "intents_read", "intents_propose")
 ALLOWED = tuple(f"mcp__metis__{t}" for t in TOOLS)
@@ -456,19 +458,18 @@ class AgentService:
             return PermissionResultDeny(message=f"{name} is not available "
                                         "in the console", interrupt=False)
         return ClaudeAgentOptions(
+            # the loop SDK's containment: no built-ins at all, no MCP but
+            # ours (strict), no user/project settings, nothing persisted (D4)
+            **claude.containment(),
             system_prompt=self.system,
             mcp_servers={"metis": self._server(chat)},
-            strict_mcp_config=True,
-            tools=[],                       # no built-ins at all
             # no allowed_tools: an allow-list entry auto-approves before
             # the callback; the gate is the ONE authority for every call
             can_use_tool=gate,
-            setting_sources=[],             # no user/project settings
             include_partial_messages=True,
             max_turns=int(self.cfg.get("agent_max_turns", 12)),
             model=self.cfg.get("agent_model") or None,
             cwd=str(self.gw.srv.root),
-            extra_args={"no-session-persistence": None},   # D4
         )
 
     # -- turns -----------------------------------------------------------

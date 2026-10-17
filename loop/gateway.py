@@ -79,7 +79,8 @@ DEFAULTS = {
     "agent": True, "agent_model": "claude-opus-5-5", "agent_tool_calls": 10,
     "agent_cmd_timeout": 60, "agent_max_turns": 12,
     # the narrate seat (personal mode, step 3 — D3): "sdk" substitutes the
-    # session's LLM endpoint with loop.sdk_narrate (Haiku); "llm" keeps
+    # session's LLM endpoint with the loop SDK's claude command face
+    # (metis_loop_sdk.models claude-command, Haiku); "llm" keeps
     # the kernel's configured endpoint (ollama)
     "narrate": "sdk", "narrate_model": "claude-haiku-4-5",
     "narrate_thinking": 1024,       # tokens; 0 = off (fast, unfaithful)
@@ -132,7 +133,8 @@ def narrate_seat(cfg: dict):
         if available() is None:
             import shlex
             import sys
-            argv = [sys.executable, "-m", "loop.sdk_narrate", "--model",
+            argv = [sys.executable, "-m", "metis_loop_sdk.models",
+                    "claude-command", "--model",
                     str(cfg.get("narrate_model") or "claude-haiku-4-5"),
                     "--thinking", str(int(cfg.get("narrate_thinking", 1024)))]
             return (f"{cfg.get('narrate_model')} (SDK)",
@@ -416,8 +418,8 @@ class Gateway:
 
     def _seat(self, sid: str):
         """D3: in personal mode the session's narrate seat goes to the
-        SDK endpoint (kernel untouched — its `command:` backend runs
-        loop.sdk_narrate); the cwd that module needs is this package."""
+        SDK endpoint (kernel untouched — its `command:` backend runs the
+        loop SDK's claude command face, an installed module)."""
         spec = narrate_seat(self.cfg)[1]
         r = self.srv.shells.get(sid)
         if spec and r is not None:

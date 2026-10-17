@@ -264,7 +264,9 @@ console-serve; the artifact is the shared window."
   live turns); a `can_use_tool` gate is the ONLY authority — no
   `allowed_tools`, which auto-approves before the callback; the page
   cannot claim `actor: claude`.
-- **Narrate seat** (D3) `loop/sdk_narrate.py`: the gateway points a
+- **Narrate seat** (D3) the loop SDK's claude command face
+  (`python -m metis_loop_sdk.models claude-command`, sdk/metis_loop_sdk/
+  models/claude.py; it was loop/sdk_narrate.py): the gateway points a
   personal session's LLM endpoint at it through the kernel's existing
   `command:` backend (pages can't set `command:` — whitelist); no
   tools, one turn, no persistence. Measured on 3lp: CLI-default

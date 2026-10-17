@@ -3,7 +3,9 @@ name = "metis-loop"
 version = "0.1.0"
 description = "The metis formalization/explanation loop: surprise records -> text -> gated candidate extensions (deployment shape deferred; library + CLI)"
 requires-python = ">=3.9"
-dependencies = []
+# the loop SDK (sdk/, metis-loop-sdk): the human loop consumes it as any
+# outside consumer would — pip install -e ./sdk first (run.sh, CI)
+dependencies = ["metis-loop-sdk"]
 
 [project.optional-dependencies]
 # `metis-loop console-serve` (docs/CONSOLE-WS.md): the gateway
@@ -11,7 +13,7 @@ dependencies = []
 # not on PyPI — pyyaml here so the loader's path fallback works without it)
 console = ["websockets>=13", "pyyaml>=6"]
 # the console's agent seat (personal mode, CONSOLE-WS §3)
-agent = ["websockets>=13", "claude-agent-sdk"]
+agent = ["websockets>=13", "metis-loop-sdk[claude]"]
 
 [project.scripts]
 metis-loop = "loop.cli:main"
