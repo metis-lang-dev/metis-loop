@@ -1,0 +1,37 @@
+# metis-loop-sdk (loop-sdk s-9aabd5a0; brief/repo-alignment.md): the code
+# that has to stay the same in every consumer — catalog access (+ the
+# catalog widget the consoles share) and the model adapters. Its own
+# distribution, so consumers (metis-agent, metis-agentic-loop) do not
+# install the human loop's console. It imports metis_catalog and metispy
+# and nothing else of ours; the human loop (../loop) imports it as any
+# outside consumer would.
+#
+#   development: pip install -e ../metis-loop/sdk   (the sibling checkout)
+#   consumers:   metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk
+# metispy and metis-catalog are not on PyPI: install them first (sibling
+# checkouts or their git URLs); the plain names here are then satisfied.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metis-loop-sdk"
+version = "0.1.0"
+description = "The metis loop SDK: catalog access, the catalog widget and the model adapters, shared by metis-loop, metis-agent and metis-agentic-loop"
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=6", "metis-catalog", "metispy"]
+
+[project.optional-dependencies]
+# the claude adapter's seat on the Agent SDK (the command face needs only the `claude` CLI)
+claude = ["claude-agent-sdk"]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["metis_loop_sdk*"]
+
+[tool.setuptools.package-data]
+# the catalog widget's JS/CSS (catalog-sdk s-bc1718e3)
+metis_loop_sdk = ["widget/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

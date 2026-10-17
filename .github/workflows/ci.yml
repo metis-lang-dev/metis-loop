@@ -47,7 +47,43 @@ jobs:
         run: |
           pip install -e ./metispy
           pip install -e ./metis-catalog     # the CATALOG panel's loader (metis_catalog: the manifests)
+          pip install -e ./metis-loop/sdk       # the loop SDK (metis_loop_sdk), as the human loop consumes it
           pip install -e './metis-loop[console]' pytest
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         working-directory: metis-loop
-        run: pytest -q tests/
+        run: pytest -q tests/ sdk/tests/
+
+  # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,
+  # metis-catalog and metis-loop-sdk and nothing of the human loop — the
+  # direction rule (the SDK never imports loop/, metis_agent or the agentic
+  # loop) proved by installation, not only by the test's AST walk.
+  sdk-alone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metis-loop
+      - name: Checkout metispy (public)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metispy
+          path: metispy
+      - name: Checkout metis-catalog (public)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          path: metis-catalog
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the SDK alone (non-editable, as a consumer gets it)
+        run: |
+          python -m venv /tmp/sdk
+          /tmp/sdk/bin/pip install ./metispy ./metis-catalog
+          /tmp/sdk/bin/pip install './metis-loop/sdk[test]'
+      - name: No human loop in the venv
+        run: '! /tmp/sdk/bin/python -c "import loop"'
+      - name: SDK suite (from outside the checkout, so the installed package is what runs)
+        working-directory: /tmp
+        run: /tmp/sdk/bin/python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/metis-loop/sdk/tests"
