@@ -272,6 +272,13 @@ def test_openai_body_dialects():
         with pytest.raises(ValueError, match="max_tokens"):
             openai.body("d", "m", "http://x/v1", max_tokens=n)
     assert openai.key_env(openai.OPENROUTER) == "OPENROUTER_API_KEY"
+    assert openai.key_env("https://eu.openrouter.ai/api/v1") == "OPENROUTER_API_KEY"
+    # opus's review: a look-alike host, or plain http, gets no key unless one is named
+    assert not openai.is_openrouter("https://evilopenrouter.ai/v1")
+    assert openai.key_env("https://evilopenrouter.ai/v1") is None
+    assert openai.key_env("https://openrouter.ai.evil.example/v1") is None
+    assert openai.key_env("http://openrouter.ai/api/v1") is None
+    assert openai.key_env("http://openrouter.ai/api/v1", "OPENROUTER_API_KEY") == "OPENROUTER_API_KEY"
     assert openai.key_env("http://127.0.0.1:11434/v1") is None
     assert openai.key_env("http://127.0.0.1:11434/v1", "MY_KEY") == "MY_KEY"
 
@@ -301,13 +308,15 @@ def test_openai_openrouter_dialect_on_the_wire(monkeypatch):
     c = Capture(answer("pred lit : lamp."))
     monkeypatch.setattr(openai, "is_openrouter", lambda url: True)      # the capture server plays OpenRouter
     try:
-        assert openai.complete("draft", "deepseek/deepseek-v4-pro", c.url,
-                               env={"OPENROUTER_API_KEY": FAKE_KEY}) == "pred lit : lamp."
+        env = {"OPENROUTER_API_KEY": FAKE_KEY}
+        assert openai.complete("draft", "deepseek/deepseek-v4-pro", c.url, env=env) == "pred lit : lamp."
         g = c.got[-1]
-        assert g["headers"]["authorization"] == "Bearer " + FAKE_KEY
+        assert "authorization" not in g["headers"]           # the stand-in is plain http: no automatic key
         assert g["body"]["reasoning"] == {"effort": "none"} and g["body"]["provider"] == {"data_collection": "deny"}
+        openai.complete("draft", "m", c.url, key_var="OPENROUTER_API_KEY", env=env)    # named: the caller's choice
+        assert c.got[-1]["headers"]["authorization"] == "Bearer " + FAKE_KEY
         with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY is not set"):
-            openai.complete("draft", "m", c.url, env={})
+            openai.complete("draft", "m", c.url, key_var="OPENROUTER_API_KEY", env={})
     finally:
         c.close()
 

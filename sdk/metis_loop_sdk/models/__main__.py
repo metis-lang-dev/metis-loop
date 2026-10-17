@@ -38,8 +38,8 @@ def main(argv=None) -> int:
     w.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL"),
                    help="e.g. %s or http://127.0.0.1:11434/v1 (default $OPENAI_BASE_URL)" % openai.OPENROUTER)
     w.add_argument("--model", default=os.environ.get("OPENAI_MODEL"), help="default $OPENAI_MODEL")
-    w.add_argument("--key-env", help="the variable holding the key (default: OPENROUTER_API_KEY on OpenRouter, "
-                                     "else none is sent)")
+    w.add_argument("--key-env", help="the variable holding the key (default: OPENROUTER_API_KEY on OpenRouter "
+                                     "over https, else none is sent)")
     w.add_argument("--max-tokens", type=int, default=2048, help="at most %d" % openai.MAX_TOKENS)
     w.add_argument("--reasoning", default="off", choices=("off", "low", "medium", "high", "default"))
     w.add_argument("--data-collection", default="deny", choices=("deny", "allow"), help="OpenRouter's provider routing")

@@ -23,8 +23,9 @@ prompts (`provider: {"data_collection": "deny"}`).
 The key is read from the environment only (an argument would show in ps and
 in the kernel's config), sent only as the Authorization header to the base
 URL, and never printed: errors quote the server with anything key-shaped
-masked. A key is sent to OpenRouter, or wherever --key-env names one;
-nowhere else (an OPENAI_API_KEY in the environment does not reach Ollama).
+masked. A key is sent to OpenRouter over https (openrouter.ai or a
+subdomain, by the exact host), or wherever --key-env names one; nowhere
+else (an OPENAI_API_KEY in the environment does not reach Ollama).
 
 `log`, when given, gets one JSON line per call: the model, the tokens, the
 cost the server reports (OpenRouter's usage.cost, USD), finish_reason, seconds."""
@@ -44,13 +45,20 @@ _KEYISH = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}")
 
 
 def is_openrouter(base_url: str) -> bool:
-    return (urllib.parse.urlparse(base_url).hostname or "").endswith("openrouter.ai")
+    """OpenRouter's host itself or one of its subdomains — not any host
+    whose name merely ends in the letters (evilopenrouter.ai)."""
+    host = (urllib.parse.urlparse(base_url).hostname or "").lower()
+    return host == "openrouter.ai" or host.endswith(".openrouter.ai")
 
 
 def key_env(base_url: str, name: Optional[str] = None) -> Optional[str]:
-    """The variable the key is read from: the one named, else OpenRouter's
-    for OpenRouter, else none (no Authorization header)."""
-    return name or ("OPENROUTER_API_KEY" if is_openrouter(base_url) else None)
+    """The variable the key is read from: the one named (the caller's
+    choice), else OpenRouter's for OpenRouter over https only (never over
+    plain http), else none (no Authorization header)."""
+    if name:
+        return name
+    https = urllib.parse.urlparse(base_url).scheme == "https"
+    return "OPENROUTER_API_KEY" if https and is_openrouter(base_url) else None
 
 
 def body(prompt: str, model: str, base_url: str, max_tokens: int = 2048, temperature: float = 0,
