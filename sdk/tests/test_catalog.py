@@ -639,6 +639,9 @@ def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
     for f in ("wildfire.llp", "wildfire.notch.json", "wildfire_host.py", "domain.yaml", "README.md"):
         assert (dst / "domains/wildfire" / f).read_text() == (src / f).read_text(), f
     assert catalog.get("wildfire", dst).notch == (dst / "domains/wildfire/wildfire.notch.json").resolve()
+    # a notch is carried, never edited (brief v2: no fitting): catalog_edit's edit() refuses it
+    with pytest.raises(ValueError, match="not one of the domain's files an edit changes"):
+        catalog.edit("wildfire", "wildfire.notch.json", '"rows"', '"rowz"', r=dst)
     # a manifest's notch that is not there
     (scratch / "domains/wildfire/wildfire.notch.json").unlink()
     with pytest.raises(ValueError, match="not there"):
