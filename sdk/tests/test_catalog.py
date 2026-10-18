@@ -101,12 +101,14 @@ def test_apply_intents_generates_and_names_the_spec(scratch):
     mf.write_text("".join(l for l in mf.read_text().splitlines(True) if not l.startswith("intent:")))
     text = catalog.skeleton("plant", scratch)
     out = catalog.apply("plant", intents=text, r=scratch)
-    assert set(out["written"]) == {"domains/plant/intent.yaml", "domains/plant/domain.yaml",
-                                   *("domains/plant/intent/" + f for f in catalog.generator(scratch).files("plant"))}
-    assert mf.read_text().endswith("intent: {spec: intent.yaml}\n")
     gen = catalog.generator(scratch)
-    for fn, t in gen.files("plant").items():                  # what `tools/intents.py gen` writes
+    made = {f: t for f, t in gen.files("plant").items() if t}  # an empty one is not written (no spoken: no -spoken.txt)
+    assert set(out["written"]) == {"domains/plant/intent.yaml", "domains/plant/domain.yaml",
+                                   *("domains/plant/intent/" + f for f in made)}
+    assert mf.read_text().endswith("intent: {spec: intent.yaml}\n")
+    for fn, t in made.items():                                # what `tools/intents.py gen` writes
         assert (d / "intent" / fn).read_text() == t
+    assert not (d / "intent/plant-spoken.txt").exists()
     with pytest.raises(ValueError):
         catalog.plan("plant", intents="not: [a, mapping", r=scratch)
 
@@ -207,6 +209,7 @@ def test_the_cli_in_json(scratch):
     dst = scratch.parent / "dst"
     (dst / "domains").mkdir(parents=True)
     shutil.copytree(scratch / "tools", dst / "tools")
+    (scratch / "domains/plant/intent/plant-spoken.txt").unlink()   # an empty generated file: take writes none
     rc, dry, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--dry-run", "--json",
                       root=scratch)                       # --root wins over $METIS_CATALOG (the source's, in pi)
     assert rc == 0 and "domains/plant/plant_host.py" in [f["path"] for f in dry["files"]]
@@ -315,3 +318,190 @@ def test_apply_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
     (run / "seed.json").write_text(json.dumps({"seed": "domains/fiction/x.llp"}))
     rc, rd, _ = _cli("readme", "plant", "--from", str(scratch), "--run", str(run), "--json")
     assert rc == 0 and rd["readme"] == catalog.readme("plant", scratch, run) and "seeded from" in rd["readme"]
+
+
+# ── loop-fixes s-855d8067 ────────────────────────────────────────────────────
+
+METISC = catalog.metisc()
+if not METISC and os.environ.get("METIS_LOOP_REQUIRE_METISC"):     # CI builds it: an edit's check must run there
+    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC, PATH, or metis-lang/src/metisc beside this checkout)")
+needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC, PATH, or metis-lang beside this checkout)")
+
+
+def changed(diff):
+    """A unified diff's removed and added lines (no headers)."""
+    ls = diff.splitlines()
+    return ([l[1:] for l in ls if l.startswith("-") and not l.startswith("---")],
+            [l[1:] for l in ls if l.startswith("+") and not l.startswith("+++")])
+
+
+@needs_metisc
+def test_an_edit_changes_exactly_its_text_and_keeps_every_comment(scratch):
+    prog = scratch / "domains/plant/plant.llp"
+    before = prog.read_text()
+    old = "% Made in the loop console (new)."
+    kw = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.")
+    assert list(kw) == ["program"] and kw["program"] == before.replace(old, "% Made in the loop console (new), edited.")
+    files = catalog.plan("plant", **kw, r=scratch)
+    assert [f["path"] for f in files] == ["domains/plant/plant.llp"]
+    assert changed(files[0]["diff"]) == (["% Made in the loop console (new). Say in prose what there is, what can"],
+                                         ["% Made in the loop console (new), edited. Say in prose what there is, what can"])
+    out = catalog.apply("plant", **kw, r=scratch)
+    assert out["written"] == ["domains/plant/plant.llp"]
+    after = prog.read_text()
+    assert [l for l in after.splitlines() if l.startswith("%")] == \
+        [l.replace("(new).", "(new), edited.") for l in before.splitlines() if l.startswith("%")]
+
+
+@needs_metisc
+def test_an_edit_is_refused_unless_it_is_exact_inside_and_adds_no_diagnostic(scratch):
+    with pytest.raises(ValueError, match="not in it"):
+        catalog.edit("plant", "plant.llp", "no such text", "x", r=scratch)
+    with pytest.raises(ValueError, match="occurs [0-9]+ times"):
+        catalog.edit("plant", "plant.llp", "pred", "PRED", r=scratch)
+    with pytest.raises(ValueError, match="empty"):
+        catalog.edit("plant", "plant.llp", "", "x", r=scratch)
+    with pytest.raises(ValueError, match="the same"):
+        catalog.edit("plant", "plant.llp", "catalog plant 1.", "catalog plant 1.", r=scratch)
+    with pytest.raises(ValueError, match="not inside"):
+        catalog.edit("plant", "../dog/dog.llp", "pred", "PRED", r=scratch)
+    with pytest.raises(ValueError, match="generated from intent.yaml"):
+        catalog.edit("plant", "intent/plant.gbnf", "root", "ROOT", r=scratch)
+    with pytest.raises(ValueError, match="no records/x to edit"):
+        catalog.edit("plant", "records/x", "a", "b", r=scratch)
+    # a rule's atom misspelt: metisc's new diagnostic refuses it, and names it
+    rule = next(l for l in (scratch / "domains/plant/plant.llp").read_text().splitlines() if " -o moist" in l)
+    with pytest.raises(ValueError, match="(?s)adds 1 diagnostic.*pred-undeclared") as e:
+        catalog.edit("plant", "plant.llp", rule, rule.replace("-o moist", "-o moistt"), r=scratch)
+    assert "moistt" in str(e.value)
+    # every occurrence with replace_all: a rename of an atom everywhere passes
+    kw = catalog.edit("plant", "plant.llp", "moist", "wet", replace_all=True, r=scratch)
+    assert "moist" not in kw["program"]
+
+
+@needs_metisc
+def test_an_edit_routes_each_file_through_applys_own_checks(scratch):
+    d = scratch / "domains/plant"
+    assert list(catalog.edit("plant", "README.md", "plant", "Plant", r=scratch, replace_all=True)) == ["readme"]
+    ext = catalog.edit("plant", "extensions/visitor.llp", "my soil is moist again", "my soil is wet again", r=scratch)
+    assert list(ext) == ["extensions"] and list(ext["extensions"]) == ["visitor"]
+    assert [f["path"] for f in catalog.plan("plant", **ext, r=scratch)] == ["domains/plant/extensions/visitor.llp"]
+    with pytest.raises(ValueError, match="(?s)adds .*undeclared predicate 'guest'"):   # checked against the program
+        catalog.edit("plant", "extensions/visitor.llp", "* visitor -o", "* guest -o", r=scratch)
+    it = catalog.edit("plant", "intent.yaml", "potted plant", "pot plant", replace_all=True, r=scratch)
+    assert [f["path"] for f in catalog.plan("plant", **it, r=scratch)][0] == "domains/plant/intent/plant-prompt.txt"
+    bad = catalog.edit("plant", "intent.yaml", "verbs:", "verbz:", r=scratch)
+    with pytest.raises(ValueError, match="does not generate"):
+        catalog.plan("plant", **bad, r=scratch)
+    mf = catalog.edit("plant", "domain.yaml", "records: records/", "colour: 1\nrecords: records/", r=scratch)
+    with pytest.raises(ValueError, match="unknown key"):                       # the loader's own check
+        catalog.plan("plant", **mf, r=scratch)
+    line = (d / "plant_host.py").read_text().splitlines()[0]
+    assert list(catalog.edit("plant", "plant_host.py", line, line + " (edited)", r=scratch)) == ["host"]
+
+
+@needs_metisc
+def test_the_cli_edit_and_since(scratch, tmp_path):
+    old, new = tmp_path / "old", tmp_path / "new"
+    old.write_text("% Made in the loop console (new).")
+    new.write_text("% Made in the loop console.")
+    rc, dry, _ = _cli("--root", str(scratch), "edit", "plant", "plant.llp", "--old", str(old), "--new", str(new),
+                      "--dry-run", "--json")
+    assert rc == 0 and dry["files"][0]["text"].count("% Made in the loop console. Say") == 1
+    assert "(new)" in (scratch / "domains/plant/plant.llp").read_text()
+    refused = dry["files"][0]["text"].replace("console.", "console, refused.")
+    since = tmp_path / "since.json"
+    since.write_text(json.dumps({"domains/plant/plant.llp": refused}))
+    rc, dry, _ = _cli("--root", str(scratch), "edit", "plant", "plant.llp", "--old", str(old), "--new", str(new),
+                      "--since", str(since), "--dry-run", "--json")
+    sd = dry["files"][0]["since_diff"]
+    assert rc == 0 and "-% Made in the loop console, refused." in sd and "+% Made in the loop console." in sd
+    assert len(changed(sd)[0]) == 1 and "--- refused/domains/plant/plant.llp" in sd
+    rc, out, _ = _cli("--root", str(scratch), "edit", "plant", "plant.llp", "--old", str(old), "--new", str(new), "--json")
+    assert rc == 0 and out["written"] == ["domains/plant/plant.llp"]
+    rc, err, _ = _cli("--root", str(scratch), "edit", "plant", "plant.llp", "--old", str(old), "--new", str(new), "--json")
+    assert rc == 1 and "not in it" in err["error"]
+    rc, err, _ = _cli("--root", str(scratch), "edit", "plant", "plant.llp", "--old", "-", "--new", "-", "--json")
+    assert rc == 1 and "one text from stdin" in err["error"]
+
+
+def test_since_on_a_plan(scratch):
+    rd = "# plant\n\nOne.\nTwo.\n"
+    f = catalog.plan("plant", readme=rd, r=scratch, since={"domains/plant/README.md": "# plant\n\nOne.\nTwi.\n"})[0]
+    assert changed(f["since_diff"]) == (["Twi."], ["Two."]) and f["text"] == rd
+    assert "since_diff" not in catalog.plan("plant", readme=rd, r=scratch)[0]
+
+
+def test_display_and_line_go_into_the_manifest(scratch):
+    files = catalog.plan("plant", display="the plant", line="a potted plant that dries out", r=scratch)
+    text = files[0]["text"]
+    assert [f["path"] for f in files] == ["domains/plant/domain.yaml"]
+    import yaml
+    m = yaml.safe_load(text)
+    assert m["display"] == "the plant" and m["line"] == "a potted plant that dries out"
+    new = catalog.plan("lamp2", program="catalog lamp2 1.\n", display="the lamp", line="a lamp", r=scratch)
+    m = yaml.safe_load(next(f for f in new if f["path"].endswith("domain.yaml"))["text"])
+    assert m == {"program": "lamp2.llp", "display": "the lamp", "line": "a lamp"}
+    whole = catalog.plan("plant", manifest="program: plant.llp\n", display="the plant", r=scratch)
+    assert yaml.safe_load(whole[0]["text"]) == {"program": "plant.llp", "display": "the plant"}
+    with pytest.raises(ValueError, match="one line"):
+        catalog.plan("plant", line="two\nlines", r=scratch)
+    rc, out, _ = _cli("--root", str(scratch), "apply", "plant", "--display", "the plant", "--line", "dries out", "--json")
+    assert rc == 0 and catalog.get("plant", scratch).line == "dries out"
+
+
+NOCMD = """% a world that only happens: no commands
+% (a header of two lines)
+catalog quiet 1.
+pred a : w.
+pred b : w.
+stage s {
+  %% a becomes b.
+  ab [w] : a -o b.
+}
+#init a 1
+#steps 2
+"""
+
+
+def test_a_world_with_no_commands_gets_no_draft(scratch, monkeypatch):
+    catalog.apply("quiet", program=NOCMD, r=scratch)
+    assert catalog.commands("quiet", scratch) == [] and catalog.commands("plant", scratch)
+    sk = catalog.skeleton("quiet", scratch, intentless=False)
+    assert sk.startswith(catalog.NO_COMMANDS.format(n="quiet")) and "DRAFT" not in sk
+    import yaml
+    assert [v["verb"] for v in yaml.safe_load(sk)["verbs"]] == ["UNKNOWN"]
+    assert "a DRAFT" in catalog.skeleton("plant", scratch, intentless=True).split("\n")[0]   # a real draft keeps it
+    assert catalog.skeleton("quiet", scratch, intentless=True) is None
+    files = catalog.plan("quiet", intents=sk, r=scratch)
+    assert "domains/quiet/intent/quiet-spoken.txt" not in [f["path"] for f in files]      # empty: not written
+    assert "domains/quiet/intent/quiet.gbnf" in [f["path"] for f in files]
+    env = dict(os.environ, METIS_CATALOG_INTENTLESS="1")
+    p = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(scratch), "apply", "quiet",
+                        "--intents-skeleton", "--json"], capture_output=True, text=True, env=env)
+    assert p.returncode == 1 and "takes no commands" in json.loads(p.stdout)["error"]
+    p = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(scratch), "intents", "quiet",
+                        "--skeleton", "--json"], capture_output=True, text=True, env=env)
+    assert json.loads(p.stdout) == {"name": "quiet", "skeleton": None, "commands": []}
+
+
+def test_the_readme_writes_its_mechanical_parts(scratch, tmp_path):
+    catalog.apply("quiet", program=NOCMD, r=scratch)
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "seed.json").write_text(json.dumps({"seed": "domains/x/quiet.llp", "name": "quiet"}))
+    text = catalog.readme("quiet", scratch, run, summary="An a turns into a b.\n", title="a world that only happens")
+    assert text.startswith("# quiet — a world that only happens\n\nAn a turns into a b.\n\n**Where it came from:**")
+    assert "seeded from `domains/x/quiet.llp`" in text
+    assert "```text\n% a world that only happens: no commands\n% (a header of two lines)\n```" in text
+    assert "`metisc --run quiet.llp` runs the case its `#` lines give:\n\n```text\n#init a 1\n#steps 2\n```" in text
+    assert "`metis quiet.llp`" in text
+    assert text.rstrip().endswith("so it has no intent.yaml: the agents open it with no verbs.")
+    catalog.apply("quiet", intents=catalog.skeleton("quiet", scratch, intentless=False), r=scratch)
+    assert "`intent.yaml` knows only UNKNOWN" in catalog.readme("quiet", scratch)
+    assert catalog.readme("quiet", scratch).startswith("# quiet\n\n**Where")       # no title, no prose: the name
+    plant = catalog.readme("plant", scratch)
+    assert "the verbs `WATER`, `CHECK` (and UNKNOWN). Its check: `python3 tools/intents.py check plant`." in plant
+    rc, out, _ = _cli("--root", str(scratch), "readme", "quiet", "--summary", "-", "--title", "t", "--json",
+                      stdin="S.\n")
+    assert rc == 0 and out["readme"].startswith("# quiet — t\n\nS.\n")

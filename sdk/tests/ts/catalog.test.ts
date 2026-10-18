@@ -74,6 +74,7 @@ test("take brings a domain over, with a README from the run; build makes its bun
 	const into = mkdtempSync(join(tmpdir(), "catalog-ts-into-"));
 	mkdirSync(join(into, "domains"));
 	cpSync(join(src, "tools"), join(into, "tools"), { recursive: true });
+	execFileSync("rm", [join(src, "domains/plant/intent/plant-spoken.txt")]);   // empty: take writes none
 	const planned = catalog.planTake("plant", src, {}, into);
 	assert.ok(planned.some((f) => f.path === "domains/plant/plant_host.py" && f.new));
 	assert.ok(!existsSync(join(into, "domains/plant")));
@@ -123,4 +124,81 @@ test("the SDK's refusals throw as CatalogError, with its words", () => {
 	const mf = join(r, "domains/plant/domain.yaml");
 	writeFileSync(mf, readFileSync(mf, "utf8").replace("host: plant_host.py:make", "host: ../dog/victim.py:make"));
 	assert.throws(() => catalog.planTake("plant", r, {}, into), /not beside its domain\.yaml/);
+});
+
+// loop-fixes s-855d8067: edit, since, display/line, the README's parts, the skeleton of a world with no commands
+const HAS_METISC = (() => {
+	try {
+		return !!JSON.parse(execFileSync(PY, ["-c", "import json; from metis_loop_sdk import catalog; print(json.dumps(catalog.metisc()))"], { encoding: "utf8" }));
+	} catch {
+		return false;
+	}
+})();
+
+if (!HAS_METISC && process.env.METIS_LOOP_REQUIRE_METISC) throw new Error("METIS_LOOP_REQUIRE_METISC: no metisc");
+test("edit: one exact edit, its diff and since_diff; the refusals", { skip: !HAS_METISC && "no metisc" }, () => {
+	const r = scratch();
+	const e = { path: "plant.llp", old_string: "% Made in the loop console (new).", new_string: "% Made in the loop console." };
+	const planned = catalog.planEdit("plant", e, r);
+	assert.deepEqual(planned.map((f) => f.path), ["domains/plant/plant.llp"]);
+	assert.deepEqual(planned, py(r, "edit", "plant", "plant.llp", "--old", w(e.old_string), "--new", w(e.new_string), "--dry-run").files);
+	const refused = planned[0].text.replace("console.", "console, refused.");
+	const again = catalog.planEdit("plant", e, r, { since: { "domains/plant/plant.llp": refused } });
+	assert.match(again[0].since_diff!, /^-% Made in the loop console, refused\./m);
+	assert.match(again[0].since_diff!, /^\+% Made in the loop console\. Say/m);
+	assert.match(readFileSync(join(r, "domains/plant/plant.llp"), "utf8"), /\(new\)/);       // a plan writes nothing
+	assert.deepEqual(catalog.edit("plant", e, r).written, ["domains/plant/plant.llp"]);
+	assert.equal(readFileSync(join(r, "domains/plant/plant.llp"), "utf8"), planned[0].text);
+	assert.throws(() => catalog.edit("plant", e, r), (x: any) => x instanceof catalog.CatalogError && /not in it/.test(x.message));
+	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: "pred", new_string: "PRED" }, r), /occurs \d+ times/);
+	assert.equal(catalog.planEdit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r).length, 1);
+	assert.throws(() => catalog.planEdit("plant", { path: "../dog/dog.llp", old_string: "a", new_string: "b" }, r), /not inside/);
+	const rule = readFileSync(join(r, "domains/plant/plant.llp"), "utf8").split("\n").find((l) => l.includes(" -o moist"))!;
+	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: rule, new_string: rule.replace("-o moist", "-o moistt") }, r),
+		/adds 1 diagnostic[^]*moistt/);
+	// the README, through the same edit
+	const rd = catalog.edit("plant", { path: "README.md", old_string: "plant", new_string: "Plant", replace_all: true }, r);
+	assert.deepEqual(rd.written, ["domains/plant/README.md"]);
+});
+
+// a text in a file, for the py CLI's --old/--new
+function w(t: string): string {
+	const f = join(mkdtempSync(join(tmpdir(), "catalog-ts-w-")), "t");
+	writeFileSync(f, t);
+	return f;
+}
+
+test("since on plan and planTake; display and line; a plan's text", () => {
+	const r = scratch();
+	const rd = "# plant\n\nOne.\nTwo.\n";
+	const [f] = catalog.plan("plant", { readme: rd }, r, { since: { "domains/plant/README.md": "# plant\n\nOne.\nTwi.\n" } });
+	assert.equal(f.text, rd);
+	assert.match(f.since_diff!, /^-Twi\.$/m);
+	assert.equal(catalog.plan("plant", { readme: rd }, r)[0].since_diff, undefined);
+	const into = mkdtempSync(join(tmpdir(), "catalog-ts-into-"));
+	mkdirSync(join(into, "domains"));
+	const t = catalog.planTake("plant", r, { readme: rd }, into, { since: { "domains/plant/README.md": "# plant\n" } });
+	assert.match(t.find((x) => x.path === "domains/plant/README.md")!.since_diff!, /^\+Two\.$/m);
+	const m = catalog.plan("plant", { display: "-the plant", line: "a potted plant: it dries out" }, r);
+	assert.deepEqual(m.map((x) => x.path), ["domains/plant/domain.yaml"]);
+	assert.match(m[0].text, /^display: -the plant$/m);
+	assert.match(m[0].text, /^line: 'a potted plant: it dries out'$/m);
+	catalog.apply("plant", { line: "dries out" }, r);
+	assert.equal(catalog.get("plant", r).line, "dries out");
+	assert.throws(() => catalog.plan("plant", { line: "two\nlines" }, r), /one line/);
+});
+
+test("readme(): the mechanical parts from the SDK, the model's summary and title; a world with no commands", () => {
+	const r = scratch();
+	const quiet = "% a quiet world\ncatalog quiet 1.\npred a : w.\npred b : w.\nstage s {\n  %% a becomes b.\n  ab [w] : a -o b.\n}\n#init a 1\n";
+	catalog.apply("quiet", { program: quiet }, r);
+	assert.deepEqual(catalog.commands("quiet", r), []);
+	assert.deepEqual(catalog.commands("plant", r), py(r, "intents", "plant", "--skeleton").commands);
+	assert.match(catalog.skeleton("quiet", r)!, /^# quiet's intents: the world takes no commands/);
+	const text = catalog.readme("quiet", { from: r, summary: "An a becomes a b.", title: "-a quiet world" });
+	assert.equal(text, py(r, "readme", "quiet", "--summary", w("An a becomes a b."), "--title=-a quiet world").readme);
+	assert.match(text, /^# quiet — -a quiet world\n\nAn a becomes a b\.\n/);
+	assert.match(text, /```text\n% a quiet world\n```/);
+	assert.match(text, /`metisc --run quiet\.llp` runs the case its `#` lines give:\n\n```text\n#init a 1\n```/);
+	assert.equal(catalog.readme("plant", r), catalog.readme("plant", { from: r }));
 });

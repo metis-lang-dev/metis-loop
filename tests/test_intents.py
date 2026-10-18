@@ -75,9 +75,8 @@ def test_draft_propose_save(srv, tmp_path):
     with pytest.raises(ValueError, match="no such proposal"):
         it.save(srv, p, "wrong")
     out = it.save(srv, p, p["token"])
-    assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",
-                              "domains/plant/intent/plant-prompt.txt", "domains/plant/intent/plant-spoken.txt",
-                              "domains/plant/domain.yaml"]
+    assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",   # no -spoken.txt: empty
+                              "domains/plant/intent/plant-prompt.txt", "domains/plant/domain.yaml"]
     # the manifest names the spec only (the generated files at their fixed names), its own text kept,
     # and the loader derives them (catalog-entry step 2)
     import yaml
@@ -86,8 +85,8 @@ def test_draft_propose_save(srv, tmp_path):
     m = yaml.safe_load(mtext)
     assert m["intent"] == {"spec": "intent.yaml"} and m["display"] == "the plant"
     got = catalog.get("plant", tmp_path).intent
-    assert (got["grammar"].name, got["prompt"].name, got["examples"]["gemma4"].name) == \
-        ("plant.gbnf", "plant-prompt.txt", "plant-spoken.txt")
+    assert (got["grammar"].name, got["prompt"].name) == ("plant.gbnf", "plant-prompt.txt")
+    assert "examples" not in got                                            # no spoken: no -spoken.txt (loop-fixes)
     out2 = it.save(srv, p, p["token"])                                     # again: the operator's block stands
     assert "domains/plant/domain.yaml" not in out2["written"] and "manifest_lacks" not in out2
     assert (tmp_path / "domains/plant/domain.yaml").read_text() == mtext
