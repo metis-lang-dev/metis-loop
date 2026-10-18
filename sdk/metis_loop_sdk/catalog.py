@@ -507,7 +507,7 @@ def main(argv=None):
     for p in (ap, ls, g, it, fp, a_, tk):
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     a = ap.parse_args(argv)
-    r = root(a.root) if a.root else None
+    r = Path(a.root).resolve() if a.root else None        # --root wins over $METIS_CATALOG (root() reads it first)
 
     def read(f):
         return sys.stdin.read() if f == "-" else Path(f).read_text()

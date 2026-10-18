@@ -207,7 +207,8 @@ def test_the_cli_in_json(scratch):
     dst = scratch.parent / "dst"
     (dst / "domains").mkdir(parents=True)
     shutil.copytree(scratch / "tools", dst / "tools")
-    rc, dry, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--dry-run", "--json")
+    rc, dry, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--dry-run", "--json",
+                      root=scratch)                       # --root wins over $METIS_CATALOG (the source's, in pi)
     assert rc == 0 and "domains/plant/plant_host.py" in [f["path"] for f in dry["files"]]
     assert not (dst / "domains/plant").exists()
     rc, out, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--json")
