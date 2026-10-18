@@ -675,6 +675,15 @@ def test_take_and_edit_keep_a_files_bytes(scratch, tmp_path):
     catalog.apply("dog", **catalog.take("dog", scratch, dst), r=dst)
     assert (dst / "domains/dog/dog.llp").read_bytes() == prog.read_bytes()
     assert catalog.plan("dog", program=catalog._text(prog), r=dst) == []          # the same bytes: nothing to write
+
+
+@needs_metisc
+def test_an_edit_in_lf_keeps_a_crlf_files_line_ends(scratch):
+    """The edit half of the above (a program's edit is checked by metisc; sdk-alone has none)."""
+    dst = scratch
+    prog = dst / "domains/dog/dog.llp"
+    lines = prog.read_bytes().split(b"\n")
+    prog.write_bytes(b"\r\n".join(lines[:3]) + b"\r\n" + b"\n".join(lines[3:]))   # a CRLF header, LF below
     two = lines[0].decode() + "\n" + lines[1].decode()
     kw = catalog.edit("dog", "dog.llp", two, two + " (edited)", r=dst)
     catalog.apply("dog", **kw, r=dst)
