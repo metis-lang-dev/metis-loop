@@ -20,7 +20,7 @@ metis-catalog and this module, and no consumer.
     catalog.readme("lamp", src, run)  # a README for a domain an agentic-loop run made
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
 
-    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|take|build|widget|ts … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|take|readme|build|widget|ts … --json
 
 The TypeScript face (metis_loop_sdk/ts/catalog.ts, TS_DIR) is the same
 catalog for a node consumer (the agentic loop's pi extensions): one function
@@ -305,14 +305,18 @@ def _manifest_text(old, keys):
 
 def _host_file(d, keys, whole):
     """The file a domain's host is in (`file.py:factory`), by the manifest
-    plan() writes, else the one there is."""
+    plan() writes, else the one there is: beside its domain.yaml, never a
+    path out of the domain (`../dog/x.py` would write another domain's file)."""
     spec = (yaml.safe_load(whole) or {}).get("host") if whole is not None else keys.get("host")
     if spec is None and (d / "domain.yaml").is_file():
         spec = (yaml.safe_load((d / "domain.yaml").read_text()) or {}).get("host")
     f, sep, _ = str(spec or "").partition(":")
     if not (sep and f.endswith(".py")):
         raise ValueError(f"{d.name}: a host's text needs a manifest host of the form file.py:factory (it has {spec!r})")
-    return d / f
+    p = (Path(d) / f).resolve()
+    if p.parent != Path(d).resolve():
+        raise ValueError(f"{d.name}: the host {f!r} is not beside its domain.yaml: a host's file stays in its domain")
+    return p
 
 
 def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
@@ -572,6 +576,9 @@ def main(argv=None):
     a_.add_argument("--intents", metavar="FILE", help="intent.yaml's text from FILE (its files generated)")
     a_.add_argument("--intents-skeleton", action="store_true", help="intent.yaml drafted from the program")
     a_.add_argument("--manifest", metavar="JSON", help="domain.yaml keys to set, as a JSON object")
+    a_.add_argument("--readme", metavar="FILE", help="the domain's README.md from FILE")
+    a_.add_argument("--host", metavar="FILE", help="the host's Python from FILE, written as the file the manifest's host names")
+    a_.add_argument("--corpus", metavar="FILE", help="intent/<name>-corpus.tsv from FILE")
     a_.add_argument("--dry-run", action="store_true")
     tk = sub.add_parser("take", help="bring a domain over from another catalog (a scratch one) into the root; "
                                      "--dry-run: the plan and its diff")
@@ -581,12 +588,16 @@ def main(argv=None):
     tk.add_argument("--readme-from-run", metavar="RUN_DIR",
                     help="without a README of its own: readme() from the agentic-loop run in RUN_DIR")
     tk.add_argument("--dry-run", action="store_true")
+    rd = sub.add_parser("readme", help="readme(): a README for a domain an agentic-loop run made (from ROOT, the run in DIR)")
+    rd.add_argument("name")
+    rd.add_argument("--from", dest="src", metavar="ROOT", help="the catalog the domain is in (default: the root)")
+    rd.add_argument("--run", metavar="DIR", help="the run's directory (records/formalize-calls.jsonl, seed.json)")
     bd = sub.add_parser("build", help="the domain's bundle (build/, metispy's emitter)")
     bd.add_argument("name")
     rt = sub.add_parser("root", help="the catalog root")
     ts_ = sub.add_parser("ts", help="the TypeScript face's directory and files")
     wd = sub.add_parser("widget", help="the catalog widget's directory, URL and files")
-    for p in (ap, ls, g, it, fp, a_, tk, bd, rt, ts_, wd):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, tk, rd, bd, rt, ts_, wd):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     a = ap.parse_args(argv)
     r = Path(a.root).resolve() if a.root else None        # --root wins over $METIS_CATALOG (root() reads it first)
@@ -624,6 +635,8 @@ def main(argv=None):
             out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
         elif a.cmd == "ts":
             out = {"dir": str(TS_DIR), "files": list(TS_FILES)}
+        elif a.cmd == "readme":
+            out = {"name": a.name, "readme": readme(a.name, a.src or _r(r), a.run)}
         elif a.cmd == "build":
             out = {"name": a.name, "bundle": build(a.name, r)}
         elif a.cmd == "take":
@@ -640,15 +653,21 @@ def main(argv=None):
             else:
                 out = apply(a.name, r=r, **kw)
         else:
-            ext = {}
+            ext, ext_files = {}, []
             for e in a.extension:
                 n, sep, f = e.partition("=")
                 if not sep:
                     raise ValueError(f"--extension {e!r}: NAME=FILE")
-                ext[n] = read(f)
+                ext_files.append(f)
+            if sum(1 for f in [a.program, a.intents, a.readme, a.host, a.corpus, *ext_files] if f == "-") > 1:
+                raise ValueError("apply: one text from stdin (-) at most")
+            for e, f in zip(a.extension, ext_files):
+                ext[e.partition("=")[0]] = read(f)
             itext = read(a.intents) if a.intents else (skeleton(a.name, r) if a.intents_skeleton else None)
             kw = dict(program=read(a.program) if a.program else None, extensions=ext, intents=itext,
-                      manifest=json.loads(a.manifest) if a.manifest else None, r=r)
+                      manifest=json.loads(a.manifest) if a.manifest else None,
+                      readme=read(a.readme) if a.readme else None, host=read(a.host) if a.host else None,
+                      corpus=read(a.corpus) if a.corpus else None, r=r)
             if a.dry_run:
                 files = plan(a.name, **kw)
                 out = {"dry_run": True, "files": [{k: v for k, v in f.items() if k != "text"} for f in files],

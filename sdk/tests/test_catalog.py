@@ -268,3 +268,50 @@ def test_the_typescript_face_is_package_data():
     rc, out, _ = _cli("ts", "--json")
     assert rc == 0 and out["files"] == ["catalog.ts"] and Path(out["dir"]) == catalog.TS_DIR
     assert (catalog.TS_DIR / "catalog.ts").read_text().startswith("// metis_loop_sdk/ts/catalog.ts")
+
+
+def test_a_host_stays_in_its_domain(scratch, tmp_path):
+    # review R1: a manifest host out of the domain (../dog/victim.py) would make take and
+    # plan write another domain's file
+    (scratch / "domains/dog/victim.py").write_text("# the dog's own\n")
+    mf = scratch / "domains/plant/domain.yaml"
+    mf.write_text(mf.read_text().replace("host: plant_host.py:make", "host: ../dog/victim.py:make"))
+    assert "../dog/victim.py" in mf.read_text()
+    dst = tmp_path / "dst"
+    (dst / "domains/dog").mkdir(parents=True)
+    (dst / "domains/dog/victim.py").write_text("# the target's dog\n")
+    with pytest.raises(ValueError, match="not beside its domain.yaml"):
+        catalog.take("plant", scratch, dst)
+    with pytest.raises(ValueError, match="not beside its domain.yaml"):
+        catalog.plan("plant", host="# mine\n", r=scratch)
+    with pytest.raises(ValueError, match="not beside its domain.yaml"):
+        catalog.plan("bell", program="% b\n", manifest={"host": "../dog/victim.py:make"}, host="# x\n", r=scratch)
+    with pytest.raises(ValueError, match="not beside its domain.yaml"):
+        catalog.plan("bell", program="% b\n", manifest={"host": "sub/h.py:make"}, host="# x\n", r=scratch)
+    assert (dst / "domains/dog/victim.py").read_text() == "# the target's dog\n"
+    assert catalog.plan("bell", program="% b\n", manifest={"host": "bell_host.py:make"}, host="# x\n",
+                        r=scratch)[-1]["path"] == "domains/bell/domain.yaml"
+
+
+def test_apply_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
+    # review R3: the CLI's apply writes what py's apply writes (readme, host, corpus)
+    for n, t in (("r", "# plant, by hand\n"), ("h", "# the plant's host, again\n"), ("c", "water it\tWATER\n")):
+        (tmp_path / n).write_text(t)
+    rc, dry, _ = _cli("apply", "plant", "--readme", str(tmp_path / "r"), "--host", str(tmp_path / "h"), "--corpus", "-",
+                      "--dry-run", "--json", root=scratch, stdin="water it\tWATER\n")
+    assert rc == 0 and [f["path"] for f in dry["files"]] == [
+        "domains/plant/README.md", "domains/plant/intent/plant-corpus.tsv", "domains/plant/plant_host.py"]
+    rc, out, _ = _cli("apply", "plant", "--readme", str(tmp_path / "r"), "--host", str(tmp_path / "h"), "--corpus",
+                      str(tmp_path / "c"), "--json", root=scratch)
+    assert rc == 0 and (scratch / "domains/plant/README.md").read_text() == "# plant, by hand\n"
+    assert (scratch / "domains/plant/plant_host.py").read_text() == "# the plant's host, again\n"
+    assert (scratch / "domains/plant/intent/plant-corpus.tsv").read_text() == "water it\tWATER\n"
+    rc, err, _ = _cli("apply", "plant", "--readme", "-", "--corpus", "-", "--json", root=scratch, stdin="x")
+    assert rc == 1 and "one text from stdin" in err["error"]
+    rc, rd, _ = _cli("readme", "plant", "--json", root=scratch)
+    assert rc == 0 and rd["readme"] == catalog.readme("plant", scratch)
+    run = tmp_path / "run"
+    (run / "records").mkdir(parents=True)
+    (run / "seed.json").write_text(json.dumps({"seed": "domains/fiction/x.llp"}))
+    rc, rd, _ = _cli("readme", "plant", "--from", str(scratch), "--run", str(run), "--json")
+    assert rc == 0 and rd["readme"] == catalog.readme("plant", scratch, run) and "seeded from" in rd["readme"]

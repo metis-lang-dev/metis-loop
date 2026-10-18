@@ -10,6 +10,7 @@
 //   catalog.plan("lamp", { program })        // what apply would write: [{path, new, diff}]
 //   catalog.apply("lamp", { program, manifest })
 //   catalog.take("lamp", from, { readmeFromRun: run }, into)
+//   catalog.readme("lamp", from, run)        // the README of a loop run's domain
 //
 // The python: $METIS_LOOP_SDK_PY (a python with the SDK installed), else python3. The
 // root: each call's `root`, else the CLI's own rule ($METIS_CATALOG, else the sibling
@@ -24,13 +25,18 @@ export type Planned = { path: string; new: boolean; diff: string };
 /** What a write wrote: the paths, the diff, the domain's fingerprint after it (null: no manifest). */
 export type Applied = { written: string[]; diff: string; fingerprint: string | null };
 /** A write's texts (apply, plan): the program, extensions by name, intent.yaml (or
- *  intentsSkeleton: one drafted from the program), domain.yaml's keys to set (or its whole text). */
+ *  intentsSkeleton: one drafted from the program), domain.yaml's keys to set (or its whole
+ *  text), the README, the host's Python (as the file the manifest's host names, beside
+ *  domain.yaml) and intent/<name>-corpus.tsv — py's plan/apply keywords, one for one. */
 export type Write = {
 	program?: string;
 	extensions?: Record<string, string>;
 	intents?: string;
 	intentsSkeleton?: boolean;
 	manifest?: Record<string, unknown> | string;
+	readme?: string;
+	host?: string;
+	corpus?: string;
 };
 /** take's README: its text, or readme() from an agentic-loop run directory; else the domain's own. */
 export type TakeOpts = { readme?: string; readmeFromRun?: string };
@@ -120,6 +126,9 @@ function writeArgs(w: Write, tmp: string): { args: string[]; input: string } {
 	if (w.intentsSkeleton) args.push("--intents-skeleton");
 	else if (w.intents !== undefined) args.push("--intents", text(w.intents));
 	if (w.manifest !== undefined) args.push("--manifest", JSON.stringify(w.manifest));
+	if (w.readme !== undefined) args.push("--readme", text(w.readme));
+	if (w.host !== undefined) args.push("--host", text(w.host));
+	if (w.corpus !== undefined) args.push("--corpus", text(w.corpus));
 	return { args, input };
 }
 
@@ -165,6 +174,12 @@ export function take(name: string, from: string, o: TakeOpts = {}, into?: string
 	return cli(args, input, into);
 }
 
+/** A README for the domain `name` of the catalog `from` (default: the root), written from
+ *  what an agentic-loop run left in `run` (the model and formalize's cost, or its seed). */
+export function readme(name: string, from?: string, run?: string, r?: string): string {
+	return cli(["readme", name, ...(from ? ["--from", from] : []), ...(run ? ["--run", run] : [])], undefined, r).readme;
+}
+
 /** The domain's bundle (build/, git-ignored): the emitter's one-line account. */
 export function build(name: string, r?: string): string {
 	return cli(["build", name], undefined, r).bundle;
@@ -173,4 +188,9 @@ export function build(name: string, r?: string): string {
 /** The catalog widget's directory, URL and files. */
 export function widget(): { dir: string; url: string; files: string[] } {
 	return cli(["widget"]);
+}
+
+/** This face's own directory and files, in the installed SDK. */
+export function ts(): { dir: string; files: string[] } {
+	return cli(["ts"]);
 }
