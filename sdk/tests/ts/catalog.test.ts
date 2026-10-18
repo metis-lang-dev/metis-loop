@@ -179,6 +179,7 @@ test("since on plan and planTake; display and line; a plan's text", () => {
 	assert.equal(catalog.plan("plant", { readme: rd }, r)[0].since_diff, undefined);
 	const into = mkdtempSync(join(tmpdir(), "catalog-ts-into-"));
 	mkdirSync(join(into, "domains"));
+	cpSync(join(r, "tools"), join(into, "tools"), { recursive: true });            // plant's intents are generated there
 	const t = catalog.planTake("plant", r, { readme: rd }, into, { since: { "domains/plant/README.md": "# plant\n" } });
 	assert.match(t.find((x) => x.path === "domains/plant/README.md")!.since_diff!, /^\+Two\.$/m);
 	const m = catalog.plan("plant", { display: "-the plant", line: "a potted plant: it dries out" }, r);
