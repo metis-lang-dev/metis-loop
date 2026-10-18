@@ -316,7 +316,7 @@ def _manifest_text(old, keys):
     for k, v in keys.items():
         if k in have and have[k] == v:
             continue
-        line = "%s: %s\n" % (k, yaml.safe_dump(v, default_flow_style=True, width=1 << 16).strip()
+        line = "%s: %s\n" % (k, yaml.safe_dump(v, default_flow_style=True, width=1 << 16, allow_unicode=True).strip()
                              .removesuffix("\n...").strip())
         at = [i for i, l in enumerate(lines) if re.match(r"^%s\s*:" % re.escape(k), l)]
         if at:

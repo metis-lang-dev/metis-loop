@@ -446,6 +446,8 @@ def test_display_and_line_go_into_the_manifest(scratch):
     assert yaml.safe_load(whole[0]["text"]) == {"program": "plant.llp", "display": "the plant"}
     with pytest.raises(ValueError, match="one line"):
         catalog.plan("plant", line="two\nlines", r=scratch)
+    uni = catalog.plan("plant", line="the pigs: ⊗, &, 1 and ⊕", r=scratch)[0]["text"]   # as written, not \u escapes
+    assert "line: 'the pigs: ⊗, &, 1 and ⊕'\n" in uni and yaml.safe_load(uni)["line"] == "the pigs: ⊗, &, 1 and ⊕"
     rc, out, _ = _cli("--root", str(scratch), "apply", "plant", "--display", "the plant", "--line", "dries out", "--json")
     assert rc == 0 and catalog.get("plant", scratch).line == "dries out"
 
