@@ -38,7 +38,7 @@ def srv():
 
 
 def test_build_from_source_with_an_extension(srv):
-    src = srv.resolve("3lp").read_text()
+    src = srv.resolve("three_pigs").read_text()
     r, label, reps = srv.build({"source": src, "name": "three-pigs",
                                 "extensions": [{"name": "tired", "source": PACK}]})
     assert label == "three-pigs (in memory + 1 extension)"
@@ -49,14 +49,14 @@ def test_build_from_source_with_an_extension(srv):
     listed = srv.serve_one("w2", "list")["posting"]["result"]
     assert "example1" in listed and "blow_brick" in listed
     # the checkout file is untouched
-    assert "example1" not in srv.resolve("3lp").read_text()
+    assert "example1" not in srv.resolve("three_pigs").read_text()
 
 
 def test_build_rejects_a_bad_extension_and_open_keeps_the_old_world(srv):
-    src = srv.resolve("3lp").read_text()
+    src = srv.resolve("three_pigs").read_text()
     with pytest.raises(ValueError, match="extension 'bad' not admitted: .*%% doc"):
         srv.build({"source": src, "extensions": [{"name": "bad", "source": BAD}]})
-    assert srv.open_session("w1", {"llp": "3lp"})["status"] == "running"
+    assert srv.open_session("w1", {"llp": "three_pigs"})["status"] == "running"
     key = srv.shells["w1"].key
     out = srv.open_session("w1", {"source": src, "extensions": [
         {"name": "bad", "source": BAD}]})
@@ -77,7 +77,7 @@ def gw():
 
 def _open(ws):
     frames(ws, lambda f: f.get("type") == "catalogs")
-    ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "3lp"}))
+    ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs"}))
     got = frames(ws, lambda f: f.get("type") == "source")
     return [f for f in got if f.get("type") == "session"][-1], got[-1]
 

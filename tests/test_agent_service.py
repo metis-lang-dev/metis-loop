@@ -231,7 +231,7 @@ def test_source_tools_edit_extension_and_recompile(agent):
                    for f in got)
     # the checkout itself is untouched
     assert "% Port of interactive-lp" in agent.gw.srv.resolve(
-        "3lp").read_text()
+        "three_pigs").read_text()
 
 
 def test_chat_needs_a_session_when_the_seat_exists(agent):

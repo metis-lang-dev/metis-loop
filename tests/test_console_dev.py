@@ -30,7 +30,7 @@ def test_store_query_where_order_limit():
 
 def test_drain_once_opens_and_serves():
     st, srv = dev.Store(), ConsoleServer()
-    st.docs["sessions/s1"] = {"llp": "3lp", "status": "opening", "ts": "0"}
+    st.docs["sessions/s1"] = {"llp": "three_pigs", "status": "opening", "ts": "0"}
     st.docs["intents/i1"] = {"session": "s1", "cmd": ":run 3",
                              "status": "queued", "ts": "1"}
     dev.drain_once(st, srv)

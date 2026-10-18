@@ -171,7 +171,7 @@ construction.
 ## World 2 — the love triangle (grounding, multiplicity, plot)
 
 The Ceptre lineage: Martens' A-Midsummer-Night's-Dream tutorial
-program, ported rule-for-rule (`metis-catalog/domains/fiction/
+program, ported rule-for-rule (`metis-catalog/domains/love_triangle/
 love_triangle.llp`, the original `.cep` committed beside it). It
 introduces first-order rules, grounding, and the pricing of
 multiplicity — on a story instead of a machine.
@@ -196,7 +196,7 @@ then on everything is the ground machinery of World 1.
 
 The session:
 
-    $ metis metis-catalog/domains/fiction/love_triangle.llp
+    $ metis metis-catalog/domains/love_triangle/love_triangle.llp
     metis shell — love_triangle.llp (catalog love-triangle, key e648d2c47888…)
     stage go | eros(helena,hermia):1 eros(helena,lysander):1
                eros(hermia,helena):1 eros(lysander,hermia):1

@@ -62,7 +62,7 @@ def frames(ws, until, timeout=20):
     raise AssertionError(f"timed out; got {out[-5:]}")
 
 
-def open3(ws, llp="3lp"):
+def open3(ws, llp="three_pigs"):
     frames(ws, lambda f: f.get("type") == "catalogs")
     ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp,
                         "req": "r1"}))
@@ -203,7 +203,7 @@ def test_shared_mode_token_llm_seats_chat_caps_and_rate():
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "x"}))
             assert "not served" in frames(
                 ws, lambda f: f.get("ch") == "chat")[-1]["error"]
-            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "3lp",
+            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs",
                                 "req": "r2"}))
             err = frames(ws, lambda f: f.get("type") == "error")[-1]
             assert "session cap" in err["error"]
@@ -230,13 +230,13 @@ def test_config_layers_and_mode_validation():
 def test_open_from_source_over_the_socket(personal):
     """§4a's open frame: catalog TEXT compiled in memory."""
     from loop.console_serve import catalog_root
-    src = (catalog_root() / "domains/fiction/3lp.llp").read_text()
+    src = (catalog_root() / "domains/three_pigs/three_pigs.llp").read_text()
     with personal.ws() as ws:
         frames(ws, lambda f: f.get("type") == "catalogs")
         ws.send(json.dumps({"ch": "repl", "type": "open", "req": "s1",
                             "source": src.replace("#init pig 3",
                                                   "#init pig 2"),
-                            "name": "domains/fiction/3lp"}))
+                            "name": "domains/three_pigs/three_pigs"}))
         f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
         assert f["type"] == "session" and f["llp"].endswith("(in memory)")
         assert f["ctx"]["counts"]["pig"] == 2
@@ -293,7 +293,7 @@ def test_the_catalog_widget_served_from_the_sdk():
 
 def test_shared_mode_never_shows_the_operators_paths():
     """Web output names catalogs relative to the checkout
-    ("domains/fiction/3lp.llp"), never the operator's filesystem — every
+    ("domains/three_pigs/three_pigs.llp"), never the operator's filesystem — every
     frame of a shared-mode round trip, file-bearing verbs included."""
     from pathlib import Path
     r = Running(mode="shared", token="t0k")
@@ -302,7 +302,7 @@ def test_shared_mode_never_shows_the_operators_paths():
     try:
         with r.ws("t0k") as ws:
             got = frames(ws, lambda f: f.get("type") == "catalogs")
-            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "3lp"}))
+            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs"}))
             got += frames(ws, lambda f: f.get("type") == "source")
             sid = [f for f in got if f.get("type") == "session"][-1]["session"]
             for k, cmd in enumerate(["run 2", "list", "ctx", "state", "why",
@@ -310,7 +310,7 @@ def test_shared_mode_never_shows_the_operators_paths():
                                      "edit build_stick", "nope"]):
                 got += send(ws, sid, cmd, f"p{k}")
         text = json.dumps(got)
-        assert "domains/fiction/3lp.llp" in text
+        assert "domains/three_pigs/three_pigs.llp" in text
         assert "/home/" not in text
         for root in roots:
             assert root not in text, root

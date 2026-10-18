@@ -108,7 +108,7 @@ class ConsoleServer:
 
     def catalogs(self):
         """Every .llp under the checkout, as names relative to it
-        without the suffix (`domains/fiction/3lp`), sorted."""
+        without the suffix (`domains/three_pigs/three_pigs`), sorted."""
         return sorted(str(p.relative_to(self.root).with_suffix(""))
                       for p in self.root.rglob("*.llp")
                       if ".git" not in p.parts)
@@ -123,7 +123,7 @@ class ConsoleServer:
     def resolve(self, llp: str) -> Path:
         """A catalog name -> its file in the checkout: the full
         relative name (with or without .llp), or a unique basename
-        (`3lp`). Never outside the checkout."""
+        (`three_pigs`). Never outside the checkout."""
         name = (llp or "").strip()
         if not name:
             raise ValueError("no catalog named")
@@ -145,7 +145,7 @@ class ConsoleServer:
 
     def scrub(self, obj):
         """Web output never names the operator's filesystem: the
-        checkout root becomes relative ("domains/fiction/3lp.llp") and
+        checkout root becomes relative ("domains/three_pigs/three_pigs.llp") and
         any other home path "~/…". Applied to every posting, session
         doc and ctx this server hands out; the terminal REPL never comes
         through here and keeps its absolute paths (the user's own
