@@ -661,6 +661,37 @@ def test_plan_writes_a_notch_where_the_manifest_names_it(scratch):
         catalog.plan("dog", notch=n, manifest={"notch": "dog.json"}, r=scratch)
 
 
+def test_take_and_edit_keep_a_files_bytes(scratch, tmp_path):
+    """rddl-worlds step 3: elevators' header is verbatim from its RDDL file, CRLF; take
+    and apply wrote it LF (universal newlines). Now the bytes are kept, and an edit
+    given in LF applies to a CRLF file and keeps its line ends."""
+    d = scratch / "domains/dog"
+    prog = d / "dog.llp"
+    lines = prog.read_bytes().split(b"\n")
+    prog.write_bytes(b"\r\n".join(lines[:3]) + b"\r\n" + b"\n".join(lines[3:]))   # a CRLF header, LF below
+    dst = tmp_path / "dst"
+    shutil.copytree(scratch / "tools", dst / "tools")
+    (dst / "domains").mkdir()
+    catalog.apply("dog", **catalog.take("dog", scratch, dst), r=dst)
+    assert (dst / "domains/dog/dog.llp").read_bytes() == prog.read_bytes()
+    assert catalog.plan("dog", program=catalog._text(prog), r=dst) == []          # the same bytes: nothing to write
+    two = lines[0].decode() + "\n" + lines[1].decode()
+    kw = catalog.edit("dog", "dog.llp", two, two + " (edited)", r=dst)
+    catalog.apply("dog", **kw, r=dst)
+    out = (dst / "domains/dog/dog.llp").read_bytes()
+    assert out.count(b"\r\n") == 3 and b"(edited)\r\n" in out and out.endswith(b"\n".join(lines[3:]))
+
+
+def test_the_gate_diff_marks_a_last_line_with_no_newline(scratch):
+    """The gate shows the files' diffs joined: a file without a final newline ran
+    on into the next file's header (`}--- a/…`)."""
+    files = catalog.plan("dog", program="% the dog\ncatalog dog 9.", readme="# dog\n", r=scratch)
+    prog = next(f for f in files if f["path"].endswith("dog.llp"))
+    assert prog["diff"].endswith("+catalog dog 9.\n\\ No newline at end of file\n")
+    joined = "".join(f["diff"] for f in files)
+    assert "9.--- a/" not in joined and "9.\n\\ No newline at end of file\n--- a/" in joined
+
+
 def test_take_says_how_to_name_a_program_it_does_not_carry(scratch, tmp_path):
     d = scratch / "domains/plant"
     (d / "plant.llp").rename(d / "plant2.llp")

@@ -337,6 +337,26 @@ def _manifest_text(old, keys):
     return "".join(lines)
 
 
+def _text(p):
+    """A file's text as its bytes are: its line ends kept (a CRLF header stays CRLF;
+    read_text's universal newlines would make it LF, and take or an edit would write it so)."""
+    with open(p, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _write(p, text):
+    with open(p, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
+def _diff(old, new, a, b):
+    """A unified diff of two texts, as diff -u writes it: a last line with no newline is
+    marked `\\ No newline at end of file`, so the next file's diff, joined after it, does
+    not run on from it."""
+    return "".join(l if l.endswith("\n") else l + "\n\\ No newline at end of file\n"
+                   for l in difflib.unified_diff(old.splitlines(True), new.splitlines(True), a, b))
+
+
 def _host_file(d, keys, whole):
     """The file a domain's host is in (`file.py:factory`), by the manifest
     plan() writes, else the one there is: beside its domain.yaml, never a
@@ -472,7 +492,7 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
         mf = d / "domain.yaml"
         if whole is None and not mf.is_file() and "program" not in keys:   # a new domain: its program named
             keys["program"] = prog.relative_to(d).as_posix()
-        text = _manifest_text(whole if whole is not None else (mf.read_text() if mf.is_file() else ""), keys)
+        text = _manifest_text(whole if whole is not None else (_text(mf) if mf.is_file() else ""), keys)
         # checked where it will live: a scratch tree with the package at its
         # depth under the root (domains/…), so the loader's containment rule
         # (its paths stay inside the catalog root) reads it as it will
@@ -490,15 +510,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
         p = Path(p).resolve()
         if r not in p.parents:
             raise ValueError(f"{p} is outside the catalog root {r}")
-        old = p.read_text() if p.is_file() else ""
+        old = _text(p) if p.is_file() else ""
         if p.is_file() and old == text:
             continue
         rel = p.relative_to(r).as_posix()
-        diff = "".join(difflib.unified_diff(old.splitlines(True), text.splitlines(True), f"a/{rel}", f"b/{rel}"))
+        diff = _diff(old, text, f"a/{rel}", f"b/{rel}")
         f = {"path": rel, "new": not p.is_file(), "diff": diff, "text": text}
         if since and rel in since:
-            f["since_diff"] = "".join(difflib.unified_diff(since[rel].splitlines(True), text.splitlines(True),
-                                                           f"refused/{rel}", f"b/{rel}"))
+            f["since_diff"] = _diff(since[rel], text, f"refused/{rel}", f"b/{rel}")
         out.append(f)
     return out
 
@@ -515,7 +534,7 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(f["text"])
+        _write(p, f["text"])
     _, d = _program_of(name, r)
     fp = None
     if d is not None and (d / "domain.yaml").is_file():
@@ -637,7 +656,9 @@ def edit(name, path, old, new, replace_all=False, r=None):
             host = _host_file(d, {}, (d / "domain.yaml").read_text())
         except ValueError:
             host = None
-    old_text = p.read_text()
+    old_text = _text(p)
+    if old and "\r" not in old and old not in old_text and old.replace("\n", "\r\n") in old_text:
+        old, new = old.replace("\n", "\r\n"), new.replace("\n", "\r\n")   # a CRLF file, the edit given in LF
     text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
     inc = includes(d, [f for f in [prog, *exts] if f is not None])
     if p == prog:
@@ -677,7 +698,7 @@ def edit(name, path, old, new, replace_all=False, r=None):
                         for f in d.rglob("*.llp"):
                             t = Path(tmp) / f.relative_to(d)
                             t.parent.mkdir(parents=True, exist_ok=True)
-                            t.write_text(text if f.resolve() == p else f.read_text())
+                            _write(t, text if f.resolve() == p else _text(f))
                         found.append((prog.relative_to(d).as_posix(),
                                       _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(d)))))
         found = [(f, a) for f, a in found if a]
@@ -725,23 +746,23 @@ def take(name, src, r=None, readme=None):
         e = Path(e).resolve()
         if e.parent != d / "extensions":
             raise ValueError(f"{name}: the extension {e} is not in extensions/")
-        ext[e.stem] = e.read_text()
+        ext[e.stem] = _text(e)
     host = None
     if s.manifest.get("host"):
-        host = _host_file(d, {}, (d / "domain.yaml").read_text()).read_text()
+        host = _text(_host_file(d, {}, (d / "domain.yaml").read_text()))
     notch = None
     if s.manifest.get("notch"):
         nf = _notch_file(d, {}, (d / "domain.yaml").read_text())
         if not nf.is_file():
             raise ValueError(f"{name}: its manifest names the notch {s.manifest['notch']}, which is not there")
-        notch = nf.read_text()
+        notch = _text(nf)
     included = includes(d, [Path(s.program).resolve(), *(Path(e).resolve() for e in s.extensions())])
     it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
     if readme is None and (d / "README.md").is_file():
-        readme = (d / "README.md").read_text()
-    return dict(program=Path(s.program).read_text(), extensions=ext, manifest=(d / "domain.yaml").read_text(),
-                intents=it.read_text() if it.is_file() else None, host=host,
-                corpus=cp.read_text() if cp.is_file() else None, readme=readme, included=included or None,
+        readme = _text(d / "README.md")
+    return dict(program=_text(s.program), extensions=ext, manifest=_text(d / "domain.yaml"),
+                intents=_text(it) if it.is_file() else None, host=host,
+                corpus=_text(cp) if cp.is_file() else None, readme=readme, included=included or None,
                 notch=notch)
 
 
@@ -816,7 +837,7 @@ def includes(d, files):
                                  "take carries a domain's own files only")
             if not inc.is_file():
                 raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, which is not there")
-            out[inc.relative_to(d).as_posix()] = inc.read_text()
+            out[inc.relative_to(d).as_posix()] = _text(inc)
             todo.append(inc)
     return out
 
