@@ -354,7 +354,7 @@ def _host_file(d, keys, whole):
 
 
 def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-         r=None, display=None, line=None, since=None, as_is=None):
+         r=None, display=None, line=None, since=None, as_is=None, included=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
@@ -376,7 +376,10 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
     as_is {path: text}: existing files of the domain directory written back where they
     are, as given (edit()'s write of an extension: extensions= would clean its name and
-    write a second file beside it)."""
+    write a second file beside it).
+
+    included {path relative to the domain directory: text}: the .llp files the program
+    and its extensions include (take()'s include closure), written there."""
     import re
     r = _r(r)
     prog, d = _program_of(name, r)
@@ -387,6 +390,13 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
     for k, (en, text) in enumerate((extensions or {}).items(), 1):
         stem = safe.sub("_", str(en or f"extension{k}").lower()).strip("_") or f"extension{k}"
         files[prog.parent / "extensions" / f"{stem}.llp"] = text
+    for rel_, text in (included or {}).items():
+        if d is None:
+            raise ValueError(f"{name}: included files belong to a domain directory")
+        ip = (Path(d) / rel_).resolve()
+        if Path(d).resolve() not in ip.parents or ip.suffix != ".llp":
+            raise ValueError(f"{name}: an included file is a .llp inside the domain's directory, not {rel_!r}")
+        files[ip] = text
     for ap, text in (as_is or {}).items():
         ap = (Path(ap) if Path(ap).is_absolute() else r / ap).resolve()
         if d is None or Path(d).resolve() not in ap.parents or not ap.is_file():
@@ -465,13 +475,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
 
 def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-          r=None, display=None, line=None, as_is=None):
+          r=None, display=None, line=None, as_is=None, included=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
-    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is)
+    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is,
+                 included=included)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -599,6 +610,7 @@ def edit(name, path, old, new, replace_all=False, r=None):
             host = None
     old_text = p.read_text()
     text = edited(old_text, old, new, replace_all, f"{name}/{rel}")
+    inc = includes(d, [f for f in [prog, *exts] if f is not None])
     if p == prog:
         kw = {"program": text}
     elif p in exts:
@@ -613,9 +625,11 @@ def edit(name, path, old, new, replace_all=False, r=None):
         kw = {"host": text}
     elif rel == f"intent/{name}-corpus.tsv":
         kw = {"corpus": text}
+    elif rel in inc:
+        kw = {"included": {rel: text}}          # a file the program includes (rddl's nav_domain.llp)
     else:
         raise ValueError(f"{name}: {rel} is not one of the domain's files an edit changes (its program, "
-                         "extensions/*.llp, README.md, intent.yaml, domain.yaml, its host, its corpus)")
+                         "extensions/*.llp, the files they include, README.md, intent.yaml, domain.yaml, its host, its corpus)")
     if p.suffix == ".llp":
         found = []   # (the file, its added diagnostics)
         with _Beside(p, text) as cand:
@@ -627,6 +641,16 @@ def edit(name, path, old, new, replace_all=False, r=None):
                     for e in exts:
                         found.append((e.relative_to(d).as_posix() if d in e.parents else str(e),
                                       _added(diagnostics(e, prog), diagnostics(e, cand))))
+                if rel in inc and prog is not None and not found[0][1]:
+                    # the program that includes it, with the edited file in its place: the domain's .llp
+                    # files mirrored (their includes are the domain's own), the one replaced
+                    with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
+                        for f in d.rglob("*.llp"):
+                            t = Path(tmp) / f.relative_to(d)
+                            t.parent.mkdir(parents=True, exist_ok=True)
+                            t.write_text(text if f.resolve() == p else f.read_text())
+                        found.append((prog.relative_to(d).as_posix(),
+                                      _added(diagnostics(prog), diagnostics(Path(tmp) / prog.relative_to(d)))))
         found = [(f, a) for f, a in found if a]
         if found:
             n = sum(len(a) for _, a in found)
@@ -644,9 +668,10 @@ TAKEN = ("program", "extensions", "host", "intent", "display", "line", "voice", 
 def take(name, src, r=None, readme=None):
     """apply()'s arguments that bring the domain `name` over from the catalog
     `src` (a scratch catalog: the agentic loop's) into the root r: its
-    domain.yaml as it is, the program, the extensions, the host, intent.yaml
-    (apply generates intent/ again) and a corpus, and its README (or
-    `readme`). Never records/ or build/ (the agents' own). Refused when r has
+    domain.yaml as it is, the program, the extensions, the files they
+    include (includes(): inside the domain directory only), the host,
+    intent.yaml (apply generates intent/ again) and a corpus, and its README
+    (or `readme`). Never records/ or build/ (the agents' own). Refused when r has
     the domain already, or the domain names a file take does not carry
     (serves, agent, pair, notch: bring those by hand) or keeps one elsewhere
     than its directory's layout. Then `apply(name, **take(name, src, r))`."""
@@ -671,12 +696,13 @@ def take(name, src, r=None, readme=None):
     host = None
     if s.manifest.get("host"):
         host = _host_file(d, {}, (d / "domain.yaml").read_text()).read_text()
+    included = includes(d, [Path(s.program).resolve(), *(Path(e).resolve() for e in s.extensions())])
     it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
     if readme is None and (d / "README.md").is_file():
         readme = (d / "README.md").read_text()
     return dict(program=Path(s.program).read_text(), extensions=ext, manifest=(d / "domain.yaml").read_text(),
                 intents=it.read_text() if it.is_file() else None, host=host,
-                corpus=cp.read_text() if cp.is_file() else None, readme=readme)
+                corpus=cp.read_text() if cp.is_file() else None, readme=readme, included=included or None)
 
 
 def header(prog):
@@ -727,6 +753,32 @@ def intents_status(name, r=None):
             + (" It is the loop's first draft (its DRAFT header): write the meanings and more examples, then "
                f"`python3 tools/intents.py gen {name}`." if draft else "")
             + f" Its check: `python3 tools/intents.py check {name}`.")
+
+
+INCLUDE = r'^\s*include\s+"([^"]+)"\s*\.'
+
+
+def includes(d, files):
+    """{path relative to the domain directory d: text} of every file the .llp `files`
+    include, transitively (`include "x.llp".`, resolved beside the including file). An
+    include out of d is refused (ValueError): take carries a domain's own files only."""
+    import re
+    d, out, todo, seen = Path(d).resolve(), {}, list(files), set()
+    while todo:
+        f = Path(todo.pop()).resolve()
+        if f in seen or not f.is_file():
+            continue
+        seen.add(f)
+        for m in re.finditer(INCLUDE, f.read_text(), re.M):
+            inc = (f.parent / m.group(1)).resolve()
+            if d not in inc.parents:
+                raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, outside its domain directory: "
+                                 "take carries a domain's own files only")
+            if not inc.is_file():
+                raise ValueError(f"{d.name}: {f.name} includes {m.group(1)!r}, which is not there")
+            out[inc.relative_to(d).as_posix()] = inc.read_text()
+            todo.append(inc)
+    return out
 
 
 def readme(name, src, run=None, summary=None, title=None):

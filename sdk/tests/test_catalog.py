@@ -592,3 +592,45 @@ def test_commands_follow_the_skeletons_rule(scratch):
     verbs = [v["verb"] for v in yaml.safe_load(catalog.skeleton("plant", scratch))["verbs"] if v["verb"] != "UNKNOWN"]
     assert [c[4:].upper() for c in catalog.commands("plant", scratch)] == verbs
     assert "cmd_nope" not in catalog.commands("plant", scratch) and "cmd_go" in catalog.commands("plant", scratch)
+
+
+def _inc_domain(root):
+    d = root / "domains/inc"
+    d.mkdir(parents=True)
+    (d / "inc_rules.llp").write_text("% the lifted part\ncatalog inc-rules 1.\nlayers (story).\nstages (s).\n"
+                                     "namespace w produce (story).\npred a : w.\npred b : w.\nbwd near(cell).\nstage s {\n"
+                                     "  %% a becomes b.\n  ab [story] : a -o b.\n}\n")
+    (d / "inc.llp").write_text('% the instance: its header\ncatalog inc 1.\nprovenance hand "t" "2026-10-18".\n'
+                               'type cell {c1 c2}.\ninclude "inc_rules.llp".\nnear(c1).\n#init a 1\n#steps 2\n')
+    (d / "domain.yaml").write_text("program: inc.llp\n")
+    return d
+
+
+def test_take_carries_the_files_a_program_includes(scratch, tmp_path):
+    """rddl-worlds B: a package seed (nav: nav.llp includes nav_domain.llp) is taken whole."""
+    _inc_domain(scratch)
+    assert catalog.includes(scratch / "domains/inc", [scratch / "domains/inc/inc.llp"]) == \
+        {"inc_rules.llp": (scratch / "domains/inc/inc_rules.llp").read_text()}
+    dst = tmp_path / "dst"
+    (dst / "domains").mkdir(parents=True)
+    out = catalog.apply("inc", **catalog.take("inc", scratch, dst), r=dst)
+    assert sorted(out["written"]) == ["domains/inc/domain.yaml", "domains/inc/inc.llp", "domains/inc/inc_rules.llp"]
+    assert (dst / "domains/inc/inc_rules.llp").read_text() == (scratch / "domains/inc/inc_rules.llp").read_text()
+    (scratch / "domains/inc/inc.llp").write_text('catalog inc 1.\ninclude "../plant/plant.llp".\n')
+    with pytest.raises(ValueError, match="outside its domain directory"):
+        catalog.take("inc", scratch, tmp_path / "dst2")
+    with pytest.raises(ValueError, match="a .llp inside the domain"):
+        catalog.plan("inc", included={"../plant/x.llp": "x"}, r=scratch)
+
+
+@needs_metisc
+def test_an_edit_of_an_included_file(scratch):
+    """The included file is checked alone, and the program that includes it with the edit in its place."""
+    d = _inc_domain(scratch)
+    kw = catalog.edit("inc", "inc_rules.llp", "the lifted part", "the lifted part, edited", r=scratch)
+    assert list(kw) == ["included"] and catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc_rules.llp"]
+    # a rename the included file alone is fine with; the program's fact near(c1) is not: refused, naming the program
+    assert catalog.diagnostics(d / "inc.llp") == []
+    with pytest.raises(ValueError, match=r"(?s)adds 1 diagnostic.*\n  inc\.llp: error fact-not-bwd"):
+        catalog.edit("inc", "inc_rules.llp", "bwd near(cell).", "bwd nearr(cell).", r=scratch)
+    assert sorted(f.name for f in d.iterdir()) == ["domain.yaml", "inc.llp", "inc_rules.llp"]
