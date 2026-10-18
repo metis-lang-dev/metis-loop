@@ -353,8 +353,25 @@ def _host_file(d, keys, whole):
     return p
 
 
+def _notch_file(d, keys, whole):
+    """The file a domain's notch is in, by the manifest plan() writes, else the one
+    there is, else <name>.notch.json (set in keys, so the manifest names it): a
+    .notch.json beside its domain.yaml."""
+    spec = (yaml.safe_load(whole) or {}).get("notch") if whole is not None else keys.get("notch")
+    if spec is None and (d / "domain.yaml").is_file():
+        spec = (yaml.safe_load((d / "domain.yaml").read_text()) or {}).get("notch")
+    if spec is None:
+        if whole is not None:
+            raise ValueError(f"{d.name}: a notch's text needs the manifest's notch: <file>.notch.json")
+        spec = keys["notch"] = f"{d.name}.notch.json"
+    p = (Path(d) / str(spec)).resolve()
+    if p.parent != Path(d).resolve() or not p.name.endswith(".notch.json"):
+        raise ValueError(f"{d.name}: the notch {spec!r} is not a .notch.json beside its domain.yaml")
+    return p
+
+
 def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-         r=None, display=None, line=None, since=None, as_is=None, included=None):
+         r=None, display=None, line=None, since=None, as_is=None, included=None, notch=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
@@ -379,7 +396,11 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
     write a second file beside it).
 
     included {path relative to the domain directory: text}: the .llp files the program
-    and its extensions include (take()'s include closure), written there."""
+    and its extensions include (take()'s include closure), written there.
+
+    notch: the fitted overlay's JSON text, written as the file the manifest's notch
+    names (beside domain.yaml, a .notch.json), else <name>.notch.json, which the
+    manifest then names."""
     import re
     r = _r(r)
     prog, d = _program_of(name, r)
@@ -423,6 +444,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
         if d is None:
             raise ValueError(f"{name}: a host belongs to a domain directory")
         files[_host_file(d, keys, whole)] = host
+    if notch is not None:
+        if d is None:
+            raise ValueError(f"{name}: a notch belongs to a domain directory")
+        try:
+            json.loads(notch)
+        except ValueError as e:
+            raise ValueError(f"{name}: the notch is not JSON ({e})") from None
+        files[_notch_file(d, keys, whole)] = notch
     if intents is not None:
         if d is None:
             raise ValueError(f"{name}: intents belong to a domain directory (domains/<name>/)")
@@ -475,14 +504,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
 
 def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-          r=None, display=None, line=None, as_is=None, included=None):
+          r=None, display=None, line=None, as_is=None, included=None, notch=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
     files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is,
-                 included=included)
+                 included=included, notch=notch)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -662,18 +691,18 @@ def edit(name, path, old, new, replace_all=False, r=None):
 
 
 # what take() carries: the manifest's keys whose files it brings, and the ones with no file
-TAKEN = ("program", "extensions", "host", "intent", "display", "line", "voice", "clock", "reload", "records")
+TAKEN = ("program", "extensions", "host", "intent", "notch", "display", "line", "voice", "clock", "reload", "records")
 
 
 def take(name, src, r=None, readme=None):
     """apply()'s arguments that bring the domain `name` over from the catalog
     `src` (a scratch catalog: the agentic loop's) into the root r: its
     domain.yaml as it is, the program, the extensions, the files they
-    include (includes(): inside the domain directory only), the host,
-    intent.yaml (apply generates intent/ again) and a corpus, and its README
-    (or `readme`). Never records/ or build/ (the agents' own). Refused when r has
-    the domain already, or the domain names a file take does not carry
-    (serves, agent, pair, notch: bring those by hand) or keeps one elsewhere
+    include (includes(): inside the domain directory only), the host, the
+    notch (its fitted overlay), intent.yaml (apply generates intent/ again)
+    and a corpus, and its README (or `readme`). Never records/ or build/ (the
+    agents' own). Refused when r has the domain already, or the domain names a
+    file take does not carry (serves, agent, pair: bring those by hand) or keeps one elsewhere
     than its directory's layout. Then `apply(name, **take(name, src, r))`."""
     r, src = _r(r), Path(src).resolve()
     s = get(name, src)
@@ -686,7 +715,11 @@ def take(name, src, r=None, readme=None):
         raise ValueError(f"{name}: its manifest names {', '.join(other)}, which take does not carry")
     d = s.dir.resolve()
     if s.program is None or Path(s.program).resolve() != d / f"{name}.llp":
-        raise ValueError(f"{name}: take carries the program {name}.llp beside domain.yaml (it names {s.program})")
+        named = (Path(s.program).relative_to(d).as_posix() if s.program and d in Path(s.program).resolve().parents
+                 else s.program)
+        raise ValueError(f"{name}: take carries a domain's program only as {name}.llp beside its domain.yaml, and "
+                         f"its manifest names {named}: rename the file to domains/{name}/{name}.llp and set "
+                         f"program: {name}.llp in its domain.yaml (by hand, in the catalog it is taken from)")
     ext = {}
     for e in s.extensions():
         e = Path(e).resolve()
@@ -696,13 +729,20 @@ def take(name, src, r=None, readme=None):
     host = None
     if s.manifest.get("host"):
         host = _host_file(d, {}, (d / "domain.yaml").read_text()).read_text()
+    notch = None
+    if s.manifest.get("notch"):
+        nf = _notch_file(d, {}, (d / "domain.yaml").read_text())
+        if not nf.is_file():
+            raise ValueError(f"{name}: its manifest names the notch {s.manifest['notch']}, which is not there")
+        notch = nf.read_text()
     included = includes(d, [Path(s.program).resolve(), *(Path(e).resolve() for e in s.extensions())])
     it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
     if readme is None and (d / "README.md").is_file():
         readme = (d / "README.md").read_text()
     return dict(program=Path(s.program).read_text(), extensions=ext, manifest=(d / "domain.yaml").read_text(),
                 intents=it.read_text() if it.is_file() else None, host=host,
-                corpus=cp.read_text() if cp.is_file() else None, readme=readme, included=included or None)
+                corpus=cp.read_text() if cp.is_file() else None, readme=readme, included=included or None,
+                notch=notch)
 
 
 def header(prog):

@@ -623,6 +623,51 @@ def test_take_carries_the_files_a_program_includes(scratch, tmp_path):
         catalog.plan("inc", included={"../plant/x.llp": "x"}, r=scratch)
 
 
+def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
+    """rddl-worlds step 3: wildfire and tamarisk are packages with their fitted notch."""
+    src = CAT / "domains" / "wildfire"
+    if not (src / "domain.yaml").is_file():
+        pytest.skip("no wildfire package in the catalog")
+    shutil.copytree(src, scratch / "domains/wildfire", ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
+    dst = tmp_path / "dst"
+    (dst / "domains").mkdir(parents=True)
+    kw = catalog.take("wildfire", scratch, dst)
+    assert kw["notch"] == (src / "wildfire.notch.json").read_text()
+    files = {f["path"]: f for f in catalog.plan("wildfire", **kw, r=dst)}
+    assert files["domains/wildfire/wildfire.notch.json"]["new"]       # shown at the gate, a file of its own
+    catalog.apply("wildfire", **kw, r=dst)
+    for f in ("wildfire.llp", "wildfire.notch.json", "wildfire_host.py", "domain.yaml", "README.md"):
+        assert (dst / "domains/wildfire" / f).read_text() == (src / f).read_text(), f
+    assert catalog.get("wildfire", dst).notch == (dst / "domains/wildfire/wildfire.notch.json").resolve()
+    # a manifest's notch that is not there
+    (scratch / "domains/wildfire/wildfire.notch.json").unlink()
+    with pytest.raises(ValueError, match="not there"):
+        catalog.take("wildfire", scratch, tmp_path / "dst2")
+
+
+def test_plan_writes_a_notch_where_the_manifest_names_it(scratch):
+    n = '{"rows": []}\n'
+    with pytest.raises(ValueError, match="not JSON"):
+        catalog.plan("dog", notch="{rows", r=scratch)
+    files = {f["path"]: f for f in catalog.plan("dog", notch=n, r=scratch)}   # no notch named: <name>.notch.json
+    assert files["domains/dog/dog.notch.json"]["text"] == n
+    assert "notch: dog.notch.json" in files["domains/dog/domain.yaml"]["text"]
+    with pytest.raises(ValueError, match="beside its domain.yaml"):
+        catalog.plan("dog", notch=n, manifest={"notch": "../plant/x.notch.json"}, r=scratch)
+    with pytest.raises(ValueError, match="beside its domain.yaml"):
+        catalog.plan("dog", notch=n, manifest={"notch": "dog.json"}, r=scratch)
+
+
+def test_take_says_how_to_name_a_program_it_does_not_carry(scratch, tmp_path):
+    d = scratch / "domains/plant"
+    (d / "plant.llp").rename(d / "plant2.llp")
+    mf = d / "domain.yaml"
+    mf.write_text(mf.read_text().replace("plant.llp", "plant2.llp"))
+    with pytest.raises(ValueError, match=r"names plant2\.llp: rename the file to domains/plant/plant\.llp "
+                                         r"and set program: plant\.llp"):
+        catalog.take("plant", scratch, tmp_path / "dst")
+
+
 @needs_metisc
 def test_an_edit_of_an_included_file(scratch):
     """The included file is checked alone, and the program that includes it with the edit in its place."""
