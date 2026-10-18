@@ -141,6 +141,37 @@ def test_a_new_domain(scratch):
     assert (scratch / "domains/bell/domain.yaml").read_text() == whole
 
 
+def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
+    dst = tmp_path / "dst"
+    shutil.copytree(scratch / "tools", dst / "tools")
+    (dst / "domains").mkdir()
+    kw = catalog.take("dog", scratch, dst)
+    assert kw["host"] == (scratch / "domains/dog/dog_host.py").read_text() and kw["corpus"] and kw["readme"]
+    out = catalog.apply("dog", r=dst, **kw)
+    assert "domains/dog/dog_host.py" in out["written"] and "domains/dog/intent/dog-corpus.tsv" in out["written"]
+    for f in ("dog.llp", "dog_host.py", "domain.yaml", "intent.yaml", "README.md", *(
+            "intent/" + n for n in ("dog.gbnf", "dog-prompt.txt", "dog-spoken.txt", "dog-corpus.tsv"))):
+        assert (dst / "domains/dog" / f).read_text() == (scratch / "domains/dog" / f).read_text(), f
+    assert catalog.fingerprint("dog", dst) == catalog.fingerprint("dog", scratch)
+    with pytest.raises(ValueError, match="already"):
+        catalog.take("dog", scratch, dst)
+    # the plant's extension, and a README given in place of its own
+    kw = catalog.take("plant", scratch, dst, readme="# plant\n")
+    assert list(kw["extensions"]) == ["visitor"]
+    catalog.apply("plant", r=dst, **kw)
+    assert (dst / "domains/plant/extensions/visitor.llp").read_text() == \
+        (scratch / "domains/plant/extensions/visitor.llp").read_text()
+    assert (dst / "domains/plant/README.md").read_text() == "# plant\n"
+    # a manifest key whose file take does not carry
+    mf = scratch / "domains/dog/domain.yaml"
+    mf.write_text(mf.read_text() + "agent: agent.py\n")
+    with pytest.raises(ValueError, match="agent"):
+        catalog.take("dog", scratch, tmp_path / "other")
+    # a host's text needs a file host to land in
+    with pytest.raises(ValueError, match="file.py:factory"):
+        catalog.plan("bell", program="% the bell\n", host="# a host\n", r=dst)
+
+
 def _cli(*args, root=None, stdin=None):
     env = dict(os.environ)
     if root:
@@ -173,6 +204,16 @@ def test_the_cli_in_json(scratch):
     assert rc == 1 and "unknown key" in err["error"]
     rc, err, _ = _cli("get", "nosuch", "--json", root=scratch)
     assert rc == 1 and "nosuch" in err["error"]
+    dst = scratch.parent / "dst"
+    (dst / "domains").mkdir(parents=True)
+    shutil.copytree(scratch / "tools", dst / "tools")
+    rc, dry, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--dry-run", "--json")
+    assert rc == 0 and "domains/plant/plant_host.py" in [f["path"] for f in dry["files"]]
+    assert not (dst / "domains/plant").exists()
+    rc, out, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--json")
+    assert rc == 0 and out["fingerprint"] == catalog.fingerprint("plant", scratch)
+    rc, err, _ = _cli("--root", str(dst), "take", "plant", "--from", str(scratch), "--json")
+    assert rc == 1 and "already" in err["error"]
 
 
 def test_the_widget_is_package_data():

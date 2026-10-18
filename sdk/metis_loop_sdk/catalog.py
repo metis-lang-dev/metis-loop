@@ -16,8 +16,9 @@ metis-catalog and this module, and no consumer.
     catalog.plan("dog", program=…)  # what apply would write, with each file's diff
     catalog.apply("dog", program=…, extensions={…}, intents=…, manifest={…})
                                     # the one validated write: never a commit
+    catalog.take("lamp", src)       # apply()'s arguments that bring a domain over from another catalog
 
-    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|widget … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|take|widget … --json
 
 The catalog widget (the CATALOG panel both consoles show) lives in
 metis-loop's web/catalog/ (web/: the shared web widgets); the SDK carries the
@@ -292,14 +293,29 @@ def _manifest_text(old, keys):
     return "".join(lines)
 
 
-def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, r=None):
+def _host_file(d, keys, whole):
+    """The file a domain's host is in (`file.py:factory`), by the manifest
+    plan() writes, else the one there is."""
+    spec = (yaml.safe_load(whole) or {}).get("host") if whole is not None else keys.get("host")
+    if spec is None and (d / "domain.yaml").is_file():
+        spec = (yaml.safe_load((d / "domain.yaml").read_text()) or {}).get("host")
+    f, sep, _ = str(spec or "").partition(":")
+    if not (sep and f.endswith(".py")):
+        raise ValueError(f"{d.name}: a host's text needs a manifest host of the form file.py:factory (it has {spec!r})")
+    return d / f
+
+
+def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
+         r=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
     {name: text} written as <dir>/extensions/<name>.llp; intents
     intent.yaml's text (its generated files in intent/, and intent: {spec}
     named in the manifest); manifest {key: value} set in domain.yaml (or
-    its whole text, a str); readme the domain's README.md. The
+    its whole text, a str); readme the domain's README.md; host the
+    host's Python, written as the file the manifest's host names
+    (file.py:factory); corpus intent/<name>-corpus.tsv. The
     manifest is checked with the loader's check_manifest and the intents
     must generate before anything is planned."""
     import re
@@ -318,6 +334,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
         if d is None:
             raise ValueError(f"{name}: a README belongs to a domain directory")
         files[d / "README.md"] = readme
+    if corpus is not None:
+        if d is None:
+            raise ValueError(f"{name}: a corpus belongs to a domain directory")
+        files[d / "intent" / f"{d.name}-corpus.tsv"] = corpus
+    if host is not None:
+        if d is None:
+            raise ValueError(f"{name}: a host belongs to a domain directory")
+        files[_host_file(d, keys, whole)] = host
     if intents is not None:
         if d is None:
             raise ValueError(f"{name}: intents belong to a domain directory (domains/<name>/)")
@@ -364,13 +388,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
     return out
 
 
-def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, r=None):
+def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
+          r=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
-    files = plan(name, program, extensions, intents, manifest, readme, r)
+    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -380,6 +405,48 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
     if d is not None and (d / "domain.yaml").is_file():
         fp = fingerprint(d.name, r)
     return {"written": [f["path"] for f in files], "diff": "".join(f["diff"] for f in files), "fingerprint": fp}
+
+
+# what take() carries: the manifest's keys whose files it brings, and the ones with no file
+TAKEN = ("program", "extensions", "host", "intent", "display", "line", "voice", "clock", "reload", "records")
+
+
+def take(name, src, r=None, readme=None):
+    """apply()'s arguments that bring the domain `name` over from the catalog
+    `src` (a scratch catalog: the agentic loop's) into the root r: its
+    domain.yaml as it is, the program, the extensions, the host, intent.yaml
+    (apply generates intent/ again) and a corpus, and its README (or
+    `readme`). Never records/ or build/ (the agents' own). Refused when r has
+    the domain already, or the domain names a file take does not carry
+    (serves, agent, pair, notch: bring those by hand) or keeps one elsewhere
+    than its directory's layout. Then `apply(name, **take(name, src, r))`."""
+    r, src = _r(r), Path(src).resolve()
+    s = get(name, src)
+    if (r / "domains" / name).exists():
+        raise ValueError(f"{name}: {r} has domains/{name} already")
+    if s.dir.resolve() != src / "domains" / name:
+        raise ValueError(f"{name}: take brings a domain from domains/{name}/ (it is at {s.dir})")
+    other = sorted(set(s.manifest) - set(TAKEN))
+    if other:
+        raise ValueError(f"{name}: its manifest names {', '.join(other)}, which take does not carry")
+    d = s.dir.resolve()
+    if s.program is None or Path(s.program).resolve() != d / f"{name}.llp":
+        raise ValueError(f"{name}: take carries the program {name}.llp beside domain.yaml (it names {s.program})")
+    ext = {}
+    for e in s.extensions():
+        e = Path(e).resolve()
+        if e.parent != d / "extensions":
+            raise ValueError(f"{name}: the extension {e} is not in extensions/")
+        ext[e.stem] = e.read_text()
+    host = None
+    if s.manifest.get("host"):
+        host = _host_file(d, {}, (d / "domain.yaml").read_text()).read_text()
+    it, cp = d / "intent.yaml", d / "intent" / f"{name}-corpus.tsv"
+    if readme is None and (d / "README.md").is_file():
+        readme = (d / "README.md").read_text()
+    return dict(program=Path(s.program).read_text(), extensions=ext, manifest=(d / "domain.yaml").read_text(),
+                intents=it.read_text() if it.is_file() else None, host=host,
+                corpus=cp.read_text() if cp.is_file() else None, readme=readme)
 
 
 # ── JSON forms (the CLI) ─────────────────────────────────────────────────────
@@ -429,9 +496,15 @@ def main(argv=None):
     a_.add_argument("--intents-skeleton", action="store_true", help="intent.yaml drafted from the program")
     a_.add_argument("--manifest", metavar="JSON", help="domain.yaml keys to set, as a JSON object")
     a_.add_argument("--dry-run", action="store_true")
+    tk = sub.add_parser("take", help="bring a domain over from another catalog (a scratch one) into the root; "
+                                     "--dry-run: the plan and its diff")
+    tk.add_argument("name")
+    tk.add_argument("--from", dest="src", required=True, metavar="ROOT", help="the catalog the domain is in")
+    tk.add_argument("--readme", metavar="FILE", help="its README.md from FILE (- = stdin), else the one it has")
+    tk.add_argument("--dry-run", action="store_true")
     sub.add_parser("root", help="the catalog root")
     sub.add_parser("widget", help="the catalog widget's directory, URL and files")
-    for p in (ap, ls, g, it, fp, a_):
+    for p in (ap, ls, g, it, fp, a_, tk):
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     a = ap.parse_args(argv)
     r = root(a.root) if a.root else None
@@ -467,6 +540,14 @@ def main(argv=None):
             out = {"root": str(_r(r))}
         elif a.cmd == "widget":
             out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
+        elif a.cmd == "take":
+            kw = take(a.name, a.src, r, read(a.readme) if a.readme else None)
+            if a.dry_run:
+                files = plan(a.name, r=r, **kw)
+                out = {"dry_run": True, "files": [{k: v for k, v in f.items() if k != "text"} for f in files],
+                       "diff": "".join(f["diff"] for f in files)}
+            else:
+                out = apply(a.name, r=r, **kw)
         else:
             ext = {}
             for e in a.extension:
