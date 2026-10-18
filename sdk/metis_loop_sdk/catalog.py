@@ -187,11 +187,11 @@ def intent_files(name, text, r=None):
 
 
 # A world whose program has no command atoms (pred cmd_*) takes no commands. With
-# INTENTLESS it gets no intent.yaml at all: the agents open a domain without intents with
-# no verbs (agent-no-intent s-7fd29000). Without it (the agents before that), it gets an
-# intent.yaml that knows only UNKNOWN, headed as what it is rather than as a draft.
-# $METIS_CATALOG_INTENTLESS=1|0 sets it.
-INTENTLESS = os.environ.get("METIS_CATALOG_INTENTLESS", "0") == "1"
+# INTENTLESS (the default) it gets no intent.yaml at all: the agents open a domain without
+# intents with no verbs (agent-no-intent s-7fd29000, metis-agent a0a19e6). Without it (for
+# agents before that), it gets an intent.yaml that knows only UNKNOWN, headed as what it
+# is rather than as a draft. $METIS_CATALOG_INTENTLESS=0 turns it off.
+INTENTLESS = os.environ.get("METIS_CATALOG_INTENTLESS", "1") != "0"
 NO_COMMANDS = ("# {n}'s intents: the world takes no commands (its program has no cmd_* atom), so this\n"
                "# file knows only UNKNOWN. It is here because the domain agent opens no domain without\n"
                "# an intent.yaml; a domain with commands drafts its verbs from them (tools/intents.py skeleton).\n")

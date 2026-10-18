@@ -194,7 +194,7 @@ test("readme(): the mechanical parts from the SDK, the model's summary and title
 	catalog.apply("quiet", { program: quiet }, r);
 	assert.deepEqual(catalog.commands("quiet", r), []);
 	assert.deepEqual(catalog.commands("plant", r), py(r, "intents", "plant", "--skeleton").commands);
-	assert.match(catalog.skeleton("quiet", r)!, /^# quiet's intents: the world takes no commands/);
+	assert.equal(catalog.skeleton("quiet", r), null);                                    // the default: no intent.yaml
 	const text = catalog.readme("quiet", { from: r, summary: "An a becomes a b.", title: "-a quiet world" });
 	assert.equal(text, py(r, "readme", "quiet", "--summary", w("An a becomes a b."), "--title=-a quiet world").readme);
 	assert.match(text, /^# quiet — -a quiet world\n\nAn a becomes a b\.\n/);

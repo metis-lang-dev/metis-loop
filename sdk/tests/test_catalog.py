@@ -476,13 +476,16 @@ def test_a_world_with_no_commands_gets_no_draft(scratch, monkeypatch):
     files = catalog.plan("quiet", intents=sk, r=scratch)
     assert "domains/quiet/intent/quiet-spoken.txt" not in [f["path"] for f in files]      # empty: not written
     assert "domains/quiet/intent/quiet.gbnf" in [f["path"] for f in files]
-    env = dict(os.environ, METIS_CATALOG_INTENTLESS="1")
+    env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG_INTENTLESS"}   # the default: intentless
     p = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(scratch), "apply", "quiet",
                         "--intents-skeleton", "--json"], capture_output=True, text=True, env=env)
     assert p.returncode == 1 and "takes no commands" in json.loads(p.stdout)["error"]
     p = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(scratch), "intents", "quiet",
                         "--skeleton", "--json"], capture_output=True, text=True, env=env)
     assert json.loads(p.stdout) == {"name": "quiet", "skeleton": None, "commands": []}
+    p = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(scratch), "intents", "quiet",
+                        "--skeleton", "--json"], capture_output=True, text=True, env=dict(env, METIS_CATALOG_INTENTLESS="0"))
+    assert json.loads(p.stdout)["skeleton"] == sk                             # the switch off: UNKNOWN only
 
 
 def test_the_readme_writes_its_mechanical_parts(scratch, tmp_path):
