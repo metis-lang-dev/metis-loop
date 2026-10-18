@@ -234,3 +234,37 @@ def test_the_widget_is_web_catalogs_bytes():
         pytest.skip(f"no metis-loop web/catalog at {web} (METIS_LOOP_WEB)")
     for f in catalog.WIDGET_FILES:
         assert (catalog.WIDGET_DIR / f).read_bytes() == (web / f).read_bytes()
+
+
+def test_readme_from_a_run_and_the_bundle(scratch, tmp_path):
+    run = tmp_path / "run"
+    shutil.copytree(scratch, run / "catalog")
+    (run / "catalog/domains/plant/README.md").unlink()
+    (run / "records").mkdir()
+    (run / "records/formalize-calls.jsonl").write_text(
+        json.dumps({"model": "m/x", "cost": 0.25}) + "\n" + json.dumps({"model": "m/x", "cost": 0.5}) + "\n")
+    text = catalog.readme("plant", run / "catalog", run)
+    assert text.startswith("# plant — ") and "on `m/x` (formalize: 2 calls, 0.7500 USD" in text
+    assert "`extensions/visitor.llp`: `visitor_waters [dyn] : dry * visitor -o moist.`" in text
+    assert "`metis --plugin plant_host:make plant.llp`" in text
+    (run / "seed.json").write_text(json.dumps({"seed": "domains/fiction/x.llp"}))
+    assert "seeded from `domains/fiction/x.llp`" in catalog.readme("plant", run / "catalog", run)
+    dst = tmp_path / "dst"
+    (dst / "domains").mkdir(parents=True)
+    shutil.copytree(scratch / "tools", dst / "tools")
+    rc, out, _ = _cli("--root", str(dst), "take", "plant", "--from", str(run / "catalog"), "--readme-from-run", str(run),
+                      "--json")
+    assert rc == 0 and (dst / "domains/plant/README.md").read_text() == catalog.readme("plant", run / "catalog", run)
+    rc, err, _ = _cli("--root", str(dst), "take", "dog", "--from", str(scratch), "--readme", "-",
+                      "--readme-from-run", str(run), "--json", stdin="x")
+    assert rc == 1 and "not both" in err["error"]
+    rc, b, _ = _cli("--root", str(dst), "build", "plant", "--json")
+    assert rc == 0 and "plant.metis" in b["bundle"] and (dst / "domains/plant/build/plant.metis").exists()
+    rc, err, _ = _cli("--root", str(dst), "build", "nosuch", "--json")
+    assert rc == 1 and "nosuch" in err["error"]
+
+
+def test_the_typescript_face_is_package_data():
+    rc, out, _ = _cli("ts", "--json")
+    assert rc == 0 and out["files"] == ["catalog.ts"] and Path(out["dir"]) == catalog.TS_DIR
+    assert (catalog.TS_DIR / "catalog.ts").read_text().startswith("// metis_loop_sdk/ts/catalog.ts")

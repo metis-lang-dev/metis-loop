@@ -35,7 +35,7 @@ include = ["metis_loop_sdk*"]
 # setuptools builds from the checkout (pip install ./sdk, or the git URL's
 # #subdirectory=sdk) holds the files themselves. An sdist would carry the link,
 # not the files: build wheels from the checkout.
-metis_loop_sdk = ["widget/*"]
+metis_loop_sdk = ["widget/*", "ts/*"]   # ts/: the TypeScript face (catalog.ts), files of its own
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

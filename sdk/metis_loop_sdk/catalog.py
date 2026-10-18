@@ -17,8 +17,15 @@ metis-catalog and this module, and no consumer.
     catalog.apply("dog", program=…, extensions={…}, intents=…, manifest={…})
                                     # the one validated write: never a commit
     catalog.take("lamp", src)       # apply()'s arguments that bring a domain over from another catalog
+    catalog.readme("lamp", src, run)  # a README for a domain an agentic-loop run made
+    catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
 
-    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|take|widget … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|take|build|widget|ts … --json
+
+The TypeScript face (metis_loop_sdk/ts/catalog.ts, TS_DIR) is the same
+catalog for a node consumer (the agentic loop's pi extensions): one function
+per CLI verb, through this CLI, so both faces are one code and one tag. The
+wheel carries it as package data, as it carries the widget; `ts` prints where.
 
 The catalog widget (the CATALOG panel both consoles show) lives in
 metis-loop's web/catalog/ (web/: the shared web widgets); the SDK carries the
@@ -47,6 +54,9 @@ INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install -e <met
 WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the checkout: ../../web/catalog
 WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
 WIDGET_FILES = ("catalog.js", "catalog.css")
+
+TS_DIR = (Path(__file__).resolve().parent / "ts").resolve()          # the TypeScript face
+TS_FILES = ("catalog.ts",)
 
 
 # ── the loader and the root ───────────────────────────────────────────────────
@@ -449,6 +459,73 @@ def take(name, src, r=None, readme=None):
                 corpus=cp.read_text() if cp.is_file() else None, readme=readme)
 
 
+def readme(name, src, run=None):
+    """A README for the domain `name` of the catalog `src`, written from what
+    an agentic-loop run left: the program's provenance line, its extensions'
+    rules, and, from the run directory `run` (loop.sh --scratch DIR: catalog/,
+    records/formalize-calls.jsonl, seed.json), the model and formalize's cost,
+    or the program it was seeded from. For take(readme=…) when the domain has
+    none of its own."""
+    import re
+    src = Path(src).resolve()
+    run = Path(run).resolve() if run else None
+    d = src / "domains" / name
+    prog = (d / f"{name}.llp").read_text()
+    m = re.search(r'provenance text "((?:[^"\\]|\\.)*)"', prog)
+    prose = m.group(1) if m else ""
+    calls = run / "records" / "formalize-calls.jsonl" if run else None
+    rows = [json.loads(l) for l in calls.read_text().splitlines() if l.strip()] if calls and calls.is_file() else []
+    seed = run / "seed.json" if run else None
+    seed = json.loads(seed.read_text()) if seed and seed.is_file() else None
+    first = prose.split(". ")[0].rstrip(".") or f"the {name}"
+    out = [f"# {name} — {first[0].lower() + first[1:]}", ""]
+    label = f", run `{run.name}`" if run else ""
+    if seed:
+        how = (f"seeded from `{seed['seed']}`: the program as it was (its header keeps its origin), made a "
+               "catalog domain around it")
+    elif rows:
+        how = (f"the kernel's formalize drafted the program on `{rows[0]['model']}` (formalize: {len(rows)} calls, "
+               f"{sum(r.get('cost') or 0 for r in rows):.4f} USD; pi's own calls are on the key's usage)")
+    else:
+        how = "the kernel's formalize drafted the program"
+    out += [f"**Where it came from:** the agentic loop (metis-agentic-loop){label}: pi drove, and {how}. "
+            "Every file was approved at pi's apply gate, and taken into this catalog from the run's.", ""]
+    host = (d / f"{name}_host.py").is_file()
+    out += [f"**What:** `{name}.llp`" + (" formalizes the person's prose (its provenance line)." if prose else
+                                          " is the program.")
+            + (f" `{name}_host.py` is the world, written before any program: the loop exercised the program against"
+               " it, and the extensions explain what the world did that the program did not say." if host else ""), ""]
+    ext = sorted((d / "extensions").glob("*.llp")) if (d / "extensions").is_dir() else []
+    if ext:
+        out += ["## The extensions", ""]
+        for e in ext:
+            rules = [l.strip() for l in e.read_text().splitlines() if re.match(r"\s*\w+\s*\[\w+\]\s*:", l)]
+            out.append(f"- `extensions/{e.name}`: " + "; ".join(f"`{r}`" for r in rules))
+        out.append("")
+    out += ["## Exercise it", "",
+            "- the loop console (metis-loop `run.sh`) and the agents serve the program with its extensions "
+            "(domain.yaml: `extensions/*.llp` in name order); the console lists it at its next catalog read;"]
+    out.append(f"- the program alone in the REPL: `metis {'--plugin ' + name + '_host:make ' if host else ''}{name}.llp`;")
+    if (d / "intent.yaml").is_file():
+        out.append(f"- its intents: `python3 tools/intents.py check {name}` (intent.yaml is the skeleton the loop "
+                   "drafted: write the meanings and more examples, then `gen`).")
+    return "\n".join(out) + "\n"
+
+
+def build(name, r=None):
+    """The domain's bundle (domains/<name>/build/, git-ignored), by metispy's
+    emitter in a child (python -m metis.kernel.artifact): its one-line
+    account. Raises ValueError with the emitter's own error."""
+    import subprocess
+    r = _r(r)
+    get(name, r)
+    p = subprocess.run([sys.executable, "-m", "metis.kernel.artifact", name], cwd=r, capture_output=True, text=True,
+                       env={**os.environ, "METIS_CATALOG": str(r)}, timeout=600)
+    if p.returncode:
+        raise ValueError(f"{name}: the bundle did not build: {(p.stderr or p.stdout).strip()[-600:]}")
+    return p.stdout.strip()
+
+
 # ── JSON forms (the CLI) ─────────────────────────────────────────────────────
 
 def _jsonable(o):
@@ -501,10 +578,15 @@ def main(argv=None):
     tk.add_argument("name")
     tk.add_argument("--from", dest="src", required=True, metavar="ROOT", help="the catalog the domain is in")
     tk.add_argument("--readme", metavar="FILE", help="its README.md from FILE (- = stdin), else the one it has")
+    tk.add_argument("--readme-from-run", metavar="RUN_DIR",
+                    help="without a README of its own: readme() from the agentic-loop run in RUN_DIR")
     tk.add_argument("--dry-run", action="store_true")
-    sub.add_parser("root", help="the catalog root")
-    sub.add_parser("widget", help="the catalog widget's directory, URL and files")
-    for p in (ap, ls, g, it, fp, a_, tk):
+    bd = sub.add_parser("build", help="the domain's bundle (build/, metispy's emitter)")
+    bd.add_argument("name")
+    rt = sub.add_parser("root", help="the catalog root")
+    ts_ = sub.add_parser("ts", help="the TypeScript face's directory and files")
+    wd = sub.add_parser("widget", help="the catalog widget's directory, URL and files")
+    for p in (ap, ls, g, it, fp, a_, tk, bd, rt, ts_, wd):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     a = ap.parse_args(argv)
     r = Path(a.root).resolve() if a.root else None        # --root wins over $METIS_CATALOG (root() reads it first)
@@ -540,8 +622,17 @@ def main(argv=None):
             out = {"root": str(_r(r))}
         elif a.cmd == "widget":
             out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
+        elif a.cmd == "ts":
+            out = {"dir": str(TS_DIR), "files": list(TS_FILES)}
+        elif a.cmd == "build":
+            out = {"name": a.name, "bundle": build(a.name, r)}
         elif a.cmd == "take":
-            kw = take(a.name, a.src, r, read(a.readme) if a.readme else None)
+            if a.readme and a.readme_from_run:
+                raise ValueError("take: --readme or --readme-from-run, not both")
+            text = read(a.readme) if a.readme else None
+            if a.readme_from_run and not (Path(a.src) / "domains" / a.name / "README.md").is_file():
+                text = readme(a.name, a.src, a.readme_from_run)
+            kw = take(a.name, a.src, r, text)
             if a.dry_run:
                 files = plan(a.name, r=r, **kw)
                 out = {"dry_run": True, "files": [{k: v for k, v in f.items() if k != "text"} for f in files],

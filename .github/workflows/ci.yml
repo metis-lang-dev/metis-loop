@@ -43,6 +43,9 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: metis-loop/pyproject.toml
+      - uses: actions/setup-node@v4     # the SDK's TypeScript face (sdk/tests/test_ts_face.py)
+        with:
+          node-version: '22.23.3'
       - name: Install (console extra; the agent extra deliberately NOT)
         run: |
           pip install -e ./metispy
@@ -51,6 +54,7 @@ jobs:
           pip install -e './metis-loop[console]' pytest
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         working-directory: metis-loop
+        env: {METIS_LOOP_REQUIRE_NODE: '1'}
         run: pytest -q tests/ sdk/tests/
 
   # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,
@@ -77,6 +81,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4     # the SDK's TypeScript face (sdk/tests/test_ts_face.py)
+        with:
+          node-version: '22.23.3'
       - name: Install the SDK alone (non-editable, as a consumer gets it)
         run: |
           python -m venv /tmp/sdk
@@ -84,7 +91,7 @@ jobs:
           /tmp/sdk/bin/pip install './metis-loop/sdk[test,claude]'   # [claude]: the command face's option tests run too
       - name: No human loop in the venv
         run: '! /tmp/sdk/bin/python -c "import loop"'
-      - name: The wheel carries the CATALOG widget, byte for byte web/catalog/ (files, not a link)
+      - name: The wheel carries the CATALOG widget, byte for byte web/catalog/ (files, not a link), and the TypeScript face
         run: |
           /tmp/sdk/bin/python - "$GITHUB_WORKSPACE/metis-loop/web/catalog" <<'EOF'
           import sys
@@ -97,7 +104,12 @@ jobs:
               assert got.is_file() and not got.is_symlink(), got
               assert got.read_bytes() == (web / f).read_bytes(), f
               print("widget", f, "=", web / f, len(got.read_bytes()), "bytes")
+          for f in catalog.TS_FILES:              # the TypeScript face, its own files
+              got = catalog.TS_DIR / f
+              assert "site-packages" in str(got) and got.is_file(), got
+              print("ts", f, len(got.read_bytes()), "bytes")
           EOF
       - name: SDK suite (from outside the checkout, so the installed package is what runs)
         working-directory: /tmp
+        env: {METIS_LOOP_REQUIRE_NODE: '1'}
         run: /tmp/sdk/bin/python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/metis-loop/sdk/tests"
