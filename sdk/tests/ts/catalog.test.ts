@@ -151,7 +151,9 @@ test("edit: one exact edit, its diff and since_diff; the refusals", { skip: !HAS
 	assert.equal(readFileSync(join(r, "domains/plant/plant.llp"), "utf8"), planned[0].text);
 	assert.throws(() => catalog.edit("plant", e, r), (x: any) => x instanceof catalog.CatalogError && /not in it/.test(x.message));
 	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: "pred", new_string: "PRED" }, r), /occurs \d+ times/);
-	assert.equal(catalog.planEdit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r).length, 1);
+	assert.equal(catalog.planEdit("plant", { path: "plant.llp", old_string: "sun", new_string: "light", replace_all: true }, r).length, 1);
+	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r),
+		/extensions\/visitor\.llp: error pred-undeclared/);                                // its extension, against the edited program
 	assert.throws(() => catalog.planEdit("plant", { path: "../dog/dog.llp", old_string: "a", new_string: "b" }, r), /not inside/);
 	const rule = readFileSync(join(r, "domains/plant/plant.llp"), "utf8").split("\n").find((l) => l.includes(" -o moist"))!;
 	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: rule, new_string: rule.replace("-o moist", "-o moistt") }, r),

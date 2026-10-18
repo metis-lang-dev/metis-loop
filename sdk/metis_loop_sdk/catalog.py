@@ -197,11 +197,16 @@ NO_COMMANDS = ("# {n}'s intents: the world takes no commands (its program has no
                "# an intent.yaml; a domain with commands drafts its verbs from them (tools/intents.py skeleton).\n")
 
 
+# a command atom's declaration, by tools/intents.py skeleton's own rule (`pred cmd_X[(T, …)] :`)
+COMMAND = r"^pred\s+(cmd_\w+)(?:\([^)]*\))?\s*:"
+
+
 def commands(name, r=None):
-    """The command atoms of the domain's program (pred cmd_X …): ["cmd_X", …]."""
+    """The command atoms of the domain's program (pred cmd_X … :): ["cmd_X", …], by the
+    rule the intent generator's skeleton drafts its verbs from (COMMAND)."""
     import re
     prog, _ = _program_of(name, _r(r))
-    return re.findall(r"^pred\s+(cmd_\w+)", prog.read_text(), re.M) if prog.is_file() else []
+    return re.findall(COMMAND, prog.read_text(), re.M) if prog.is_file() else []
 
 
 def skeleton(name, r=None, intentless=None):
@@ -349,7 +354,7 @@ def _host_file(d, keys, whole):
 
 
 def plan(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-         r=None, display=None, line=None, since=None):
+         r=None, display=None, line=None, since=None, as_is=None):
     """What apply would write: [{path (relative to the root), new, diff,
     text}] for each file whose text changes. `name` is a domain (or a
     catalog's path, no .llp); program the program's text; extensions
@@ -367,7 +372,11 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
     since {path: text}: an earlier proposal of a file (the one the person
     refused); a planned file with one gets since_diff, its diff from that
-    text, so the person reads what changed since, not the whole file again."""
+    text, so the person reads what changed since, not the whole file again.
+
+    as_is {path: text}: existing files of the domain directory written back where they
+    are, as given (edit()'s write of an extension: extensions= would clean its name and
+    write a second file beside it)."""
     import re
     r = _r(r)
     prog, d = _program_of(name, r)
@@ -378,11 +387,16 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
     for k, (en, text) in enumerate((extensions or {}).items(), 1):
         stem = safe.sub("_", str(en or f"extension{k}").lower()).strip("_") or f"extension{k}"
         files[prog.parent / "extensions" / f"{stem}.llp"] = text
+    for ap, text in (as_is or {}).items():
+        ap = (Path(ap) if Path(ap).is_absolute() else r / ap).resolve()
+        if d is None or Path(d).resolve() not in ap.parents or not ap.is_file():
+            raise ValueError(f"{name}: as_is writes back an existing file of the domain's directory, not {ap}")
+        files[ap] = text
     whole = manifest if isinstance(manifest, str) else None      # domain.yaml's whole text
     keys = {} if whole is not None else dict(manifest or {})
     shown = {k: v for k, v in (("display", display), ("line", line)) if v is not None}
     for k, v in shown.items():
-        if not isinstance(v, str) or not v.strip() or "\n" in v:
+        if not isinstance(v, str) or not v.strip() or v.splitlines() != [v]:   # any line break (U+2028, U+0085 …)
             raise ValueError(f"{name}: {k} is one line of text")
     if whole is not None and shown:
         whole = _manifest_text(whole, shown)
@@ -451,13 +465,13 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
 
 
 def apply(name, program=None, extensions=None, intents=None, manifest=None, readme=None, host=None, corpus=None,
-          r=None, display=None, line=None):
+          r=None, display=None, line=None, as_is=None):
     """The one validated write into a catalog root (a working copy or a
     scratch catalog): plan()'s files written, never a commit. Returns
     {written: [paths], diff, fingerprint} — the fingerprint of the domain
     after the write (None for a catalog no manifest names)."""
     r = _r(r)
-    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line)
+    files = plan(name, program, extensions, intents, manifest, readme, host, corpus, r, display, line, as_is=as_is)
     for f in files:
         p = r / f["path"]
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -482,21 +496,22 @@ def metisc():
     return str(sib) if sib.is_file() else None
 
 
-def diagnostics(text, filename, base=None):
-    """metisc's diagnostics of a program text (an extension's against `base`, the program
-    file it extends): [{code, severity, decl, text, line, hint}]. Raises ValueError without
-    a metisc, or when metisc fails."""
+def diagnostics(path, base=None):
+    """metisc's diagnostics of the program file `path` (an extension's against `base`, the
+    program file it extends): [{code, severity, decl, text, line, hint}]. A metisc that
+    fails on it (a parse error, a missing include) is one diagnostic, code metisc-failed,
+    so a file that does not compile is still compared, and an edit may repair it. Raises
+    ValueError without a metisc."""
     import subprocess
     m = metisc()
     if not m:
         raise ValueError("no metisc to check a program's edit: set METISC (metis-lang src/metisc)")
-    with tempfile.TemporaryDirectory(prefix="edit-") as tmp:
-        f = Path(tmp) / filename
-        f.write_text(text)
-        p = subprocess.run([m, "--diagnostics-json", str(f), *(["--base", str(base)] if base else [])],
-                           capture_output=True, text=True, timeout=120)
+    p = subprocess.run([m, "--diagnostics-json", str(path), *(["--base", str(base)] if base else [])],
+                       capture_output=True, text=True, timeout=120)
     if p.returncode:
-        raise ValueError(f"metisc --diagnostics {filename}: exit {p.returncode}: {(p.stderr or p.stdout).strip()[-400:]}")
+        why = (p.stderr or p.stdout).strip().splitlines()
+        return [{"code": "metisc-failed", "severity": "error", "decl": None, "line": None, "hint": None,
+                 "text": (why[-1] if why else f"exit {p.returncode}").replace(str(path), Path(path).name)}]
     out = []
     for l in p.stdout.splitlines():
         if l.strip().startswith("{"):
@@ -504,6 +519,38 @@ def diagnostics(text, filename, base=None):
             loc = d.get("loc") or {}
             out.append({"code": d.get("code"), "severity": d.get("severity"), "decl": loc.get("decl"),
                         "text": d.get("text"), "line": loc.get("line"), "hint": d.get("hint")})
+    return out
+
+
+class _Beside:
+    """The text `text` as a dot-file beside `at` (`.<name>.edit-…`, no .llp suffix: no
+    reload watches it), so its includes resolve as the original's; removed on exit."""
+    def __init__(self, at, text):
+        self.at, self.text, self.path = Path(at), text, None
+
+    def __enter__(self):
+        fd, t = tempfile.mkstemp(prefix=f".{self.at.name}.edit-", dir=self.at.parent)
+        with os.fdopen(fd, "w") as f:
+            f.write(self.text)
+        self.path = Path(t)
+        return self.path
+
+    def __exit__(self, *exc):
+        self.path.unlink(missing_ok=True)
+
+
+def _added(before, after):
+    """The diagnostics of `after` that `before` does not have (a multiset of code,
+    severity, declaration and text: shifted lines do not count; metisc-failed by its
+    code alone)."""
+    from collections import Counter
+    key = lambda x: (x["code"], x["severity"]) + ((None, None) if x["code"] == "metisc-failed" else (x["decl"], x["text"]))
+    left = Counter(key(x) for x in after) - Counter(key(x) for x in before)
+    out = []
+    for x in after:
+        if left[key(x)] > 0:
+            left[key(x)] -= 1
+            out.append(x)
     return out
 
 
@@ -531,7 +578,6 @@ def edit(name, path, old, new, replace_all=False, r=None):
     all, stays. A .llp edit adds no diagnostic (metisc's, before and after; an extension
     against the program it extends). Then `apply(name, **edit(…))`: the program
     and intent.yaml go through apply's own checks, intent/ generated again."""
-    from collections import Counter
     r = _r(r)
     dom = get(name, r)
     d = Path(dom.dir).resolve()
@@ -556,7 +602,7 @@ def edit(name, path, old, new, replace_all=False, r=None):
     if p == prog:
         kw = {"program": text}
     elif p in exts:
-        kw = {"extensions": {exts[p]: text}}
+        kw = {"as_is": {p: text}}       # written back where it is (plan's extensions= would clean its name)
     elif rel == "README.md":
         kw = {"readme": text}
     elif rel == "intent.yaml":
@@ -571,20 +617,23 @@ def edit(name, path, old, new, replace_all=False, r=None):
         raise ValueError(f"{name}: {rel} is not one of the domain's files an edit changes (its program, "
                          "extensions/*.llp, README.md, intent.yaml, domain.yaml, its host, its corpus)")
     if p.suffix == ".llp":
-        base = prog if p in exts else None
-        key = lambda x: (x["code"], x["severity"], x["decl"], x["text"])
-        before = Counter(key(x) for x in diagnostics(old_text, p.name, base))
-        after = diagnostics(text, p.name, base)
-        added = Counter(key(x) for x in after) - before
-        if added:
-            shown = []
-            for x in after:
-                if added[key(x)] > 0:
-                    added[key(x)] -= 1
-                    shown.append(x)
-            raise ValueError(f"{name}/{rel}: the edit adds {len(shown)} diagnostic(s), so it is refused:\n" + "\n".join(
-                f"  {x['severity']} {x['code']} @ line {x['line']} ({x['decl']}): {x['text']}"
-                + (f" — {x['hint']}" if x.get("hint") else "") for x in shown))
+        found = []   # (the file, its added diagnostics)
+        with _Beside(p, text) as cand:
+            if p in exts:                                   # an extension, against the program it extends
+                found.append((rel, _added(diagnostics(p, prog), diagnostics(cand, prog))))
+            else:
+                found.append((rel, _added(diagnostics(p), diagnostics(cand))))
+                if p == prog and not found[0][1]:           # the program's extensions, against the edited program
+                    for e in exts:
+                        found.append((e.relative_to(d).as_posix() if d in e.parents else str(e),
+                                      _added(diagnostics(e, prog), diagnostics(e, cand))))
+        found = [(f, a) for f, a in found if a]
+        if found:
+            n = sum(len(a) for _, a in found)
+            raise ValueError(f"{name}/{rel}: the edit adds {n} diagnostic(s), so it is refused:\n" + "\n".join(
+                f"  {f}: {x['severity']} {x['code']}" + (f" @ line {x['line']}" if x.get("line") else "")
+                + (f" ({x['decl']})" if x.get("decl") else "") + f": {x['text']}"
+                + (f" — {x['hint']}" if x.get("hint") else "") for f, a in found for x in a))
     return kw
 
 
@@ -660,11 +709,15 @@ def intents_status(name, r=None):
         return ("The world takes no commands (its program has no `cmd_*` atom), so it has no intent.yaml: "
                 "the agents open it with no verbs.")
     text = it.read_text()
-    spec = yaml.safe_load(text) or {}
+    try:
+        spec = yaml.safe_load(text) or {}
+    except yaml.YAMLError as e:
+        return f"`intent.yaml` does not read as YAML ({type(e).__name__}): `python3 tools/intents.py check {name}`."
     verbs = []
-    for v in spec.get("verbs") or []:
-        for x in (v.get("verb") if isinstance(v.get("verb"), list) else [v.get("verb")]):
-            if x and x != "UNKNOWN":
+    for v in (spec.get("verbs") if isinstance(spec, dict) else None) or []:
+        verb = v.get("verb") if isinstance(v, dict) else None
+        for x in (verb if isinstance(verb, list) else [verb]):
+            if isinstance(x, str) and x and x != "UNKNOWN":
                 verbs.append(x)
     if not verbs:
         return ("The world takes no commands (its program has no `cmd_*` atom). `intent.yaml` knows only UNKNOWN: "
@@ -696,10 +749,13 @@ def readme(name, src, run=None, summary=None, title=None):
     rows = [json.loads(l) for l in calls.read_text().splitlines() if l.strip()] if calls and calls.is_file() else []
     seed = run / "seed.json" if run else None
     seed = json.loads(seed.read_text()) if seed and seed.is_file() else None
-    if title and title.strip():
-        head = f"# {name} — {title.strip()}"
-    elif prose:
-        first = prose.split(". ")[0].rstrip(".")
+    title = (title or "").strip()
+    if title and title.splitlines() != [title]:
+        raise ValueError(f"{name}: a README's title is one line")
+    first = prose.split(". ")[0].rstrip(".").strip()
+    if title:
+        head = f"# {name} — {title}"
+    elif first:
         head = f"# {name} — {first[0].lower() + first[1:]}"
     else:
         head = f"# {name}"

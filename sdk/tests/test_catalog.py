@@ -374,9 +374,12 @@ def test_an_edit_is_refused_unless_it_is_exact_inside_and_adds_no_diagnostic(scr
     with pytest.raises(ValueError, match="(?s)adds 1 diagnostic.*pred-undeclared") as e:
         catalog.edit("plant", "plant.llp", rule, rule.replace("-o moist", "-o moistt"), r=scratch)
     assert "moistt" in str(e.value)
-    # every occurrence with replace_all: a rename of an atom everywhere passes
-    kw = catalog.edit("plant", "plant.llp", "moist", "wet", replace_all=True, r=scratch)
-    assert "moist" not in kw["program"]
+    # every occurrence with replace_all: the program's own rename of an atom passes …
+    kw = catalog.edit("plant", "plant.llp", "sun", "light", replace_all=True, r=scratch)
+    assert "sun" not in kw["program"]
+    # … but not one its extension still reads (review R3): visitor.llp, against the edited program
+    with pytest.raises(ValueError, match="(?s)extensions/visitor.llp: error pred-undeclared.*'moist'"):
+        catalog.edit("plant", "plant.llp", "moist", "wet", replace_all=True, r=scratch)
 
 
 @needs_metisc
@@ -384,7 +387,7 @@ def test_an_edit_routes_each_file_through_applys_own_checks(scratch):
     d = scratch / "domains/plant"
     assert list(catalog.edit("plant", "README.md", "plant", "Plant", r=scratch, replace_all=True)) == ["readme"]
     ext = catalog.edit("plant", "extensions/visitor.llp", "my soil is moist again", "my soil is wet again", r=scratch)
-    assert list(ext) == ["extensions"] and list(ext["extensions"]) == ["visitor"]
+    assert list(ext) == ["as_is"] and [Path(k).name for k in ext["as_is"]] == ["visitor.llp"]
     assert [f["path"] for f in catalog.plan("plant", **ext, r=scratch)] == ["domains/plant/extensions/visitor.llp"]
     with pytest.raises(ValueError, match="(?s)adds .*undeclared predicate 'guest'"):   # checked against the program
         catalog.edit("plant", "extensions/visitor.llp", "* visitor -o", "* guest -o", r=scratch)
@@ -510,3 +513,82 @@ def test_the_readme_writes_its_mechanical_parts(scratch, tmp_path):
     rc, out, _ = _cli("--root", str(scratch), "readme", "quiet", "--summary", "-", "--title", "t", "--json",
                       stdin="S.\n")
     assert rc == 0 and out["readme"].startswith("# quiet — t\n\nS.\n")
+
+
+@needs_metisc
+def test_an_edit_of_a_program_that_includes(scratch):
+    """review R1: the candidate is diagnosed beside the original, so its include resolves."""
+    d = scratch / "domains/inc"
+    d.mkdir()
+    (d / "inc_rules.llp").write_text("% the lifted part\ncatalog inc-rules 1.\nlayers (story).\nstages (s).\n"
+                                     "namespace w produce (story).\npred a : w.\npred b : w.\nstage s {\n"
+                                     "  %% a becomes b.\n  ab [story] : a -o b.\n}\n")
+    (d / "inc.llp").write_text('% the instance: its header\ncatalog inc 1.\nprovenance hand "t" "2026-10-18".\n'
+                               'include "inc_rules.llp".\n#init a 1\n#steps 2\n')
+    (d / "domain.yaml").write_text("program: inc.llp\n")
+    assert catalog.diagnostics(d / "inc.llp") == []
+    kw = catalog.edit("inc", "inc.llp", "its header", "its header, edited", r=scratch)
+    assert catalog.apply("inc", **kw, r=scratch)["written"] == ["domains/inc/inc.llp"]
+    with pytest.raises(ValueError, match="(?s)adds 1 diagnostic.*metisc-failed.*nope.llp"):
+        catalog.edit("inc", "inc.llp", '"inc_rules.llp"', '"nope.llp"', r=scratch)
+    assert sorted(f.name for f in d.iterdir()) == ["domain.yaml", "inc.llp", "inc_rules.llp"]   # no dot-file left
+
+
+@needs_metisc
+def test_an_extension_edit_writes_back_its_own_file(scratch):
+    """review R2: extensions/Wear-2.llp stays Wear-2.llp (plan's extensions= would write wear_2.llp beside it)."""
+    d = scratch / "domains/plant"
+    (d / "extensions/visitor.llp").rename(d / "extensions/Wear-2.llp")
+    assert [Path(e).name for e in catalog.get("plant", scratch).extensions()] == ["Wear-2.llp"]
+    kw = catalog.edit("plant", "extensions/Wear-2.llp", "moist again", "wet again", r=scratch)
+    files = catalog.plan("plant", **kw, r=scratch)
+    assert [(f["path"], f["new"]) for f in files] == [("domains/plant/extensions/Wear-2.llp", False)]
+    catalog.apply("plant", **kw, r=scratch)
+    assert sorted(f.name for f in (d / "extensions").iterdir()) == ["Wear-2.llp"]
+    with pytest.raises(ValueError, match="existing file of the domain"):
+        catalog.plan("plant", as_is={scratch / "domains/dog/dog.llp": "x"}, r=scratch)
+
+
+@needs_metisc
+def test_an_edit_may_repair_a_file_that_does_not_compile(scratch):
+    """review note 1: a failing metisc before the edit is a diagnostic, not a refusal of every edit."""
+    prog = scratch / "domains/plant/plant.llp"
+    good = prog.read_text()
+    prog.write_text(good.replace("catalog plant 1.", "catalog plant 1"))       # a parse error
+    assert [x["code"] for x in catalog.diagnostics(prog)] == ["metisc-failed"]
+    kw = catalog.edit("plant", "plant.llp", "catalog plant 1\n", "catalog plant 1.\n", r=scratch)
+    assert kw["program"] == good
+    prog.write_text(good)
+    with pytest.raises(ValueError, match="metisc-failed"):                     # and breaking it is refused
+        catalog.edit("plant", "plant.llp", "catalog plant 1.\n", "catalog plant 1\n", r=scratch)
+
+
+def test_one_line_means_no_line_break_of_any_kind(scratch):
+    """review note 2: U+2028, U+0085 and the other breaks str.splitlines knows are refused."""
+    for v in ("a\u2028b", "a\x85b", "a\rb", "a\x0cb"):
+        with pytest.raises(ValueError, match="one line"):
+            catalog.plan("plant", line=v, r=scratch)
+
+
+def test_the_readme_refuses_or_survives_odd_inputs(scratch):
+    """review note 4: a title of two lines; provenance text "."; an intent.yaml that does not read."""
+    with pytest.raises(ValueError, match="title is one line"):
+        catalog.readme("plant", scratch, title="two\nlines")
+    prog = scratch / "domains/plant/plant.llp"
+    prog.write_text(prog.read_text().replace('provenance text "a potted plant that dries out: the person waters it or asks how it is"',
+                                             'provenance text "."'))
+    assert catalog.readme("plant", scratch).startswith("# plant\n")
+    (scratch / "domains/plant/intent.yaml").write_text("verbs: [}\n")
+    assert "does not read as YAML" in catalog.readme("plant", scratch)
+    (scratch / "domains/plant/intent.yaml").write_text("verbs: [WATER, {verb: [CHECK, 3]}]\n")
+    assert "the verbs `CHECK` (and UNKNOWN)" in catalog.readme("plant", scratch)
+
+
+def test_commands_follow_the_skeletons_rule(scratch):
+    """review note 6: the SDK's commands() and intents.py's skeleton read the same atoms."""
+    import yaml
+    prog = scratch / "domains/plant/plant.llp"
+    prog.write_text(prog.read_text() + "pred cmd_go(soil, soil) : plant.\npred cmd_nope.\npred  cmd_spaced  : plant.\n")
+    verbs = [v["verb"] for v in yaml.safe_load(catalog.skeleton("plant", scratch))["verbs"] if v["verb"] != "UNKNOWN"]
+    assert [c[4:].upper() for c in catalog.commands("plant", scratch)] == verbs
+    assert "cmd_nope" not in catalog.commands("plant", scratch) and "cmd_go" in catalog.commands("plant", scratch)
