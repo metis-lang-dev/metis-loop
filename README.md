@@ -35,3 +35,7 @@ fixtures, the pantry and meadow demos) moved on 2026-10-11 to sit next
 to the domains they produced, each with a README of what formalization
 taught. See the "Experiments" section of the metis-catalog README. This
 repo keeps only the loop machinery.
+
+## License
+
+Apache License 2.0 (see `LICENSE`, `NOTICE`).

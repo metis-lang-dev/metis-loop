@@ -1,6 +1,12 @@
+[build-system]
+requires = ["setuptools>=77"]      # PEP 639: license as an SPDX expression
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "metis-loop"
 version = "0.1.0"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 description = "The metis formalization/explanation loop: surprise records -> text -> gated candidate extensions (deployment shape deferred; library + CLI)"
 requires-python = ">=3.9"
 # the loop SDK (sdk/, metis-loop-sdk): the human loop consumes it as any
