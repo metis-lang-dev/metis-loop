@@ -267,7 +267,7 @@ exact under direction.
 ## World 3 — the road handles (guards, ports, decisions)
 
 The production encoding pattern, on the corpus fixture
-(`metis-catalog/scenes/road_close_instance.llp`, an instance that
+(`metis-catalog/domains/road/scenes/road_close_instance.llp`, an instance that
 `include`s the handles domain). It introduces Horn guards,
 reads-scoped ports, and the tick — the shape the vehicle runtime
 actually serves.
@@ -299,7 +299,7 @@ interprets. The measure lives on qualitative classes
 
 The session — the scene typed live, in directive syntax:
 
-    $ metis metis-catalog/scenes/road_close_instance.llp
+    $ metis metis-catalog/domains/road/scenes/road_close_instance.llp
     llp> #init emvt 1
     llp> #init cmd(keep) 1
     llp> #init gclose 1
