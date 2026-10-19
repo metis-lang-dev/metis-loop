@@ -35,7 +35,8 @@ def test_index_lists_the_domains_first_with_what_they_have(srv):
     # is not lent to its several files
     assert by["domains/rddl/wildfire/iter1-world/base"]["kind"] == "catalog"
     assert by["domains/road/scenes/nav4_instance"]["kind"] == "catalog"          # a scene instance in the parked road package (the key gate)
-    assert by["domains/road/road_catalog"]["kind"] == "domain"                   # road (road-collapse): parked, no intents, no host
+    assert by["domains/road/road"]["kind"] == "domain"                           # road (road-collapse): parked, no intents, no host
+    assert by["domains/road/road_catalog"]["kind"] == "catalog"                  # its production catalog, included by road.llp
     assert by["domains/three_pigs/three_pigs"]["kind"] == "domain"              # the fiction ports are domains
     assert "conformance fixtures" not in by["domains/ports/port-proto/clock"]["line"]
 
