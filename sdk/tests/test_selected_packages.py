@@ -32,9 +32,15 @@ needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC, PATH, o
 IGNORE = shutil.ignore_patterns("records", "build", "__pycache__")
 
 
+def _rel(name):
+    """The package's directory in the catalog, as the loader finds it (domains/<name>, or
+    nested: the Ceptre ports are domains/ceptre/<name>)."""
+    return Path(catalog.loader().get(name, CAT).dir).resolve().relative_to(Path(CAT).resolve())
+
+
 def _scratch(root, name):
     """A scratch catalog holding the package as the catalog has it, and the intent generator."""
-    shutil.copytree(CAT / "domains" / name, root / "domains" / name, ignore=IGNORE)
+    shutil.copytree(CAT / _rel(name), root / _rel(name), ignore=IGNORE)
     if not (root / "tools").exists():
         shutil.copytree(CAT / "tools", root / "tools", ignore=IGNORE)
     return root
@@ -48,7 +54,9 @@ def _tree(d):
 
 @pytest.fixture(params=SELECTED)
 def name(request):
-    if not (CAT / "domains" / request.param / "domain.yaml").is_file():
+    try:
+        _rel(request.param)
+    except KeyError:
         pytest.fail(f"{request.param}: not a package in {CAT}: change SELECTED with the catalog")
     return request.param
 
@@ -76,13 +84,19 @@ def test_take_then_apply_writes_the_package_byte_for_byte(name, tmp_path):
         with pytest.raises(ValueError, match=f"names {NOT_TAKEN[name]}, which take does not carry"):
             catalog.take(name, src, dst)
         return
-    for p in (src / "domains" / name / "intent").glob("*"):
+    if _rel(name) != Path("domains", name):
+        # a nested package (the Ceptre ports, domains/ceptre/<name>) is not taken: out of its
+        # directory it would leave its license behind (ceptre-carveout s-76664d26)
+        with pytest.raises(ValueError, match=f"take brings a domain from domains/{name}/"):
+            catalog.take(name, src, dst)
+        return
+    for p in (src / _rel(name) / "intent").glob("*"):
         if not p.stat().st_size:
             p.unlink()                      # an empty generated file (plant-spoken.txt): take writes none
     kw = catalog.take(name, src, dst)
     out = catalog.apply(name, r=dst, **kw)
     assert out["fingerprint"] == catalog.fingerprint(name, src)
-    a, b = _tree(src / "domains" / name), _tree(dst / "domains" / name)
+    a, b = _tree(src / _rel(name)), _tree(dst / "domains" / name)      # apply writes a new package at domains/<name>
     carried = {f for f in a if f in b}
     assert {f: b[f] for f in carried} == {f: a[f] for f in carried}
     # what take leaves behind is only what its docstring says it does not carry
@@ -106,17 +120,17 @@ def test_an_edit_and_its_reverse_give_back_the_files_bytes(name, tmp_path):
     d = catalog.get(name, r)
     p = Path(d.program)
     rel = p.relative_to(d.dir).as_posix()
-    before = _tree(r / "domains" / name)
+    before = _tree(r / _rel(name))
     text = p.read_text()
     line = next(l for l in reversed(text.splitlines()) if l.strip() and text.count(l) == 1)
     catalog.apply(name, **catalog.edit(name, rel, line, line + "\n% catalog-packages: an edit", r=r), r=r)
     assert "% catalog-packages: an edit" in p.read_text()
     catalog.apply(name, **catalog.edit(name, rel, line + "\n% catalog-packages: an edit", line, r=r), r=r)
-    assert _tree(r / "domains" / name) == before
+    assert _tree(r / _rel(name)) == before
 
 
 def test_the_bundle_builds(name, tmp_path):
     r = _scratch(tmp_path, name)
     out = catalog.build(name, r)
-    assert out and (r / "domains" / name / "build").is_dir(), out
-    assert any((r / "domains" / name / "build").rglob("*.metis")), out
+    assert out and (r / _rel(name) / "build").is_dir(), out
+    assert any((r / _rel(name) / "build").rglob("*.metis")), out

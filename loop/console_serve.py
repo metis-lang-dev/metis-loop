@@ -108,7 +108,7 @@ class ConsoleServer:
 
     def catalogs(self):
         """Every .llp under the checkout, as names relative to it
-        without the suffix (`domains/three_pigs/three_pigs`), sorted."""
+        without the suffix (`domains/ceptre/three_pigs/three_pigs`), sorted."""
         return sorted(str(p.relative_to(self.root).with_suffix(""))
                       for p in self.root.rglob("*.llp")
                       if ".git" not in p.parts)
@@ -145,7 +145,7 @@ class ConsoleServer:
 
     def scrub(self, obj):
         """Web output never names the operator's filesystem: the
-        checkout root becomes relative ("domains/three_pigs/three_pigs.llp") and
+        checkout root becomes relative ("domains/ceptre/three_pigs/three_pigs.llp") and
         any other home path "~/…". Applied to every posting, session
         doc and ctx this server hands out; the terminal REPL never comes
         through here and keeps its absolute paths (the user's own

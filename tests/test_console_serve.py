@@ -13,9 +13,9 @@ def srv():
 
 def test_catalogs_and_resolution(srv):
     names = srv.catalogs()
-    assert "domains/three_pigs/three_pigs" in names and names == sorted(names)
+    assert "domains/ceptre/three_pigs/three_pigs" in names and names == sorted(names)
     assert srv.resolve("three_pigs").name == "three_pigs.llp"
-    assert srv.resolve("domains/three_pigs/three_pigs.llp") == srv.resolve("three_pigs")
+    assert srv.resolve("domains/ceptre/three_pigs/three_pigs.llp") == srv.resolve("three_pigs")
     with pytest.raises(ValueError, match="no catalog"):
         srv.resolve("nope")
     with pytest.raises(ValueError):
@@ -25,7 +25,7 @@ def test_catalogs_and_resolution(srv):
 def test_open_serve_and_epoch(srv):
     s = srv.open_session("w1", {"llp": "three_pigs"})
     assert s["status"] == "running" and s["epoch"] == 1
-    assert s["name"] == "three-pigs" and s["llp"] == "domains/three_pigs/three_pigs"
+    assert s["name"] == "three-pigs" and s["llp"] == "domains/ceptre/three_pigs/three_pigs"
     assert s["ctx"]["fired"] == 0
 
     out = srv.serve_one("w1", "run 3")
@@ -75,7 +75,7 @@ def test_drain_is_a_pure_rows_to_writes_mapping(srv):
     assert by["intents/i2"]["json"]["fired"][0]["i"] == 3   # after i1
     assert by["sessions/s1"]["ctx"]["fired"] == 3            # merged
     fresh = ConsoleServer(srv.root)                          # "restart"
-    w2 = fresh.drain([("s1", {"llp": "domains/three_pigs/three_pigs",
+    w2 = fresh.drain([("s1", {"llp": "domains/ceptre/three_pigs/three_pigs",
                               "status": "running", "epoch": 4})], [])
     s = w2[0]["data"]
     assert s["epoch"] == 5 and s["ctx"]["fired"] == 0 and "reopened" in s
@@ -89,7 +89,7 @@ def test_open_session_from_source_in_memory(srv, tmp_path, monkeypatch):
         "#init pig 3", "#init pig 1")
     monkeypatch.chdir(tmp_path)
     before = set(srv.root.rglob("*"))
-    s = srv.open_session("f1", {"source": src, "name": "domains/three_pigs/three_pigs"})
+    s = srv.open_session("f1", {"source": src, "name": "domains/ceptre/three_pigs/three_pigs"})
     assert s["status"] == "running" and s["llp"].endswith("(in memory)")
     assert s["ctx"]["counts"]["pig"] == 1                 # the edited text
     out = srv.serve_one("f1", "run 6")["posting"]

@@ -230,13 +230,13 @@ def test_config_layers_and_mode_validation():
 def test_open_from_source_over_the_socket(personal):
     """§4a's open frame: catalog TEXT compiled in memory."""
     from loop.console_serve import catalog_root
-    src = (catalog_root() / "domains/three_pigs/three_pigs.llp").read_text()
+    src = (catalog_root() / "domains/ceptre/three_pigs/three_pigs.llp").read_text()
     with personal.ws() as ws:
         frames(ws, lambda f: f.get("type") == "catalogs")
         ws.send(json.dumps({"ch": "repl", "type": "open", "req": "s1",
                             "source": src.replace("#init pig 3",
                                                   "#init pig 2"),
-                            "name": "domains/three_pigs/three_pigs"}))
+                            "name": "domains/ceptre/three_pigs/three_pigs"}))
         f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
         assert f["type"] == "session" and f["llp"].endswith("(in memory)")
         assert f["ctx"]["counts"]["pig"] == 2
@@ -293,7 +293,7 @@ def test_the_catalog_widget_served_from_the_sdk():
 
 def test_shared_mode_never_shows_the_operators_paths():
     """Web output names catalogs relative to the checkout
-    ("domains/three_pigs/three_pigs.llp"), never the operator's filesystem — every
+    ("domains/ceptre/three_pigs/three_pigs.llp"), never the operator's filesystem — every
     frame of a shared-mode round trip, file-bearing verbs included."""
     from pathlib import Path
     r = Running(mode="shared", token="t0k")
@@ -310,7 +310,7 @@ def test_shared_mode_never_shows_the_operators_paths():
                                      "edit build_stick", "nope"]):
                 got += send(ws, sid, cmd, f"p{k}")
         text = json.dumps(got)
-        assert "domains/three_pigs/three_pigs.llp" in text
+        assert "domains/ceptre/three_pigs/three_pigs.llp" in text
         assert "/home/" not in text
         for root in roots:
             assert root not in text, root
