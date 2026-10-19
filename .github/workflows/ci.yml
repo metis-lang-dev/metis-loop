@@ -56,9 +56,17 @@ jobs:
           pip install -e ./metis-catalog     # the CATALOG panel's loader (metis_catalog: the manifests)
           pip install -e ./metis-loop/sdk       # the loop SDK (metis_loop_sdk), as the human loop consumes it
           pip install -e './metis-loop[console]' pytest
+      # nav's and wildfire's hosts step the IPPC gym (metis-catalog tools/rddl_gym.py) in an
+      # interpreter of their own: pyRDDLGym and rddlrepository, public on PyPI (MIT), pinned
+      # as the packages' .venv has them; ~15 s and 181 MB with no pip cache
+      - name: The gym for the RDDL packages' hosts (its own venv, METIS_RDDL_PY)
+        run: |
+          python -m venv /tmp/gym
+          /tmp/gym/bin/pip install -q pyRDDLGym==2.7 rddlrepository==2.2
+          echo "METIS_RDDL_PY=/tmp/gym/bin/python" >> "$GITHUB_ENV"
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         working-directory: metis-loop
-        env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_LOOP_REQUIRE_METISC: '1'}
+        env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_LOOP_REQUIRE_METISC: '1', METIS_LOOP_REQUIRE_GYM: '1'}
         run: pytest -q tests/ sdk/tests/
 
   # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,

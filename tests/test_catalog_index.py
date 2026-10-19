@@ -34,7 +34,7 @@ def test_index_lists_the_domains_first_with_what_they_have(srv):
     # drafts and plain catalogs are listed, not as domains; a dir's table row
     # is not lent to its several files
     assert by["domains/rddl/wildfire/iter1-world/base"]["kind"] == "catalog"
-    assert by["domains/logic/ll"]["kind"] == "catalog"
+    assert by["scenes/nav4_instance"]["kind"] == "catalog"                       # a scene instance (stays: the key gate)
     assert by["domains/three_pigs/three_pigs"]["kind"] == "domain"              # the fiction ports are domains
     assert "conformance fixtures" not in by["domains/ports/port-proto/clock"]["line"]
 
