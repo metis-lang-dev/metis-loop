@@ -6,23 +6,24 @@
 # and nothing else of ours; the human loop (../loop) imports it as any
 # outside consumer would.
 #
-#   development: pip install -e ../metis-loop/sdk   (the sibling checkout)
-#   consumers:   metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk
-# metispy and metis-catalog are not on PyPI: install them first (sibling
-# checkouts or their git URLs); the plain names here are then satisfied.
+#   consumers:   pip install metis-loop-sdk        (PyPI: metispy and metis-catalog come with it)
+#   development: pip install -e ../metis-loop/sdk   (the sibling checkout; install the
+#                siblings -e first, they satisfy the names here)
+# Released from GitHub by trusted publishing on a tag sdk-vX.Y.Z = this
+# version (.github/workflows/publish.yml; pi-release s-8e13f6a8).
 [build-system]
 requires = ["setuptools>=77"]      # PEP 639: license as an SPDX expression
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "metis-loop-sdk"
-version = "0.1.0"
+version = "0.1.7"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 description = "The metis loop SDK: catalog access, the catalog widget and the model adapters, shared by metis-loop, metis-agent and metis-agentic-loop"
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6", "metis-catalog", "metispy"]
+dependencies = ["pyyaml>=6", "metis-catalog>=0.1.0", "metispy>=0.1.1"]   # 0.1.0: the wheel carries its domains
 
 [project.optional-dependencies]
 # the claude adapter's seat on the Agent SDK (the command face needs only the `claude` CLI)
@@ -35,9 +36,9 @@ include = ["metis_loop_sdk*"]
 [tool.setuptools.package-data]
 # the catalog widget's JS/CSS (catalog-sdk s-bc1718e3): metis_loop_sdk/widget is
 # a link to the checkout's web/catalog/ (web/: the shared web widgets); the wheel
-# setuptools builds from the checkout (pip install ./sdk, or the git URL's
-# #subdirectory=sdk) holds the files themselves. An sdist would carry the link,
-# not the files: build wheels from the checkout.
+# setuptools builds from the checkout (pip install ./sdk, the git URL's
+# #subdirectory=sdk, or python -m build: its sdist copies the files the link
+# points at) holds the files themselves; tools/smoke_wheel.sh checks them.
 metis_loop_sdk = ["widget/*", "ts/*"]   # ts/: the TypeScript face (catalog.ts), files of its own
 
 [tool.pytest.ini_options]

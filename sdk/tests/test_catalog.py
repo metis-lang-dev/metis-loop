@@ -39,6 +39,25 @@ def test_root_is_the_env_then_the_config_then_the_checkout(monkeypatch, tmp_path
         assert catalog.root() == catalog.SIBLING
 
 
+def test_root_without_a_sibling_is_the_loaders_own(monkeypatch, tmp_path):
+    """No env, no config, no sibling: the loader's root() — the installed
+    wheel's catalog (metis-catalog 0.1.0), or the checkout it came from."""
+    (tmp_path / "wheel" / "domains").mkdir(parents=True)
+
+    class Loader:
+        @staticmethod
+        def root():
+            return tmp_path / "wheel"
+
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.setattr(catalog, "SIBLING", tmp_path / "none")
+    monkeypatch.setattr(catalog, "loader", lambda: Loader)
+    assert catalog.root() == tmp_path / "wheel"
+    (tmp_path / "wheel" / "domains").rmdir()
+    with pytest.raises(FileNotFoundError, match="no catalog root"):
+        catalog.root()
+
+
 def test_the_facade_reads_what_the_loader_reads():
     mc = catalog.loader()
     assert [d.name for d in catalog.domains(CAT)] == [d.name for d in mc.domains(CAT)]

@@ -49,8 +49,8 @@ import yaml
 
 # perotheia-packages/metis-catalog beside this checkout (sdk/metis_loop_sdk/catalog.py)
 SIBLING = Path(__file__).resolve().parents[3] / "metis-catalog"
-INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install -e <metis-catalog checkout>"
-           "  (metis-loop/run.sh and metis-agent/run.sh do it; it needs pyyaml)")
+INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install metis-catalog, or pip install -e "
+           "<metis-catalog checkout>  (metis-loop/run.sh and metis-agent/run.sh do it; it needs pyyaml)")
 
 WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the checkout: ../../web/catalog
 WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
@@ -80,13 +80,14 @@ def loader():
 def root(config=None) -> Path:
     """The catalog root: $METIS_CATALOG, else `config` (the consumer's
     configured root), else the metis-catalog checkout beside this one, else
-    the checkout the loader is installed from (an editable install)."""
+    the loader's own: the checkout it is installed from (an editable
+    install), or the installed wheel's catalog (metis-catalog 0.1.0)."""
     for c in (os.environ.get("METIS_CATALOG"), config):
         if c:
             return Path(c).resolve()
     if (SIBLING / "domains").is_dir():
         return SIBLING
-    own = Path(loader().__file__).resolve().parents[1]
+    own = Path(loader().root())
     if (own / "domains").is_dir():
         return own
     raise FileNotFoundError("no catalog root: set METIS_CATALOG to a metis-catalog checkout "

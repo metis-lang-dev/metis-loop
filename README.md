@@ -36,6 +36,13 @@ to the domains they produced, each with a README of what formalization
 taught. See the "Experiments" section of the metis-catalog README. This
 repo keeps only the loop machinery.
 
+**The loop SDK (`sdk/`) is on PyPI**: `pip install metis-loop-sdk`
+(catalog access, the catalog widget, the model adapters, the TypeScript
+face; metispy and metis-catalog come with it). Its consumers are
+metis-agent and metis-agentic-loop; [sdk/README.md](sdk/README.md) has
+the install and the release (a tag `sdk-vX.Y.Z`). The human loop itself
+is not published.
+
 ## License
 
 Apache License 2.0 (see `LICENSE`, `NOTICE`).

@@ -34,4 +34,7 @@ def test_every_module_imports():
 
 
 def test_version():
-    assert metis_loop_sdk.__version__ == "0.1.0"
+    """__version__ is pyproject's, the version the sdk-vX.Y.Z tag names (publish.yml)."""
+    import tomllib
+    pp = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    assert metis_loop_sdk.__version__ == tomllib.loads(pp.read_text())["project"]["version"] == "0.1.7"

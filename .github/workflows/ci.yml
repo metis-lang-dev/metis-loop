@@ -75,7 +75,7 @@ jobs:
   # loop) proved by installation, not only by the test's AST walk.
   sdk-alone:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -121,6 +121,11 @@ jobs:
               assert "site-packages" in str(got) and got.is_file(), got
               print("ts", f, len(got.read_bytes()), "bytes")
           EOF
+      - name: The wheel publish.yml uploads, smoke-installed in a fresh venv (metispy from PyPI, metis-catalog the checkout)
+        run: |
+          python -m pip install -q build
+          python -m build --outdir /tmp/sdk-dist metis-loop/sdk
+          bash metis-loop/sdk/tools/smoke_wheel.sh /tmp/sdk-dist metis-catalog
       - name: SDK suite (from outside the checkout, so the installed package is what runs)
         working-directory: /tmp
         env: {METIS_LOOP_REQUIRE_NODE: '1'}
