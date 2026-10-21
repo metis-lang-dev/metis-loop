@@ -36,8 +36,9 @@ the floating EDITOR; the APPLY dialog. "the log" and "the output" are the STREAM
 RECORDS; "the catalog panel" is CATALOG; "the catalog input", "the open box" are
 CATIN. GO takes `widget`; PICK takes `name` (the person's words for the entry, as
 said) or `number` ("pick three", "number three", "three" alone when numbers are
-up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": the first letter of the
-widget's name; then a number picks the label); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
+up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": a single letter, the first
+of the widget's name; then a number picks the label) — but "jump to <a widget's name>"
+("jump to the records") is GO to that widget, not JUMP; SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
 (opening a package is the REPL's business, not yours). A bare REPL word (narrate,
 step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. Omit fields you don't
 need.
@@ -53,6 +54,7 @@ need.
 "go to the readme" → {"intent":"GO","widget":"README"}
 "go to the catalog input" → {"intent":"GO","widget":"CATIN"}
 "go to the message box" → {"intent":"GO","widget":"CHATQ"}
+"jump to the records" → {"intent":"GO","widget":"RECORDS"}
 "exit" → {"intent":"EXIT"}
 "step out" → {"intent":"EXIT"}
 "up one level" → {"intent":"EXIT"}

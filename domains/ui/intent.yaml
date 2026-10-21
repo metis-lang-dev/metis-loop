@@ -56,8 +56,9 @@ guidance: |
   RECORDS; "the catalog panel" is CATALOG; "the catalog input", "the open box" are
   CATIN. GO takes `widget`; PICK takes `name` (the person's words for the entry, as
   said) or `number` ("pick three", "number three", "three" alone when numbers are
-  up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": the first letter of the
-  widget's name; then a number picks the label); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
+  up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": a single letter, the first
+  of the widget's name; then a number picks the label) — but "jump to <a widget's name>"
+  ("jump to the records") is GO to that widget, not JUMP; SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
   (opening a package is the REPL's business, not yours). A bare REPL word (narrate,
   step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. Omit fields you don't
   need.
@@ -73,6 +74,7 @@ examples:
   - ["go to the readme", {"intent":"GO","widget":"README"}]
   - ["go to the catalog input", {"intent":"GO","widget":"CATIN"}]
   - ["go to the message box", {"intent":"GO","widget":"CHATQ"}]
+  - ["jump to the records", {"intent":"GO","widget":"RECORDS"}]
   - ["exit", {"intent":"EXIT"}]
   - ["step out", {"intent":"EXIT"}]
   - ["up one level", {"intent":"EXIT"}]
@@ -168,38 +170,41 @@ asks: [HELP]
 
 # ── the replier: outcome predicate → result status; a refusal's way out ──
 outcomes: {done: done, refused: refused, progress: progress}
+# the alternatives are EMPTY on purpose (console-nav A1): the orchestrator dispatches a
+# refusal's alternative on its own, and a navigation domain must never move the focus
+# unasked; the %% lines already say what to do
 alternatives:
   max: 2
   rules:
     p_go_modal: []
-    p_go: [exit, home]
+    p_go: []
     p_exit_modal: []
     p_exit: []
     p_home_modal: []
     p_home: []
     p_back_modal: []
     p_back: []
-    p_pick_busy: [cancel]
-    p_pick: [go]
-    p_pick_n_busy: [cancel]
-    p_pick_n: [numbers]
+    p_pick_busy: []
+    p_pick: []
+    p_pick_n_busy: []
+    p_pick_n: []
     p_numbers_shown: []
-    p_numbers_jumping: [cancel]
-    p_jump_busy: [cancel]
-    p_jump_to_busy: [cancel]
-    p_jump_picking: [cancel]
-    p_jump_to_picking: [cancel]
+    p_numbers_jumping: []
+    p_jump_busy: []
+    p_jump_to_busy: []
+    p_jump_picking: []
+    p_jump_to_picking: []
     p_jumped_modal: []
-    jump_none: [jump]
-    p_numbers: [go]
+    jump_none: []
+    p_numbers: []
     p_show_shown: []
     p_show: []
     p_show_modal: []
-    p_close: [exit]
+    p_close: []
     p_close_hidden: []
     p_close_modal: []
-    p_dictate: [go]
+    p_dictate: []
     p_dictate_on: []
     p_command: []
-    p_unknown: [help]
-    pick_none: [numbers]
+    p_unknown: []
+    pick_none: []

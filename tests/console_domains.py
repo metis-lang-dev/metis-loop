@@ -250,17 +250,27 @@ def inject_ui(path):
             return not modal or w == modal[0] or (w in INSIDE.get(modal[0], ()))
         return ok
     INSIDE = {"apply": ()}               # the console's dialog has no children (ui.llp)
+    DOCKS = set(_re.findall(r"^role\((\w+),\s*dock\)", program_text(path), _re.M))
+
+    def labelled(w):
+        """A label the page can have put on w (an answer may come late, after a cancel): a shown
+        widget or a hidden dock (its header) when free; under the dialog any (a label outside it
+        is the breach p_jumped_modal refuses)."""
+        def ok(s):
+            if any(a.startswith("modal(") for a in s):
+                return True
+            return s.get(f"shown({w})", 0) > 0 or (w in DOCKS and s.get(f"hidden({w})", 0) > 0)
+        return ok
     nums = [f"n{i}" for i in range(1, 10)]
     return (
         [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
         + [((f"+cmd_{c}",), always) for c in ("exit", "home", "back", "pick", "numbers", "close", "cancel",
                                                 "dictate", "command", "help", "unknown", "jump")]
         + [((f"+cmd_jump_to({l})",), always) for l in ("c", "r")]
-        + [((f"+jumped({w})",), has("resolving")) for w in ws]                 # the page resolves a label
-        + [(("+nothing_picked",), has("resolving"))]
+        + [((f"+jumped({w})",), labelled(w)) for w in ws]                      # the page resolves a label
         + [((f"+cmd_pick_n({n})",), always) for n in ("n1", "n9")]
         + [((f"+enter({w})",), visible(w)) for w in ws]                      # the port: focusin on what is there
         + [(("+blur",), always)]
         + [(("+opened(apply)",), has("free", "hidden(apply)")), (("+closed(apply)",), has("modal(apply)"))]
-        + [(("+picked",), has("picking")), (("+nothing_picked",), has("picking")), (("+ambiguous",), has("picking"))]
+        + [(("+picked",), always), (("+nothing_picked",), always), (("+ambiguous",), always)]   # late too (after a cancel)
     ), nums
