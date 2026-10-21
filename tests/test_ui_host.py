@@ -119,6 +119,31 @@ def test_observe_reads_the_page_once_it_caught_up():
     assert r["focused(readme)"] == 0 and r["focused(catalog)"] == 1      # the difference the watch prices
 
 
+def test_a_dock_shown_for_an_effect_is_the_pages_state_too():
+    """nina's H4: a takeover's report says the editor is hidden; go_hidden shows it (the page does
+    not report a dock it shows for an effect), so observe() reads it shown after the catch-up."""
+    h = ui_host.UiHost()
+    page = StubPage()
+    page.hide_itself("chat")                                # a takeover's report: the page model has a hidden dock
+    page.flush(h)
+    h.port({"hidden": "editor"})
+    h.tick({})
+    for e in fired(h, "go_hidden[W=editor,F=root,Q=root]"):
+        page.effect(e)
+    page.flush(h)
+    for _ in range(ui_host.CATCH_UP + 1):
+        h.tick({})
+    r = h.observe({"focused(editor)": 1, "shown(editor)": 1})
+    assert r["shown(editor)"] == 1 and r["hidden(editor)"] == 0 and r["focused(editor)"] == 1
+    for e in fired(h, "close[W=editor,P=root]"):
+        page.effect(e)
+    page.flush(h)
+    for _ in range(ui_host.CATCH_UP + 1):
+        h.tick({})
+    r = h.observe({"focused(root)": 1, "hidden(editor)": 1})
+    assert r["hidden(editor)"] == 1 and r["shown(editor)"] == 0
+
+
 def test_snapshot_is_json_and_restores():
     import json
     h = ui_host.UiHost()

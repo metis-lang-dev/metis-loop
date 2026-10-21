@@ -171,6 +171,12 @@ class UiHost:
         self.effects.append(e)
         if e["ui"] in ("focus", "show", "hide"):
             self.awaiting = self.beat + CATCH_UP
+        if self.page is not None and e["ui"] in ("show", "hide"):
+            # the page carries a dock's show or hide out without reporting it (the port reports only
+            # what it does by itself), so its model takes the state it will be in (nina's H4)
+            w, (add, drop) = e["widget"], (("shown", "hidden") if e["ui"] == "show" else ("hidden", "shown"))
+            self.page[add].add(w)
+            self.page[drop].discard(w)
 
     def _focus(self, w):
         self.believed = w
