@@ -1,5 +1,5 @@
 """The console's REPL domain (domains/repl, console-nav s-b923ebfe) through metispy's kernel,
-no model: the program and its embedded case in both toolchains; every state it reaches from
+no model: its case (cases/repl.llp) in both toolchains, the program's own #init its live start; every state it reaches from
 #init under the person's commands, the gateway's reports and the host's pair flips takes each
 token by exactly one rule (none stuck, no pair held twice); every rule — each accept and each
 refusal — fired by the kernel's own step from a state the exploration reached; the card's
@@ -19,6 +19,7 @@ from console_domains import INJECT_REPL, Explorer
 
 ROOT = Path(__file__).resolve().parents[1]
 REPL = ROOT / "domains" / "repl" / "repl.llp"
+CASE = ROOT / "cases" / "repl.llp"
 RULES = re.compile(r"^\s*(\w+) \[dyn\]", re.M)
 
 
@@ -61,18 +62,20 @@ def _metisc():
 
 @pytest.mark.skipif(not _metisc(), reason="no metisc (METISC)")
 def test_the_case_in_both_toolchains():
-    """metisc --run of the program's #case and metispy's replay of it: the same I/T/F lines."""
+    """metisc --run of the case file (cases/repl.llp: the program included, a start that fires)
+    and metispy's replay of it: the same I/T/F lines; the program's own #init is its live start."""
     from metis.kernel.artifact import served_doc
     from metis.lang.directives import render_run
-    out = subprocess.run([_metisc(), "--run", str(REPL)], stdin=subprocess.DEVNULL, capture_output=True,
+    out = subprocess.run([_metisc(), "--run", str(CASE)], stdin=subprocess.DEVNULL, capture_output=True,
                          text=True, timeout=120)
     assert out.returncode == 0, out.stderr
-    doc, case, _ = served_doc(REPL, [])
-    py = render_run(REPL.stem, case, doc.catalog.ground(dict(case["init"])))
+    doc, case, _ = served_doc(CASE, [])
+    py = render_run(CASE.stem, case, doc.catalog.ground(dict(case["init"])))
 
     def itf(s):
         return [l for l in s.splitlines() if l[:2] in ("I ", "T ", "F ")]
     assert itf(out.stdout) == itf(py) and "T 1 run_nothing" in out.stdout
+    assert "cmd_" not in "".join(l for l in REPL.read_text().splitlines() if l.startswith("#init"))   # the live start
 
 
 def test_the_cards_generated_files_are_the_generators():

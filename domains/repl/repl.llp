@@ -213,9 +213,6 @@ stage serve {
 #init idle 1
 #init unloaded 1
 #init chat_seat 1
-% the embedded case: "run" with nothing loaded is refused with its reason
-#init cmd_run 1
+% the live start only: its case ("run" with nothing loaded is refused) is cases/repl.llp
 #steps 2
 #seeds 1
-#query refused(run)
-#query unloaded

@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(not _agent_ok(), reason="no metis-agent py venv 
 
 def test_the_repl_served_by_the_domain_agent():
     gw = StubGateway(domains=[{"name": "plant", "path": "domains/plant/plant", "host": "plant_host.py:make"}]).start()
-    env = dict(os.environ, METIS_CATALOG=str(ROOT), METIS_LOOP_WS=gw.url,
+    env = dict(os.environ, METIS_CATALOG=str(ROOT), METIS_LOOP_WS=gw.url, METIS_LOOP_OWN_SESSIONS="1",   # no page here
                PYTHONPATH=os.pathsep.join(p for p in (DIR, str(ROOT / "sdk"), os.environ.get("PYTHONPATH", "")) if p))
     p = subprocess.Popen([PY, "-m", "metis_agent.domain_agent", "--domain", "repl", "--case", "replay"],
                          cwd=DIR or None, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -61,7 +61,7 @@ def test_the_repl_served_by_the_domain_agent():
 
     try:
         assert json.loads(p.stdout.readline())["clock"] == "ready"
-        line({"clock": "beat"})                            # the start (the embedded case's token, if any, settles)
+        line({"clock": "beat"})                            # the start: nothing fires (the live #init)
         assert say(1, "LOAD", package="the plant") == [("done", "The package is loaded.")]
         assert say(2, "RUN", n=3)[0][0] == "done"
         assert say(3, "NARRATE")[0] == ("done", "The narration is in the log.")

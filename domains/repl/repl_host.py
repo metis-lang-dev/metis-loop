@@ -6,8 +6,8 @@ a small stdlib websocket client (no metis-loop import, no websockets package), s
 in the domain agent's own venv.
 
   on_event              the frame sent                          the report at a later tick
-  load, load_switch     repl/open {llp, host} (the package from  +opened (the session frame for
-                        the payload, found in meta/domains)      that request) | +absent
+  load, load_switch     the page opens it ({"repl": "open"}; own  +opened (the session attached;
+                        sessions: repl/open {llp, host})         own: its frame) | +absent
   run, step             repl/intent ":run N" (N: the payload's  +stopped (posting done) |
                         n, default RUN_N) | ":step"              +run_refused (refused, error)
   undo, reset           repl/intent ":undo" | ":reset"          — (the rule is done already)
@@ -16,8 +16,8 @@ in the domain agent's own venv.
   apply                 repl/save with NO token (the plan)      +plan_shown (files) |
                                                                 +nothing_to_apply (none)
   stop_*                repl/stop                               —
-  tell                  chat/say {text: the payload's text}     +told (the chat's user frame)
-                                                                | +tell_refused (chat error)
+  tell                  the page says it ({"repl": "tell"}; own: +told (the chat's user frame)
+                        chat/say {text})                        | +tell_refused (an error, the wait)
 
 The pairs the console keeps and the program cannot see change by itself go in as world
 lines at the tick: the working copy (source.certified: checkout → clean, else dirty) and
@@ -31,12 +31,29 @@ says it closed.
 
 The payload (the intent's slots the atoms do not carry: package, n, text) rides with the
 event that consumes the command: the domain agent hands it over with take_payload(p)
-before on_event (metis-agent AgentHost). The page's session: a session this host opens
-is its own websocket's, so the page shows it once it attaches (`effects`: {"repl":
-"attach", "session": sid} for the page, step 2); attach(sid) adopts the page's session.
+before on_event (metis-agent AgentHost).
 
-  METIS_LOOP_WS       the gateway's socket (default ws://127.0.0.1:8770/ws; ?token=… as the URL has it)
-  METIS_LOOP_SESSION  the page's session to attach to at the start (optional)
+The person's session, never the host's own (the architect's ruling): the page names its
+session (the agent's activate bindings, step 2) and attach(sid) subscribes this socket to
+it, so its broadcasts (session, source, postings, chat) reach the host. What only the page
+can do is an effect for it (`effects`, carried by the agent's wire in step 2):
+  {"repl": "open", "llp", "host", "req"}   a load: the page opens the package; its new
+                                           session's attach(sid) is +opened, open_failed(why)
+                                           +absent
+  {"repl": "apply", "session"}             the page opens its APPLY dialog (a plan frame goes
+                                           to the socket that asked for it only; the host's own
+                                           plan says whether there is one)
+  {"repl": "tell", "id", "text"}           the page posts chat/say with the person's own words
+                                           (the payload's text the fallback); the chat's user
+                                           frame on the session is +told, none in TELL_WAIT
+                                           beats +tell_refused (a chat error goes to the page's
+                                           socket only)
+own_sessions=True (METIS_LOOP_OWN_SESSIONS=1) is the host opening sessions and saying the
+words itself: a stand-alone run and the tests, never the live page.
+
+  METIS_LOOP_WS            the gateway's socket (default ws://127.0.0.1:8770/ws; ?token=… as the URL has it)
+  METIS_LOOP_SESSION       the page's session to attach to at the start
+  METIS_LOOP_OWN_SESSIONS  1: the host's own sessions (above)
 PURITY: the world changes only in tick/on_event/attach; snapshot is total."""
 import base64
 import json
@@ -51,6 +68,7 @@ import urllib.parse
 OUTCOMES = ("done", "refused", "progress")
 WAITS = ()                  # no wait ends by itself: every task ends by the gateway's answer
 RUN_N = 50                  # a run with no count (README: "default 50"); the gateway caps it
+TELL_WAIT = 8               # beats a page-posted tell waits for the chat's user frame
 URL = "ws://127.0.0.1:8770/ws"
 UNSEEN = "unseen"           # no source frame for the session yet
 
@@ -153,8 +171,9 @@ def _norm(name):
 
 
 class ReplHost:
-    def __init__(self, case=None, url=None):
+    def __init__(self, case=None, url=None, own_sessions=None):
         self.url = url or os.environ.get("METIS_LOOP_WS") or URL
+        self.own = (os.environ.get("METIS_LOOP_OWN_SESSIONS") == "1") if own_sessions is None else own_sessions
         self.beat, self.due, self.script, self.last = 0, (), {}, None     # AgentHost's hosted-day fields
         self.wire, self.frames = None, queue.Queue()
         self.sid = None
@@ -165,7 +184,8 @@ class ReplHost:
         self.reports = []           # do-lines for the next tick
         self.payload = {}
         self.acted = ()             # (beat, event, frame type) — the journal
-        self.effects = []           # for the page: {"repl": "attach", "session": sid}
+        self.effects = []           # for the page: open, apply, tell (the docstring)
+        self.tell_by = None         # the beat a page-posted tell is refused by
         self.error = None           # the last wire failure, said in the refusal's place
         self._n = 0
         self._attach = os.environ.get("METIS_LOOP_SESSION") or None
@@ -210,11 +230,29 @@ class ReplHost:
         return f"nav-{kind}-{self._n}"
 
     def attach(self, sid):
-        """Adopt the page's session (the page names it): the program learns it at the next tick."""
-        self.sid, self._attach = sid, None
-        if self.wire is not None:
-            self._send({"ch": "repl", "type": "open", "session": sid})
+        """The page's session (the page names it): this socket subscribes to it. A load the page
+        carried out ends here (+opened); a session the program did not ask for is said as world
+        lines, so the program tracks it."""
+        was, self.sid, self._attach = self.sid, sid, None
+        if self.wire is None and not self.connect():
+            return
+        self._send({"ch": "repl", "type": "open", "session": sid})
+        loads = [k for k, v in self.pending.items() if v == "load"]
+        if loads:
+            for k in loads:
+                self.pending.pop(k)
+            self._report("load", True)
+        elif not was:
             self.reports += ["-unloaded", "+loaded", "+fresh", "+clean"]
+
+    def open_failed(self, why):
+        """The page could not open the package a load named: +absent."""
+        loads = [k for k, v in self.pending.items() if v == "load"]
+        for k in loads:
+            self.pending.pop(k)
+        if loads:
+            self.error = why
+            self._report("load", False)
 
     def close(self):
         """The wire closed (the domain agent's end, a test's)."""
@@ -253,10 +291,9 @@ class ReplHost:
             for kind in self.pending.values():
                 self._report(kind, False)
             self.pending = {}
-        elif ch == "repl" and typ == "session" and f.get("req") in self.pending:
+        elif ch == "repl" and typ == "session" and f.get("req") in self.pending:     # own_sessions: our open
             self.pending.pop(f["req"])
             self.sid = f.get("session")
-            self.effects.append({"repl": "attach", "session": self.sid})
             self._report("load", True)
         elif ch == "repl" and typ == "error" and f.get("req") in self.pending:
             self.pending.pop(f["req"])
@@ -272,6 +309,7 @@ class ReplHost:
         elif ch == "chat" and f.get("session") == self.sid and "tell" in self.pending.values() \
                 and typ in ("user", "error"):
             self.pending = {k: v for k, v in self.pending.items() if v != "tell"}
+            self.tell_by = None
             if typ == "error":
                 self.error = f.get("error")
             self._report("tell", typ == "user")
@@ -290,6 +328,10 @@ class ReplHost:
         dos = [f"-{a} {n}" for a, n in sorted(counts.items()) if n and a.split("(")[0] in OUTCOMES]
         dos += [d for b, d in self.due if b == self.beat]
         self.due = tuple(x for x in self.due if x[0] != self.beat)
+        if self.tell_by is not None and self.beat >= self.tell_by and "tell" in self.pending.values():
+            self.pending = {k: v for k, v in self.pending.items() if v != "tell"}      # no user frame came
+            self.tell_by, self.error = None, "the chat did not take the words (the page saw why)"
+            self._report("tell", False)
         dos += self.reports
         self.reports = []
         if self.sid and self.certified != UNSEEN:       # the working copy, as the console has it
@@ -320,9 +362,13 @@ class ReplHost:
                 self.reports.append("+absent")
             else:
                 req = self._id("load")
-                frame = {"ch": "repl", "type": "open", "llp": row.get("path") or row["name"],
-                         "host": bool(row.get("host")), "req": req}
+                opening = {"llp": row.get("path") or row["name"], "host": bool(row.get("host")), "req": req}
                 self.pending[req] = "load"
+                if self.own:
+                    frame = {"ch": "repl", "type": "open", **opening}
+                else:                       # the person's session: the page opens it, then attaches
+                    self.effects.append({"repl": "open", **opening})
+                    self.acted += ((self.beat, name, "effect:open"),)
         elif base in ("run", "step", "narrate", "undo", "reset"):
             n = p.get("n")
             cmd = {"run": f":run {int(n) if isinstance(n, (int, float)) and n >= 1 else RUN_N}",
@@ -342,6 +388,8 @@ class ReplHost:
             else:
                 frame = {"ch": "repl", "type": "save", "session": self.sid}     # NO token: the plan only
                 self.pending[self._id("apply")] = "apply"
+                if not self.own:            # the plan comes to this socket only: the page asks for its own
+                    self.effects.append({"repl": "apply", "session": self.sid})
         elif base.startswith("stop") and self.sid:
             frame = {"ch": "repl", "type": "stop", "session": self.sid}
             self.pending = {k: v for k, v in self.pending.items() if v not in ("run", "narrate")}
@@ -350,8 +398,14 @@ class ReplHost:
             if not (self.sid and text):
                 self._report("tell", False)
             else:
-                frame = {"ch": "chat", "type": "say", "session": self.sid, "text": text}
-                self.pending[self._id("tell")] = "tell"
+                tid = self._id("tell")
+                self.pending[tid] = "tell"
+                if self.own:
+                    frame = {"ch": "chat", "type": "say", "session": self.sid, "text": text}
+                else:                       # the page says the person's own words
+                    self.effects.append({"repl": "tell", "id": tid, "text": text})
+                    self.acted += ((self.beat, name, "effect:tell"),)
+                    self.tell_by = self.beat + TELL_WAIT
         if frame is not None:
             self._send(frame)
             self.acted += ((self.beat, name, frame["type"]),)
@@ -366,10 +420,10 @@ class ReplHost:
 
     def snapshot(self):
         return [self.beat, list(self.due), list(self.acted), self.sid, self.certified, self.chat_ok,
-                dict(self.pending), list(self.reports)]
+                dict(self.pending), list(self.reports), self.tell_by]
 
     def restore(self, snap):
-        beat, due, acted, self.sid, self.certified, self.chat_ok, pending, reports = snap
+        beat, due, acted, self.sid, self.certified, self.chat_ok, pending, reports, self.tell_by = snap
         self.beat, self.due = beat, tuple((b, d) for b, d in due)
         self.acted = tuple((b, n, t) for b, n, t in acted)
         self.pending, self.reports = dict(pending), list(reports)

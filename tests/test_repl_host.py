@@ -1,7 +1,9 @@
 """domains/repl's host against the stub gateway (console-nav s-b923ebfe): the frame each
 event sends, the report each answer becomes at a later tick, the pairs it keeps, the
 sensor face. No kernel, no model (the program's side: test_console_domains.py)."""
+import contextlib
 import importlib.util
+import json
 import time
 from pathlib import Path
 
@@ -30,8 +32,8 @@ def tick_until(h, counts=None, want=None, secs=5):
 HOSTS = []
 
 
-def host(url):
-    h = repl_host.ReplHost(url=url)
+def host(url, own=True):
+    h = repl_host.ReplHost(url=url, own_sessions=own)
     HOSTS.append(h)
     return h
 
@@ -73,7 +75,7 @@ def test_load_opens_the_package_the_payload_names(gw):
     assert gw.received[-1] == {"ch": "repl", "type": "open", "llp": "domains/plant/plant", "host": True,
                                "req": gw.received[-1]["req"]}
     assert "+opened" in tick_until(h, want="+opened")
-    assert h.effects == [{"repl": "attach", "session": h.sid}]    # the page shows it once it attaches
+    assert h.effects == []                                        # own sessions: nothing for a page
     assert h.observe({}) == {"loaded": 1, "unloaded": 0}
     event(h, "load_switch", gw=gw, package="Love Triangle")
     assert gw.received[-1]["llp"] == "domains/ceptre/love_triangle/love_triangle"
@@ -163,7 +165,7 @@ def test_stop_and_records(gw):
 
 
 def test_no_console_refuses_the_tasks():
-    h = repl_host.ReplHost(url="ws://127.0.0.1:9/ws")             # nothing listens there
+    h = repl_host.ReplHost(url="ws://127.0.0.1:9/ws", own_sessions=True)   # nothing listens there
     event(h, "load", package="plant")
     assert h.reports == ["+absent"] and "did not answer" in h.error
     event(h, "tell", text="x")
@@ -195,3 +197,86 @@ def test_snapshot_is_json_and_restores():
     g = repl_host.ReplHost(url="ws://127.0.0.1:9/ws")
     g.restore(s)
     assert (g.sid, g.pending, g.reports, g.acted) == (h.sid, h.pending, h.reports, h.acted)
+
+
+# -- the person's session (the live mode): the page opens, says and shows; the host attaches --
+
+def attached(h, gw, sid):
+    """h attaches to the page's session, and the stub has the attach frame."""
+    n = len(gw.received)
+    h.attach(sid)
+    end = time.time() + 5
+    while len(gw.received) == n and time.time() < end:
+        time.sleep(0.01)
+
+
+@contextlib.contextmanager
+def page_open(gw, llp):
+    """A page: its own socket opens the package (the page's session)."""
+    from websockets.sync.client import connect
+    with connect(gw.url) as ws:
+        while json.loads(ws.recv(timeout=5)).get("type") != "catalogs":
+            pass
+        ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp, "req": "page-1"}))
+        while True:
+            f = json.loads(ws.recv(timeout=5))
+            if f.get("type") == "session":
+                yield ws, f["session"]
+                return
+
+
+
+
+def test_a_load_is_the_pages_open_then_its_session_attached(gw):
+    h = host(gw.url, own=False)
+    h.connect()
+    n = len(gw.received)
+    event(h, "load", package="the plant")
+    assert len(gw.received) == n                                   # nothing opened by the host
+    assert h.effects == [{"repl": "open", "llp": "domains/plant/plant", "host": True, "req": h.effects[0]["req"]}]
+    assert h.observe({}) == {}                                    # in flight
+    with page_open(gw, h.effects[0]["llp"]) as (ws, sid):                   # the page carries it out
+        attached(h, gw, sid)
+        assert h.tick({}) == ["+opened"] and h.sid == sid
+        assert h.observe({}) == {"loaded": 1, "unloaded": 0}
+        event(h, "run", gw=gw, n=3)                                    # the person's session, driven
+        assert gw.received[-1]["session"] == sid
+        tick_until(h, want="+stopped")
+
+
+def test_a_load_the_page_could_not_open_is_absent(gw):
+    h = host(gw.url, own=False)
+    event(h, "load", package="plant")
+    h.open_failed("no such catalog file")
+    assert h.tick({}) == ["+absent"] and h.error == "no such catalog file"
+
+
+def test_tell_is_the_pages_and_told_when_the_chat_has_it(gw):
+    h = host(gw.url, own=False)
+    with page_open(gw, "domains/plant/plant") as (ws, sid):
+        h.connect()
+        attached(h, gw, sid)
+        h.tick({})
+        event(h, "tell", text="the lamp dims first")
+        eff = h.effects[-1]
+        assert eff == {"repl": "tell", "id": eff["id"], "text": "the lamp dims first"}
+        ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "the lamp should dim before it goes dark"}))
+        tick_until(h, want="+told")                                    # the chat's user frame, broadcast to the session
+        event(h, "tell", text="again")
+        seen = []
+        for _ in range(repl_host.TELL_WAIT + 1):                       # the page never posts: refused after the wait
+            seen += h.tick({})
+        assert "+tell_refused" in seen
+
+
+def test_apply_asks_for_the_plan_and_the_page_opens_its_dialog(gw):
+    h = host(gw.url, own=False)
+    with page_open(gw, "domains/plant/plant") as (ws, sid):
+        h.connect()
+        attached(h, gw, sid)
+        h.tick({})
+        event(h, "apply", gw=gw)
+        assert gw.received[-1] == {"ch": "repl", "type": "save", "session": sid}
+        assert h.effects[-1] == {"repl": "apply", "session": sid}
+        tick_until(h, want="+plan_shown")
+        assert gw.written == []
