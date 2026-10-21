@@ -1,5 +1,6 @@
 """The console's serving half (CONSOLE §5a): one kernel REPL per open
-console window, over the metis-catalog checkout.
+console window, over the catalog root — the directory the console was
+started in (cd DIR && metis-loop), or $METIS_CATALOG.
 
 The artifact db is reachable only by the page's capability or by a
 Claude session's ArtifactData tool, so the drain is a Claude session
@@ -36,7 +37,7 @@ from metis_loop_sdk import catalog
 
 def catalog_root() -> Path:
     """The catalog root, by the loop SDK's one rule (metis_loop_sdk.catalog.root:
-    $METIS_CATALOG, else the metis-catalog checkout beside this one)."""
+    $METIS_CATALOG, else the cwd)."""
     return catalog.root()
 
 
@@ -64,6 +65,15 @@ stage main {{
 """
 
 MAX_SOURCE = 256 * 1024     # an in-memory catalog's byte cap
+README_MAX = 64 * 1024      # the root README the page lands on
+CONTEXT_MAX = 16 * 1024     # … and the part of it the narrate seat reads
+
+# the narrate seat's context (cwd-root rule 10): DIR/README.md after the
+# doctrine, as Claude Code reads CLAUDE.md — the catalog's own terms
+NARRATE_CONTEXT = ("\n\n## The catalog's README\n\nThe catalog this world is from describes "
+                   "itself in its README ({path}). Narrate in its terms — its names for the "
+                   "worlds, the people and the moves — and never against the program's own "
+                   "comments, which stay the source of what happened.\n\n{text}")
 
 
 def _source_repl(path: Path, source: str, seed: int, plugin=None):
@@ -107,11 +117,47 @@ class ConsoleServer:
     # -- catalogs --------------------------------------------------------
 
     def catalogs(self):
-        """Every .llp under the checkout, as names relative to it
-        without the suffix (`domains/ceptre/three_pigs/three_pigs`), sorted."""
-        return sorted(str(p.relative_to(self.root).with_suffix(""))
-                      for p in self.root.rglob("*.llp")
-                      if ".git" not in p.parts)
+        """Every .llp under the root, as names relative to it without the
+        suffix (`domains/ceptre/three_pigs/three_pigs`), sorted; none under a
+        dot directory (.metis/, .git/ …: the SDK's catalog.hidden)."""
+        names = (p.relative_to(self.root).with_suffix("") for p in self.root.rglob("*.llp"))
+        return sorted(str(n) for n in names if not catalog.hidden(n))
+
+    def readme(self):
+        """DIR/README.md, the catalog's context (cwd-root rule 10): {path,
+        text, links} — `links` maps each of its relative links that names a
+        package (its directory, or its program) to that package's path as
+        the list has it, so the page opens the package from the README; None
+        without a README. Read, never written."""
+        import re
+        f = self.root / "README.md"
+        if not f.is_file():
+            return None
+        text = f.read_text(errors="replace")[:README_MAX]
+        progs = {e["path"] for e in catalog.index(self.root) if e["kind"] == "domain" and e.get("path")}
+        dirs = {os.path.dirname(p): p for p in progs if os.path.basename(p) == os.path.basename(os.path.dirname(p))}
+        links = {}
+        for href in re.findall(r"\]\(([^)\s]+)\)", text):
+            h = href.split("#")[0]
+            if not h or ":" in h or h.startswith("/"):
+                continue
+            rel = os.path.normpath(h)
+            if rel in dirs:
+                links[href] = dirs[rel]
+            elif rel.removesuffix(".llp") in progs:
+                links[href] = rel.removesuffix(".llp")
+        return self.scrub({"path": "README.md", "text": text, "links": links})
+
+    def _context(self, r):
+        """The narrate seat of the session `r` reads the root README after its
+        doctrine (rule 10); without one it keeps the doctrine alone."""
+        f = self.root / "README.md"
+        if not f.is_file():
+            return
+        from metis.loop.prompts import resolve
+        head, _ = resolve("narrate", None)
+        r.sys_prompts["narrate"] = head + NARRATE_CONTEXT.format(
+            path=f.name, text=f.read_text(errors="replace")[:CONTEXT_MAX].strip())
 
     def domains(self):
         """The CATALOG panel's list (the SDK's catalog.index): every catalog
@@ -175,13 +221,13 @@ class ConsoleServer:
     def _source_path(self, name: str) -> Path:
         """Where an in-memory catalog is anchored (names it, resolves its
         includes): a checkout name keeps that file's directory, anything
-        else a virtual <root>/scratch/<safe>.llp — never written."""
+        else a virtual <root>/.metis/scratch/<safe>.llp — never written."""
         try:
             return self.resolve(name)
         except ValueError:
             safe = "".join(c if c.isalnum() or c in "-_." else "_"
                            for c in name.split("/")[-1])[:64]
-            return self.root.resolve() / "scratch" / (
+            return self.root.resolve() / catalog.STATE / "scratch" / (
                 (safe.removesuffix(".llp") or "scratch") + ".llp")
 
     @staticmethod
@@ -222,6 +268,7 @@ class ConsoleServer:
             label = rel + (f" + {spec}" if spec else "")
             if reports:
                 label += f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
+            self._context(r)
             return r, label, reports
         src = str(doc["source"])
         extensions = list(doc.get("extensions") or [])
@@ -239,6 +286,7 @@ class ConsoleServer:
         label = name.removesuffix(".llp") + " (in memory" + (
             f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
             if reports else "") + ")"
+        self._context(r)
         return r, label, reports
 
     def _merge_extensions(self, r, extensions) -> list:
@@ -343,9 +391,9 @@ class ConsoleServer:
         its close), newest first; escalated ones carry mined_text."""
         out = []
         for f in self.root.rglob("records/*.jsonl"):
-            if ".git" in f.parts:
-                continue
             rel = f.relative_to(self.root).as_posix()
+            if catalog.hidden(rel):         # .metis/records: the loop's own, not a domain agent's
+                continue
             dom = f.parent.parent.relative_to(self.root).as_posix()
             try:
                 lines = [ln for ln in f.read_text(errors="replace").splitlines()

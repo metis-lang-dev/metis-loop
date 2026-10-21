@@ -2,6 +2,21 @@
 
 [![ci](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml)
 
+**A loop starts in a directory, and that directory is the catalog and the
+workspace**, as `cd DIR && claude` makes DIR the project:
+
+```sh
+cd DIR && metis-loop           # the human loop's console over DIR (./run.sh: the same, in the background)
+cd DIR && metis-agentic-loop   # pi's loop over DIR
+METIS_CATALOG=DIR metis-loop   # the same, started elsewhere
+```
+
+DIR's `domains/<name>/` packages are the catalog; an empty DIR is an empty
+catalog (the console's `new` writes the first domain); the loop's processes
+run in DIR; the loops' own state goes in `DIR/.metis/` (git-ignored when DIR
+is a checkout). `cd metis-catalog && metis-loop` serves the catalog's own
+domains. Nothing is found "beside this checkout".
+
 The explanation / formalization loop for metis catalogs:
 
     surprise records → mined text → formalize (LLM) → gated candidate

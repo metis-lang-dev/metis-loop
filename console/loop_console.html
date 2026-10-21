@@ -82,6 +82,11 @@ pre.err{color:var(--red)}
 .rec.esc .st{color:var(--red);border-color:#5a2a2a}.rec .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line)}
 .newdom{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}.newdom input{background:var(--bg);border:1px solid var(--line);padding:1px 6px}
 .newdom input.nm{width:9em}.newdom input.ln{flex:1;min-width:12em}
+.rootrd{margin:0 0 10px;border:1px solid var(--line);border-radius:4px;padding:4px 8px}.rootrd>summary{cursor:pointer;color:var(--dim);font-size:11.5px}
+.rootrd .md{max-height:40vh;overflow:auto;font-size:12.5px;line-height:1.45}.rootrd .md h3,.rootrd .md h4,.rootrd .md h5{margin:8px 0 4px}
+.rootrd .md table{border-collapse:collapse;margin:4px 0}.rootrd .md td,.rootrd .md th{border:1px solid var(--line);padding:2px 6px;text-align:left;vertical-align:top}
+.rootrd .md pre{white-space:pre-wrap;background:var(--bg);padding:4px}.rootrd .md p{margin:4px 0}.rootrd .md ul{margin:4px 0;padding-left:18px}
+.rootrd .md a[data-pkg]{cursor:pointer}
 #savewin{position:fixed;z-index:30;left:8%;right:8%;top:8%;bottom:8%;display:flex;flex-direction:column;background:var(--panel);border:1px solid #3a4452}
 #savewin header{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}
 #savewin header .grow{flex:1}#savewin .body{overflow:auto;padding:6px 10px;flex:1}
@@ -239,7 +244,7 @@ let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
 const GW=window.LOOP_GATEWAY||null;
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
-let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],fileRecs=null,saveTok=null,pendingRec=null,recordOpen=false;
+let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],domainsSeen=false,rootReadme=null,fileRecs=null,saveTok=null,pendingRec=null,recordOpen=false;
 let unsubSess=null,unsubInt=null,openInsp=null;
 let lenses=new Set(store.get("loopconsole.lenses",["rules","measure"]));
 let hist=store.get("loopconsole.hist",[]),hpos=hist.length;
@@ -780,7 +785,8 @@ function wsConnect(){
 function wsRetryLater(){setTimeout(wsConnect,wsRetry);wsRetry=Math.min(wsRetry*2,8000)}
 function wsHandle(f){
   if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
-  if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];renderCatalogDock();return}
+  if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];domainsSeen=true;renderCatalogDock();return}
+  if(f.ch==="meta"&&f.type==="readme"){rootReadme=f.readme||null;renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="records"){fileRecs=f.records||[];renderRecords();return}
   if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();return}
   if(f.ch==="repl"&&f.type==="sink"){if(f.session===sid)afterSink(f);return}
@@ -1071,15 +1077,48 @@ $("#catdock").addEventListener("submit",e=>{const f=e.target.closest("#newdom");
 /* the list itself is the loop SDK's CATALOG widget (sdk/catalog/catalog.js,
    MetisCatalog.render: the same component the metis-agent console shows);
    this console adds the stale tag, the path, the new-domain form */
+/* the catalog's README (cwd-root rule 10): DIR/README.md, the page's landing,
+   as Claude Code reads CLAUDE.md — rendered (escaped first, then a small
+   markdown: headings, lists, tables, code, emphasis, links); a link that names a
+   package opens it, any other relative link is text, an http(s) one a new tab */
+function mdInline(t,links){
+  let h=esc(t);
+  h=h.replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*/g,"$1<i>$2</i>");
+  return h.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,txt,href)=>{
+    const raw=href.replace(/&amp;/g,"&");
+    if(links&&links[raw])return `<a href="#" data-pkg="${esc(links[raw])}" title="open ${esc(links[raw])}.llp">${txt}</a>`;
+    if(/^https?:\/\//.test(raw))return `<a href="${href}" target="_blank" rel="noopener noreferrer">${txt}</a>`;
+    return `<span class="mdref" title="${href}">${txt}</span>`})}
+function mdRender(text,links){
+  const out=[],ls=String(text||"").split("\n");let i=0;
+  while(i<ls.length){const l=ls[i];
+    if(/^```/.test(l)){const b=[];i++;while(i<ls.length&&!/^```/.test(ls[i]))b.push(ls[i++]);i++;out.push(`<pre>${esc(b.join("\n"))}</pre>`);continue}
+    const hm=l.match(/^(#{1,4})\s+(.*)$/);if(hm){const n=Math.min(hm[1].length+2,6);out.push(`<h${n}>${mdInline(hm[2],links)}</h${n}>`);i++;continue}
+    if(/^\s*\|/.test(l)){const rows=[];while(i<ls.length&&/^\s*\|/.test(ls[i]))rows.push(ls[i++]);
+      const cells=r=>r.trim().replace(/^\||\|$/g,"").split("|").map(c=>c.trim());
+      const body=rows.filter(r=>!/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      out.push("<table>"+body.map((r,k)=>"<tr>"+cells(r).map(c=>k?`<td>${mdInline(c,links)}</td>`:`<th>${mdInline(c,links)}</th>`).join("")+"</tr>").join("")+"</table>");continue}
+    if(/^\s*[-*]\s+/.test(l)){const it=[];while(i<ls.length&&/^\s*[-*]\s+/.test(ls[i])){let x=ls[i++].replace(/^\s*[-*]\s+/,"");
+        while(i<ls.length&&/^\s{2,}\S/.test(ls[i])&&!/^\s*[-*]\s+/.test(ls[i]))x+=" "+ls[i++].trim();it.push(`<li>${mdInline(x,links)}</li>`)}
+      out.push(`<ul>${it.join("")}</ul>`);continue}
+    if(!l.trim()){i++;continue}
+    const p=[];while(i<ls.length&&ls[i].trim()&&!/^(#{1,4}\s|```|\s*\||\s*[-*]\s+)/.test(ls[i]))p.push(ls[i++]);
+    out.push(`<p>${mdInline(p.join(" "),links)}</p>`)}
+  return out.join("")}
+function renderRootReadme(){
+  if(!rootReadme)return "";
+  return `<details class="rootrd"${work?"":" open"}><summary>${esc(rootReadme.path)} · the catalog's context (the narrate seat reads it)</summary>
+    <div class="md">${mdRender(rootReadme.text,rootReadme.links)}</div></details>`}
 function renderDomainList(){
   const nf=GW&&(!manifestM||manifestM.mode!=="shared")?`<form class="newdom" id="newdom"><input class="nm" name="nm" placeholder="new domain" aria-label="new domain name" autocomplete="off" pattern="[a-z][a-z0-9_]{1,31}">
       <input class="ln" name="ln" placeholder="its display line — what it is, what the person can ask" aria-label="display line"><button class="btn">new</button></form>`:"";
-  return (domainList.length?nf:"")+'<div id="catrows"></div>'}
+  return renderRootReadme()+(domainList.length||domainsSeen?nf:"")+'<div id="catrows"></div>'}
 function fillDomainList(){
   const box=$("#catrows");if(!box)return;
   if(!window.MetisCatalog){box.innerHTML='<div class="empty">The catalog widget did not load (sdk/catalog/catalog.js: the loop SDK).</div>';return}
   const el=MetisCatalog.el;
   MetisCatalog.render(box,domainList,{
+    empty:domainsSeen?"An empty catalog: new writes the first domain (domains/<name>/ here).":undefined,
     tags:["host","notch","readme"],
     head:doms=>`DOMAINS · ${doms.length} — one click opens the program with its host and notch`,
     current:d=>!!work&&String(work.name||"")===d.path,
@@ -1106,6 +1145,8 @@ function renderCatalogDock(){
       :'<div class="empty">none — [+ extension] starts one on top of the copy</div>'}</div>
     <div class="empty" style="margin-top:8px">Edits live in this browser (IndexedDB) and in the backend's memory — never on the server's disk. Download and merge by the one road: candidate → gates → approval → commit.</div>
     <div style="margin-top:10px">${list}</div>`;fillDomainList()}
+$("#catdock").addEventListener("click",e=>{const a=e.target.closest("a[data-pkg]");if(!a)return;e.preventDefault();
+  const d=domainList.find(x=>x.path===a.dataset.pkg);openCatalog({path:a.dataset.pkg,host:!!(d&&d.host)})});
 $("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
   if(a==="edit")openEditor("copy");else if(a==="extension")newExtension();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
   else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});wsSend({ch:"repl",type:"recompile",session:sid})}

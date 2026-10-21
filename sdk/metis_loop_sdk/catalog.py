@@ -4,7 +4,8 @@ catalog here, so a change to the catalog's layout or to domain.yaml touches
 metis-catalog and this module, and no consumer.
 
     from metis_loop_sdk import catalog
-    catalog.root()                  # $METIS_CATALOG, else the configured root, else the sibling checkout
+    catalog.root()                  # $METIS_CATALOG, else the cwd (cd DIR && metis-loop: DIR is the catalog)
+    catalog.state()                 # DIR/.metis/: the loop's own state (git-ignored when DIR is a checkout)
     catalog.domains()               # [Domain] — every manifest, by name (metis_catalog's Domain)
     catalog.get("dog")              # Domain: .program .serves() .intent .has() …
     catalog.index()                 # every catalog for a console's list, the domains first
@@ -21,7 +22,7 @@ metis-catalog and this module, and no consumer.
     catalog.readme("lamp", src, run, summary=…)  # a README for a domain an agentic-loop run made
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
 
-    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|widget|ts … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|root|state|widget|ts … --json
 
 The TypeScript face (metis_loop_sdk/ts/catalog.ts, TS_DIR) is the same
 catalog for a node consumer (the agentic loop's pi extensions): one function
@@ -47,10 +48,9 @@ from pathlib import Path
 
 import yaml
 
-# perotheia-packages/metis-catalog beside this checkout (sdk/metis_loop_sdk/catalog.py)
-SIBLING = Path(__file__).resolve().parents[3] / "metis-catalog"
-INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install metis-catalog, or pip install -e "
-           "<metis-catalog checkout>  (metis-loop/run.sh and metis-agent/run.sh do it; it needs pyyaml)")
+INSTALL = ("the catalog's loader (metis_catalog) is missing: pip install metis-catalog "
+           "(or pip install -e <a metis-catalog checkout>; it needs pyyaml)")
+STATE = ".metis"                      # DIR/.metis/: the loop's own state in the catalog it runs in
 
 WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the checkout: ../../web/catalog
 WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
@@ -63,35 +63,39 @@ TS_FILES = ("catalog.ts",)
 # ── the loader and the root ───────────────────────────────────────────────────
 
 def loader():
-    """metis_catalog — installed, else from the sibling checkout. The one
-    place in every consumer that imports it."""
+    """metis_catalog, installed (pip install metis-catalog, or -e a
+    checkout). The one place in every consumer that imports it."""
     try:
         import metis_catalog
-    except ImportError:
-        if SIBLING.is_dir() and str(SIBLING) not in sys.path:
-            sys.path.insert(0, str(SIBLING))
-        try:
-            import metis_catalog
-        except ImportError as e:            # the package or its pyyaml
-            raise ImportError(f"{INSTALL} — {e}") from None
+    except ImportError as e:                # the package or its pyyaml
+        raise ImportError(f"{INSTALL} — {e}") from None
     return metis_catalog
 
 
-def root(config=None) -> Path:
-    """The catalog root: $METIS_CATALOG, else `config` (the consumer's
-    configured root), else the metis-catalog checkout beside this one, else
-    the loader's own: the checkout it is installed from (an editable
-    install), or the installed wheel's catalog (metis-catalog 0.1.0)."""
-    for c in (os.environ.get("METIS_CATALOG"), config):
-        if c:
-            return Path(c).resolve()
-    if (SIBLING / "domains").is_dir():
-        return SIBLING
-    own = Path(loader().root())
-    if (own / "domains").is_dir():
-        return own
-    raise FileNotFoundError("no catalog root: set METIS_CATALOG to a metis-catalog checkout "
-                            f"(none beside this one at {SIBLING})")
+def root() -> Path:
+    """The catalog root (cwd-root s-ddac2cbf): $METIS_CATALOG, else the
+    current directory — as `cd DIR && claude` makes DIR the project, `cd DIR
+    && metis-loop` makes DIR the catalog. Any directory is one: an empty
+    one is an empty catalog, and domains/ appears at the first apply."""
+    c = os.environ.get("METIS_CATALOG")
+    return Path(c).resolve() if c else Path.cwd().resolve()
+
+
+def state(r=None) -> Path:
+    """DIR/.metis/, the loop's own state in the catalog DIR it runs in
+    (records, sessions, scratch files), made when missing. When DIR is a
+    git checkout and its .gitignore does not ignore .metis/ yet, the line
+    is added (never a commit)."""
+    r = _r(r)
+    d = r / STATE
+    d.mkdir(exist_ok=True)
+    if (r / ".git").exists():
+        gi = r / ".gitignore"
+        text = gi.read_text() if gi.is_file() else ""
+        if not any(ln.strip().strip("/") == STATE for ln in text.splitlines()):
+            gi.write_text(text + ("" if not text or text.endswith("\n") else "\n")
+                          + f"\n# the metis loops' own state (records, sessions, scratch)\n/{STATE}/\n")
+    return d
 
 
 def _r(r):
@@ -111,8 +115,15 @@ def get(name, r=None):
 def index(r=None):
     """Every catalog of the root for a console's list: the domains first
     (their display line, what they have, the host spec), then every other
-    .llp (metis_catalog.index)."""
-    return loader().index(_r(r))
+    .llp (metis_catalog.index) — none under a dot directory (.metis/, the
+    loop's own state; .git/, .venv/, .pi/ …): the root is a workspace too."""
+    return [e for e in loader().index(_r(r)) if not hidden(e.get("path"))]
+
+
+def hidden(rel) -> bool:
+    """A path relative to the root under a dot directory (.metis/, .git/ …):
+    never a catalog of the root."""
+    return bool(rel) and any(part.startswith(".") for part in Path(rel).parts[:-1])
 
 
 def listing(r=None):
@@ -139,29 +150,38 @@ def host_of(rel, r=None):
     return next((e["host"] for e in index(r) if e.get("path") == rel), None)
 
 
-def check_manifest(path):
-    """A domain.yaml read and checked by the loader's own rule (ManifestError)."""
-    return loader().check_manifest(path)
+def check_manifest(path, root=None):
+    """A domain.yaml read and checked by the loader's own rule (ManifestError):
+    its paths inside `root` (else the domains/ tree it is in)."""
+    return loader().check_manifest(path, root)
 
 
 # ── intents ───────────────────────────────────────────────────────────────────
 
 def generator(r=None):
     """The intent generator, metis-catalog's tools/intents.py, as a module
-    reading the root `r`: the root's own tools/intents.py, else the sibling
-    checkout's (a scratch catalog of domains/ only). A fresh module per
-    call, its ROOT the root."""
+    reading the root `r`: the root's own tools/intents.py, else the
+    installed metis-catalog's (a catalog of domains/ only, an empty one).
+    A fresh module per call, its ROOT the root."""
     r = _r(r)
     p = r / "tools" / "intents.py"
     if not p.is_file():
-        p = SIBLING / "tools" / "intents.py"
+        p = _installed_tools() / "intents.py"
     if not p.is_file():
-        raise FileNotFoundError(f"no intent generator at {r}/tools/intents.py (metis-catalog tools/intents.py)")
+        raise FileNotFoundError(f"no intent generator at {r}/tools/intents.py nor in the installed "
+                                f"metis-catalog ({p}): pip install metis-catalog")
     spec = importlib.util.spec_from_file_location("metis_catalog_intents", p)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     mod.ROOT = r
     return mod
+
+
+def _installed_tools() -> Path:
+    """The installed metis-catalog's tools/: the wheel's (metis_catalog/tools)
+    or, installed -e, its checkout's — where the package is, never $METIS_CATALOG."""
+    own = Path(loader().__file__).resolve().parent
+    return own / "tools" if (own / "tools").is_dir() else own.parent / "tools"
 
 
 def intents(name, r=None):
@@ -495,14 +515,14 @@ def plan(name, program=None, extensions=None, intents=None, manifest=None, readm
             keys["program"] = prog.relative_to(d).as_posix()
         text = _manifest_text(whole if whole is not None else (_text(mf) if mf.is_file() else ""), keys)
         # checked where it will live: a scratch tree with the package at its
-        # depth under the root (domains/…), so the loader's containment rule
-        # (its paths stay inside the catalog root) reads it as it will
+        # depth under the root (domains/… or anywhere: rule 9), so the loader's
+        # containment rule (its paths stay inside the catalog root) reads it as it will
         with tempfile.TemporaryDirectory(prefix="manifest-") as tmp:
             t = Path(tmp) / Path(d).resolve().relative_to(r) / "domain.yaml"
             t.parent.mkdir(parents=True)
             t.write_text(text)
             try:
-                check_manifest(t)
+                check_manifest(t, tmp)
             except Exception as e:
                 raise ValueError(str(e).replace(str(t), f"{name}/domain.yaml").replace(tmp, str(r))) from None
         files[mf] = text
@@ -546,14 +566,14 @@ def apply(name, program=None, extensions=None, intents=None, manifest=None, read
 # ── one exact edit of a file on disk ─────────────────────────────────────────
 
 def metisc():
-    """The metis compiler for an edit's diagnostics: $METISC, else metisc on PATH, else
-    the metis-lang checkout beside this one (src/metisc); None when there is none."""
+    """The metis compiler for an edit's diagnostics: $METISC, else metisc on PATH;
+    None when there is none (diagnostics() then refuses with NO_METISC)."""
     import shutil
-    m = os.environ.get("METISC") or shutil.which("metisc")
-    if m:
-        return m
-    sib = SIBLING.parent / "metis-lang" / "src" / "metisc"
-    return str(sib) if sib.is_file() else None
+    return os.environ.get("METISC") or shutil.which("metisc")
+
+
+NO_METISC = ("no metisc to check a program's edit: set METISC or put metisc on PATH "
+             "(build it: make -C <a metis-lang checkout> metisc, then src/metisc)")
 
 
 def diagnostics(path, base=None):
@@ -565,7 +585,7 @@ def diagnostics(path, base=None):
     import subprocess
     m = metisc()
     if not m:
-        raise ValueError("no metisc to check a program's edit: set METISC (metis-lang src/metisc)")
+        raise ValueError(NO_METISC)
     p = subprocess.run([m, "--diagnostics-json", str(path), *(["--base", str(base)] if base else [])],
                        capture_output=True, text=True, timeout=120)
     if p.returncode:
@@ -730,7 +750,9 @@ def take(name, src, r=None, readme=None):
     s = get(name, src)
     if (r / "domains" / name).exists():
         raise ValueError(f"{name}: {r} has domains/{name} already")
-    if s.dir.resolve() != src / "domains" / name:
+    if name in {x.name for x in domains(r)}:              # a package of that name anywhere under r (rule 9)
+        raise ValueError(f"{name}: {r} has a package {name} already ({get(name, r).dir})")
+    if s.dir.resolve() != src / "domains" / name:         # a nested one (domains/ceptre/<name>) keeps its license beside it
         raise ValueError(f"{name}: take brings a domain from domains/{name}/ (it is at {s.dir})")
     other = sorted(set(s.manifest) - set(TAKEN))
     if other:
@@ -855,7 +877,7 @@ def readme(name, src, run=None, summary=None, title=None):
     import re
     src = Path(src).resolve()
     run = Path(run).resolve() if run else None
-    d = src / "domains" / name
+    d = get(name, src).dir                 # anywhere under src (rule 9)
     prog = (d / f"{name}.llp").read_text()
     m = re.search(r'provenance text "((?:[^"\\]|\\.)*)"', prog)
     prose = m.group(1) if m else ""
@@ -951,7 +973,7 @@ def describe(name, r=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m metis_loop_sdk.catalog", description=__doc__.split("\n")[0])
-    ap.add_argument("--root", help="the catalog root (default: $METIS_CATALOG, else the sibling checkout)")
+    ap.add_argument("--root", help="the catalog root (default: $METIS_CATALOG, else the current directory)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     ls = sub.add_parser("list", help="every catalog, the domains first (index); --consoles: the agent console's rows")
     ls.add_argument("--domains", action="store_true", help="the domains only")
@@ -1005,9 +1027,10 @@ def main(argv=None):
     bd = sub.add_parser("build", help="the domain's bundle (build/, metispy's emitter)")
     bd.add_argument("name")
     rt = sub.add_parser("root", help="the catalog root")
+    st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
     ts_ = sub.add_parser("ts", help="the TypeScript face's directory and files")
     wd = sub.add_parser("widget", help="the catalog widget's directory, URL and files")
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, rt, ts_, wd):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, rt, st, ts_, wd):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1049,6 +1072,8 @@ def main(argv=None):
             out = {"name": a.name, "fingerprint": fingerprint(a.name, r)}
         elif a.cmd == "root":
             out = {"root": str(_r(r))}
+        elif a.cmd == "state":
+            out = {"state": str(state(r))}
         elif a.cmd == "widget":
             out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
         elif a.cmd == "ts":
@@ -1067,7 +1092,7 @@ def main(argv=None):
             if a.readme and a.readme_from_run:
                 raise ValueError("take: --readme or --readme-from-run, not both")
             text = read(a.readme) if a.readme else None
-            if a.readme_from_run and not (Path(a.src) / "domains" / a.name / "README.md").is_file():
+            if a.readme_from_run and not (get(a.name, Path(a.src).resolve()).dir / "README.md").is_file():
                 text = readme(a.name, a.src, a.readme_from_run)
             kw = take(a.name, a.src, r, text)
             if a.dry_run:

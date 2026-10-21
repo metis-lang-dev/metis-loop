@@ -363,3 +363,26 @@ def test_the_copy_of_a_domain_carries_its_extensions(tmp_path):
             assert src["extensions"] == [{"name": "visitor", "source": VISITOR}] and src["certified"] == "checkout"
     finally:
         r.close()
+
+
+def test_a_gateway_started_in_an_empty_dir_serves_it(tmp_path, monkeypatch):
+    """cwd-root s-ddac2cbf through the wire: started in an empty directory
+    (no METIS_CATALOG), the greeting lists no domain and no catalog; `new`
+    writes domains/<name>/ there, the panel's list then shows it, and it opens."""
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    r = Running(mode="personal")
+    try:
+        assert r.gw.srv.root == tmp_path.resolve()
+        with r.ws() as ws:
+            hello = frames(ws, lambda f: f.get("type") == "catalogs")
+            assert [f["domains"] for f in hello if f.get("type") == "domains"] == [[]]
+            assert [f["readme"] for f in hello if f.get("type") == "readme"] == [None]     # no README.md
+            assert hello[-1]["names"] == []
+            ws.send(json.dumps({"ch": "repl", "type": "new", "name": "lamp", "line": "a lamp", "req": "n1"}))
+            got = frames(ws, lambda f: f.get("type") == "source")
+            doms = [f["domains"] for f in got if f.get("type") == "domains"]
+            assert [e["name"] for e in doms[-1]] == ["lamp"]
+            assert (tmp_path / "domains/lamp/lamp.llp").is_file()
+    finally:
+        r.close()

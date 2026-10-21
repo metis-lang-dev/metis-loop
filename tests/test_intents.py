@@ -3,6 +3,7 @@ domain's intent.yaml drafted from its program, proposed (it must generate
 and every example map to a command atom, checked by metis-agent's generic
 domain agent), shown as a diff, written with its generated files. On a
 scratch checkout with a small plant."""
+import os
 import shutil
 from pathlib import Path
 
@@ -10,13 +11,13 @@ import pytest
 
 from loop import intents as it
 from loop.console_serve import ConsoleServer
+from metis_loop_sdk import catalog
 
-SIB = Path(__file__).resolve().parents[2]
-GEN = SIB / "metis-catalog/tools/intents.py"
-AGENT_PY = SIB / "metis-agent/py/.venv/bin/python"
+GEN = catalog._installed_tools() / "intents.py"          # the installed metis-catalog's generator
+AGENT_PY = Path(os.environ.get("METIS_AGENT_PY") or "/nonexistent")
 
 pytestmark = pytest.mark.skipif(not (GEN.exists() and AGENT_PY.exists()),
-                                reason="needs the metis-catalog and metis-agent checkouts beside this one")
+                                reason="needs metis-agent's py venv (METIS_AGENT_PY) and the installed metis-catalog")
 
 PLANT = """catalog plant 1.
 provenance text "a potted plant that dries out; the person waters it or asks how it is" "2026-10-14".
@@ -48,7 +49,6 @@ stage serve {
 
 @pytest.fixture
 def srv(tmp_path, monkeypatch):
-    monkeypatch.setenv("METIS_AGENT_PY", str(AGENT_PY))     # the venv is not beside a scratch checkout
     (tmp_path / "tools").mkdir()
     shutil.copy(GEN, tmp_path / "tools/intents.py")
     s = ConsoleServer(tmp_path)

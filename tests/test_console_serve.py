@@ -101,3 +101,57 @@ def test_open_session_from_source_in_memory(srv, tmp_path, monkeypatch):
     assert "KiB" in big["error"]
     scratch = srv.open_session("f4", {"source": src, "name": "my fork!"})
     assert scratch["status"] == "running"
+
+
+def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
+    """cwd-root s-ddac2cbf: `cd DIR && metis-loop` over an empty DIR — the
+    console serves the cwd, lists nothing, `new` writes domains/<name>/, the
+    list then shows it; the loop's own .metis/ is never a catalog nor a
+    records file of the console, and an in-memory copy anchors under it."""
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    srv = ConsoleServer()
+    assert srv.root == tmp_path.resolve()
+    assert srv.catalogs() == [] and srv.domains() == [] and srv.records() == []
+    assert srv.new_domain("lamp", "a lamp") == "domains/lamp/lamp"
+    assert (tmp_path / "domains/lamp/domain.yaml").is_file()
+    assert srv.catalogs() == ["domains/lamp/lamp"] and [e["name"] for e in srv.domains()] == ["lamp"]
+    s = srv.open_session("e1", {"llp": "lamp"})
+    assert s["status"] == "running", s
+    (tmp_path / ".metis/records").mkdir(parents=True)
+    (tmp_path / ".metis/records/formalize-calls.jsonl").write_text('{"ts": "x"}\n')
+    (tmp_path / ".metis/scratch").mkdir()
+    (tmp_path / ".metis/scratch/x.llp").write_text("catalog x 1.\n")
+    assert srv.catalogs() == ["domains/lamp/lamp"] and srv.records() == []
+    assert srv._source_path("a copy") == tmp_path.resolve() / ".metis/scratch/a_copy.llp"
+    assert not (tmp_path / ".metis/scratch/a_copy.llp").exists()
+
+
+def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):
+    """cwd-root rules 9 and 10: `cd domains/ceptre && metis-loop` — the
+    packages sit directly under DIR (no domains/), the list has them; DIR's
+    README is the page's landing, its links to a package resolve to it, and
+    every session's narrate seat reads the README after its doctrine."""
+    import shutil
+    from metis.loop.prompts import resolve
+    for n in ("three_pigs", "gossip"):
+        shutil.copytree(catalog_root() / "domains/ceptre" / n, tmp_path / n,
+                        ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
+    (tmp_path / "README.md").write_text(
+        "# the ports\n\n| package | from |\n| --- | --- |\n| [`three_pigs/`](three_pigs/) | 3lp |\n"
+        "| [`gossip/`](gossip/gossip.llp) | gossip |\n\nThe [license](LICENSE) and [Ceptre](https://example.org/).\n")
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    srv = ConsoleServer()
+    assert [e["name"] for e in srv.domains()] == ["gossip", "three_pigs"]
+    rd = srv.readme()
+    assert rd["path"] == "README.md" and rd["text"].startswith("# the ports")
+    assert rd["links"] == {"three_pigs/": "three_pigs/three_pigs", "gossip/gossip.llp": "gossip/gossip"}
+    s = srv.open_session("p1", {"llp": "three_pigs"})
+    assert s["status"] == "running", s
+    sysp = srv.shells["p1"].sys_prompts["narrate"]
+    assert sysp.startswith(resolve("narrate", None)[0]) and "# the ports" in sysp and "README.md" in sysp
+    (tmp_path / "README.md").unlink()
+    assert srv.readme() is None
+    srv.open_session("p2", {"llp": "three_pigs"})
+    assert "narrate" not in srv.shells["p2"].sys_prompts           # no README: the doctrine alone

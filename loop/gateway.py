@@ -29,6 +29,8 @@ Frames (JSON, one per message):
                  {ch:"chat", type:"say"|"stop"|"history", session, text}
                                           (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
+                 {ch:"meta", type:"readme", readme}  the root's README.md, {path, text,
+                                          links: {href: package path}} or null
                  {ch:"meta", type:"domains", domains}  the CATALOG panel
                                           (the SDK's catalog.index: line, has, readme_text)
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
@@ -55,6 +57,7 @@ nothing a visitor types or runs is written to the operator's disk."""
 import asyncio
 import ctypes
 import json
+import os
 import secrets
 import sys
 import threading
@@ -686,6 +689,9 @@ class Gateway:
         # last frame of the greeting: a page waits for it)
         await self._send(ws, {"ch": "meta", "type": "domains",
                               "domains": self.srv.domains()})
+        # DIR/README.md, the catalog's context the page lands on (rule 10)
+        await self._send(ws, {"ch": "meta", "type": "readme",
+                              "readme": self.srv.readme()})
         if self.agent_state:            # the band's AGENT field (step 3)
             await self._send(ws, self.agent_state.frame())
         await self._send(ws, {"ch": "meta", "type": "catalogs",
@@ -905,6 +911,13 @@ def main(argv=None) -> int:
     except ImportError as e:
         print(f"console-serve: {e}", file=sys.stderr)
         return 1
+    # the catalog root is the workspace (cwd-root s-ddac2cbf): the cwd, or
+    # $METIS_CATALOG — then the process runs there, as `cd DIR` would have
+    root = catalog.root()
+    if not root.is_dir():
+        print(f"console-serve: no catalog directory at {root} (METIS_CATALOG)", file=sys.stderr)
+        return 1
+    os.chdir(root)
     try:                        # the page's shell (console/lib/shell.css, shell.js)
         shell_lib.check()
     except FileNotFoundError as e:
@@ -918,6 +931,7 @@ def main(argv=None) -> int:
     q = f"?token={cfg['token']}" if cfg["token"] else ""
     print(f"loop console ({cfg['mode']}): http://{cfg['bind']}:"
           f"{cfg['port']}/{q}", flush=True)
+    print(f"catalog: {root}", flush=True)
     try:
         asyncio.run(gw.serve())
     except KeyboardInterrupt:

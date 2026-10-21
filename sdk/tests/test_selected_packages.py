@@ -5,7 +5,7 @@ the program includes its lifted domain) and love_triangle (a fiction world, no
 intents). Unit level: the files as the catalog has them, written into scratch
 catalogs; no model, no gym.
 
-The catalog is the metis-catalog checkout beside metis-loop (or $METIS_CATALOG)."""
+The catalog is the installed metis-catalog's own (or $METIS_CATALOG)."""
 import os
 import shutil
 import subprocess
@@ -16,9 +16,11 @@ import pytest
 
 from metis_loop_sdk import catalog
 
-CAT = Path(os.environ.get("METIS_CATALOG") or Path(__file__).resolve().parents[3] / "metis-catalog")
+from conftest import installed_catalog
+
+CAT = installed_catalog()
 if not (CAT / "domains").is_dir():
-    pytest.skip(f"no metis-catalog checkout at {CAT} (METIS_CATALOG)", allow_module_level=True)
+    pytest.skip(f"no metis-catalog domains at {CAT} (METIS_CATALOG)", allow_module_level=True)
 
 SELECTED = ["dog", "plant", "kitchen", "nav", "love_triangle"]
 # what take refuses, by the manifest key it names (the files take does not carry)
@@ -26,8 +28,8 @@ NOT_TAKEN = {"kitchen": "agent, pair, serves"}
 
 METISC = catalog.metisc()
 if not METISC and os.environ.get("METIS_LOOP_REQUIRE_METISC"):
-    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC, PATH, or metis-lang/src/metisc beside this checkout)")
-needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC, PATH, or metis-lang beside this checkout)")
+    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC or PATH)")
+needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC or PATH)")
 
 IGNORE = shutil.ignore_patterns("records", "build", "__pycache__")
 

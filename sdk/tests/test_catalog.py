@@ -2,8 +2,9 @@
 loader reads, apply is the one validated write (into a scratch catalog here),
 the CLI says the same in JSON, the widget ships as package data.
 
-The catalog is the metis-catalog checkout beside metis-loop (or
-$METIS_CATALOG); the writes go to a scratch copy of its dog and plant."""
+The fixtures are the installed metis-catalog's own domains (its checkout
+installed -e, or the wheel's; $METIS_CATALOG overrides); the writes go to
+a scratch copy of its dog and plant."""
 import json
 import os
 import shutil
@@ -15,9 +16,11 @@ import pytest
 
 from metis_loop_sdk import catalog
 
-CAT = Path(os.environ.get("METIS_CATALOG") or Path(__file__).resolve().parents[3] / "metis-catalog")
+from conftest import installed_catalog
+
+CAT = installed_catalog()
 if not (CAT / "domains").is_dir():
-    pytest.skip(f"no metis-catalog checkout at {CAT} (METIS_CATALOG)", allow_module_level=True)
+    pytest.skip(f"no metis-catalog domains at {CAT} (METIS_CATALOG)", allow_module_level=True)
 
 
 @pytest.fixture
@@ -30,32 +33,93 @@ def scratch(tmp_path):
     return tmp_path
 
 
-def test_root_is_the_env_then_the_config_then_the_checkout(monkeypatch, tmp_path):
+LAMP = """% lamp — a lamp that can be switched on
+catalog lamp 1.
+provenance text "a lamp that can be switched on" "2026-10-21".
+layers (dyn).
+stages (main).
+
+namespace lamp produce (dyn).
+
+pred off : lamp.
+pred on : lamp.
+
+stage main {
+  %% I switch it on.
+  switch_on [dyn] : off -o on.
+}
+
+#init off 1
+"""
+
+
+def cli(args, cwd):
+    """The CLI run in `cwd`, without $METIS_CATALOG: its root is the cwd."""
+    env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG"}
+    r = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", *args], capture_output=True, text=True,
+                       env=env, cwd=cwd, timeout=120)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_root_is_the_env_else_the_cwd(monkeypatch, tmp_path):
+    """cwd-root s-ddac2cbf: $METIS_CATALOG, else the current directory —
+    `cd DIR` makes DIR the catalog; no configured root, no sibling."""
+    (tmp_path / "a").mkdir()
     monkeypatch.setenv("METIS_CATALOG", str(tmp_path))
-    assert catalog.root("/elsewhere") == tmp_path.resolve()
+    monkeypatch.chdir(tmp_path / "a")
+    assert catalog.root() == tmp_path.resolve()
     monkeypatch.delenv("METIS_CATALOG")
-    assert catalog.root(str(tmp_path)) == tmp_path.resolve()
-    if catalog.SIBLING.is_dir():
-        assert catalog.root() == catalog.SIBLING
+    assert catalog.root() == (tmp_path / "a").resolve()
+    assert not hasattr(catalog, "SIBLING")
+    with pytest.raises(TypeError):
+        catalog.root("/elsewhere")                        # the config argument went
 
 
-def test_root_without_a_sibling_is_the_loaders_own(monkeypatch, tmp_path):
-    """No env, no config, no sibling: the loader's root() — the installed
-    wheel's catalog (metis-catalog 0.1.0), or the checkout it came from."""
-    (tmp_path / "wheel" / "domains").mkdir(parents=True)
-
-    class Loader:
-        @staticmethod
-        def root():
-            return tmp_path / "wheel"
-
+def test_an_empty_directory_is_an_empty_catalog(monkeypatch, tmp_path):
+    """An empty cwd lists nothing; the first apply makes domains/<name>/,
+    and the index then shows it; the intent generator is the installed
+    metis-catalog's (the root has no tools/)."""
     monkeypatch.delenv("METIS_CATALOG", raising=False)
-    monkeypatch.setattr(catalog, "SIBLING", tmp_path / "none")
-    monkeypatch.setattr(catalog, "loader", lambda: Loader)
-    assert catalog.root() == tmp_path / "wheel"
-    (tmp_path / "wheel" / "domains").rmdir()
-    with pytest.raises(FileNotFoundError, match="no catalog root"):
-        catalog.root()
+    monkeypatch.chdir(tmp_path)
+    assert catalog.domains() == [] and catalog.index() == [] and catalog.listing() == []
+    out = catalog.apply("lamp", program=LAMP, manifest="display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    assert sorted(out["written"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
+    assert [e["name"] for e in catalog.index()] == ["lamp"] and [d.name for d in catalog.domains()] == ["lamp"]
+    gen = catalog.generator()
+    assert not (tmp_path / "tools").exists() and Path(gen.__file__).parent == catalog._installed_tools()
+    assert gen.ROOT == tmp_path.resolve()
+    rows = cli(["list", "--json"], cwd=tmp_path)          # the CLI in the cwd: the same catalog
+    assert [e["name"] for e in rows] == ["lamp"]
+
+
+def test_state_is_the_roots_dot_metis_and_hidden(monkeypatch, tmp_path):
+    """DIR/.metis/ holds the loop's own state: made on demand, ignored in a
+    git checkout's .gitignore (once), and nothing under it is a catalog."""
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert catalog.state() == tmp_path.resolve() / ".metis" and (tmp_path / ".metis").is_dir()
+    assert not (tmp_path / ".gitignore").exists()             # not a checkout: nothing to ignore in
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".gitignore").write_text("build/")
+    catalog.state(); catalog.state()
+    assert (tmp_path / ".gitignore").read_text().splitlines().count("/.metis/") == 1
+    assert (tmp_path / ".gitignore").read_text().startswith("build/\n")
+    (tmp_path / ".metis" / "scratch").mkdir()
+    (tmp_path / ".metis" / "scratch" / "lamp.llp").write_text(LAMP)
+    assert catalog.index() == []
+    assert cli(["state", "--json"], cwd=tmp_path)["state"] == str(tmp_path.resolve() / ".metis")
+
+
+def test_metisc_is_the_env_else_path_else_a_refusal(monkeypatch, tmp_path):
+    monkeypatch.delenv("METISC", raising=False)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert catalog.metisc() is None
+    (tmp_path / "x.llp").write_text(LAMP)
+    with pytest.raises(ValueError, match="set METISC or put metisc on PATH"):
+        catalog.diagnostics(tmp_path / "x.llp")
+    monkeypatch.setenv("METISC", "/opt/metisc")
+    assert catalog.metisc() == "/opt/metisc"
 
 
 def test_the_facade_reads_what_the_loader_reads():
@@ -163,7 +227,7 @@ def test_a_new_domain(scratch):
 
 
 def test_take_brings_a_domain_over_from_a_scratch_catalog(scratch, tmp_path):
-    dst = tmp_path / "dst"
+    dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     shutil.copytree(scratch / "tools", dst / "tools")
     (dst / "domains").mkdir()
     kw = catalog.take("dog", scratch, dst)
@@ -343,8 +407,8 @@ def test_apply_readme_host_corpus_and_the_readme_verb(scratch, tmp_path):
 
 METISC = catalog.metisc()
 if not METISC and os.environ.get("METIS_LOOP_REQUIRE_METISC"):     # CI builds it: an edit's check must run there
-    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC, PATH, or metis-lang/src/metisc beside this checkout)")
-needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC, PATH, or metis-lang beside this checkout)")
+    raise RuntimeError("METIS_LOOP_REQUIRE_METISC: no metisc (METISC or PATH)")
+needs_metisc = pytest.mark.skipif(not METISC, reason="no metisc (METISC or PATH)")
 
 
 def changed(diff):
@@ -359,7 +423,7 @@ def test_an_edit_changes_exactly_its_text_and_keeps_every_comment(scratch):
     prog = scratch / "domains/plant/plant.llp"
     before = prog.read_text()
     old = "% Made in the loop console (new)."
-    kw = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.")
+    kw = catalog.edit("plant", "plant.llp", old, "% Made in the loop console (new), edited.", r=scratch)
     assert list(kw) == ["program"] and kw["program"] == before.replace(old, "% Made in the loop console (new), edited.")
     files = catalog.plan("plant", **kw, r=scratch)
     assert [f["path"] for f in files] == ["domains/plant/plant.llp"]
@@ -630,7 +694,7 @@ def test_take_carries_the_files_a_program_includes(scratch, tmp_path):
     _inc_domain(scratch)
     assert catalog.includes(scratch / "domains/inc", [scratch / "domains/inc/inc.llp"]) == \
         {"inc_rules.llp": (scratch / "domains/inc/inc_rules.llp").read_text()}
-    dst = tmp_path / "dst"
+    dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     (dst / "domains").mkdir(parents=True)
     out = catalog.apply("inc", **catalog.take("inc", scratch, dst), r=dst)
     assert sorted(out["written"]) == ["domains/inc/domain.yaml", "domains/inc/inc.llp", "domains/inc/inc_rules.llp"]
@@ -648,7 +712,7 @@ def test_take_carries_the_notch_its_manifest_names(scratch, tmp_path):
     if not (src / "domain.yaml").is_file():
         pytest.skip("no wildfire package in the catalog")
     shutil.copytree(src, scratch / "domains/wildfire", ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
-    dst = tmp_path / "dst"
+    dst = tmp_path.parent / (tmp_path.name + "-dst")      # beside the scratch root, not in it (a package anywhere under a root is its)
     (dst / "domains").mkdir(parents=True)
     kw = catalog.take("wildfire", scratch, dst)
     assert kw["notch"] == (src / "wildfire.notch.json").read_text()

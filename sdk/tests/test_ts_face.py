@@ -1,6 +1,6 @@
 """The TypeScript face (metis_loop_sdk/ts/catalog.ts) against this CLI: tests/ts/catalog.test.ts
 under node's test runner (node >= 22.6, --experimental-strip-types). Node: $NODE, else `node`
-on PATH, else the agentic loop's pinned one beside this checkout; none, the test skips
+on PATH (never one beside a checkout: cwd-root s-ddac2cbf); none, the test skips
 (METIS_LOOP_REQUIRE_NODE=1, as CI sets it: it fails instead)."""
 import os
 import shutil
@@ -10,12 +10,14 @@ from pathlib import Path
 
 import pytest
 
+from conftest import installed_catalog
+
 HERE = Path(__file__).resolve().parent
-CAT = Path(os.environ.get("METIS_CATALOG") or HERE.parents[2] / "metis-catalog")
+CAT = installed_catalog()
 
 
 def node():
-    for n in (os.environ.get("NODE"), shutil.which("node"), HERE.parents[2] / "metis-agentic-loop/node/bin/node"):
+    for n in (os.environ.get("NODE"), shutil.which("node")):
         if not n or not Path(n).is_file():
             continue
         v = subprocess.run([str(n), "-p", "process.versions.node"], capture_output=True, text=True).stdout.strip()

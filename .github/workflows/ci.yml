@@ -21,8 +21,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: metis-loop
-      # metis-loop imports metispy and its tests read metis-catalog —
-      # both public siblings, checked out beside it.
+      # metis-loop imports metispy and its tests read metis-catalog — both
+      # public, checked out beside it and installed (-e): the tests find the
+      # catalog as the installed metis_catalog's, never by the layout.
       - name: Checkout metispy (public)
         uses: actions/checkout@v4
         with:
@@ -66,7 +67,9 @@ jobs:
           echo "METIS_RDDL_PY=/tmp/gym/bin/python" >> "$GITHUB_ENV"
       - name: Suite (incl. the real-socket gateway tests; agent tests skip without the SDK)
         working-directory: metis-loop
-        env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_LOOP_REQUIRE_METISC: '1', METIS_LOOP_REQUIRE_GYM: '1'}
+        # metisc named (the SDK looks on PATH, never beside a checkout: cwd-root s-ddac2cbf)
+        env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_LOOP_REQUIRE_METISC: '1', METIS_LOOP_REQUIRE_GYM: '1',
+              METISC: '${{ github.workspace }}/metis-lang/src/metisc'}
         run: pytest -q tests/ sdk/tests/
 
   # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,
@@ -128,5 +131,7 @@ jobs:
           bash metis-loop/sdk/tools/smoke_wheel.sh /tmp/sdk-dist metis-catalog
       - name: SDK suite (from outside the checkout, so the installed package is what runs)
         working-directory: /tmp
-        env: {METIS_LOOP_REQUIRE_NODE: '1'}
+        # the fixtures: the metis-catalog checkout, named (the root is the cwd, cwd-root
+        # s-ddac2cbf; the wheel's catalog lacks domains/ceptre/, which the suite reads)
+        env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_CATALOG: '${{ github.workspace }}/metis-catalog'}
         run: /tmp/sdk/bin/python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/metis-loop/sdk/tests"

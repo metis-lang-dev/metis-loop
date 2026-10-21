@@ -6,7 +6,8 @@
 # published), metis_loop_sdk from site-packages at pyproject's version, the
 # human loop absent, the widget's and the TypeScript face's files in the wheel
 # (the face where `catalog ts` says: the agentic loop resolves it from there),
-# and the catalog CLI on the installed catalog: root, list, get, intents
+# the root is the cwd (an empty one: an empty catalog, its .metis/ on demand),
+# and the catalog CLI on the installed catalog: list, get, intents
 # (--skeleton: the root's tools/intents.py), fingerprint. publish.yml runs it.
 set -euo pipefail
 DIST=$(cd "$1" && pwd)
@@ -23,6 +24,7 @@ cd "$W"                                   # no checkout on the path
 env -u METIS_CATALOG -u PYTHONPATH "$W/venv/bin/python" - "$V" "$HERE/../web/catalog" <<'PY'
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -47,8 +49,15 @@ def cli(*args):
 
 ts = cli("ts")
 assert "site-packages" in ts["dir"] and (Path(ts["dir"]) / "catalog.ts").is_file(), ts
-root = Path(cli("root")["root"])
+empty = Path.cwd().resolve() / "empty"
+empty.mkdir()
+os.chdir(empty)                           # the root is the cwd: an empty directory is an empty catalog
+assert Path(cli("root")["root"]) == empty and cli("list") == []
+assert Path(cli("state")["state"]) == empty / ".metis" and (empty / ".metis").is_dir()
+import metis_catalog
+root = Path(metis_catalog.__file__).resolve().parent          # the wheel's own catalog
 assert "site-packages" in str(root) and (root / "domains" / "dog" / "domain.yaml").is_file(), root
+os.environ["METIS_CATALOG"] = str(root)
 names = {e["name"] for e in cli("list") if e["kind"] == "domain"}
 assert {"dog", "wildfire", "kitchen"} <= names, sorted(names)
 assert cli("get", "dog")["name"] == "dog"

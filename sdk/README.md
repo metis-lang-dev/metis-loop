@@ -11,15 +11,29 @@ agent and metis-agentic-loop's tools. It holds:
 Each has a JSON CLI (`python -m metis_loop_sdk.<module>`). A TypeScript face,
 `metis_loop_sdk/ts/catalog.ts`, ships in the wheel.
 
+**The catalog root is the current directory**, as `cd DIR && claude` makes DIR
+the project: `catalog.root()` is `$METIS_CATALOG`, else the cwd.
+
 ```sh
-pip install metis-loop-sdk            # Python 3.10+; metispy and metis-catalog come with it
-pip install -e ../metis-loop/sdk      # development, beside the sibling checkouts (install them -e first)
+cd DIR && python -m metis_loop_sdk.catalog list --json      # DIR's domains/<name>/: an empty DIR lists nothing
+cd DIR && python -m metis_loop_sdk.catalog apply lamp --program lamp.llp --json   # writes DIR/domains/lamp/
+METIS_CATALOG=DIR python -m metis_loop_sdk.catalog list --json                     # the same, from elsewhere
 ```
 
-Installed alone, the catalog it reads is the metis-catalog wheel's (read-only);
-set `METIS_CATALOG` to a checkout or a scratch copy for the writes (`apply`,
-`edit`, `take`). `python -m metis_loop_sdk.catalog ts --json` prints where the
-TypeScript face is (`dir`): a node consumer imports it from there.
+Any directory is a catalog; `domains/` appears at the first write. The loops'
+own state goes in `catalog.state()`, `DIR/.metis/` (made on demand, added to
+DIR's `.gitignore` when DIR is a git checkout), and nothing under a dot
+directory is a catalog. The intent generator is the root's `tools/intents.py`,
+else the installed metis-catalog's; `metisc` is `$METISC`, else PATH. Nothing
+is looked up beside a checkout.
+
+```sh
+pip install metis-loop-sdk            # Python 3.10+; metispy and metis-catalog come with it
+pip install -e sdk/                   # development, in a metis-loop checkout (metispy and metis-catalog installed first)
+```
+
+`python -m metis_loop_sdk.catalog ts --json` prints where the TypeScript face
+is (`dir`): a node consumer imports it from there.
 
 ## Releasing
 

@@ -157,10 +157,10 @@ someone is using that surface, as below.
 The console's db is reachable only by the page or by THIS session's
 ArtifactData tool, so you are the backend: a drain loop over
 `loop/console_serve.py`, one interpreter per open console window,
-working directly on the metis-catalog checkout (no catalog mirror).
+working directly on the catalog in the session's directory (no catalog mirror).
 
     from loop.console_serve import ConsoleServer
-    srv = ConsoleServer()          # $METIS_CATALOG or ../metis-catalog
+    srv = ConsoleServer()          # $METIS_CATALOG, else the cwd (cd metis-catalog first for its domains)
 
 The whole drain is ONE pure call — you are glue, not logic:
 

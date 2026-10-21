@@ -14,8 +14,8 @@
 //   catalog.readme("lamp", { from, run, summary, title })   // the README of a loop run's domain
 //
 // The python: $METIS_LOOP_SDK_PY (a python with the SDK installed), else python3. The
-// root: each call's `root`, else the CLI's own rule ($METIS_CATALOG, else the sibling
-// checkout). The SDK's refusals ({"error"}, exit 1) throw as CatalogError.
+// root: each call's `root`, else the CLI's own rule ($METIS_CATALOG, else the process's
+// cwd: cd DIR makes DIR the catalog). The SDK's refusals ({"error"}, exit 1) throw as CatalogError.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -92,6 +92,12 @@ export function cli(args: string[], input?: string, root?: string): any {
 /** The catalog root the CLI resolves. */
 export function root(r?: string): string {
 	return cli(["root"], undefined, r).root;
+}
+
+/** The root's .metis/ (the loop's own state: records, sessions, scratch), made when missing;
+ *  ignored in the root's .gitignore when the root is a git checkout. */
+export function state(r?: string): string {
+	return cli(["state"], undefined, r).state;
 }
 
 /** Every catalog, the domains first (index); `domains`: those only; `consoles`: the agent console's rows. */

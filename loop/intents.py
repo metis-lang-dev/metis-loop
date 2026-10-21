@@ -9,13 +9,14 @@ mapped to a command atom.
 The generator is metis-catalog's tools/intents.py (CATALOG.md
 "intent.yaml"), reached through the loop SDK (metis_loop_sdk.catalog: the
 generator, and the write — catalog.apply); the mapper and the model run in
-metis-agent's py venv (metis_agent.intent_check), beside this checkout or at
-$METIS_AGENT_PY.
+metis-agent's py venv (metis_agent.intent_check): $METIS_AGENT_PY, else
+this python when it has metis_agent.
 """
 import difflib
 import hashlib
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -30,23 +31,32 @@ def generator(root):
 
 
 def agent_python(root):
-    """metis-agent's py venv: (its python, its py/ directory)."""
-    py = os.environ.get("METIS_AGENT_PY") or str(Path(root).resolve().parent / "metis-agent/py/.venv/bin/python")
-    if not Path(py).exists():
-        raise ValueError(f"no metis-agent py venv at {py} (set METIS_AGENT_PY)")
-    return py, str(Path(py).parent.parent.parent)     # py/.venv/bin/python → py/
+    """metis-agent's py venv: (its python, the directory it runs in) —
+    $METIS_AGENT_PY (py/.venv/bin/python, run from py/), else this python
+    when metis_agent imports here (run in the root); never a sibling."""
+    py = os.environ.get("METIS_AGENT_PY")
+    if py:
+        if not Path(py).exists():
+            raise ValueError(f"no metis-agent python at {py} (METIS_AGENT_PY)")
+        return py, str(Path(py).parent.parent.parent)     # py/.venv/bin/python → py/
+    import importlib.util
+    if importlib.util.find_spec("metis_agent") is not None:
+        return sys.executable, str(Path(root).resolve())
+    raise ValueError("the intents check runs in metis-agent's py venv: set METIS_AGENT_PY "
+                     "(<a metis-agent checkout>/py/.venv/bin/python)")
 
 
 def domain_of(srv, name):
     """The open copy's checkout domain: (its directory, its name). Only a
-    domain directory (domains/<name>/<name>.llp) carries intents."""
+    domain directory (<name>/<name>.llp with its domain.yaml anywhere under
+    the root, or domains/<name>/<name>.llp) carries intents."""
     try:
         prog = srv.resolve(name)
     except ValueError:
         raise ValueError("intents belong to a checkout domain: this copy is in memory only "
                          "(start one with `new`, or open a domain from the catalog)")
     d = prog.parent
-    if d.parent.name != "domains" or prog.stem != d.name:
+    if prog.stem != d.name or not (d.parent.name == "domains" or (d / "domain.yaml").is_file()):
         raise ValueError(f"{prog.relative_to(srv.root.resolve())} is not a domain directory's program "
                          "(domains/<name>/<name>.llp)")
     return d, d.name

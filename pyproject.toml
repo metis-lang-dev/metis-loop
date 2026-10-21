@@ -14,9 +14,8 @@ requires-python = ">=3.9"
 dependencies = ["metis-loop-sdk"]
 
 [project.optional-dependencies]
-# `metis-loop console-serve` (docs/CONSOLE-WS.md): the gateway
-# (+ the catalog's loader: pip install -e ../metis-catalog, a sibling checkout,
-# not on PyPI — pyyaml here so the loader's path fallback works without it)
+# `metis-loop` (docs/CONSOLE-WS.md): the gateway, over the catalog in the cwd
+# (+ the catalog's loader: pip install metis-catalog, or -e a checkout)
 console = ["websockets>=13", "pyyaml>=6"]
 # the console's agent seat (personal mode, CONSOLE-WS §3)
 agent = ["websockets>=13", "metis-loop-sdk[claude]"]
