@@ -59,6 +59,18 @@ class Refused(ValueError):
     """A rule of the gate said no: its words are the message."""
 
 
+def _state_dir(d):
+    """The gate's directory, made when missing: a loop's .metis/ through catalog.state()
+    (git-ignored in a checkout), any other directory as it is."""
+    d = Path(d)
+    if not d.is_dir():
+        if d.name == catalog.STATE:
+            catalog.state(d.parent)
+        else:
+            d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _seed(run):
     try:
         return json.loads((Path(run) / "seed.json").read_text()) if run else None
@@ -96,7 +108,9 @@ class Gate:
 
     @classmethod
     def at(cls, state_dir):
-        """A gate whose memory is state_dir/gate.json (the loop's state: DIR/.metis/)."""
+        """A gate whose memory is state_dir/gate.json (the loop's state: DIR/.metis/),
+        written whole and atomically (a temp file, then os.replace)."""
+        import os
         f = Path(state_dir) / "gate.json"
         try:
             store = json.loads(f.read_text())
@@ -104,9 +118,25 @@ class Gate:
             store = {}
 
         def save(s):
-            f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text(json.dumps(s))
+            _state_dir(f.parent)
+            tmp = f.with_name(f.name + ".tmp")
+            tmp.write_text(json.dumps(s))
+            os.replace(tmp, f)
         return cls(store, save)
+
+    @classmethod
+    @__import__("contextlib").contextmanager
+    def locked(cls, state_dir):
+        """Gate.at under an exclusive lock on state_dir/gate.lock for the whole of one
+        use (load, change, save): two loops in one DIR never lose each other's memory."""
+        import fcntl
+        d = _state_dir(Path(state_dir))
+        with open(d / "gate.lock", "a") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX)
+            try:
+                yield cls.at(d)
+            finally:
+                fcntl.flock(lk, fcntl.LOCK_UN)
 
     # -- the memory ---------------------------------------------------------
 
@@ -206,7 +236,9 @@ class Gate:
         if kind == "edit":
             d = catalog.get(domain, root)
             import posixpath
-            rel = f"domains/{domain}/{posixpath.normpath(a['path'])}"
+            # the file as the plan names it: relative to the root, wherever the package sits (rule 9: DIR/lamp/ too)
+            pkg = Path(d.dir).resolve().relative_to(Path(root).resolve()).as_posix()
+            rel = posixpath.normpath(f"{pkg}/{a['path']}")
             if not (Path(d.dir) / a["path"]).exists() and rel in since:
                 raise Refused(f"{a['path']} was never written: the person refused its proposal. Send it again through "
                               "catalog_apply with only the fix; its gate shows what changed since")
@@ -288,16 +320,16 @@ def main(argv=None):
     for p in (ap, pr, cf, rf):
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     a = ap.parse_args(argv)
-    g = Gate.at(a.state)
+    raw = sys.stdin.read() if a.cmd == "propose" else ""
     try:
-        if a.cmd == "propose":
-            raw = sys.stdin.read()
-            args = json.loads(raw) if raw.strip() else {}
-            out = public(g.propose(a.kind, a.domain, a.root, a.run, **args))
-        elif a.cmd == "confirm":
-            out = g.confirm(a.token)
-        else:
-            out = g.refuse(a.token)
+        with Gate.locked(a.state) as g:
+            if a.cmd == "propose":
+                args = json.loads(raw) if raw.strip() else {}
+                out = public(g.propose(a.kind, a.domain, a.root, a.run, **args))
+            elif a.cmd == "confirm":
+                out = g.confirm(a.token)
+            else:
+                out = g.refuse(a.token)
     except (KeyError, ValueError, FileNotFoundError) as e:     # as the catalog's CLI says it
         msg = e.args[0] if isinstance(e, KeyError) and e.args else str(e)
         json.dump({"error": msg}, sys.stdout)

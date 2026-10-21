@@ -91,6 +91,31 @@ def test_the_readme_refused_rule(root):
         g.propose("edit", "plant", root, path="README.md", old="A plant.", new="A plant, watered.")
 
 
+def test_the_readme_refused_rule_for_a_package_outside_domains(tmp_path):
+    """cwd-root rule 9: a package anywhere under the root (DIR/plant/, no domains/) — the
+    refused file is remembered by its path from the root, and the rule says its words."""
+    r = tmp_path / "flat"
+    shutil.copytree(CAT / "domains" / "plant", r / "plant", ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
+    (r / "plant/README.md").unlink(missing_ok=True)
+    g = gate.Gate()
+    pl = g.propose("readme", "plant", r, text="A plant.", title="a plant")
+    assert [f["path"] for f in pl["files"]] == ["plant/README.md"]
+    g.refuse(pl["token"])
+    with pytest.raises(gate.Refused, match="README.md was never written: the person refused its proposal"):
+        g.propose("edit", "plant", r, path="./README.md", old="A plant.", new="A plant, watered.")
+
+
+def test_the_cli_memory_is_locked_atomic_and_its_metis_ignored(root, tmp_path):
+    """gate.json is written whole (a temp file replaced), under gate.lock; a new .metis/
+    is made through catalog.state(), so a checkout ignores it."""
+    (root / ".git").mkdir()
+    st = root / ".metis"
+    rc, pl = _cli(st, "propose", "readme", "plant", "--root", str(root), stdin=json.dumps({"text": "A.", "title": "a"}))
+    assert rc == 0 and (st / "gate.json").is_file() and (st / "gate.lock").is_file()
+    assert not (st / "gate.json.tmp").exists()
+    assert "/.metis/" in (root / ".gitignore").read_text()
+
+
 def test_readme_refusals(root):
     g = gate.Gate()
     with pytest.raises(gate.Refused, match="no domain lamp in the loop's catalog yet: its README follows its program"):
