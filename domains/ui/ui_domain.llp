@@ -340,18 +340,12 @@ stage post {
   p_nothing_picked_late [dyn] : nothing_picked * $ready * $idle_jump -o ().
   %% A late answer to a pick that was dropped: the labels are up now.
   p_nothing_picked_jumping [dyn] : nothing_picked * $jumping -o ().
-  %% A late answer to a pick that was dropped: the labels are up now.
-  p_picked_jumping [dyn] : picked * $jumping -o ().
-  %% A late answer to a pick that was dropped: the labels are up now.
-  p_ambiguous_jumping [dyn] : ambiguous * $jumping -o ().
   %% A late answer to a pick that was dropped.
-  p_picked_late [dyn] : picked * $ready * $idle_jump -o ().
+  p_picked_late [dyn] : picked * $ready -o ().
   %% A late answer to a pick that was dropped.
-  p_page_refused_late [dyn] : page_refused * $ready * $idle_jump -o ().
-  %% A late answer to a pick that was dropped: the labels are up now.
-  p_page_refused_jumping [dyn] : page_refused * $jumping -o ().
+  p_page_refused_late [dyn] : page_refused * $ready -o ().
   %% A late answer to a pick that was dropped.
-  p_ambiguous_late [dyn] : ambiguous * $ready * $idle_jump -o ().
+  p_ambiguous_late [dyn] : ambiguous * $ready -o ().
   %% The labels are up already: say a number, or "cancel".
   p_jump_busy [dyn] : cmd_jump * $jumping -o refused(jump).
   %% The labels are up already: say a number, or "cancel".

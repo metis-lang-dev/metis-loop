@@ -33,7 +33,13 @@ document (mouse and keyboard produce the same events; the model cannot tell and 
 not), coalesces one `+enter(W)` per focus change, sends `+blur` when the focus leaves
 every widget (the viewport), `+opened(D)` / `+closed(D)` when a dialog rises or falls,
 `+shown(W)` / `-hidden(W)` (and the reverse) when it shows or hides a dock itself, and
-`+picked` / `+nothing_picked` / `+ambiguous` as the answer to a pick. `observe()` returns
+`+picked` / `+nothing_picked` / `+ambiguous` as the answer to a pick. **When a page takes a domain over** (a reload, a new tab after the old one closed, the
+owner changing), the program still holds the old page's state, so the new page reports its
+full visible state once when its hello claim succeeds: its real focus (`+enter(W)`, or
+`+blur`), every dock's `+shown(W)` / `+hidden(W)`, and for every dialog of the instance
+`+closed(D)` when it is not up or `+opened(D)` when it is — the rules then release a modal
+the old page left (`dialog_close`) or consume the stray report (`p_closed`); the sampler
+starts after that report. `observe()` returns
 the page's real `focused(W)`, `shown`/`hidden` and `modal` atoms: a focus change the
 port missed — the standards' silent cases (a removed element, `aria-activedescendant`,
 the viewport) — is a surprise record.
