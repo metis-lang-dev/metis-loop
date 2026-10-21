@@ -118,10 +118,10 @@ class ConsoleServer:
 
     def catalogs(self):
         """Every .llp under the root, as names relative to it without the
-        suffix (`domains/ceptre/three_pigs/three_pigs`), sorted; none under a
-        dot directory (.metis/, .git/ …: the SDK's catalog.hidden)."""
-        names = (p.relative_to(self.root).with_suffix("") for p in self.root.rglob("*.llp"))
-        return sorted(str(n) for n in names if not catalog.hidden(n))
+        suffix (`domains/ceptre/three_pigs/three_pigs`), sorted — the loader's
+        walk, as its index: none under a dot directory (.metis/, .git/ …),
+        build/, records/, __pycache__/, node_modules/."""
+        return sorted(str(p.relative_to(self.root).with_suffix("")) for p in catalog.walk("*.llp", self.root))
 
     def readme(self):
         """DIR/README.md, the catalog's context (cwd-root rule 10): {path,

@@ -120,6 +120,12 @@ def index(r=None):
     return [e for e in loader().index(_r(r)) if not hidden(e.get("path"))]
 
 
+def walk(pattern, r=None):
+    """Every file matching `pattern` under the root, by the loader's own walk
+    (never under a dot directory, build/, records/, __pycache__, node_modules/)."""
+    return loader().walk(_r(r), pattern)
+
+
 def hidden(rel) -> bool:
     """A path relative to the root under a dot directory (.metis/, .git/ …):
     never a catalog of the root."""
