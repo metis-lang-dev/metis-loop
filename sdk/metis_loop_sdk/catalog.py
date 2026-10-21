@@ -93,8 +93,8 @@ def state(r=None) -> Path:
         gi = r / ".gitignore"
         text = gi.read_text() if gi.is_file() else ""
         if not any(ln.strip().strip("/") == STATE for ln in text.splitlines()):
-            gi.write_text(text + ("" if not text or text.endswith("\n") else "\n")
-                          + f"\n# the metis loops' own state (records, sessions, scratch)\n/{STATE}/\n")
+            sep = ("" if text.endswith("\n") else "\n") + "\n" if text else ""
+            gi.write_text(text + sep + f"# the metis loops' own state (records, sessions, scratch)\n/{STATE}/\n")
     return d
 
 

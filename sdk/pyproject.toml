@@ -6,9 +6,10 @@
 # and nothing else of ours; the human loop (../loop) imports it as any
 # outside consumer would.
 #
-#   consumers:   pip install metis-loop-sdk        (PyPI: metispy and metis-catalog come with it)
-#   development: pip install -e ../metis-loop/sdk   (the sibling checkout; install the
-#                siblings -e first, they satisfy the names here)
+#   consumers:   pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"
+#                (after metispy, on PyPI, and metis-catalog, its checkout or git URL: not on PyPI yet)
+#   development: pip install -e sdk/   (in a metis-loop checkout; metispy and
+#                metis-catalog installed first satisfy the names here)
 # Released from GitHub by trusted publishing on a tag sdk-vX.Y.Z = this
 # version (.github/workflows/publish.yml; pi-release s-8e13f6a8).
 [build-system]

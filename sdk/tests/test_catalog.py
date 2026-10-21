@@ -105,6 +105,10 @@ def test_state_is_the_roots_dot_metis_and_hidden(monkeypatch, tmp_path):
     catalog.state(); catalog.state()
     assert (tmp_path / ".gitignore").read_text().splitlines().count("/.metis/") == 1
     assert (tmp_path / ".gitignore").read_text().startswith("build/\n")
+    (tmp_path / "fresh").mkdir()
+    (tmp_path / "fresh" / ".git").mkdir()
+    catalog.state(tmp_path / "fresh")                         # a .gitignore it creates starts with its line
+    assert (tmp_path / "fresh" / ".gitignore").read_text().startswith("# the metis loops")
     (tmp_path / ".metis" / "scratch").mkdir()
     (tmp_path / ".metis" / "scratch" / "lamp.llp").write_text(LAMP)
     assert catalog.index() == []

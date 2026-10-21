@@ -28,7 +28,7 @@ else the installed metis-catalog's; `metisc` is `$METISC`, else PATH. Nothing
 is looked up beside a checkout.
 
 ```sh
-# Python 3.10+; metispy and metis-catalog first (not on PyPI yet: their checkouts or git URLs)
+# Python 3.10+; metispy (PyPI) and metis-catalog (not on PyPI yet: its checkout or git URL) first
 pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"
 pip install -e sdk/                   # development, in a metis-loop checkout (metispy and metis-catalog installed first)
 ```
@@ -45,9 +45,10 @@ The SDK goes to PyPI from GitHub by trusted publishing (metis-loop's
 workflow refuses any other); the tag's push publishes straight through (the
 `pypi` environment has no required reviewer). The run builds the sdist and
 the wheel from `sdk/`, smoke-installs the wheel in a fresh venv outside the
-checkout with metispy and metis-catalog from PyPI (`tools/smoke_wheel.sh`;
-ci.yml's sdk-alone job runs it on every push, with the metis-catalog
-checkout) and uploads. `workflow_dispatch` is the dry run: everything but
+checkout with metispy and metis-catalog from PyPI (`tools/smoke_wheel.sh`)
+and uploads; ci.yml's sdk-alone job runs the same smoke on every push with
+metis-catalog installed from its checkout instead (it is not on PyPI yet, so
+a tag's run stops at its smoke until it is). `workflow_dispatch` is the dry run: everything but
 the upload.
 
 Apache License 2.0 (see `LICENSE`, `NOTICE`).

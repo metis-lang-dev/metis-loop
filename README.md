@@ -54,8 +54,8 @@ repo keeps only the loop machinery.
 **The loop SDK (`sdk/`)** installs from its tag (catalog access, the
 catalog widget, the model adapters, the TypeScript face):
 `pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"`,
-after metispy and metis-catalog (not on PyPI yet: install them from their
-checkouts or git URLs). Its consumers are metis-agent and
+after metispy (on PyPI) and metis-catalog (not on PyPI yet: its checkout
+or git URL). Its consumers are metis-agent and
 metis-agentic-loop; [sdk/README.md](sdk/README.md) has the install and the
 release (a tag `sdk-vX.Y.Z`). The human loop itself is not published.
 
