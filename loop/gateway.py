@@ -101,6 +101,7 @@ DEFAULTS = {
     "brain": "", "openrouter_model": "deepseek/deepseek-v4-pro",
     "openrouter_narrate_model": "deepseek/deepseek-v4-flash",
     "max_usd": 1.00,                # per session, OpenRouter's reported cost
+    "narrate_reasoning": "low",     # OpenRouter's narrate (formalize: off); off invented events
 }
 # the LLM seats: never through the operator's credentials in shared mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
@@ -122,6 +123,9 @@ def load_config(**overrides) -> dict:
     if cfg["mode"] not in ("personal", "shared"):
         raise ValueError(f"[console] mode must be personal|shared, "
                          f"not {cfg['mode']!r}")
+    if cfg["narrate_reasoning"] not in brain.REASONING:
+        raise ValueError(f"[console] narrate_reasoning must be {'|'.join(brain.REASONING)}, "
+                         f"not {cfg['narrate_reasoning']!r}")
     if not float(cfg["max_usd"]) > 0:
         raise ValueError(f"[console] max_usd must be above 0, not {cfg['max_usd']!r}")
     return cfg

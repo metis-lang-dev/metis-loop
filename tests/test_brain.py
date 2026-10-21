@@ -97,6 +97,9 @@ def test_openrouter_seats_go_through_the_capped_command(here):
                     "--seat formalize --session w1 --log /d/.metis/formalize-calls.jsonl --max-usd 0.25")
     label, spec = narrate_seat(c, "w1", "/d/.metis/formalize-calls.jsonl")
     assert label == "deepseek/deepseek-v4-flash (OpenRouter)" and "--seat narrate" in spec
+    assert spec.endswith("--max-usd 0.25 --reasoning low")            # narrate reasons a little; formalize: off
+    assert "--reasoning" not in formalize_seat(c, "w1")[1]
+    assert narrate_seat(dict(c, narrate_reasoning="medium"), "w1")[1].endswith("--reasoning medium")
     assert KEY not in spec and "OPENROUTER_API_KEY" not in spec        # the key: the environment only
     seat, why = agent_seat(c)
     assert seat is None and why.startswith("needs claude")
@@ -104,6 +107,12 @@ def test_openrouter_seats_go_through_the_capped_command(here):
     assert m["brain"] == {"name": "openrouter", "model": "deepseek/deepseek-v4-pro"}
     assert m["seats"]["formalize"] == "deepseek/deepseek-v4-pro (OpenRouter)"
     assert m["seats"]["chat"] is None and m["chat_unavailable"].startswith("needs claude")
+
+
+def test_narrate_reasoning_is_checked():
+    from loop.gateway import load_config
+    with pytest.raises(ValueError, match="narrate_reasoning"):
+        load_config(narrate_reasoning="lots")
 
 
 def test_ollama_and_shared(here):
