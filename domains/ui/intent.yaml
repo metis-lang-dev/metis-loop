@@ -177,6 +177,8 @@ values:
 
 # cancel acts on the tick it arrives
 enders: [cmd_cancel]
+# typed intents the page sends for itself: journaled, never voiced (console-nav item 20)
+silent: [HOLD, RELEASE]
 # the verbs that ask the navigator a question
 asks: [HELP]
 

@@ -252,6 +252,8 @@ stage global {
   go_hidden [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * hidden(W) * $role(W, dock) * $free -o focused(W) * prev(F) * shown(W) * done(go).
   %% I move into {W}, inside the dialog.
   go_in_dialog [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * $modal(D) * inside(W, D) -o focused(W) * prev(F) * done(go).
+  %% You are in {W} already.
+  go_here [dyn] : cmd_go(W) * $focused(W) -o refused(go).
   %% I step out to {P}.
   exit [dyn] : cmd_exit * focused(F) * prev(Q) * child(P, F) * $free -o focused(P) * prev(F) * done(exit).
   %% I step out to {P}, inside the dialog.
