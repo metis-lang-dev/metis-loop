@@ -97,9 +97,9 @@ def test_openrouter_seats_go_through_the_capped_command(here):
                     "--seat formalize --session w1 --log /d/.metis/formalize-calls.jsonl --max-usd 0.25")
     label, spec = narrate_seat(c, "w1", "/d/.metis/formalize-calls.jsonl")
     assert label == "deepseek/deepseek-v4-flash (OpenRouter)" and "--seat narrate" in spec
-    assert spec.endswith("--max-usd 0.25 --reasoning low")            # narrate reasons a little; formalize: off
-    assert "--reasoning" not in formalize_seat(c, "w1")[1]
-    assert narrate_seat(dict(c, narrate_reasoning="medium"), "w1")[1].endswith("--reasoning medium")
+    assert spec.endswith("--max-usd 0.25 --reasoning low --max-tokens 4096")   # narrate reasons a little, with room
+    assert "--reasoning" not in formalize_seat(c, "w1")[1] and "--max-tokens" not in formalize_seat(c, "w1")[1]
+    assert "--reasoning medium --max-tokens" in narrate_seat(dict(c, narrate_reasoning="medium"), "w1")[1]
     assert KEY not in spec and "OPENROUTER_API_KEY" not in spec        # the key: the environment only
     seat, why = agent_seat(c)
     assert seat is None and why.startswith("needs claude")

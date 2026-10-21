@@ -40,9 +40,9 @@ Without `--brain` it is `[console] brain` in the metis dot file, else `claude`
 when the Agent SDK is installed, else `openrouter` when `OPENROUTER_API_KEY`
 is set, else `ollama`; the start line says which, with its models. A brain
 named and not available refuses at startup with the fix. On OpenRouter every
-call has 2048 tokens at most, formalize with reasoning off and narrate with
-`[console] narrate_reasoning` ("low": with it off, narration invented events) and only providers that keep no
-prompts; each call and its cost (OpenRouter's own figure) goes in
+call goes only to providers that keep no prompts; formalize has reasoning off
+and 2048 tokens, narrate `[console] narrate_reasoning` ("low": with it off,
+narration invented events) and 4096 tokens; each call and its cost (OpenRouter's own figure) goes in
 `DIR/.metis/formalize-calls.jsonl`, and a session stops calling once it has
 spent `[console] max_usd` (1.00 USD). A shared instance (`--mode shared`)
 serves no LLM seat on any brain.

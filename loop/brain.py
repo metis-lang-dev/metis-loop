@@ -35,11 +35,12 @@ A shared instance has no brain: every LLM seat refuses there, as before.
 The kernel's `command:` backend for an OpenRouter seat: the prompt on stdin,
 the completion on stdout, through the loop SDK's OpenAI-compatible face
 (metis_loop_sdk.models.openai: the key from $OPENROUTER_API_KEY only, never an
-argument; 2048 tokens; providers that keep no prompts). Formalize runs with
+argument; providers that keep no prompts). Formalize runs with 2048 tokens and
 reasoning off (it wants the answer); narrate with [console] narrate_reasoning,
-"low" by default: with reasoning off both DeepSeek models narrated events a
-run never fired (brain-choice step 1, the quiescent plant). Each
-call appends the face's own log line, plus the session and the seat, to FILE
+"low" by default, and 4096 tokens (its reasoning takes most of 2048): with
+reasoning off both DeepSeek models narrated events a run never fired
+(brain-choice step 1, the quiescent plant). Each call appends the face's own
+log line, plus the session and the seat, to FILE
 (DIR/.metis/formalize-calls.jsonl, the agentic loop's file and format). A
 call starts only while the session's spend in FILE, by the cost the server
 reports, is under X ([console] max_usd); past it the seat refuses with the
@@ -55,6 +56,8 @@ BRAINS = ("claude", "openrouter", "ollama")
 LOG = "formalize-calls.jsonl"           # in the root's .metis/ (catalog.state())
 STATE = ".metis"
 REASONING = ("off", "low", "medium", "high")    # the SDK face's efforts (formalize: off)
+FORMALIZE_TOKENS = 2048
+NARRATE_TOKENS = 4096   # narrate's reasoning at low took 1827 of 2048 on the quiescent plant (the face's ceiling: 8192)
 
 
 class BrainError(ValueError):
@@ -132,7 +135,8 @@ def seats(cfg: dict, sid: str = "", log: Optional[str] = None) -> dict:
                 "formalize": (f"{b['model']} (OpenRouter)", face("formalize", b["model"])),
                 "narrate": (("llm (ollama)", None) if kernel else
                             (f"{narr} (OpenRouter)",
-                             face("narrate", narr, "--reasoning", str(cfg["narrate_reasoning"]))))}
+                             face("narrate", narr, "--reasoning", str(cfg["narrate_reasoning"]),
+                                  "--max-tokens", NARRATE_TOKENS)))}
     return {"brain": b, "formalize": ("llm", None), "narrate": ("llm (ollama)", None)}
 
 
@@ -180,6 +184,7 @@ def openrouter_command(argv=None) -> int:
     ap.add_argument("--log", required=True)
     ap.add_argument("--max-usd", type=float, required=True)
     ap.add_argument("--reasoning", default="off", choices=REASONING)
+    ap.add_argument("--max-tokens", type=int, default=FORMALIZE_TOKENS)
     a = ap.parse_args(argv)
     used = spent(a.log, a.session)
     if used >= a.max_usd:
@@ -190,7 +195,7 @@ def openrouter_command(argv=None) -> int:
     with tempfile.TemporaryDirectory() as t:
         one = os.path.join(t, "call.jsonl")
         try:
-            text = openai.complete(prompt, a.model, openai.OPENROUTER, max_tokens=2048,
+            text = openai.complete(prompt, a.model, openai.OPENROUTER, max_tokens=a.max_tokens,
                                    reasoning=a.reasoning, data_collection="deny", log=one)
         except Exception as e:                              # noqa: BLE001
             sys.stderr.write(f"{type(e).__name__}: {openai.mask(str(e))}\n")
