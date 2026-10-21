@@ -49,7 +49,9 @@ guidance: |
   or the whole utterance when it is a long request to change or explain the rules
   (eight words or more that are not a command). Short talk that is not a command is
   UNKNOWN. "open the catalog", "go to the records", "exit", "home" are the
-  navigator's, not yours: UNKNOWN here. Omit fields you don't need.
+  navigator's, not yours: UNKNOWN here. When the navigator's card is served beside yours
+  and a sentence could be either — going back, the beginning, the top, enough, what
+  happened — it is yours: the person is in the REPL. Omit fields you don't need.
 
 examples:
   - ["load the plant", {"intent":"LOAD","package":"plant"}]

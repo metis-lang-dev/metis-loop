@@ -40,8 +40,10 @@ up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": a single le
 of the widget's name; then a number picks the label) — but "jump to <a widget's name>"
 ("jump to the records") is GO to that widget, not JUMP; SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
 (opening a package is the REPL's business, not yours). A bare REPL word (narrate,
-step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. Omit fields you don't
-need.
+step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. When the REPL's card is
+served beside yours (the focus is in the REPL's widgets) and a sentence could be either
+— going back, the beginning, the top, enough, what happened — the REPL's reading wins:
+answer UNKNOWN and let it take the sentence. Omit fields you don't need.
 
 ## Examples (utterance → JSON)
 "go to the catalog" → {"intent":"GO","widget":"CATALOG"}
