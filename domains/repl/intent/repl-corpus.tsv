@@ -1,0 +1,74 @@
+# utterance	expected_intent	source   (source: prompt = in the few-shot examples; heldout = paraphrase)
+load the plant	LOAD	prompt
+open a session on the dog	LOAD	prompt
+load three pigs	LOAD	prompt
+switch to the kitchen	LOAD	prompt
+run three steps	RUN	prompt
+run 10	RUN	prompt
+run it	RUN	prompt
+step	STEP	prompt
+next	STEP	prompt
+undo	UNDO	prompt
+reset	RESET	prompt
+start over	RESET	prompt
+narrate	NARRATE	prompt
+what happened	NARRATE	prompt
+records	RECORDS	prompt
+list the surprises	RECORDS	prompt
+apply	APPLY	prompt
+apply that	APPLY	prompt
+stop	STOP	prompt
+tell the formalizer the lamp should dim before it goes dark	TELL	prompt
+formalize: a worn lamp burns out when it is lit	TELL	prompt
+ask claude why blow brick is waiting	TELL	prompt
+the plant should only dry out after two sunny ticks not one	TELL	prompt
+help	HELP	prompt
+go to the records	UNKNOWN	prompt
+good job	UNKNOWN	prompt
+load wgc	LOAD	heldout
+bring up the bridge package	LOAD	heldout
+open the love triangle	LOAD	heldout
+load the dog please	LOAD	heldout
+let's work on the plant	LOAD	heldout
+run five	RUN	heldout
+run twenty steps	RUN	heldout
+run until it settles	RUN	heldout
+let it run	RUN	heldout
+go on for two steps	RUN	heldout
+one more step	STEP	heldout
+advance one	STEP	heldout
+single step	STEP	heldout
+go back one step	UNDO	heldout
+take that back	UNDO	heldout
+undo the last one	UNDO	heldout
+reset the session	RESET	heldout
+back to the beginning	RESET	heldout
+from the top	RESET	heldout
+narrate the trace	NARRATE	heldout
+tell me the story so far	NARRATE	heldout
+what did it do	NARRATE	heldout
+what surprised you	RECORDS	heldout
+show the surprise list	RECORDS	heldout
+any surprises	RECORDS	heldout
+apply the working copy	APPLY	heldout
+put that in the catalog	APPLY	heldout
+apply these files	APPLY	heldout
+save it to the catalog	APPLY	heldout
+halt	STOP	heldout
+stop running	STOP	heldout
+that's enough	STOP	heldout
+tell the formalizer that watering a moist plant does nothing	TELL	heldout
+ask the formalizer why the wolf never blows the brick house	TELL	heldout
+formalize that the bridge collapses when three cross at once	TELL	heldout
+I think the dog should refuse to sit on a wet floor	TELL	heldout
+can you explain why dry out fired twice in a row	TELL	heldout
+the goat and the wolf must never be left alone together on a bank	TELL	heldout
+what commands are there	HELP	heldout
+what can you do	HELP	heldout
+exit	UNKNOWN	heldout
+home	UNKNOWN	heldout
+open the catalog panel	UNKNOWN	heldout
+show me the chat	UNKNOWN	heldout
+thanks	UNKNOWN	heldout
+what time is it	UNKNOWN	heldout
+order me a pizza	UNKNOWN	heldout

@@ -1,0 +1,221 @@
+% repl — the loop console's REPL as a domain: what a command needs, what it changes,
+% what it refuses (console-nav s-b923ebfe, the architect, 2026-10-21).
+%
+% What this program is. The console drives one kernel REPL per session: a package is
+% loaded (a session opened on its program), steps are run, the trace is narrated, undone
+% or reset, the surprise records are listed, the working copy is applied to the catalog
+% through the APPLY gate, and the person can hand what they say to the formalization
+% agent (the console's brain: claude -p or OpenRouter — brain-choice). The navigation
+% agent (metis-agent, Gemma E2B) types the person's words into one intent; the harness
+% maps it to ONE command token (cmd_*), the host asserts it, and these rules consume it
+% under the session's state and leave an outcome: done(ACT), refused(ACT),
+% progress(ACT). The reason for a refusal is the rule that fired: its %% line is the
+% sentence the person hears.
+%
+% The host is a websocket client of the loop gateway (metis-loop loop/gateway.py): a
+% fired rule's event is the frame the page would send (repl/open, repl/intent, repl/save
+% without a token, repl/stop, repl/records, chat/say), and the gateway's answers come
+% back as world lines (the session frame as loaded or busy, a posting's done or refused,
+% the save plan shown, a domains frame as the package list). A long command (load, run,
+% narrate, apply) is accepted into a task token and ends when the gateway reports; only
+% one task runs at a time: idle is the slot. A disagreement between these rules and the
+% console (a line the gateway refused that a rule accepted, or the reverse) is a
+% surprise: the console's own formalization closes its loop through the loop console.
+%
+% Finite by design: packages are not a type (a catalog is any directory, cwd-root);
+% the name rides in the command's payload to the host, which asks the gateway and
+% reports present or absent, as the dog's host reports arrived or blocked.
+catalog repl 1.
+provenance text "the loop console's REPL: load a package, run or step, narrate, undo, reset, records, apply through the gate, stop, tell the formalizer; each command accepted under the session's state or refused with a reason" "2026-10-21".
+layers (dyn).
+stages (serve).
+
+% the acts the person's intents name (the card's dictionary)
+type act {load run step undo reset narrate records apply stop tell help unknown}.
+
+namespace repl produce (dyn).
+
+% the session, as the gateway shows it
+pred idle : repl.                % no task in flight (the slot)
+pred busy : repl.                % a task in flight (complement of idle)
+pred loaded : repl.              % a session is open on a package
+pred unloaded : repl.            % no session (complement of loaded)
+pred ran : repl.                 % at least one step has been run since the last reset
+pred fresh : repl.               % nothing run yet (complement of ran)
+pred dirty : repl.               % the working copy differs from the catalog (uncertified)
+pred clean : repl.               % the copy is the catalog's (complement of dirty)
+pred chat_seat : repl.           % the formalization agent's chat seat is up (brain-choice: claude)
+pred no_chat_seat : repl.        % it is not (another brain: "needs claude")
+
+% the tasks in flight
+pred loading : repl.
+pred running : repl.
+pred narrating : repl.
+pred applying : repl.
+pred telling : repl.
+
+% the host's reports (the gateway's answers, one beat later)
+pred opened : repl.              % the session frame came: the package is loaded
+pred absent : repl.              % the gateway found no such package
+pred stopped : repl.             % the run reached quiescence or its step count, or was stopped
+pred run_refused : repl.         % the gateway refused the line (the wire policy)
+pred narrated : repl.
+pred narrate_refused : repl.     % shared mode, or no narrate seat
+pred plan_shown : repl.          % the APPLY dialog is up with the plan
+pred nothing_to_apply : repl.    % the plan is empty: the copy equals the catalog
+pred told : repl.                % the chat accepted the utterance
+pred tell_refused : repl.        % the chat seat refused it
+
+% the commands, one token per typed intent
+pred cmd_load : repl.            % the package's name rides in the payload
+pred cmd_run : repl.             % the step count rides in the payload (default 1: "step")
+pred cmd_step : repl.
+pred cmd_undo : repl.
+pred cmd_reset : repl.
+pred cmd_narrate : repl.
+pred cmd_records : repl.
+pred cmd_apply : repl.
+pred cmd_stop : repl.
+pred cmd_tell : repl.            % the utterance rides in the payload
+pred cmd_help : repl.
+pred cmd_unknown : repl.
+
+% the outcomes, by act
+pred done(act) : repl.
+pred refused(act) : repl.
+pred progress(act) : repl.
+
+stage serve {
+  % ── loading a package: a task; the gateway answers with the session or an error ──
+  %% I open a session on that package.
+  load [dyn] : cmd_load * idle * $unloaded -o loading * busy * progress(load).
+  %% I close this session and open one on that package instead.
+  load_switch_fresh [dyn] : cmd_load * idle * loaded * clean * fresh -o loading * unloaded * busy * progress(load).
+  %% I close this session and open one on that package instead.
+  load_switch_ran [dyn] : cmd_load * idle * loaded * clean * ran -o loading * unloaded * busy * progress(load).
+  %% I can't switch packages: the working copy has changes that are not applied. Apply them, or reset.
+  load_dirty [dyn] : cmd_load * $idle * $loaded * $dirty -o refused(load).
+  %% I can't load now: a task is still running. Say "stop" first.
+  load_busy [dyn] : cmd_load * $busy -o refused(load).
+  %% The package is loaded.
+  load_ok [dyn] : loading * opened * unloaded * busy -o loaded * fresh * clean * idle * done(load).
+  %% There is no package by that name in this catalog.
+  load_absent [dyn] : loading * absent * busy -o idle * refused(load).
+
+  % ── running and stepping ──
+  %% I run that many steps.
+  run [dyn] : cmd_run * idle * $loaded -o running * busy * progress(run).
+  %% I can't run: nothing is loaded. Say "load" and a package first.
+  run_nothing [dyn] : cmd_run * $idle * $unloaded -o refused(run).
+  %% I can't run now: a task is still running. Say "stop" first.
+  run_busy [dyn] : cmd_run * $busy -o refused(run).
+  %% I take one step.
+  step [dyn] : cmd_step * idle * $loaded -o running * busy * progress(step).
+  %% I can't step: nothing is loaded. Say "load" and a package first.
+  step_nothing [dyn] : cmd_step * $idle * $unloaded -o refused(step).
+  %% I can't step now: a task is still running. Say "stop" first.
+  step_busy [dyn] : cmd_step * $busy -o refused(step).
+  %% The run stopped: quiescent, or the steps are done.
+  run_done [dyn] : running * stopped * fresh * busy -o ran * idle * done(run).
+  %% The run stopped: quiescent, or the steps are done.
+  run_done_again [dyn] : running * stopped * $ran * busy -o idle * done(run).
+  %% The console refused that line.
+  run_refused_by_console [dyn] : running * run_refused * busy -o idle * refused(run).
+
+  % ── undo and reset ──
+  %% I undo the last step.
+  undo [dyn] : cmd_undo * $idle * $loaded * $ran -o done(undo).
+  %% There is nothing to undo: nothing has run yet.
+  undo_fresh [dyn] : cmd_undo * $idle * $loaded * $fresh -o refused(undo).
+  %% I can't undo: nothing is loaded.
+  undo_nothing [dyn] : cmd_undo * $idle * $unloaded -o refused(undo).
+  %% I can't undo now: a task is still running. Say "stop" first.
+  undo_busy [dyn] : cmd_undo * $busy -o refused(undo).
+  %% I reset the session to its start.
+  reset [dyn] : cmd_reset * $idle * $loaded * ran -o fresh * done(reset).
+  %% The session is at its start already.
+  reset_fresh [dyn] : cmd_reset * $idle * $loaded * $fresh -o refused(reset).
+  %% I can't reset: nothing is loaded.
+  reset_nothing [dyn] : cmd_reset * $idle * $unloaded -o refused(reset).
+  %% I can't reset now: a task is still running. Say "stop" first.
+  reset_busy [dyn] : cmd_reset * $busy -o refused(reset).
+
+  % ── narrating the trace ──
+  %% I narrate what happened.
+  narrate [dyn] : cmd_narrate * idle * $loaded * $ran -o narrating * busy * progress(narrate).
+  %% There is nothing to narrate yet: nothing has run.
+  narrate_fresh [dyn] : cmd_narrate * $idle * $loaded * $fresh -o refused(narrate).
+  %% I can't narrate: nothing is loaded.
+  narrate_nothing [dyn] : cmd_narrate * $idle * $unloaded -o refused(narrate).
+  %% I can't narrate now: a task is still running. Say "stop" first.
+  narrate_busy [dyn] : cmd_narrate * $busy -o refused(narrate).
+  %% The narration is in the log.
+  narrate_done [dyn] : narrating * narrated * busy -o idle * done(narrate).
+  %% The console refused to narrate: no narrate seat here.
+  narrate_no_seat [dyn] : narrating * narrate_refused * busy -o idle * refused(narrate).
+
+  % ── the records ──
+  %% The surprise records are listed in their dock.
+  records [dyn] : cmd_records * $idle -o done(records).
+  %% I can't list the records now: a task is still running. Say "stop" first.
+  records_busy [dyn] : cmd_records * $busy -o refused(records).
+
+  % ── applying through the gate: I only show the plan; the click is yours ──
+  %% I open the APPLY dialog with the plan: read the diff, then apply or cancel there.
+  apply [dyn] : cmd_apply * idle * $loaded * $dirty -o applying * busy * progress(apply).
+  %% There is nothing to apply: the working copy is the catalog's.
+  apply_clean [dyn] : cmd_apply * $idle * $loaded * $clean -o refused(apply).
+  %% I can't apply: nothing is loaded.
+  apply_nothing [dyn] : cmd_apply * $idle * $unloaded -o refused(apply).
+  %% I can't apply now: a task is still running. Say "stop" first.
+  apply_busy [dyn] : cmd_apply * $busy -o refused(apply).
+  %% The plan is up in the APPLY dialog; applying it is your click.
+  apply_shown [dyn] : applying * plan_shown * busy -o idle * done(apply).
+  %% The plan was empty after all: nothing to apply.
+  apply_empty [dyn] : applying * nothing_to_apply * busy -o idle * refused(apply).
+
+  % ── stop ──
+  %% I stop the run.
+  stop_run [dyn] : cmd_stop * running * busy -o idle * done(stop).
+  %% I stop the narration.
+  stop_narrate [dyn] : cmd_stop * narrating * busy -o idle * done(stop).
+  %% I stop the load.
+  stop_load [dyn] : cmd_stop * loading * busy * unloaded -o idle * unloaded * done(stop).
+  %% I take that back from the formalizer.
+  stop_tell [dyn] : cmd_stop * telling * busy -o idle * done(stop).
+  %% The plan is in the APPLY dialog: cancel it there.
+  stop_apply [dyn] : cmd_stop * $applying -o refused(stop).
+  %% Nothing is running.
+  stop_idle [dyn] : cmd_stop * $idle -o refused(stop).
+
+  % ── telling the formalizer: the handover to the console's brain ──
+  %% I hand that to the formalizer; its answer comes in the chat.
+  tell [dyn] : cmd_tell * idle * $loaded * $chat_seat -o telling * busy * progress(tell).
+  %% I can't hand that over: nothing is loaded to formalize about. Say "load" and a package first.
+  tell_nothing [dyn] : cmd_tell * $idle * $unloaded -o refused(tell).
+  %% I can't hand that over: the agent seat needs claude (start the console with --brain claude).
+  tell_no_seat [dyn] : cmd_tell * $idle * $loaded * $no_chat_seat -o refused(tell).
+  %% I can't hand that over now: a task is still running. Say "stop" first.
+  tell_busy [dyn] : cmd_tell * $busy -o refused(tell).
+  %% The formalizer has it; the input stays with the chat until you flip back.
+  tell_done [dyn] : telling * told * busy -o idle * done(tell).
+  %% The chat refused it.
+  tell_refused_by_chat [dyn] : telling * tell_refused * busy -o idle * refused(tell).
+
+  % ── help and the rest ──
+  %% You can say: load <package>, run <n>, step, undo, reset, narrate, records, apply, stop, or tell the formalizer <what>.
+  help [dyn] : cmd_help -o done(help).
+  %% I can't do that: it is not a REPL command.
+  unknown [dyn] : cmd_unknown -o refused(unknown).
+}
+
+% the session at the start: nothing loaded, idle, the chat seat as the brain gives it
+#init idle 1
+#init unloaded 1
+#init chat_seat 1
+% the embedded case: "run" with nothing loaded is refused with its reason
+#init cmd_run 1
+#steps 2
+#seeds 1
+#query refused(run)
+#query unloaded
