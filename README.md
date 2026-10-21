@@ -17,6 +17,35 @@ run in DIR; the loops' own state goes in `DIR/.metis/` (git-ignored when DIR
 is a checkout). `cd metis-catalog && metis-loop` serves the catalog's own
 domains. Nothing is found "beside this checkout".
 
+## Your brain
+
+The console's LLM seats (formalize, narrate, the agent chat) run on one brain,
+chosen when it starts (`loop/brain.py`):
+
+```sh
+cd DIR && metis-loop --brain claude                               # your Claude subscription
+cd DIR && metis-loop --brain openrouter                           # an OpenRouter key: deepseek/deepseek-v4-pro
+cd DIR && metis-loop --brain openrouter:qwen/qwen3-235b-a22b-2507 # another OpenRouter model
+cd DIR && metis-loop --brain ollama                               # the dot file's [llm] endpoint (local)
+BRAIN=openrouter ./run.sh                                         # the same, in the background
+```
+
+| brain | needs | formalize | narrate | agent chat |
+|---|---|---|---|---|
+| `claude` | `pip install 'metis-loop[agent]'` (the Agent SDK, with its `claude` CLI) and your `claude` login | `formalize_model` (claude-haiku-4-5) | `narrate_model` (claude-haiku-4-5) | yes |
+| `openrouter[:MODEL]` | `export OPENROUTER_API_KEY=…` (from the environment only, never a file) | MODEL, else `openrouter_model` | `openrouter_narrate_model` (deepseek/deepseek-v4-flash) | needs claude |
+| `ollama` | the kernel's `[llm] endpoint` (Ollama by default) | that endpoint | that endpoint | as the Agent SDK allows |
+
+Without `--brain` it is `[console] brain` in the metis dot file, else `claude`
+when the Agent SDK is installed, else `openrouter` when `OPENROUTER_API_KEY`
+is set, else `ollama`; the start line says which, with its models. A brain
+named and not available refuses at startup with the fix. On OpenRouter every
+call has reasoning off, 2048 tokens at most and only providers that keep no
+prompts; each call and its cost (OpenRouter's own figure) goes in
+`DIR/.metis/formalize-calls.jsonl`, and a session stops calling once it has
+spent `[console] max_usd` (1.00 USD). A shared instance (`--mode shared`)
+serves no LLM seat on any brain.
+
 The explanation / formalization loop for metis catalogs:
 
     surprise records → mined text → formalize (LLM) → gated candidate

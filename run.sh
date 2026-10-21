@@ -13,6 +13,9 @@
 #   …/run.sh log         follow the gateway's log
 #
 #   VENV=../.venv  PORT=8770  BIND=127.0.0.1  MODE=personal|shared  TOKEN=…
+#   BRAIN=claude|openrouter[:MODEL]|ollama   the LLM seats' provider (loop/brain.py; default:
+#                              [console] brain, else claude when here, else openrouter with
+#                              OPENROUTER_API_KEY in the environment, else ollama)
 #   METIS_CATALOG=<dir>        the catalog when it is not the current directory
 #   METIS_AGENT_WS=<ws url>    the band's AGENT field: metis-agent's console wire
 #                              (default ws://127.0.0.1:8395/ws in personal mode; empty: off)
@@ -86,7 +89,7 @@ mkdir -p "$RUN"
 echo "$CATALOG" >"$SERVED"
 cd "$CATALOG"                     # the workspace: the gateway and its REPLs run in the catalog
 AGENT_WS="${METIS_AGENT_WS-ws://127.0.0.1:8395/ws}"; [ "$MODE" = personal ] || AGENT_WS=""
-METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} >"$LOG" 2>&1 &
+METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${BRAIN:+--brain "$BRAIN"} ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} >"$LOG" 2>&1 &
 echo $! >"$PID"
 
 for _ in $(seq 1 60); do
@@ -99,5 +102,6 @@ grep -q "^loop console" "$LOG" || { echo "not serving after 30 s — see $LOG" >
 cat <<MSG
 metis-loop console is up (pid $(cat "$PID")): open $URL
   mode: $MODE · catalog: $CATALOG · log: $LOG
+  $(grep -m1 "^brain:" "$LOG" || true)
   $0 stop · $0 log · $0 status
 MSG

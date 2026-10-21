@@ -71,7 +71,7 @@ from urllib.parse import parse_qs, urlparse
 
 from metis_loop_sdk.catalog import WIDGET_URL, widget_file
 
-from . import shell_lib
+from . import brain, shell_lib
 from .console_serve import ConsoleServer
 
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
@@ -91,9 +91,16 @@ DEFAULTS = {
     # the kernel's configured endpoint (ollama)
     "narrate": "sdk", "narrate_model": "claude-haiku-4-5",
     "narrate_thinking": 1024,       # tokens; 0 = off (fast, unfaithful)
+    # formalize on the claude brain (brain-choice): its own key, the same Haiku by default
+    "formalize_model": "claude-haiku-4-5", "formalize_thinking": 1024,
     # the band's AGENT field (human-loop step 3): metis-agent's console wire,
     # e.g. "ws://127.0.0.1:8395/ws"; "" = off; never in shared mode
     "metis_agent": "",
+    # the brain (brain-choice s-c59b7b51, loop/brain.py): claude | openrouter[:MODEL] |
+    # ollama; "" = by what is here (claude, else OpenRouter with a key, else ollama)
+    "brain": "", "openrouter_model": "deepseek/deepseek-v4-pro",
+    "openrouter_narrate_model": "deepseek/deepseek-v4-flash",
+    "max_usd": 1.00,                # per session, OpenRouter's reported cost
 }
 # the LLM seats: never through the operator's credentials in shared mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
@@ -115,6 +122,8 @@ def load_config(**overrides) -> dict:
     if cfg["mode"] not in ("personal", "shared"):
         raise ValueError(f"[console] mode must be personal|shared, "
                          f"not {cfg['mode']!r}")
+    if not float(cfg["max_usd"]) > 0:
+        raise ValueError(f"[console] max_usd must be above 0, not {cfg['max_usd']!r}")
     return cfg
 
 
@@ -127,26 +136,25 @@ def agent_seat(cfg: dict):
         return None, "agent disabled in [console]"
     from .agent_service import available
     why = available()
-    return (None, why) if why else ("agent", None)
+    if why:
+        return None, why
+    b = brain.resolve(cfg)["name"]
+    if b != "claude":                   # brain-choice: the agent seat is Claude's
+        return None, f"needs claude (the brain is {b}: --brain claude)"
+    return "agent", None
 
 
-def narrate_seat(cfg: dict):
+def narrate_seat(cfg: dict, sid: str = "", log=None):
     """(label, endpoint spec or None): the narrate seat this instance
-    serves (D3). None spec = leave the kernel's endpoint (ollama)."""
-    if cfg["mode"] == "shared":
-        return None, None
-    if cfg.get("narrate") == "sdk":
-        from .agent_service import available
-        if available() is None:
-            import shlex
-            import sys
-            argv = [sys.executable, "-m", "metis_loop_sdk.models",
-                    "claude-command", "--model",
-                    str(cfg.get("narrate_model") or "claude-haiku-4-5"),
-                    "--thinking", str(int(cfg.get("narrate_thinking", 1024)))]
-            return (f"{cfg.get('narrate_model')} (SDK)",
-                    "command:" + " ".join(shlex.quote(a) for a in argv))
-    return "llm (ollama)", None
+    serves (D3), on the brain's provider (loop/brain.py). None spec =
+    leave the kernel's endpoint (ollama)."""
+    return brain.seats(cfg, sid, log)["narrate"]
+
+
+def formalize_seat(cfg: dict, sid: str = "", log=None):
+    """(label, endpoint spec or None): formalize's seat (brain-choice). None
+    spec = the session's one endpoint (the narrate seat's, or the kernel's)."""
+    return brain.seats(cfg, sid, log)["formalize"]
 
 
 def verb_lines() -> dict:
@@ -161,14 +169,16 @@ def manifest(cfg: dict) -> dict:
     """What this instance serves — the page renders only these (§4)."""
     shared = cfg["mode"] == "shared"
     seat, why = agent_seat(cfg)
+    s = brain.seats(cfg)
     return {
         "mode": cfg["mode"],
+        "brain": s["brain"],                             # brain-choice: {name, model}; None when shared
         "chat_unavailable": why,
         "seats": {
             "repl": True,
             "chat": seat,                                # §3
-            "narrate": narrate_seat(cfg)[0],              # D3
-            "formalize": None if shared else "llm",
+            "narrate": s["narrate"][0],                   # D3
+            "formalize": s["formalize"][0],
         },
         "chat_model": (cfg.get("agent_model") or "the CLI default")
         if seat == "agent" else None,
@@ -217,6 +227,7 @@ class Gateway:
         self.rates: Dict[object, deque] = {}
         self.pages = set()
         self.agent_state = None
+        self.formalize_llm: Dict[str, Optional[str]] = {}   # sid -> formalize's endpoint (brain-choice)
         if cfg.get("metis_agent") and cfg["mode"] == "personal":
             from .agent_state import AgentState
             self.agent_state = AgentState(cfg["metis_agent"])
@@ -425,12 +436,22 @@ class Gateway:
 
     def _seat(self, sid: str):
         """D3: in personal mode the session's narrate seat goes to the
-        SDK endpoint (kernel untouched — its `command:` backend runs the
-        loop SDK's claude command face, an installed module)."""
-        spec = narrate_seat(self.cfg)[1]
+        brain's endpoint (kernel untouched — its `command:` backend runs the
+        loop SDK's claude command face, or loop.brain's OpenRouter one);
+        formalize's own endpoint, when the brain gives it one, is kept for
+        the formalize commands (_work)."""
+        s = brain.seats(self.cfg, sid, self.calls_log())
+        spec = s["narrate"][1]
         r = self.srv.shells.get(sid)
         if spec and r is not None:
             r.llm = spec
+        self.formalize_llm[sid] = s["formalize"][1]
+
+    def calls_log(self) -> str:
+        """The OpenRouter seats' call log: DIR/.metis/formalize-calls.jsonl (made
+        by the first call, through the SDK's catalog.state(); nothing here)."""
+        from metis_loop_sdk import catalog
+        return str(Path(self.srv.root).resolve() / catalog.STATE / brain.LOG)
 
     def _gate(self, cmd: str) -> Optional[str]:
         """Gateway-side policy beyond run_intent's whitelist: shared mode
@@ -574,12 +595,20 @@ class Gateway:
             cmd, note = self._cap_run(item["cmd"])
 
             def run(cmd=cmd):
+                # formalize on its own endpoint for this one command (the kernel has one per session)
+                f = self.formalize_llm.get(s.sid) if cmd.strip().lstrip(":").split(" ", 1)[0] == "formalize" else None
+                r = self.srv.shells.get(s.sid) if f else None
+                was = r.llm if r is not None else None
                 try:
                     with s.lock:
                         s.tid = threading.get_ident()
                     try:
+                        if r is not None:
+                            r.llm = f
                         return self.srv.serve_one(s.sid, cmd)
                     finally:
+                        if r is not None:
+                            r.llm = was
                         with s.lock:
                             s.tid = None
                 except KeyboardInterrupt:
@@ -888,6 +917,9 @@ def main(argv=None) -> int:
     ap.add_argument("--bind")
     ap.add_argument("--mode", choices=["personal", "shared"])
     ap.add_argument("--token")
+    ap.add_argument("--brain", metavar="claude|openrouter[:MODEL]|ollama",
+                    help="the LLM seats' provider (loop/brain.py); default: [console] brain, "
+                         "else claude when here, else openrouter with $OPENROUTER_API_KEY, else ollama")
     ap.add_argument("--metis-agent", metavar="WS_URL",
                     help="metis-agent's console wire (ws://127.0.0.1:8395/ws): "
                          "the band shows the agent's state of the open domain "
@@ -898,7 +930,14 @@ def main(argv=None) -> int:
                          "subscription")
     ns = ap.parse_args(argv)
     cfg = load_config(port=ns.port, bind=ns.bind, mode=ns.mode,
-                      token=ns.token, metis_agent=ns.metis_agent)
+                      token=ns.token, metis_agent=ns.metis_agent, brain=ns.brain)
+    if cfg["mode"] == "personal":       # a brain asked for and not here refuses now, naming the fix
+        try:
+            b = brain.resolve(cfg)
+        except brain.BrainError as e:
+            print(f"metis-loop: {e}", file=sys.stderr)
+            return 2
+        cfg["brain"] = b["name"] + (":" + b["model"] if b["name"] == "openrouter" else "")
     if cfg["mode"] == "shared" and cfg["bind"] not in ("127.0.0.1",
                                                        "localhost") \
             and not cfg["token"]:
@@ -932,6 +971,8 @@ def main(argv=None) -> int:
     print(f"loop console ({cfg['mode']}): http://{cfg['bind']}:"
           f"{cfg['port']}/{q}", flush=True)
     print(f"catalog: {root}", flush=True)
+    print(brain.describe(cfg, os.path.relpath(gw.calls_log(), root)
+                         if cfg["mode"] == "personal" else None), flush=True)
     try:
         asyncio.run(gw.serve())
     except KeyboardInterrupt:
