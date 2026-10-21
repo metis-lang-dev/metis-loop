@@ -51,6 +51,13 @@ def test_each_rule_sends_the_page_its_effect():
                                                                   {"ui": "focus", "widget": "editor"}]
     for r in ("clear_jump[N=chat]", "go_jump[W=chat]", "cancel_jump"):
         assert fired(h, r) == [{"ui": "unjump"}]
+    # a pending choice dropped unresolved: the candidates' numbers go (nina's H3)
+    for r in ("cancel_choice", "clear_choice[N=chat]", "blur_choice", "open_choice[D=apply]", "go_choice[W=chat]",
+              "exit_choice", "home_choice", "back_choice", "jump_choice", "jump_to_choice[L=c]"):
+        assert fired(h, r) == [{"ui": "unnumber"}], r
+    assert fired(h, "pick_replace[W=catin]", name="dog") == [{"ui": "unnumber"},
+                                                             {"ui": "pick", "widget": "catin", "name": "dog"}]
+    assert fired(h, "pick_choice[N=n2]")[0]["ui"] == "pick"                # resolved: the page clears them itself
 
 
 def test_the_repl_card_follows_the_focus_into_the_repls_widgets():

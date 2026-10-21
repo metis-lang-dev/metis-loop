@@ -7,7 +7,9 @@ The effects (`effects`, the frames for the page; the agent's wire carries them, 
   {"ui": "show", "widget": W}           go_hidden (then the focus), show
   {"ui": "hide", "widget": W}           close (then the focus on the parent)
   {"ui": "numbers", "widget": W}        numbers: the focused list's entries 1–9
-  {"ui": "unnumber"}                    every *_numbers rule (clear, blur, a dialog, a voice move, a jump, a cancel)
+  {"ui": "unnumber"}                    every *_numbers rule (clear, blur, a dialog, a voice move, a jump, a cancel),
+                                        and every rule that drops a pending choice unresolved (*_choice but
+                                        pick_choice, pick_replace: the candidates' numbers go)
   {"ui": "jump"[, "letter": L]}          jump, jump_to: label the reachable widgets 1–9 (inside the dialog
                                         while one is up; with a letter, those whose name starts with it)
   {"ui": "jump_pick", "number": N}      jump_pick: resolve the label; the page answers +jumped(W) | +nothing_picked
@@ -208,6 +210,12 @@ class UiHost:
             self._effect({"ui": "numbers", "widget": b["W"]})
         elif base.endswith("_numbers") and not base.startswith("p_"):
             self._effect({"ui": "unnumber"})    # any move, a dialog, a jump, a cancel: the numbers go
+        elif (base.endswith("_choice") and base != "pick_choice" and not base.startswith("p_")) or base == "pick_replace":
+            # a pending choice dropped unresolved: the page's numbered candidates go (nina's H3);
+            # pick_choice resolves it, and the page clears them itself when it answers
+            self._effect({"ui": "unnumber"})
+            if base == "pick_replace":
+                self._effect({"ui": "pick", "widget": b.get("W", self.believed), "name": str(p.get("name") or "")})
         elif base in UNJUMP:
             self._effect({"ui": "unjump"})      # the labels go
         elif base == "jump":
