@@ -18,7 +18,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metis-loop-sdk"
-version = "0.1.9"
+version = "0.1.10"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -40,7 +40,7 @@ include = ["metis_loop_sdk*"]
 # setuptools builds from the checkout (pip install ./sdk, the git URL's
 # #subdirectory=sdk, or python -m build: its sdist copies the files the link
 # points at) holds the files themselves; tools/smoke_wheel.sh checks them.
-metis_loop_sdk = ["widget/*", "ts/*"]   # ts/: the TypeScript face (catalog.ts), files of its own
+metis_loop_sdk = ["widget/*", "ts/*"]   # ts/: the TypeScript face (catalog.ts, gate.ts), files of its own
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

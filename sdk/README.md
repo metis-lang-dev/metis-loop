@@ -6,10 +6,14 @@ agent and metis-agentic-loop's tools. It holds:
 
 - `metis_loop_sdk.catalog`: catalog access, the one validated write
   (`apply`, `edit`, `take`), the catalog widget;
+- `metis_loop_sdk.gate`: the loop's policy over those writes, one for both loops:
+  `propose` a write (its plan, each file's diff, a token), the person reads it,
+  `confirm` writes exactly that plan, `refuse` is remembered (the next plan shows what
+  changed since); the seed-first and README-refused rules (metis-loop `docs/LOOP.md`);
 - `metis_loop_sdk.models`: the model adapters.
 
 Each has a JSON CLI (`python -m metis_loop_sdk.<module>`). A TypeScript face,
-`metis_loop_sdk/ts/catalog.ts`, ships in the wheel.
+`metis_loop_sdk/ts/catalog.ts` and `ts/gate.ts`, ships in the wheel.
 
 **The catalog root is the current directory**, as `cd DIR && claude` makes DIR
 the project: `catalog.root()` is `$METIS_CATALOG`, else the cwd.
