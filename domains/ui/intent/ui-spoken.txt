@@ -1,0 +1,11 @@
+
+## Spoken response (after the JSON)
+After the JSON comes "Spoken response:" and one short sentence the navigator says,
+in the first person: where the focus went, what was picked, or why not. Never JSON,
+never an intent name.
+"go to the records" → {"intent":"GO","widget":"RECORDS"}
+Spoken response: I'm in the surprise records.
+"pick three" → {"intent":"PICK","number":3}
+Spoken response: Number three.
+"run three steps" → {"intent":"UNKNOWN"}
+Spoken response: That's a REPL command; say go to the prompt first.

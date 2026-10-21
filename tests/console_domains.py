@@ -148,3 +148,116 @@ INJECT_REPL = (
        (("-chat_seat", "+no_chat_seat"), has("chat_seat"), "world"),
        (("-no_chat_seat", "+chat_seat"), has("no_chat_seat"), "world")]   # the working copy, the brain's chat seat
 )
+
+
+# -- a stage pipeline (a lockstep program: one pass per beat) --------------------
+
+import re as _re
+from pathlib import Path as _Path
+
+TOKENS = ("cmd_", "enter(", "blur", "opened(", "closed(", "picked", "nothing_picked", "ambiguous")
+
+
+def program_text(path):
+    """The program as the compiler reads it: includes spliced beside the includer, once each."""
+    seen = set()
+
+    def splice(p):
+        p = _Path(p).resolve()
+        if p in seen:
+            return ""
+        seen.add(p)
+        return _re.sub(r'^\s*include\s+"([^"]+)"\s*\.\s*$', lambda m: splice(p.parent / m.group(1)),
+                       p.read_text(), flags=_re.M)
+    return splice(path)
+
+
+class PipelineExplorer(Explorer):
+    """The explorer for a stage pipeline: an input arrives at the pass's first stage; each
+    stage fires until nothing is enabled, then the next; at the pass's end the outcomes are
+    retracted. A token (a command, a port line) two enabled rules consume at once is a
+    conflict; one left at the pass's end is stuck. The ground events are indexed by stage and
+    by their first required atom (metispy's _candidates scans every event: 31k for ui)."""
+
+    def __init__(self, path, inject, max_states=20000):
+        super().__init__(path, inject, max_states)
+        self.stages = _re.search(r"^stages\s*\(([^)]*)\)", program_text(path), _re.M).group(1).split()
+        self.index = {s: {} for s in self.stages}
+        for kind, stage, e in self.ev:
+            if kind != "clause" or stage not in self.index:
+                continue
+            req = dict(e.consume)
+            for a, n in e.persist.items():
+                req[a] = max(req.get(a, 0), n)
+            if not req:
+                continue
+            key = sorted(req)[0]
+            self.index[stage].setdefault(key, []).append((e, req))
+        self.races = []          # two enabled rules of one stage that consume the same state atom
+
+    def enabled_in(self, stage, counts):
+        out = []
+        for a in counts:
+            for e, req in self.index[stage].get(a, ()):
+                if all(counts.get(x, 0) >= n for x, n in req.items()):
+                    out.append(e)
+        return out
+
+    def step(self, state, lines, world=False):
+        counts = dict(state)
+        tokens = set()
+        for l in lines:
+            a = l[1:]
+            counts[a] = counts.get(a, 0) + (1 if l[0] == "+" else -1)
+            if l[0] == "+" and a.startswith(TOKENS):
+                tokens.add(a)
+        counts = {a: n for a, n in counts.items() if n}
+        for stage in self.stages:
+            for _ in range(100):
+                es = self.enabled_in(stage, counts)
+                if not es:
+                    break
+                by = {}
+                for e in es:
+                    for a in e.consume:
+                        by.setdefault(a, set()).add(self.base(e.name))
+                for a, names in by.items():
+                    if len(names) > 1:
+                        (self.conflicts if a.startswith(TOKENS) else self.races).append((state, tuple(lines), a, sorted(names)))
+                self.witness.setdefault(self.base(es[0].name), (stage, dict(counts)))
+                counts = self.fire(counts, es[0])
+            else:
+                raise AssertionError(f"{lines}: stage {stage} did not settle")
+        left = [a for a in counts if a.startswith(TOKENS)]
+        if left:
+            self.stuck.append((state, tuple(lines), left))
+            return None
+        return strip(counts)
+
+
+def widgets(path):
+    return _re.search(r"^type\s+widget\s*\{([^}]*)\}", program_text(path), _re.M).group(1).split()
+
+
+def inject_ui(path):
+    ws = widgets(path)
+
+    def visible(w):
+        def ok(s):
+            if s.get(f"shown({w})", 0) <= 0:
+                return False
+            modal = [a[6:-1] for a in s if a.startswith("modal(")]
+            return not modal or w == modal[0] or (w in INSIDE.get(modal[0], ()))
+        return ok
+    INSIDE = {"apply": ()}               # the console's dialog has no children (ui.llp)
+    nums = [f"n{i}" for i in range(1, 10)]
+    return (
+        [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
+        + [((f"+cmd_{c}",), always) for c in ("exit", "home", "back", "pick", "numbers", "close", "cancel",
+                                                "dictate", "command", "help", "unknown")]
+        + [((f"+cmd_pick_n({n})",), always) for n in ("n1", "n9")]
+        + [((f"+enter({w})",), visible(w)) for w in ws]                      # the port: focusin on what is there
+        + [(("+blur",), always)]
+        + [(("+opened(apply)",), has("free", "hidden(apply)")), (("+closed(apply)",), has("modal(apply)"))]
+        + [(("+picked",), has("picking")), (("+nothing_picked",), has("picking")), (("+ambiguous",), has("picking"))]
+    ), nums

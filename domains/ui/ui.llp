@@ -1,0 +1,86 @@
+% ui — the loop console page over the lifted voice-navigation base (console-nav
+% s-b923ebfe, the architect, 2026-10-21). This file is the CONCRETE EXTENSION: it
+% includes ui_domain.llp (every rule) and adds only facts — the page's widgets as a
+% type, the tree, the roles, the dialog's entry — and the start. The widgets are
+% metis-loop console/loop_console.html's (ids in parentheses).
+catalog ui 1.
+provenance text "the loop console page: its widgets, tree and roles over ui_domain.llp, the lifted voice-navigation base" "2026-10-21".
+include "ui_domain.llp".
+
+type widget {root band sessbar catin debugger stream lenses chips prompt chat chatlog chatq catalog copy extensions readme candidates records editor apply}.
+
+% the tree: child(parent, child)
+child(root, band).
+child(band, sessbar).          % #sessbar: the catalog input, open, reset, edit
+child(sessbar, catin).         % #catin: the catalog input with its list
+child(root, debugger).         % #left
+child(debugger, stream).       % #stream: the REPL log
+child(debugger, lenses).       % #lenses: rules measure tokens proof
+child(debugger, chips).        % #chips: run step events ctx graph why findings narrate undo
+child(debugger, prompt).       % #prompt: the REPL line
+child(root, chat).             % #dock-claude: the formalization agent
+child(chat, chatlog).
+child(chat, chatq).            % #chatq: the message to the formalizer
+child(root, catalog).          % #dock-catalog
+child(catalog, copy).          % the working copy's files
+child(catalog, extensions).
+child(catalog, readme).        % the catalog's README (cwd-root rule 10)
+child(root, candidates).       % #dock-candidates
+child(root, records).          % #dock-records: the surprise records
+child(root, editor).           % the floating editor (#editbtn opens it)
+child(root, apply).            % #savewin: the APPLY dialog
+
+% the roles, one each
+role(root, container).
+role(band, container).
+role(sessbar, composite).
+role(catin, list).             % the catalog input's list: a pick fills it (opening is the REPL's load)
+role(debugger, container).
+role(stream, container).
+role(lenses, composite).
+role(chips, composite).
+role(prompt, editable).        % the REPL line
+role(chat, dock).
+role(chatlog, container).
+role(chatq, editable).         % the chat's text
+role(catalog, dock).
+role(copy, list).
+role(extensions, list).
+role(readme, container).
+role(candidates, dock).        % its list is the dock itself
+role(records, dock).           % a pick sinks the record into the session (the page does that)
+role(editor, dock).
+role(apply, dialog).
+
+% where the focus lands when the dialog rises: on the dialog itself (its first button is the page's)
+entry(apply, apply).
+
+% the page at the start: the root focused, nothing to go back to, no dialog, every
+% widget shown but the editor and the dialog, nothing pending, commands
+#init focused(root) 1
+#init prev(root) 1
+#init free 1
+#init mode(command) 1
+#init ready 1
+#init numbers_hidden 1
+#init no_choice 1
+#init shown(root) 1
+#init shown(band) 1
+#init shown(sessbar) 1
+#init shown(catin) 1
+#init shown(debugger) 1
+#init shown(stream) 1
+#init shown(lenses) 1
+#init shown(chips) 1
+#init shown(prompt) 1
+#init shown(chat) 1
+#init shown(chatlog) 1
+#init shown(chatq) 1
+#init shown(catalog) 1
+#init shown(copy) 1
+#init shown(extensions) 1
+#init shown(readme) 1
+#init shown(candidates) 1
+#init shown(records) 1
+#init hidden(editor) 1
+#init hidden(apply) 1

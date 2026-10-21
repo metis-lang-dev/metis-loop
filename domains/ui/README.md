@@ -1,0 +1,65 @@
+# ui — voice navigation over the loop console page, lifted
+
+Two files make the domain. **`ui_domain.llp` is the lifted base**: every rule of voice
+navigation over any widget tree — focus as one linear token (the root when nothing
+else), the browser's focus events as the input port, widget-local commands before
+global ones, modal dialogs that hold the focus, picks by name or by number with an
+explicit ambiguity state, show and hide, command and dictation modes, and a refusal
+with its reason for every command no rule took. **`ui.llp` is the concrete
+extension**: it includes the base and adds only facts — the loop console's widgets as a
+type, the tree (`child/2`), the roles (`role/2`), the dialog's entry (`entry/2`) — and
+the start. It adds no rule. The design is grounded in the research report on the
+subject (docs/voice-ui-research.md): its eight principles are the base's sections.
+
+The navigation agent (metis-agent, Gemma E2B, local — the NAVIGATION brain, never the
+formalization brain) types the person's words into one command. **The host is the
+page**: a fired rule's event is a frame the page carries out (focus a widget, show or
+hide a dock, number a list, pick an entry), and the page reports back through the
+input port.
+
+| file | what |
+|---|---|
+| `ui_domain.llp` | the base: types `role`, `act`, `mode`, `num`; the facts an instance supplies (`child`, `role`, `entry`); `inside/2` by Horn rules; the stage pipeline `clear → sync → local → global → post` with its `qui` links; every rule with its `%%` line |
+| `ui.llp` | the loop console: 20 widgets (ids in comments), the tree, the roles, `entry(apply, apply)`, the start |
+| `cases/*.llp` | the cases, each including the program with its init: `ui` (go to catalog), `ui_dialog` (the APPLY dialog refuses exit), `ui_named` (go by name), `ui_mouse` (a mouse focus drops the numbers), `ui_pick` (a pick after a mouse focus into the list) |
+| `intent.yaml` | the card: GO(widget), EXIT, HOME, BACK, PICK(name | number), NUMBERS, SHOW(widget), CLOSE, CANCEL, MODE(to), HELP, UNKNOWN |
+| `intent/ui-corpus.tsv` | 91 rows: the examples and held-out paraphrases, the REPL's commands as UNKNOWN here |
+| `ui_host.py` | the page as host (the implementer's), below |
+
+## The input port (the page → the model)
+
+Widgets that know their own activation report it. The page registers `focusin` on the
+document (mouse and keyboard produce the same events; the model cannot tell and must
+not), coalesces one `+enter(W)` per focus change, sends `+blur` when the focus leaves
+every widget (the viewport), `+opened(D)` / `+closed(D)` when a dialog rises or falls,
+`+shown(W)` / `-hidden(W)` (and the reverse) when it shows or hides a dock itself, and
+`+picked` / `+nothing_picked` / `+ambiguous` as the answer to a pick. `observe()` returns
+the page's real `focused(W)`, `shown`/`hidden` and `modal` atoms: a focus change the
+port missed — the standards' silent cases (a removed element, `aria-activedescendant`,
+the viewport) — is a surprise record.
+
+## The effects (the model → the page)
+
+| event | the page does |
+|---|---|
+| `go_child`, `go_named`, `go_hidden`, `go_in_dialog`, `exit`, `exit_in_dialog`, `home`, `back`, `move` (no-op: it was the person's), `close` (focus to the parent) | focus the widget (and show the dock first for `go_hidden`) |
+| `show`, `close` | show / hide the dock |
+| `numbers` | number the focused list's entries 1–9 (an ephemeral bijection, re-derived per pass) |
+| `cancel_*`, `clear_numbers`, `blur_numbers`, `go/exit/home/back_numbers` | remove the numbers (any move, by voice or by hand, invalidates them) |
+| `pick`, `pick_n`, `pick_choice` | resolve the payload's name, or the number, against the focused list; answer `+picked`, `+nothing_picked` or `+ambiguous` (and number the candidates) |
+| `dictate`, `command`, `mode_back` | set the input mode and show it in the band |
+| every outcome | the replier's words (the rule's `%%` line) |
+
+## Why the pipeline
+
+Each beat is one pass: `clear` drops the transients a manual focus move invalidates
+(the numbers, a pending choice), `sync` applies the port to the focus and the dialogs,
+`local` serves the focused widget, `global` moves around the tree, `post` refuses what
+no stage took, with the reason — so every command is consumed exactly once, most local
+first, and no two rules of one command are enabled at once by construction. The
+manifest's `clock: {lockstep: true}` makes the watch read once per pass.
+
+`V <> constant` is not in the toolchain yet (metispy refuses it; metisc's run fails),
+so guards against the root or a role go through fact tables (`child(P, F)` for "not
+the root", `notlist/notdock/noneditable` over the role type); `P <> F` between two
+variables works in both toolchains.

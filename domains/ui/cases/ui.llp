@@ -1,0 +1,35 @@
+% case ui
+catalog ui_ui 1.
+include "../ui.llp".
+#init focused(root) 1
+#init prev(root) 1
+#init free 1
+#init mode(command) 1
+#init ready 1
+#init numbers_hidden 1
+#init no_choice 1
+#init shown(root) 1
+#init shown(band) 1
+#init shown(sessbar) 1
+#init shown(catin) 1
+#init shown(debugger) 1
+#init shown(stream) 1
+#init shown(lenses) 1
+#init shown(chips) 1
+#init shown(prompt) 1
+#init shown(chat) 1
+#init shown(chatlog) 1
+#init shown(chatq) 1
+#init shown(catalog) 1
+#init shown(copy) 1
+#init shown(extensions) 1
+#init shown(readme) 1
+#init shown(candidates) 1
+#init shown(records) 1
+#init hidden(editor) 1
+#init hidden(apply) 1
+#init cmd_go(catalog) 1
+#steps 12
+#seeds 1
+#query focused(catalog)
+#query done(go)
