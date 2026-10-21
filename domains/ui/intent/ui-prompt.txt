@@ -11,18 +11,18 @@ dock, cancel what is pending, and switch between command and dictation.
 Intent categories:
 | intent | meaning |
 |--------|---------|
-| GO | move the focus into a widget: a child of the current one, or any widget by its name |
+| GO | move the focus into a widget of the page: a child of the current one, or any widget by its name (NOT opening a package or advancing the run: 'switch to the kitchen', 'open the love triangle', 'advance one' are the REPL's load and step) |
 | EXIT | step out of the current widget to its parent |
-| HOME | go to the root of the page |
-| BACK | go back to where the focus was before the last move |
+| HOME | go to the root of the page (a move on the page; NOT resetting the run: 'from the top', 'back to the beginning' are the REPL's reset) |
+| BACK | go back to where the focus was before the last move (a move on the page; NOT undoing a step: 'go back one step', 'take that back' are the REPL's undo) |
 | PICK | pick an entry of the focused list: by name (a catalog in the band's input, a record, a file) or by the number shown |
 | NUMBERS | show numbers on the entries of the focused list, to pick by number |
 | JUMP | label every widget on the page you can reach (or only those whose name starts with a letter) to jump to one by its number |
-| SHOW | show a hidden dock by name |
+| SHOW | show a hidden dock by its name (NOT listing the surprises: 'show the surprise list' is the REPL's records) |
 | CLOSE | hide the current dock |
-| CANCEL | drop what is pending: the numbers, a choice, a pick |
+| CANCEL | drop what is pending on the page: the numbers, a choice, a pick, a jump (NOT stopping a run: 'stop', 'that's enough' are the REPL's stop) |
 | MODE | switch to dictation (what you say goes into the text field) or back to commands |
-| HELP | ask what can be said here |
+| HELP | ask what can be said here, or where the focus is (NOT what happened in the run: 'what did it do', 'what surprised you' are the REPL's narrate and records) |
 | UNKNOWN | anything that is not a way to move around the page |
 
 The page's widgets: the BAND at the top (its SESSBAR holds the catalog input CATIN
@@ -101,5 +101,11 @@ Running, stepping, loading, applying, narrating and undoing are the REPL's comma
 "back to the beginning" → {"intent":"UNKNOWN"}
 "that's enough" → {"intent":"UNKNOWN"}
 "open the love triangle" → {"intent":"UNKNOWN"}
+"switch to the kitchen" → {"intent":"UNKNOWN"}
+"what surprised you" → {"intent":"UNKNOWN"}
+"from the top" → {"intent":"UNKNOWN"}
+"advance one" → {"intent":"UNKNOWN"}
+"show the surprise list" → {"intent":"UNKNOWN"}
+"take that back" → {"intent":"UNKNOWN"}
 "tell the formalizer the lamp should dim first" → {"intent":"UNKNOWN"}
 "what time is it" → {"intent":"UNKNOWN"}

@@ -13,13 +13,13 @@ Intent categories:
 |--------|---------|
 | LOAD | open a session on a package of the catalog, by name |
 | RUN | run the session a number of steps (n; default 50 = to quiescence) |
-| STEP | run exactly one step |
-| UNDO | undo the last step |
-| RESET | reset the session to its start |
-| NARRATE | narrate what happened in the trace |
-| RECORDS | list the surprise records |
+| STEP | run exactly one step ('step', 'next', 'advance one'; NOT a move on the page) |
+| UNDO | undo the last step of the run ('go back one step', 'take that back'; NOT the navigator's back to a widget) |
+| RESET | reset the session to its start ('from the top', 'back to the beginning'; NOT the navigator's home) |
+| NARRATE | narrate what happened in the trace ('what did it do', 'what happened'; NOT the navigator's help) |
+| RECORDS | list the surprise records ('what surprised you', 'show the surprise list'; NOT the navigator's show of a dock) |
 | APPLY | open the APPLY dialog with the working copy's plan (the person then applies or cancels) |
-| STOP | stop what is running |
+| STOP | stop what is running ('stop', 'halt', 'that's enough'; NOT the navigator's cancel of pending numbers) |
 | TELL | hand a message to the formalizer (the formalization agent): what the rules should say, a question about the run; also any long request that is not one of the commands above |
 | HELP | ask what can be said here |
 | UNKNOWN | anything that is none of these (a short non-command, chit-chat, something impossible) |
@@ -63,6 +63,11 @@ navigator's, not yours: UNKNOWN here. Omit fields you don't need.
 "save it to the catalog" → {"intent":"APPLY"}
 "stop" → {"intent":"STOP"}
 "halt" → {"intent":"STOP"}
+"that's enough" → {"intent":"STOP"}
+"what surprised you" → {"intent":"RECORDS"}
+"show the surprise list" → {"intent":"RECORDS"}
+"advance one" → {"intent":"STEP"}
+"go back one step" → {"intent":"UNDO"}
 "tell the formalizer the lamp should dim before it goes dark" → {"intent":"TELL","text":"the lamp should dim before it goes dark"}
 "formalize: a worn lamp burns out when it is lit" → {"intent":"TELL","text":"a worn lamp burns out when it is lit"}
 "ask claude why blow brick is waiting" → {"intent":"TELL","text":"why blow brick is waiting"}
