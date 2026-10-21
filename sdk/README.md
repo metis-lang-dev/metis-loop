@@ -25,7 +25,10 @@ own state goes in `catalog.state()`, `DIR/.metis/` (made on demand, added to
 DIR's `.gitignore` when DIR is a git checkout), and nothing under a dot
 directory is a catalog. The intent generator is the root's `tools/intents.py`,
 else the installed metis-catalog's; `metisc` is `$METISC`, else PATH. Nothing
-is looked up beside a checkout.
+is looked up beside a checkout. `catalog.installed()` (`installed --json`) names
+the installed metis-catalog's own catalog and `tools/`, never the root: what a
+loop copies a known domain from, and where an RDDL host finds `rddl_host.py`
+when its catalog has none.
 
 ```sh
 # Python 3.10+; metispy (PyPI) and metis-catalog (not on PyPI yet: its checkout or git URL) first

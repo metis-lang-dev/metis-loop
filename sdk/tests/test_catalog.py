@@ -115,6 +115,17 @@ def test_state_is_the_roots_dot_metis_and_hidden(monkeypatch, tmp_path):
     assert cli(["state", "--json"], cwd=tmp_path)["state"] == str(tmp_path.resolve() / ".metis")
 
 
+def test_installed_is_the_packages_own_never_the_root(monkeypatch, tmp_path):
+    """cwd-root step 2: the installed metis-catalog's catalog and tools/, wherever
+    the cwd or $METIS_CATALOG is — the lamp demo's plant and an RDDL host's tools."""
+    monkeypatch.setenv("METIS_CATALOG", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    got = catalog.installed()
+    assert got["catalog"] != tmp_path and (got["catalog"] / "domains" / "plant" / "domain.yaml").is_file()
+    assert (got["tools"] / "rddl_host.py").is_file() and got["tools"] == catalog._installed_tools()
+    assert cli(["installed", "--json"], cwd=tmp_path) == {k: str(v) for k, v in got.items()}
+
+
 def test_metisc_is_the_env_else_path_else_a_refusal(monkeypatch, tmp_path):
     monkeypatch.delenv("METISC", raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))

@@ -100,6 +100,12 @@ export function state(r?: string): string {
 	return cli(["state"], undefined, r).state;
 }
 
+/** The installed metis-catalog's own catalog and tools/ (never the root): what a loop copies a
+ *  known domain from, and where an RDDL host finds rddl_host when its catalog has no tools/. */
+export function installed(): { catalog: string; tools: string } {
+	return cli(["installed"]);
+}
+
 /** Every catalog, the domains first (index); `domains`: those only; `consoles`: the agent console's rows. */
 export function list(opts: { domains?: boolean; consoles?: boolean } = {}, r?: string): any[] {
 	return cli(["list", ...(opts.domains ? ["--domains"] : []), ...(opts.consoles ? ["--consoles"] : [])], undefined, r);

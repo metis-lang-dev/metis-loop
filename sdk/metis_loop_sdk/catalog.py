@@ -6,6 +6,7 @@ metis-catalog and this module, and no consumer.
     from metis_loop_sdk import catalog
     catalog.root()                  # $METIS_CATALOG, else the cwd (cd DIR && metis-loop: DIR is the catalog)
     catalog.state()                 # DIR/.metis/: the loop's own state (git-ignored when DIR is a checkout)
+    catalog.installed()             # the installed metis-catalog's own {catalog, tools}: never the root
     catalog.domains()               # [Domain] — every manifest, by name (metis_catalog's Domain)
     catalog.get("dog")              # Domain: .program .serves() .intent .has() …
     catalog.index()                 # every catalog for a console's list, the domains first
@@ -22,7 +23,7 @@ metis-catalog and this module, and no consumer.
     catalog.readme("lamp", src, run, summary=…)  # a README for a domain an agentic-loop run made
     catalog.build("lamp")           # the domain's bundle (build/, metispy's emitter)
 
-    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|root|state|widget|ts … --json
+    python -m metis_loop_sdk.catalog list|get|intents [--spec|--skeleton]|fingerprint|apply|edit|take|readme|build|root|state|installed|widget|ts … --json
 
 The TypeScript face (metis_loop_sdk/ts/catalog.ts, TS_DIR) is the same
 catalog for a node consumer (the agentic loop's pi extensions): one function
@@ -183,11 +184,20 @@ def generator(r=None):
     return mod
 
 
-def _installed_tools() -> Path:
-    """The installed metis-catalog's tools/: the wheel's (metis_catalog/tools)
-    or, installed -e, its checkout's — where the package is, never $METIS_CATALOG."""
+def installed() -> dict:
+    """The installed metis-catalog's own catalog and tools/ (cwd-root s-ddac2cbf
+    step 2): {catalog, tools} — the wheel's (metis_catalog/domains, metis_catalog/tools)
+    or, installed -e, its checkout's; where the package is, never $METIS_CATALOG
+    nor the cwd. What a loop copies a known domain from (the lamp demo's plant),
+    and the directory an RDDL world's host imports rddl_host from when its
+    catalog has no tools/ of its own (loop.sh puts it on PYTHONPATH)."""
     own = Path(loader().__file__).resolve().parent
-    return own / "tools" if (own / "tools").is_dir() else own.parent / "tools"
+    base = own if (own / "domains").is_dir() else own.parent
+    return {"catalog": base, "tools": base / "tools"}
+
+
+def _installed_tools() -> Path:
+    return installed()["tools"]
 
 
 def intents(name, r=None):
@@ -1034,9 +1044,10 @@ def main(argv=None):
     bd.add_argument("name")
     rt = sub.add_parser("root", help="the catalog root")
     st = sub.add_parser("state", help="the root's .metis/ (the loop's own state), made when missing")
+    inst = sub.add_parser("installed", help="the installed metis-catalog's own catalog and tools/ (never the root)")
     ts_ = sub.add_parser("ts", help="the TypeScript face's directory and files")
     wd = sub.add_parser("widget", help="the catalog widget's directory, URL and files")
-    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, rt, st, ts_, wd):     # --json after any verb
+    for p in (ap, ls, g, it, fp, a_, ed, tk, rd, bd, rt, st, inst, ts_, wd):     # --json after any verb
         p.add_argument("--json", action="store_true", help="JSON on stdout")
     for p in (a_, ed, tk):
         p.add_argument("--since", metavar="FILE", help="a JSON object {path: text}: earlier proposals (refused); "
@@ -1080,6 +1091,8 @@ def main(argv=None):
             out = {"root": str(_r(r))}
         elif a.cmd == "state":
             out = {"state": str(state(r))}
+        elif a.cmd == "installed":
+            out = {k: str(v) for k, v in installed().items()}
         elif a.cmd == "widget":
             out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
         elif a.cmd == "ts":

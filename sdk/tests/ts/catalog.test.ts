@@ -8,16 +8,16 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // the face under test: $METIS_LOOP_SDK_TS (the installed package's, test_ts_face.py sets it), else this checkout's
 type Face = typeof import("../../metis_loop_sdk/ts/catalog.ts");
 const catalog: Face = await import(
 	process.env.METIS_LOOP_SDK_TS ? pathToFileURL(process.env.METIS_LOOP_SDK_TS).href : "../../metis_loop_sdk/ts/catalog.ts");
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const CAT = process.env.CAT ?? resolve(HERE, "..", "..", "..", "..", "metis-catalog");
+// the fixtures' catalog: $CAT, named (test_ts_face.py sets it; never a checkout beside this one)
+const CAT = process.env.CAT ?? (() => { throw new Error("CAT: the metis-catalog the fixtures are copied from"); })();
 const PY = process.env.METIS_LOOP_SDK_PY ?? "python3";
 
 // a scratch catalog: the dog and the plant, and the intent generator (the py tests' fixture)
@@ -45,6 +45,9 @@ test("the reads answer what the py CLI answers", () => {
 	assert.equal(catalog.skeleton("plant", r), py(r, "intents", "plant", "--skeleton").skeleton);
 	assert.equal(catalog.fingerprint("dog", r), py(r, "fingerprint", "dog").fingerprint);
 	assert.deepEqual(catalog.widget(), py(r, "widget"));
+	assert.deepEqual(catalog.installed(), py(r, "installed"));                       // cwd-root: never the root
+	assert.equal(catalog.state(r), py(r, "state").state);
+	assert.ok(existsSync(join(r, ".metis")));
 });
 
 test("plan writes nothing; apply writes the program, the extensions and the intents", () => {
