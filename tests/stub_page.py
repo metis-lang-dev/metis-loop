@@ -73,6 +73,15 @@ class StubPage:
             self._report({"picked": True} if len(hit) == 1 else {"ambiguous": True} if hit else {"nothing_picked": True})
         elif kind == "mode":
             self.mode = e["mode"]
+        elif kind == "jump":                              # label the reachable actionable widgets 1-9
+            reach = [x for x in self.role if x in self.shown and not self.inert(x) and x != "root"
+                     and (not e.get("letter") or x.startswith(e["letter"]))]
+            self.labels = reach[:9]
+        elif kind == "jump_pick":
+            n, labels = e["number"], getattr(self, "labels", [])
+            self._report({"jumped": labels[n - 1]} if 0 < n <= len(labels) else {"nothing_picked": True})
+        elif kind == "unjump":
+            self.labels = []
 
     def carry(self, host):
         """Every effect the host queued, carried out; the page's reports into its port."""

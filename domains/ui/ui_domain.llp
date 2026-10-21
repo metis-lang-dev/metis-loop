@@ -44,7 +44,8 @@ stages (clear sync local global post).
 % the roles a widget can have (one each; the application's facts)
 type role {container composite list editable button dock dialog item}.
 % the acts the person's intents name (the card's dictionary)
-type act {go exit home back pick numbers show close cancel dictate command help unknown}.
+type act {go exit home back pick numbers jump show close cancel dictate command help unknown}.
+type letter {a b c d e f g h i j k l m n o p q r s t u v w x y z}.
 type mode {command dictation}.
 type num {n1 n2 n3 n4 n5 n6 n7 n8 n9}.
 
@@ -84,6 +85,9 @@ pred awaiting_choice : ui.       % a pick by name was ambiguous: the next number
 pred no_choice : ui.
 pred ready : ui.                 % no pick in flight
 pred picking : ui.
+pred idle_jump : ui.             % no jump in flight
+pred jumping : ui.               % the page labels the reachable widgets (page-wide hint mode, Vimium's f / Emacs avy): a number picks
+pred resolving : ui.             % a label was said; the page answers jumped(W) or nothing_picked
 
 % ── the input port: what the page reports ──
 pred enter(widget) : ui.         % focusin on a widget (mouse or keyboard alike), coalesced
@@ -93,6 +97,7 @@ pred closed(widget) : ui.        % a dialog fell
 pred picked : ui.                % the page resolved a pick
 pred nothing_picked : ui.
 pred ambiguous : ui.             % more than one entry matched the name
+pred jumped(widget) : ui.        % the page resolved a jump label to a widget
 
 % ── the commands, one token per typed intent ──
 pred cmd_go(widget) : ui.
@@ -102,6 +107,8 @@ pred cmd_back : ui.
 pred cmd_pick : ui.              % by name: the name rides in the payload
 pred cmd_pick_n(num) : ui.       % by the number shown, or the number of a pending choice
 pred cmd_numbers : ui.
+pred cmd_jump : ui.              % label every reachable widget on the page
+pred cmd_jump_to(letter) : ui.   % label only the widgets whose name starts with the letter (Emacs: first char, then the label)
 pred cmd_show(widget) : ui.
 pred cmd_close : ui.
 pred cmd_cancel : ui.
@@ -125,6 +132,32 @@ stage clear {
   blur_numbers [dyn] : $blur * numbers_shown -o numbers_hidden.
   %% The choice is dropped: the focus left the page.
   blur_choice [dyn] : $blur * awaiting_choice -o no_choice.
+  %% The numbers go away: a dialog is up.
+  open_numbers [dyn] : $opened(D) * numbers_shown -o numbers_hidden.
+  %% The choice is dropped: a dialog is up.
+  open_choice [dyn] : $opened(D) * awaiting_choice -o no_choice.
+  %% The labels go away: a dialog is up.
+  open_jump [dyn] : $opened(D) * jumping -o idle_jump.
+  %% The labels go away: you moved the focus yourself.
+  clear_jump [dyn] : $enter(N) * jumping -o idle_jump.
+  %% The labels go away: the focus left the page.
+  blur_jump [dyn] : $blur * jumping -o idle_jump.
+  %% The numbers go away: the labels take their place.
+  jump_numbers [dyn] : $cmd_jump * numbers_shown -o numbers_hidden.
+  %% The numbers go away: the labels take their place.
+  jump_to_numbers [dyn] : $cmd_jump_to(L) * numbers_shown -o numbers_hidden.
+  %% The choice is dropped: the labels take its place.
+  jump_choice [dyn] : $cmd_jump * awaiting_choice -o no_choice.
+  %% The choice is dropped: the labels take its place.
+  jump_to_choice [dyn] : $cmd_jump_to(L) * awaiting_choice -o no_choice.
+  %% The labels go away: you are moving on.
+  go_jump [dyn] : $cmd_go(W) * jumping -o idle_jump.
+  %% The labels go away: you are moving on.
+  exit_jump [dyn] : $cmd_exit * jumping -o idle_jump.
+  %% The labels go away: you are moving on.
+  home_jump [dyn] : $cmd_home * jumping -o idle_jump.
+  %% The labels go away: you are moving on.
+  back_jump [dyn] : $cmd_back * jumping -o idle_jump.
   %% The numbers go away: you are moving on.
   go_numbers [dyn] : $cmd_go(W) * numbers_shown -o numbers_hidden.
   %% The choice is dropped: you are moving on.
@@ -168,11 +201,13 @@ qui sl [dyn] : sync -o local.
 % ═══ local: the focused widget's own commands ═══
 stage local {
   %% I pick that in {W}.
-  pick [dyn] : cmd_pick * ready * $focused(W) * $role(W, list) -o picking * progress(pick).
+  pick [dyn] : cmd_pick * ready * $no_choice * $focused(W) * $role(W, list) -o picking * progress(pick).
+  %% I drop the pending choice and pick that in {W}.
+  pick_replace [dyn] : cmd_pick * ready * awaiting_choice * $focused(W) * $role(W, list) -o no_choice * picking * progress(pick).
   %% I pick number {N} in {W}.
-  pick_n [dyn] : cmd_pick_n(N) * ready * $numbers_shown * $focused(W) * $role(W, list) -o picking * progress(pick).
+  pick_n [dyn] : cmd_pick_n(N) * ready * $idle_jump * $no_choice * $numbers_shown * $focused(W) * $role(W, list) -o picking * progress(pick).
   %% Number {N} it is.
-  pick_choice [dyn] : cmd_pick_n(N) * awaiting_choice * ready -o no_choice * picking * progress(pick).
+  pick_choice [dyn] : cmd_pick_n(N) * awaiting_choice * ready * $idle_jump -o no_choice * picking * progress(pick).
   %% I picked it.
   pick_ok [dyn] : picking * picked -o ready * done(pick).
   %% There is nothing by that name here.
@@ -180,7 +215,7 @@ stage local {
   %% More than one matches: the page numbers them; say the number.
   pick_ambiguous [dyn] : picking * ambiguous * no_choice -o ready * awaiting_choice * progress(pick).
   %% I number the entries of {W}.
-  numbers [dyn] : cmd_numbers * numbers_hidden * $focused(W) * $role(W, list) -o numbers_shown * done(numbers).
+  numbers [dyn] : cmd_numbers * numbers_hidden * $idle_jump * $focused(W) * $role(W, list) -o numbers_shown * done(numbers).
   %% I hide {W} and step out to {P}.
   close [dyn] : cmd_close * focused(W) * shown(W) * $role(W, dock) * child(P, W) * $free -o focused(P) * hidden(W) * done(close).
   %% Dictation: what you say goes into {W}.
@@ -211,6 +246,22 @@ stage global {
   home [dyn] : cmd_home * focused(F) * prev(Q) * child(P, F) * $free -o focused(root) * prev(F) * done(home).
   %% Back to {P}.
   back [dyn] : cmd_back * focused(F) * prev(P) * F <> P * $free -o focused(P) * prev(F) * done(back).
+  %% I label every widget you can reach: say its number.
+  jump [dyn] : cmd_jump * idle_jump * $ready -o jumping * progress(jump).
+  %% I label the widgets starting with {L}: say its number.
+  jump_to [dyn] : cmd_jump_to(L) * idle_jump * $ready -o jumping * progress(jump).
+  %% Number {N}.
+  jump_pick [dyn] : cmd_pick_n(N) * jumping -o resolving * progress(jump).
+  %% I jump to {W}.
+  jump_ok [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * shown(W) * $free -o idle_jump * focused(W) * prev(F) * shown(W) * done(jump).
+  %% I show {W} and jump to it.
+  jump_ok_hidden [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * hidden(W) * $role(W, dock) * $free -o idle_jump * focused(W) * prev(F) * shown(W) * done(jump).
+  %% I jump to {W}, inside the dialog.
+  jump_ok_dialog [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * $modal(D) * inside(W, D) -o idle_jump * focused(W) * prev(F) * done(jump).
+  %% No label by that number.
+  jump_none [dyn] : resolving * nothing_picked -o idle_jump * refused(jump).
+  %% The labels are gone.
+  cancel_jump [dyn] : cmd_cancel * jumping * $ready * $no_choice * $numbers_hidden -o idle_jump * done(cancel).
   %% I show {W}.
   show [dyn] : cmd_show(W) * hidden(W) * $role(W, dock) * $free -o shown(W) * done(show).
   %% The pick is dropped and the numbers are gone.
@@ -223,7 +274,7 @@ stage global {
   cancel_choice [dyn] : cmd_cancel * awaiting_choice * $numbers_hidden * $ready -o no_choice * done(cancel).
   %% The numbers are gone.
   cancel_numbers [dyn] : cmd_cancel * numbers_shown * $ready * $no_choice -o numbers_hidden * done(cancel).
-  %% From here you can say: go to <widget>, exit, home, back, pick <name>, numbers, show <dock>, close, cancel, dictate, help.
+  %% From here you can say: go to <widget>, exit, home, back, jump (then a number), pick <name>, numbers, show <dock>, close, cancel, dictate, help.
   help [dyn] : cmd_help -o done(help).
 }
 %% Navigation is served; what is left is refused with its reason.
@@ -252,13 +303,25 @@ stage post {
   %% I can't pick here: {W} is not a list. Go to a list first.
   p_pick [dyn] : cmd_pick * $ready * $focused(W) * $role(W, R) * notlist(R) -o refused(pick).
   %% I am still picking the last one: a moment.
-  p_pick_n_busy [dyn] : cmd_pick_n(N) * $picking -o refused(pick).
+  p_pick_n_busy [dyn] : cmd_pick_n(N) * $picking * $idle_jump -o refused(pick).
   %% There are no numbers to pick from: say "numbers" first.
-  p_pick_n [dyn] : cmd_pick_n(N) * $ready * $numbers_hidden * $no_choice -o refused(pick).
+  p_pick_n [dyn] : cmd_pick_n(N) * $ready * $idle_jump * $numbers_hidden * $no_choice -o refused(pick).
+  %% The labels are up already: say a number, or "cancel".
+  p_jump_busy [dyn] : cmd_jump * $jumping -o refused(jump).
+  %% The labels are up already: say a number, or "cancel".
+  p_jump_to_busy [dyn] : cmd_jump_to(L) * $jumping -o refused(jump).
+  %% I am still picking the last one: a moment.
+  p_jump_picking [dyn] : cmd_jump * $idle_jump * $picking -o refused(jump).
+  %% I am still picking the last one: a moment.
+  p_jump_to_picking [dyn] : cmd_jump_to(L) * $idle_jump * $picking -o refused(jump).
+  %% I can't jump to {W}: the {D} dialog holds the focus until it is done.
+  p_jumped_modal [dyn] : resolving * jumped(W) * $modal(D) -o idle_jump * refused(jump).
+  %% The numbers are off while the labels are up: say a number, or "cancel".
+  p_numbers_jumping [dyn] : cmd_numbers * $jumping -o refused(numbers).
   %% The numbers are up already.
-  p_numbers_shown [dyn] : cmd_numbers * $numbers_shown -o refused(numbers).
+  p_numbers_shown [dyn] : cmd_numbers * $numbers_shown * $idle_jump -o refused(numbers).
   %% I can't number {W}: it is not a list.
-  p_numbers [dyn] : cmd_numbers * $numbers_hidden * $focused(W) * $role(W, R) * notlist(R) -o refused(numbers).
+  p_numbers [dyn] : cmd_numbers * $numbers_hidden * $idle_jump * $focused(W) * $role(W, R) * notlist(R) -o refused(numbers).
   %% {W} is shown already.
   p_show_shown [dyn] : cmd_show(W) * $shown(W) * $role(W, dock) -o refused(show).
   %% I can't show {W}: it is not a dock.

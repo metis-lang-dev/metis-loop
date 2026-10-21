@@ -8,6 +8,7 @@ include "../ui.llp".
 #init ready 1
 
 #init no_choice 1
+#init idle_jump 1
 #init shown(root) 1
 #init shown(band) 1
 #init shown(sessbar) 1

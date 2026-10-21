@@ -3,11 +3,16 @@ carries out; the page reports back through the input port; observe() reads the p
 state, so a focus change the port missed is the watch's surprise. README.md has the tables.
 
 The effects (`effects`, the frames for the page; the agent's wire carries them, step 2):
-  {"ui": "focus", "widget": W}          go_child go_named go_in_dialog exit exit_in_dialog home back
+  {"ui": "focus", "widget": W}          go_child go_named go_in_dialog exit exit_in_dialog exit_to_dialog home back
   {"ui": "show", "widget": W}           go_hidden (then the focus), show
   {"ui": "hide", "widget": W}           close (then the focus on the parent)
   {"ui": "numbers", "widget": W}        numbers: the focused list's entries 1–9
-  {"ui": "unnumber"}                    cancel_numbers clear_numbers blur_numbers
+  {"ui": "unnumber"}                    every *_numbers rule (clear, blur, a dialog, a voice move, a jump, a cancel)
+  {"ui": "jump"[, "letter": L]}          jump, jump_to: label the reachable widgets 1–9 (inside the dialog
+                                        while one is up; with a letter, those whose name starts with it)
+  {"ui": "jump_pick", "number": N}      jump_pick: resolve the label; the page answers +jumped(W) | +nothing_picked
+  {"ui": "unjump"}                      clear_jump blur_jump open_jump go_/exit_/home_/back_jump cancel_jump
+  focus (show first for jump_ok_hidden) jump_ok jump_ok_hidden jump_ok_dialog
   {"ui": "pick", "widget": W, "name"|"number": …[, "choice": true]}
                                         pick (the payload's name), pick_n (the number), pick_choice
   {"ui": "mode", "mode": M}             dictate command mode_back
@@ -24,6 +29,8 @@ The input port (the page's reports, port(report); the agent's world lines, world
   {"opened": D} / {"closed": D}      a dialog rose / fell: +opened(D) / +closed(D)
   {"shown": W} / {"hidden": W}       the page showed / hid a dock itself: -hidden(W) +shown(W) …
   {"picked": true} / {"nothing_picked": true} / {"ambiguous": true}    a pick's answer
+  {"jumped": W}           a jump label resolved to the widget W: +jumped(W) (a label that names
+                          nothing: {"nothing_picked": true})
   {"sample": W | null}    ?focus(W) / ?blur: the page's real focus, sampled whenever it differs
                           from what the port said (a removed element, aria-activedescendant,
                           the viewport: the standards' silent cases). It asserts nothing: the
@@ -37,6 +44,7 @@ CATCH_UP beats). PURITY: the world changes only in tick/on_event/port; snapshot 
 import re
 
 OUTCOMES = ("done", "refused", "progress")
+UNJUMP = ("clear_jump", "blur_jump", "open_jump", "go_jump", "exit_jump", "home_jump", "back_jump", "cancel_jump")
 WAITS = ()
 REPL_WIDGETS = ("debugger", "stream", "lenses", "chips", "prompt")     # the REPL's widgets (ui.llp's tree)
 CATCH_UP = 3                # beats the page has to carry out an effect before observe() reads it again
@@ -104,6 +112,8 @@ class UiHost:
             self.lines += [f"-shown({w})", f"+hidden({w})"]
         elif "sample" in report:            # the page's real focus where the port said otherwise: no line
             p["focus"] = report["sample"] or "root"
+        if "jumped" in report:
+            self.lines.append(f"+jumped({report['jumped']})")
         for k in ("picked", "nothing_picked", "ambiguous"):
             if report.get(k):
                 self.lines.append("+" + k)
@@ -120,13 +130,13 @@ class UiHost:
             m = re.match(r"^\+(\w+)(?:\((\w+)\))?$", l)
             if m and m.group(1) == "enter":
                 self.port({"focus": m.group(2)})
-            elif m and m.group(1) in ("opened", "closed", "shown", "hidden"):
+            elif m and m.group(1) in ("opened", "closed", "shown", "hidden", "jumped"):
                 self.port({m.group(1): m.group(2)})
             elif m and m.group(1) in ("blur", "picked", "nothing_picked", "ambiguous"):
                 self.port({m.group(1): True})
             elif not l.startswith("-"):
                 raise ValueError(f"world line {l!r}: the ui port takes +enter(W) +blur +opened(D) +closed(D) "
-                                 "+shown(W) +hidden(W) +picked +nothing_picked +ambiguous")
+                                 "+shown(W) +hidden(W) +picked +nothing_picked +ambiguous +jumped(W) ?focus(W) ?blur")
 
     def take_payload(self, payload):
         self.payload = dict(payload or {})
@@ -177,6 +187,8 @@ class UiHost:
             self._focus(b["W"])
         elif base in ("exit", "exit_in_dialog", "back"):
             self._focus(b["P"])
+        elif base == "exit_to_dialog":          # from a direct child of the dialog: onto the dialog itself
+            self._focus(b["D"])
         elif base == "home":
             self._focus("root")
         elif base == "move":
@@ -194,8 +206,21 @@ class UiHost:
             self._focus(b["P"])
         elif base == "numbers":
             self._effect({"ui": "numbers", "widget": b["W"]})
-        elif base in ("cancel_numbers", "clear_numbers", "blur_numbers"):
-            self._effect({"ui": "unnumber"})
+        elif base.endswith("_numbers") and not base.startswith("p_"):
+            self._effect({"ui": "unnumber"})    # any move, a dialog, a jump, a cancel: the numbers go
+        elif base in UNJUMP:
+            self._effect({"ui": "unjump"})      # the labels go
+        elif base == "jump":
+            self._effect({"ui": "jump"})
+        elif base == "jump_to":
+            self._effect({"ui": "jump", "letter": b["L"]})
+        elif base == "jump_pick":
+            self._effect({"ui": "jump_pick", "number": int(b["N"][1:])})
+        elif base in ("jump_ok", "jump_ok_dialog"):
+            self._focus(b["W"])
+        elif base == "jump_ok_hidden":
+            self._effect({"ui": "show", "widget": b["W"]})
+            self._focus(b["W"])
         elif base == "pick":
             self._effect({"ui": "pick", "widget": b["W"], "name": str(p.get("name") or "")})
         elif base == "pick_n":

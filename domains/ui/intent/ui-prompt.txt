@@ -17,6 +17,7 @@ Intent categories:
 | BACK | go back to where the focus was before the last move |
 | PICK | pick an entry of the focused list: by name (a catalog in the band's input, a record, a file) or by the number shown |
 | NUMBERS | show numbers on the entries of the focused list, to pick by number |
+| JUMP | label every widget on the page you can reach (or only those whose name starts with a letter) to jump to one by its number |
 | SHOW | show a hidden dock by name |
 | CLOSE | hide the current dock |
 | CANCEL | drop what is pending: the numbers, a choice, a pick |
@@ -35,7 +36,8 @@ the floating EDITOR; the APPLY dialog. "the log" and "the output" are the STREAM
 RECORDS; "the catalog panel" is CATALOG; "the catalog input", "the open box" are
 CATIN. GO takes `widget`; PICK takes `name` (the person's words for the entry, as
 said) or `number` ("pick three", "number three", "three" alone when numbers are
-up); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
+up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": the first letter of the
+widget's name; then a number picks the label); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
 (opening a package is the REPL's business, not yours). A bare REPL word (narrate,
 step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. Omit fields you don't
 need.
@@ -65,6 +67,10 @@ need.
 "pick three" → {"intent":"PICK","number":3}
 "number two" → {"intent":"PICK","number":2}
 "seven" → {"intent":"PICK","number":7}
+"jump" → {"intent":"JUMP"}
+"jump h" → {"intent":"JUMP","letter":"H"}
+"jump to r" → {"intent":"JUMP","letter":"R"}
+"hop" → {"intent":"JUMP"}
 "numbers" → {"intent":"NUMBERS"}
 "show numbers" → {"intent":"NUMBERS"}
 "number them" → {"intent":"NUMBERS"}

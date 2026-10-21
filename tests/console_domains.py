@@ -155,7 +155,7 @@ INJECT_REPL = (
 import re as _re
 from pathlib import Path as _Path
 
-TOKENS = ("cmd_", "enter(", "blur", "opened(", "closed(", "picked", "nothing_picked", "ambiguous")
+TOKENS = ("cmd_", "enter(", "blur", "opened(", "closed(", "picked", "nothing_picked", "ambiguous", "jumped(")
 
 
 def program_text(path):
@@ -254,7 +254,10 @@ def inject_ui(path):
     return (
         [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
         + [((f"+cmd_{c}",), always) for c in ("exit", "home", "back", "pick", "numbers", "close", "cancel",
-                                                "dictate", "command", "help", "unknown")]
+                                                "dictate", "command", "help", "unknown", "jump")]
+        + [((f"+cmd_jump_to({l})",), always) for l in ("c", "r")]
+        + [((f"+jumped({w})",), has("resolving")) for w in ws]                 # the page resolves a label
+        + [(("+nothing_picked",), has("resolving"))]
         + [((f"+cmd_pick_n({n})",), always) for n in ("n1", "n9")]
         + [((f"+enter({w})",), visible(w)) for w in ws]                      # the port: focusin on what is there
         + [(("+blur",), always)]

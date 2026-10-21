@@ -32,6 +32,7 @@ def test_each_rule_sends_the_page_its_effect():
                                                                 {"ui": "focus", "widget": "editor"}]
     assert fired(h, "close[W=editor,P=root]") == [{"ui": "hide", "widget": "editor"}, {"ui": "focus", "widget": "root"}]
     assert fired(h, "exit[F=copy,Q=catalog,P=catalog]") == [{"ui": "focus", "widget": "catalog"}]
+    assert fired(h, "exit_to_dialog[F=ok,Q=root,D=apply]") == [{"ui": "focus", "widget": "apply"}]   # nina's H2
     assert fired(h, "home[F=catalog,Q=copy,P=root]") == [{"ui": "focus", "widget": "root"}]
     assert fired(h, "back[F=root,P=catalog]") == [{"ui": "focus", "widget": "catalog"}]
     assert fired(h, "numbers[W=copy]") == [{"ui": "numbers", "widget": "copy"}]
@@ -42,6 +43,14 @@ def test_each_rule_sends_the_page_its_effect():
     assert fired(h, "mode_back[N=root,R=container]") == [{"ui": "mode", "mode": "command"}]
     assert fired(h, "move[N=records,O=prompt]") == []                  # the person's own: nothing to do
     assert fired(h, "show[W=records]") == [{"ui": "show", "widget": "records"}]
+    assert fired(h, "go_numbers[W=chat]") == [{"ui": "unnumber"}]      # a voice move drops the numbers
+    assert fired(h, "jump") == [{"ui": "jump"}]
+    assert fired(h, "jump_to[L=c]") == [{"ui": "jump", "letter": "c"}]
+    assert fired(h, "jump_pick[N=n2]") == [{"ui": "jump_pick", "number": 2}]
+    assert fired(h, "jump_ok_hidden[W=editor,F=root,Q=root]") == [{"ui": "show", "widget": "editor"},
+                                                                  {"ui": "focus", "widget": "editor"}]
+    for r in ("clear_jump[N=chat]", "go_jump[W=chat]", "cancel_jump"):
+        assert fired(h, r) == [{"ui": "unjump"}]
 
 
 def test_the_repl_card_follows_the_focus_into_the_repls_widgets():
@@ -122,53 +131,6 @@ def _agent():
         return None
 
 
-@pytest.mark.skipif(_agent() is None, reason="no metis-agent (METIS_AGENT_DIR: its py/)")
-def test_ui_served_by_the_domain_agent_with_the_page(monkeypatch):
-    Process, serve = _agent()
-    monkeypatch.setenv("METIS_CATALOG", str(ROOT))
-    proc = Process(["ui"])
-    agent = proc.build(1, "replay")
-    host = agent.host.inner
-    page = StubPage(lists={"catin": ["plant", "dog", "dog_shared"]})
-    n = [0]
-
-    def say(verb, **args):
-        n[0] += 1
-        global_agent = [agent]
-        out = []
-        a, o = serve(global_agent[0], {"domain": "ui", "id": n[0], "verb": verb, "args": args}, proc.build,
-                     proc.reload, proc.add_line)
-        out += o
-        for _ in range(4):                  # beats: the page carries the effects out, reports back
-            page.carry(host)
-            a, o = serve(a, {"clock": "beat"}, proc.build, proc.reload, proc.add_line)
-            out += o
-        return [(r.get("status"), r.get("text", "")) for r in out if r.get("status") in ("done", "refused")]
-
-    def beats(k=3):
-        out = []
-        for _ in range(k):
-            page.carry(host)
-            _, o = serve(agent, {"clock": "beat"}, proc.build, proc.reload, proc.add_line)
-            out += o
-        return out
-
-    assert say("GO", widget="CATALOG")[0][0] == "done" and page.focus == "catalog"
-    assert say("GO", widget="PROMPT")[0][0] == "done" and page.focus == "prompt"
-    assert {"ui": "activate", "domain": "repl"} in page.done
-    page.click("records")                                   # the person's own focus: tracked
-    beats()
-    assert "focused(records)" in agent.repl.counts and agent.repl.counts["focused(records)"] == 1
-    assert say("EXIT")[0][0] == "done" and page.focus == "root"
-    page.open_dialog()                                      # the APPLY dialog rises (the REPL's apply)
-    beats()
-    assert agent.repl.counts.get("modal(apply)") == 1 and agent.repl.counts.get("focused(apply)") == 1
-    refusal = say("GO", widget="CATALOG")
-    assert refusal and refusal[0][0] == "refused"           # the dialog holds the focus, with the reason
-    surprises = [r for r in beats() if r.get("kind") == "surprise"]
-    assert surprises == []                                  # the page and the program agree
-
-
 def _served(monkeypatch, page):
     Process, serve = _agent()
     monkeypatch.setenv("METIS_CATALOG", str(ROOT))
@@ -176,16 +138,49 @@ def _served(monkeypatch, page):
     agent = proc.build(1, "replay")
     host = agent.host.inner
 
+    def line(msg):
+        """One line; the page carries out the effects its replies bring (the trace's `effects`,
+        metis-agent's drain), else what the host still queues (an agent before the drain)."""
+        out = serve(agent, msg, proc.build, proc.reload, proc.add_line)[1]
+        for r in out:
+            for e in (r.get("effects") or []) if r.get("kind") == "trace" else []:
+                page.effect(e)
+        page.carry(host)
+        return out
+
     def run(msg=None, beats=4):
-        out = []
-        if msg:
-            out += serve(agent, msg, proc.build, proc.reload, proc.add_line)[1]
+        out = line(msg) if msg else []
         for _ in range(beats):
-            page.carry(host)
-            out += serve(agent, {"clock": "beat"}, proc.build, proc.reload, proc.add_line)[1]
+            out += line({"clock": "beat"})
         return out
     return agent, run
 
+
+
+@pytest.mark.skipif(_agent() is None, reason="no metis-agent (METIS_AGENT_DIR: its py/)")
+def test_ui_served_by_the_domain_agent_with_the_page(monkeypatch):
+    page = StubPage(lists={"catin": ["plant", "dog", "dog_shared"]})
+    agent, run = _served(monkeypatch, page)
+    n = [0]
+
+    def say(verb, **args):
+        n[0] += 1
+        out = run({"domain": "ui", "id": n[0], "verb": verb, "args": args})
+        return [(r.get("status"), r.get("text", "")) for r in out if r.get("status") in ("done", "refused")]
+
+    assert say("GO", widget="CATALOG")[0][0] == "done" and page.focus == "catalog"
+    assert say("GO", widget="PROMPT")[0][0] == "done" and page.focus == "prompt"
+    assert {"ui": "activate", "domain": "repl"} in page.done
+    page.click("records")                                   # the person's own focus: tracked
+    run(beats=3)
+    assert agent.repl.counts.get("focused(records)") == 1
+    assert say("EXIT")[0][0] == "done" and page.focus == "root"
+    page.open_dialog()                                      # the APPLY dialog rises (the REPL's apply)
+    run(beats=3)
+    assert agent.repl.counts.get("modal(apply)") == 1 and agent.repl.counts.get("focused(apply)") == 1
+    refusal = say("GO", widget="CATALOG")
+    assert refusal and refusal[0][0] == "refused"           # the dialog holds the focus, with the reason
+    assert [r for r in run(beats=3) if r.get("kind") == "surprise"] == []      # the page and the program agree
 
 @pytest.mark.skipif(_agent() is None, reason="no metis-agent (METIS_AGENT_DIR: its py/)")
 def test_a_go_the_page_cannot_carry_out_is_a_surprise(monkeypatch):
@@ -228,3 +223,22 @@ def test_a_focus_change_the_port_never_reported_is_a_surprise(monkeypatch):
     page.lose_focus_silently()
     s = [r for r in run(beats=ui_host.CATCH_UP + 2) if r.get("kind") == "surprise"]
     assert s and agent.repl.counts.get("focused(catalog)") == 1
+
+
+@pytest.mark.skipif(_agent() is None, reason="no metis-agent (METIS_AGENT_DIR: its py/)")
+def test_a_voice_jump_labels_the_page_and_lands_on_the_label(monkeypatch):
+    """Jump mode: JUMP labels the reachable widgets, a number resolves a label, the page answers
+    +jumped(W), and the focus lands there; a label that names nothing is refused."""
+    page = StubPage()
+    agent, run = _served(monkeypatch, page)
+    run({"domain": "ui", "id": 1, "verb": "JUMP", "args": {}})
+    assert page.labels and agent.repl.counts.get("jumping") == 1
+    target = page.labels[2]
+    out = run({"domain": "ui", "id": 2, "verb": "PICK", "args": {"number": 3}})
+    assert [r.get("status") for r in out if r.get("status") in ("done", "refused")] == ["done"]
+    assert agent.repl.counts.get(f"focused({target})") == 1 and page.focus == target
+    assert [r for r in run() if r.get("kind") == "surprise"] == []
+    run({"domain": "ui", "id": 3, "verb": "JUMP", "args": {}})
+    out = run({"domain": "ui", "id": 4, "verb": "PICK", "args": {"number": 9 if len(page.labels) < 9 else 1}})
+    st = [r.get("status") for r in out if r.get("status") in ("done", "refused")]
+    assert st and st[-1] in ("done", "refused") and agent.repl.counts.get("idle_jump") == 1

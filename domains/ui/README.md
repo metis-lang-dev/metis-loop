@@ -45,7 +45,9 @@ the viewport) — is a surprise record.
 | `go_child`, `go_named`, `go_hidden`, `go_in_dialog`, `exit`, `exit_in_dialog`, `home`, `back`, `move` (no-op: it was the person's), `close` (focus to the parent) | focus the widget (and show the dock first for `go_hidden`) |
 | `show`, `close` | show / hide the dock |
 | `numbers` | number the focused list's entries 1–9 (an ephemeral bijection, re-derived per pass) |
-| `cancel_*`, `clear_numbers`, `blur_numbers`, `go/exit/home/back_numbers` | remove the numbers (any move, by voice or by hand, invalidates them) |
+| `jump`, `jump_to` | page-wide hint mode (Vimium's `f`, Emacs avy): label every reachable actionable widget 1–9 — inside the dialog only while one is up; with a letter, only those whose name starts with it; more than nine → the first nine and say so |
+| `jump_pick` | resolve the label; answer `+jumped(W)` (W a widget of the type) or `+nothing_picked` |
+| `cancel_*`, `clear_numbers`, `blur_numbers`, `go/exit/home/back_numbers`, `clear_jump`, `blur_jump`, `*_jump` | remove the numbers or the labels (any move, by voice or by hand, invalidates them) |
 | `pick`, `pick_n`, `pick_choice` | resolve the payload's name, or the number, against the focused list; answer `+picked`, `+nothing_picked` or `+ambiguous` (and number the candidates) |
 | `dictate`, `command`, `mode_back` | set the input mode and show it in the band |
 | every outcome | the replier's words (the rule's `%%` line) |

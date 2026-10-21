@@ -20,7 +20,13 @@ select the plant	PICK	prompt
 pick three	PICK	prompt
 number two	PICK	prompt
 numbers	NUMBERS	prompt
+jump	JUMP	prompt
+jump h	JUMP	prompt
+jump to r	JUMP	prompt
 show numbers	NUMBERS	prompt
+jump	JUMP	prompt
+jump h	JUMP	prompt
+jump to r	JUMP	prompt
 show the records dock	SHOW	prompt
 bring back the chat	SHOW	prompt
 close	CLOSE	prompt
@@ -65,6 +71,9 @@ six	PICK	heldout
 number them	NUMBERS	heldout
 put numbers on the list	NUMBERS	heldout
 show me numbers	NUMBERS	heldout
+label everything	JUMP	heldout
+jump c	JUMP	heldout
+hop to s	JUMP	heldout
 unhide the editor	SHOW	heldout
 show the catalog dock again	SHOW	heldout
 bring up the candidates	SHOW	heldout

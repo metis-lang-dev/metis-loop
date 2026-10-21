@@ -29,6 +29,7 @@ verbs:
   - {verb: BACK, meaning: "go back to where the focus was before the last move"}
   - {verb: PICK, meaning: "pick an entry of the focused list: by name (a catalog in the band's input, a record, a file) or by the number shown"}
   - {verb: NUMBERS, meaning: "show numbers on the entries of the focused list, to pick by number"}
+  - {verb: JUMP, meaning: "label every widget on the page you can reach (or only those whose name starts with a letter) to jump to one by its number"}
   - {verb: SHOW, meaning: "show a hidden dock by name"}
   - {verb: CLOSE, meaning: "hide the current dock"}
   - {verb: CANCEL, meaning: "drop what is pending: the numbers, a choice, a pick"}
@@ -41,6 +42,7 @@ slots:
   name: string
   number: number
   to: {enum: [DICTATION, COMMAND]}
+  letter: {enum: [A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z]}
 
 guidance: |
   The page's widgets: the BAND at the top (its SESSBAR holds the catalog input CATIN
@@ -54,7 +56,8 @@ guidance: |
   RECORDS; "the catalog panel" is CATALOG; "the catalog input", "the open box" are
   CATIN. GO takes `widget`; PICK takes `name` (the person's words for the entry, as
   said) or `number` ("pick three", "number three", "three" alone when numbers are
-  up); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
+  up); JUMP takes an optional `letter` ("jump", "jump h", "jump to r": the first letter of the
+  widget's name; then a number picks the label); SHOW takes `widget`; MODE takes `to`. "open the catalog" means GO CATALOG
   (opening a package is the REPL's business, not yours). A bare REPL word (narrate,
   step, undo, run, reset, load, apply) is UNKNOWN, never a PICK. Omit fields you don't
   need.
@@ -84,6 +87,10 @@ examples:
   - ["pick three", {"intent":"PICK","number":3}]
   - ["number two", {"intent":"PICK","number":2}]
   - ["seven", {"intent":"PICK","number":7}]
+  - ["jump", {"intent":"JUMP"}]
+  - ["jump h", {"intent":"JUMP","letter":"H"}]
+  - ["jump to r", {"intent":"JUMP","letter":"R"}]
+  - ["hop", {"intent":"JUMP"}]
   - ["numbers", {"intent":"NUMBERS"}]
   - ["show numbers", {"intent":"NUMBERS"}]
   - ["number them", {"intent":"NUMBERS"}]
@@ -138,6 +145,8 @@ map:
   - {verb: PICK, atom: "cmd_pick_n({number:num})", act: pick}
   - {verb: PICK, atom: cmd_pick, act: pick}
   - {verb: NUMBERS, atom: cmd_numbers, act: numbers}
+  - {verb: JUMP, atom: "cmd_jump_to({letter:letter})", act: jump}
+  - {verb: JUMP, atom: cmd_jump, act: jump}
   - {verb: SHOW, atom: "cmd_show({widget:widget})", act: show}
   - {verb: CLOSE, atom: cmd_close, act: close}
   - {verb: CANCEL, atom: cmd_cancel, act: cancel}
@@ -150,6 +159,7 @@ values:
            PROMPT: prompt, CHAT: chat, CHATLOG: chatlog, CHATQ: chatq, CATALOG: catalog, COPY: copy, EXTENSIONS: extensions,
            README: readme, CANDIDATES: candidates, RECORDS: records, EDITOR: editor, APPLY: apply}
   num: {1: n1, 2: n2, 3: n3, 4: n4, 5: n5, 6: n6, 7: n7, 8: n8, 9: n9}
+  letter: {A: a, B: b, C: c, D: d, E: e, F: f, G: g, H: h, I: i, J: j, K: k, L: l, M: m, N: n, O: o, P: p, Q: q, R: r, S: s, T: t, U: u, V: v, W: w, X: x, Y: y, Z: z}
 
 # cancel acts on the tick it arrives
 enders: [cmd_cancel]
@@ -174,6 +184,13 @@ alternatives:
     p_pick_n_busy: [cancel]
     p_pick_n: [numbers]
     p_numbers_shown: []
+    p_numbers_jumping: [cancel]
+    p_jump_busy: [cancel]
+    p_jump_to_busy: [cancel]
+    p_jump_picking: [cancel]
+    p_jump_to_picking: [cancel]
+    p_jumped_modal: []
+    jump_none: [jump]
     p_numbers: [go]
     p_show_shown: []
     p_show: []
