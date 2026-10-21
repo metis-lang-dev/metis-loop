@@ -28,7 +28,8 @@ else the installed metis-catalog's; `metisc` is `$METISC`, else PATH. Nothing
 is looked up beside a checkout.
 
 ```sh
-pip install metis-loop-sdk            # Python 3.10+; metispy and metis-catalog come with it
+# Python 3.10+; metispy and metis-catalog first (not on PyPI yet: their checkouts or git URLs)
+pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"
 pip install -e sdk/                   # development, in a metis-loop checkout (metispy and metis-catalog installed first)
 ```
 

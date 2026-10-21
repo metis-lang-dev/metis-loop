@@ -51,12 +51,13 @@ to the domains they produced, each with a README of what formalization
 taught. See the "Experiments" section of the metis-catalog README. This
 repo keeps only the loop machinery.
 
-**The loop SDK (`sdk/`) is on PyPI**: `pip install metis-loop-sdk`
-(catalog access, the catalog widget, the model adapters, the TypeScript
-face; metispy and metis-catalog come with it). Its consumers are
-metis-agent and metis-agentic-loop; [sdk/README.md](sdk/README.md) has
-the install and the release (a tag `sdk-vX.Y.Z`). The human loop itself
-is not published.
+**The loop SDK (`sdk/`)** installs from its tag (catalog access, the
+catalog widget, the model adapters, the TypeScript face):
+`pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"`,
+after metispy and metis-catalog (not on PyPI yet: install them from their
+checkouts or git URLs). Its consumers are metis-agent and
+metis-agentic-loop; [sdk/README.md](sdk/README.md) has the install and the
+release (a tag `sdk-vX.Y.Z`). The human loop itself is not published.
 
 ## License
 
