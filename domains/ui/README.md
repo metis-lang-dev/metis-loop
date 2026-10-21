@@ -49,7 +49,8 @@ the viewport) — is a surprise record.
 | `jump_pick` | resolve the label; answer `+jumped(W)` (W a widget of the type) or `+nothing_picked` |
 | `cancel_*`, `clear_numbers`, `blur_numbers`, `go/exit/home/back_numbers`, `clear_jump`, `blur_jump`, `*_jump` | remove the numbers or the labels (any move, by voice or by hand, invalidates them) |
 | `pick`, `pick_n`, `pick_choice` | resolve the payload's name, or the number, against the focused list; answer `+picked`, `+nothing_picked` or `+ambiguous` (and number the candidates) |
-| `dictate`, `command`, `mode_back` | set the input mode and show it in the band |
+| `dictate`, `command`, `mode_back`, `hold_*`, `release` | set the input mode (command / dictation / held) and show it in the band; held = push-to-talk: the voice goes to the page's own channel while the key is down (the page sends cmd_hold / cmd_release as typed intents through the wire's `intent` frame, no model pass) |
+| `help` | the words name the focus: "You are in {W}. From here you can say…" |
 | every outcome | the replier's words (the rule's `%%` line) |
 
 ## Why the pipeline

@@ -44,9 +44,9 @@ stages (clear sync local global post).
 % the roles a widget can have (one each; the application's facts)
 type role {container composite list editable button dock dialog item}.
 % the acts the person's intents name (the card's dictionary)
-type act {go exit home back pick numbers jump show close cancel dictate command help unknown}.
+type act {go exit home back pick numbers jump show close cancel dictate command hold release help unknown}.
 type letter {a b c d e f g h i j k l m n o p q r s t u v w x y z}.
-type mode {command dictation}.
+type mode {command dictation held}.
 type num {n1 n2 n3 n4 n5 n6 n7 n8 n9}.
 
 namespace ui produce (dyn).
@@ -77,6 +77,7 @@ pred invoker(widget, widget) : ui.   % invoker(Dialog, the widget to restore)
 pred shown(widget) : ui.         % a widget's visibility, a pair the instance starts and the page keeps
 pred hidden(widget) : ui.
 pred mode(mode) : ui.            % exactly one
+pred was(mode) : ui.             % the mode before a push-to-talk hold (exactly one while held)
 
 % ── transients a manual focus move invalidates ──
 pred numbers_shown : ui.         % the page numbers the focused list's entries
@@ -97,6 +98,7 @@ pred closed(widget) : ui.        % a dialog fell
 pred picked : ui.                % the page resolved a pick
 pred nothing_picked : ui.
 pred ambiguous : ui.             % more than one entry matched the name
+pred page_refused : ui.          % the page declines the pick (its own reason: the navigator's own domain, an inactive domain's atom, a tab the domain lacks)
 pred jumped(widget) : ui.        % the page resolved a jump label to a widget
 
 % ── the commands, one token per typed intent ──
@@ -114,6 +116,8 @@ pred cmd_close : ui.
 pred cmd_cancel : ui.
 pred cmd_dictate : ui.
 pred cmd_command : ui.
+pred cmd_hold : ui.              % push-to-talk pressed (the page's held key): the voice goes to the page's own channel while held
+pred cmd_release : ui.           % push-to-talk released
 pred cmd_help : ui.
 pred cmd_unknown : ui.
 
@@ -214,6 +218,8 @@ stage local {
   pick_none [dyn] : picking * nothing_picked -o ready * refused(pick).
   %% More than one matches: the page numbers them; say the number.
   pick_ambiguous [dyn] : picking * ambiguous * no_choice -o ready * awaiting_choice * progress(pick).
+  %% The page declines that pick.
+  pick_declined [dyn] : picking * page_refused -o ready * refused(pick).
   %% I number the entries of {W}.
   numbers [dyn] : cmd_numbers * numbers_hidden * $idle_jump * $focused(W) * $role(W, list) -o numbers_shown * done(numbers).
   %% I hide {W} and step out to {P}.
@@ -222,6 +228,12 @@ stage local {
   dictate [dyn] : cmd_dictate * mode(command) * $focused(W) * $role(W, editable) -o mode(dictation) * done(dictate).
   %% Commands again.
   command [dyn] : cmd_command * mode(dictation) -o mode(command) * done(command).
+  %% Held: what you say goes to the page's own channel until you let go.
+  hold_command [dyn] : cmd_hold * mode(command) -o mode(held) * was(command) * done(hold).
+  %% Held: what you say goes to the page's own channel until you let go.
+  hold_dictation [dyn] : cmd_hold * mode(dictation) -o mode(held) * was(dictation) * done(hold).
+  %% Released: back to where you were.
+  release [dyn] : cmd_release * mode(held) * was(M) -o mode(M) * done(release).
 }
 %% The focused widget is served; the rest is navigation.
 qui lg [dyn] : local -o global.
@@ -276,8 +288,8 @@ stage global {
   cancel_choice [dyn] : cmd_cancel * awaiting_choice * $numbers_hidden * $ready -o no_choice * done(cancel).
   %% The numbers are gone.
   cancel_numbers [dyn] : cmd_cancel * numbers_shown * $ready * $no_choice -o numbers_hidden * done(cancel).
-  %% From here you can say: go to <widget>, exit, home, back, jump (then a number), pick <name>, numbers, show <dock>, close, cancel, dictate, help.
-  help [dyn] : cmd_help -o done(help).
+  %% You are in {W}. From here you can say: go to <widget>, exit, home, back, jump (then a number), pick <name>, numbers, show <dock>, close, cancel, dictate, help.
+  help [dyn] : cmd_help * $focused(W) -o done(help).
 }
 %% Navigation is served; what is left is refused with its reason.
 qui gp [dyn] : global -o post.
@@ -318,14 +330,24 @@ stage post {
   p_pick_resolving [dyn] : cmd_pick * $resolving -o refused(pick).
   %% I am still looking for that label: a moment.
   p_numbers_resolving [dyn] : cmd_numbers * $resolving -o refused(numbers).
+  %% The labels are up: say a label's number, or "cancel" the jump.
+  p_pick_jumping [dyn] : cmd_pick * $jumping -o refused(pick).
   %% A late answer to a jump that was dropped.
   p_jumped_late [dyn] : jumped(W) * $idle_jump -o ().
   %% A late answer to a jump that was dropped.
   p_jumped_jumping [dyn] : jumped(W) * $jumping -o ().
   %% A late answer to a pick or jump that was dropped.
   p_nothing_picked_late [dyn] : nothing_picked * $ready * $idle_jump -o ().
+  %% A late answer to a pick that was dropped: the labels are up now.
+  p_nothing_picked_jumping [dyn] : nothing_picked * $jumping -o ().
+  %% A late answer to a pick that was dropped: the labels are up now.
+  p_picked_jumping [dyn] : picked * $jumping -o ().
+  %% A late answer to a pick that was dropped: the labels are up now.
+  p_ambiguous_jumping [dyn] : ambiguous * $jumping -o ().
   %% A late answer to a pick that was dropped.
   p_picked_late [dyn] : picked * $ready -o ().
+  %% A late answer to a pick that was dropped.
+  p_page_refused_late [dyn] : page_refused * $ready -o ().
   %% A late answer to a pick that was dropped.
   p_ambiguous_late [dyn] : ambiguous * $ready -o ().
   %% The labels are up already: say a number, or "cancel".
@@ -360,6 +382,16 @@ stage post {
   p_cancel [dyn] : cmd_cancel -o done(cancel).
   %% I can't take dictation here: {W} is not a text field.
   p_dictate [dyn] : cmd_dictate * $mode(command) * $focused(W) * $role(W, R) * noneditable(R) -o refused(dictate).
+  %% Let go of the key first.
+  p_dictate_held [dyn] : cmd_dictate * $mode(held) -o refused(dictate).
+  %% Let go of the key first.
+  p_command_held [dyn] : cmd_command * $mode(held) -o refused(command).
+  %% Already held.
+  p_hold [dyn] : cmd_hold * $mode(held) -o refused(hold).
+  %% Nothing is held.
+  p_release_command [dyn] : cmd_release * $mode(command) -o refused(release).
+  %% Nothing is held.
+  p_release_dictation [dyn] : cmd_release * $mode(dictation) -o refused(release).
   %% Dictation is on already.
   p_dictate_on [dyn] : cmd_dictate * $mode(dictation) -o refused(dictate).
   %% Commands are on already.

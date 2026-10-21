@@ -96,9 +96,16 @@ class Explorer:
         counts = self.fire(counts, es[0])
         return strip(self.settle(counts, state, tuple(lines)))
 
-    def run(self):
+    def run(self, seconds=None):
+        """BFS to a fixed point, or until `seconds` (then self.frontier says how much was left)."""
+        import time
+        end = time.time() + seconds if seconds else None
         q = deque([self.start])
+        self.frontier = 0
         while q:
+            if end and time.time() > end:
+                self.frontier = len(q)
+                return self
             s = q.popleft()
             d = dict(s)
             for lines, when, *kind in self.inject:
@@ -155,7 +162,7 @@ INJECT_REPL = (
 import re as _re
 from pathlib import Path as _Path
 
-TOKENS = ("cmd_", "enter(", "blur", "opened(", "closed(", "picked", "nothing_picked", "ambiguous", "jumped(")
+TOKENS = ("cmd_", "enter(", "blur", "opened(", "closed(", "picked", "nothing_picked", "ambiguous", "jumped(", "page_refused")
 
 
 def program_text(path):
@@ -265,12 +272,13 @@ def inject_ui(path):
     return (
         [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
         + [((f"+cmd_{c}",), always) for c in ("exit", "home", "back", "pick", "numbers", "close", "cancel",
-                                                "dictate", "command", "help", "unknown", "jump")]
+                                                "dictate", "command", "help", "unknown", "jump", "hold", "release")]
         + [((f"+cmd_jump_to({l})",), always) for l in ("c", "r")]
         + [((f"+jumped({w})",), labelled(w)) for w in ws]                      # the page resolves a label
         + [((f"+cmd_pick_n({n})",), always) for n in ("n1", "n9")]
         + [((f"+enter({w})",), visible(w)) for w in ws]                      # the port: focusin on what is there
         + [(("+blur",), always)]
         + [(("+opened(apply)",), has("free", "hidden(apply)")), (("+closed(apply)",), has("modal(apply)"))]
-        + [(("+picked",), always), (("+nothing_picked",), always), (("+ambiguous",), always)]   # late too (after a cancel)
+        + [(("+picked",), always), (("+nothing_picked",), always), (("+ambiguous",), always),   # late too (after a cancel)
+           (("+page_refused",), always)]
     ), nums

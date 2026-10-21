@@ -58,6 +58,8 @@ def test_each_rule_sends_the_page_its_effect():
     assert fired(h, "pick_replace[W=catin]", name="dog") == [{"ui": "unnumber"},
                                                              {"ui": "pick", "widget": "catin", "name": "dog"}]
     assert fired(h, "pick_choice[N=n2]")[0]["ui"] == "pick"                # resolved: the page clears them itself
+    assert fired(h, "hold_command") == [{"ui": "mode", "mode": "held"}]   # push-to-talk
+    assert fired(h, "release[M=command]") == [{"ui": "mode", "mode": "command"}]
 
 
 def test_the_repl_card_follows_the_focus_into_the_repls_widgets():
@@ -73,6 +75,9 @@ def test_the_port_coalesces_focusin_and_reports_the_rest():
         h.port({"focus": w})
     h.port({"picked": True})
     assert h.tick({"done(go)": 1}) == ["-done(go) 1", "+enter(readme)", "+picked"]
+    h.port({"page_refused": True})
+    h.world(["+page_refused"])
+    assert h.tick({}) == ["+page_refused", "+page_refused"]
     h.port({"blur": True})
     assert h.tick({}) == ["+blur"]
     h.port({"opened": "apply"})

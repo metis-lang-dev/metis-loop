@@ -163,6 +163,10 @@ map:
   - {verb: MODE, when: {to: DICTATION}, atom: cmd_dictate, act: dictate}
   - {verb: MODE, when: {to: COMMAND}, atom: cmd_command, act: command}
   - {verb: HELP, atom: cmd_help, act: help}
+  # push-to-talk (console-nav v6 item 20): never spoken — the page sends them as typed intents
+  # (the wire's intent{domain, id, j} frame, the act form {"verb":"hold"} / {"verb":"release"})
+  - {verb: HOLD, atom: cmd_hold, act: hold}
+  - {verb: RELEASE, atom: cmd_release, act: release}
   - {verb: UNKNOWN, atom: cmd_unknown, act: unknown}
 values:
   widget: {BAND: band, SESSBAR: sessbar, CATIN: catin, DEBUGGER: debugger, STREAM: stream, LENSES: lenses, CHIPS: chips,

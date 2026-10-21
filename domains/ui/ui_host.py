@@ -17,7 +17,8 @@ The effects (`effects`, the frames for the page; the agent's wire carries them, 
   focus (show first for jump_ok_hidden) jump_ok jump_ok_hidden jump_ok_dialog
   {"ui": "pick", "widget": W, "name"|"number": …[, "choice": true]}
                                         pick (the payload's name), pick_n (the number), pick_choice
-  {"ui": "mode", "mode": M}             dictate command mode_back
+  {"ui": "mode", "mode": M}             dictate command mode_back; hold_command hold_dictation (held: push-to-talk),
+                                        release (the mode before the hold)
   {"ui": "activate"|"deactivate", "domain": "repl"}
                                         the focus entering or leaving the REPL's widgets (REPL_WIDGETS):
                                         the agent's card for it (brief item 15)
@@ -33,6 +34,8 @@ The input port (the page's reports, port(report); the agent's world lines, world
   {"picked": true} / {"nothing_picked": true} / {"ambiguous": true}    a pick's answer
   {"jumped": W}           a jump label resolved to the widget W: +jumped(W) (a label that names
                           nothing: {"nothing_picked": true})
+  {"page_refused": true}  the page declines a pick for its own reason (the navigator's own domain,
+                          an inactive domain's atom, a tab the domain lacks): +page_refused
   {"sample": W | null}    ?focus(W) / ?blur: the page's real focus, sampled whenever it differs
                           from what the port said (a removed element, aria-activedescendant,
                           the viewport: the standards' silent cases). It asserts nothing: the
@@ -116,7 +119,7 @@ class UiHost:
             p["focus"] = report["sample"] or "root"
         if "jumped" in report:
             self.lines.append(f"+jumped({report['jumped']})")
-        for k in ("picked", "nothing_picked", "ambiguous"):
+        for k in ("picked", "nothing_picked", "ambiguous", "page_refused"):
             if report.get(k):
                 self.lines.append("+" + k)
         if "focus" in report and self.awaiting is not None and report["focus"] == self.believed:
@@ -134,11 +137,11 @@ class UiHost:
                 self.port({"focus": m.group(2)})
             elif m and m.group(1) in ("opened", "closed", "shown", "hidden", "jumped"):
                 self.port({m.group(1): m.group(2)})
-            elif m and m.group(1) in ("blur", "picked", "nothing_picked", "ambiguous"):
+            elif m and m.group(1) in ("blur", "picked", "nothing_picked", "ambiguous", "page_refused"):
                 self.port({m.group(1): True})
             elif not l.startswith("-"):
                 raise ValueError(f"world line {l!r}: the ui port takes +enter(W) +blur +opened(D) +closed(D) "
-                                 "+shown(W) +hidden(W) +picked +nothing_picked +ambiguous +jumped(W) ?focus(W) ?blur")
+                                 "+shown(W) +hidden(W) +picked +nothing_picked +ambiguous +page_refused +jumped(W) ?focus(W) ?blur")
 
     def take_payload(self, payload):
         self.payload = dict(payload or {})
@@ -237,6 +240,10 @@ class UiHost:
             self._effect({"ui": "pick", "widget": self.believed, "number": int(b["N"][1:]), "choice": True})
         elif base in ("dictate", "command", "mode_back"):
             self._effect({"ui": "mode", "mode": "dictation" if base == "dictate" else "command"})
+        elif base in ("hold_command", "hold_dictation"):
+            self._effect({"ui": "mode", "mode": "held"})          # push-to-talk: the band says the page's channel has the voice
+        elif base == "release":
+            self._effect({"ui": "mode", "mode": b["M"]})          # the mode before the hold, back
         self._activation()
         self.acted += ((self.beat, name),)
 
