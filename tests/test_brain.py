@@ -183,5 +183,18 @@ def test_the_gateway_runs_formalize_on_its_own_endpoint(here, monkeypatch, tmp_p
             p = send(ws, sid, ":formalize", "f1")[-1]
             assert "FORMALIZE-SEAT" in json.dumps(p)
             assert r.gw.srv.shells[sid].llm == narr
+            # a person's `:llm X` moves both seats, as before the brain: formalize then runs on X
+            seen = []
+            serve = r.gw.srv.serve_one
+
+            def spy(sid_, cmd):
+                if cmd.lstrip(":").startswith("formalize"):
+                    seen.append(r.gw.srv.shells[sid_].llm)
+                    return {"posting": {"status": "done", "result": "spied", "json": {"ok": True}}}
+                return serve(sid_, cmd)
+            r.gw.srv.serve_one = spy
+            assert send(ws, sid, ":llm ollama:brain-choice-test", "l1")[-1]["status"] == "done"
+            send(ws, sid, ":formalize", "f2")
+            assert seen == ["ollama:brain-choice-test"]
     finally:
         r.close()

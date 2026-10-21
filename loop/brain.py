@@ -25,8 +25,10 @@ the session's endpoint, as the narrate seat always did):
               through `python -m loop.brain openrouter-command` (below);
               the agent seat is off ("needs claude")
   ollama      formalize and narrate on the kernel's [llm] endpoint; the
-              agent seat as the Agent SDK allows
+              agent seat is off ("needs claude")
 
+A person's `:llm X` in a session moves both seats to X, as it always did: the
+brain's formalize endpoint is then not set for that session's formalize.
 A shared instance has no brain: every LLM seat refuses there, as before.
 
     python -m loop.brain openrouter-command --model M --seat formalize|narrate

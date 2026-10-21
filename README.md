@@ -34,11 +34,13 @@ BRAIN=openrouter ./run.sh                                         # the same, in
 |---|---|---|---|---|
 | `claude` | `pip install 'metis-loop[agent]'` (the Agent SDK, with its `claude` CLI) and your `claude` login | `formalize_model` (claude-haiku-4-5) | `narrate_model` (claude-haiku-4-5) | yes |
 | `openrouter[:MODEL]` | `export OPENROUTER_API_KEY=…` (from the environment only, never a file) | MODEL, else `openrouter_model` | `openrouter_narrate_model` (deepseek/deepseek-v4-flash) | needs claude |
-| `ollama` | the kernel's `[llm] endpoint` (Ollama by default) | that endpoint | that endpoint | as the Agent SDK allows |
+| `ollama` | the kernel's `[llm] endpoint` (Ollama by default) | that endpoint | that endpoint | needs claude |
 
 Without `--brain` it is `[console] brain` in the metis dot file, else `claude`
 when the Agent SDK is installed, else `openrouter` when `OPENROUTER_API_KEY`
-is set, else `ollama`; the start line says which, with its models. A brain
+is set, else `ollama` (so a key in your environment makes OpenRouter the
+default); the start line says which, with its models. `:llm X` in a session
+moves both of its seats to X. A brain
 named and not available refuses at startup with the fix. On OpenRouter every
 call goes only to providers that keep no prompts; formalize has reasoning off
 and 2048 tokens, narrate `[console] narrate_reasoning` ("low": with it off,

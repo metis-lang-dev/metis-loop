@@ -232,6 +232,7 @@ class Gateway:
         self.pages = set()
         self.agent_state = None
         self.formalize_llm: Dict[str, Optional[str]] = {}   # sid -> formalize's endpoint (brain-choice)
+        self.seated_llm: Dict[str, Optional[str]] = {}      # sid -> the session's endpoint as _seat left it
         if cfg.get("metis_agent") and cfg["mode"] == "personal":
             from .agent_state import AgentState
             self.agent_state = AgentState(cfg["metis_agent"])
@@ -450,6 +451,7 @@ class Gateway:
         if spec and r is not None:
             r.llm = spec
         self.formalize_llm[sid] = s["formalize"][1]
+        self.seated_llm[sid] = r.llm if r is not None else None    # what the seats left; a person's `:llm` moves it
 
     def calls_log(self) -> str:
         """The OpenRouter seats' call log: DIR/.metis/formalize-calls.jsonl (made
@@ -599,9 +601,12 @@ class Gateway:
             cmd, note = self._cap_run(item["cmd"])
 
             def run(cmd=cmd):
-                # formalize on its own endpoint for this one command (the kernel has one per session)
+                # formalize on its own endpoint for this one command (the kernel has one per session),
+                # unless the person moved the session's endpoint (`:llm X`): then both seats are on X, as before
                 f = self.formalize_llm.get(s.sid) if cmd.strip().lstrip(":").split(" ", 1)[0] == "formalize" else None
                 r = self.srv.shells.get(s.sid) if f else None
+                if r is not None and r.llm != self.seated_llm.get(s.sid):
+                    r = None
                 was = r.llm if r is not None else None
                 try:
                     with s.lock:
