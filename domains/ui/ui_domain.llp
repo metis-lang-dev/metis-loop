@@ -198,6 +198,10 @@ stage sync {
   dialog_close [dyn] : closed(D) * modal(D) * invoker(D, W) * focused(F) * shown(D) -o free * focused(W) * hidden(D).
   %% Leaving the text field ends dictation: back to commands.
   mode_back [dyn] : mode(dictation) * $focused(N) * $role(N, R) * noneditable(R) -o mode(command).
+  %% The page says {W} is shown: it was.
+  shown_twice [dyn] : shown(W) * shown(W) -o shown(W).
+  %% The page says {W} is hidden: it was.
+  hidden_twice [dyn] : hidden(W) * hidden(W) -o hidden(W).
 }
 %% The focus is current; the focused widget takes its own commands first.
 qui sl [dyn] : sync -o local.
