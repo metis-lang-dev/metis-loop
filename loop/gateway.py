@@ -96,6 +96,9 @@ DEFAULTS = {
     # the band's AGENT field (human-loop step 3): metis-agent's console wire,
     # e.g. "ws://127.0.0.1:8395/ws"; "" = off; never in shared mode
     "metis_agent": "",
+    # the voice navigation's flip key (console-nav): the page's input between the
+    # navigation agent and the formalization agent's chat, both ways
+    "flip_key": "ctrl+space",
     # the brain (brain-choice s-c59b7b51, loop/brain.py): claude | openrouter[:MODEL] |
     # ollama; "" = by what is here (claude, else OpenRouter with a key, else ollama)
     "brain": "", "openrouter_model": "deepseek/deepseek-v4-pro",
@@ -833,7 +836,7 @@ class Gateway:
 
     def page(self) -> str:
         flag = json.dumps({"ws": "/ws", "token": self.cfg.get("token") or "",
-                           "mode": self.cfg["mode"]})
+                           "mode": self.cfg["mode"], "flip_key": self.cfg.get("flip_key") or "ctrl+space"})
         return ("<!doctype html><html><head><meta charset=utf-8><meta "
                 "name=viewport content=\"width=device-width,initial-scale=1\">"
                 f"<script>window.LOOP_GATEWAY={flag};"

@@ -1,6 +1,8 @@
 <title>Loop Console</title>
 <link rel="stylesheet" href="lib/shell.css">
 <link rel="stylesheet" href="sdk/catalog/catalog.css">
+<link rel="stylesheet" href="lib/panel.css">
+<script type="importmap">{"imports":{"fsttm-web/tts":"./lib/tts.js","fsttm-web/ws":"./lib/ws.js","fsttm-web/panel":"./lib/panel.js"}}</script>
 <style>
 .dots{color:var(--cyan);letter-spacing:1px}
 .st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
@@ -124,9 +126,22 @@ details summary{cursor:pointer;color:var(--dim)}
 .ffoot{font-size:11px;color:var(--dim);padding:2px 8px;border-top:1px solid var(--line);max-height:6em;overflow:auto;white-space:pre-wrap}
 .ffoot.err{color:var(--red)}
 .cm-flash{background:rgba(57,197,207,.25)!important}
+/* console-nav step 2: the widgets (data-w) the navigation agent moves the focus between */
+#root{flex:1;display:flex;flex-direction:column;min-height:0;outline:none}
+[data-w]:focus{outline:2px solid var(--cyan);outline-offset:-2px}
+[data-n]{position:relative}[data-n]::before{content:attr(data-n);display:inline-block;min-width:1.4em;margin-right:6px;text-align:center;color:#000;background:var(--cyan);border-radius:3px}
+[data-j]{position:relative;outline:2px dashed var(--cyan)}[data-j]::after{content:attr(data-j);position:absolute;top:-7px;left:-7px;z-index:5;min-width:1.3em;text-align:center;color:#000;background:var(--cyan);border-radius:3px;font-size:11px}
+.picked{background:rgba(57,197,207,.18)}
+.nav-nav{color:var(--green)}.nav-chat{color:var(--yellow)}
+#dock-talk .dbody{display:flex;flex-direction:column;overflow:hidden;min-height:180px}
+#dock-talk.collapsed .dbody{display:none}
+#talkpanel{flex:1;min-height:0;display:flex;flex-direction:column}
+#savewin:not([open]){display:none}#savewin[open]{width:auto;height:auto;margin:0;max-width:none;max-height:none;padding:0;color:var(--fg)}
+#savewin::backdrop{background:rgba(0,0,0,.45)}
 </style>
 
-<header id="band" aria-label="context">
+<div id="root" data-w="root" data-role="container" tabindex="-1">
+<header id="band" aria-label="context" data-w="band" data-role="container" tabindex="-1">
   <div class="l">
     <span class="brand">LOOP CONSOLE</span>
     <span><b>CATALOG</b><span class="v" id="b-cat">—</span></span>
@@ -137,8 +152,8 @@ details summary{cursor:pointer;color:var(--dim)}
     <span id="b-agentw" hidden title="metis-agent's state of this domain"><b>AGENT</b><span class="v" id="b-agent">—</span></span>
     <span id="b-status" class="v">no session</span>
     <span class="v" id="b-fired"></span>
-    <span id="sessbar">
-      <input id="catin" list="catlist" placeholder="catalog, e.g. three_pigs" aria-label="catalog to open" autocomplete="off">
+    <span id="sessbar" data-w="sessbar" data-role="composite" tabindex="-1">
+      <input id="catin" data-w="catin" data-role="list" list="catlist" placeholder="catalog, e.g. three_pigs" aria-label="catalog to open" autocomplete="off">
       <datalist id="catlist"></datalist>
       <button class="btn" id="open">open</button>
       <button class="btn" id="reset" title="queue reset">reset</button>
@@ -150,24 +165,25 @@ details summary{cursor:pointer;color:var(--dim)}
     <span id="tokens"><b>TOKENS</b><span id="b-tok" class="empty">—</span></span>
     <span><b>ENABLED</b><span class="v" id="b-en">—</span></span>
     <span id="b-mode" hidden><b>MODE</b><span class="v" id="b-modev"></span></span>
+    <span id="b-navw" hidden><b>INPUT</b><span class="v" id="b-nav">navigation</span></span>
   </div>
 </header>
 <div id="banner" role="status" hidden></div>
-<div id="savewin" role="dialog" aria-label="apply to the catalog" hidden>
+<dialog id="savewin" data-w="apply" data-role="dialog" aria-label="apply to the catalog" tabindex="-1">
   <header><b>APPLY</b><span class="empty" id="savesub">the working copy into the catalog source (the operator's checkout) — read the diff, then apply; metis-agent sees the change</span><span class="grow"></span>
     <button class="btn" id="savego">apply these files</button><button class="btn" id="savex">cancel</button></header>
   <div class="body" id="savebody"></div>
-</div>
+</dialog>
 <main>
-  <section id="left" aria-label="debugger">
-    <div id="stream" aria-live="polite"><div class="empty" id="hello">Open a catalog above to start a session — then type REPL lines below (<span class="cmd">run 6</span>, <span class="cmd">why</span>, <span class="cmd">ctx</span>…) or use the chips.</div></div>
-    <div id="lenses">context after each stop:
+  <section id="left" aria-label="debugger" data-w="debugger" data-role="container" tabindex="-1">
+    <div id="stream" aria-live="polite" data-w="stream" data-role="container" tabindex="-1"><div class="empty" id="hello">Open a catalog above to start a session — then type REPL lines below (<span class="cmd">run 6</span>, <span class="cmd">why</span>, <span class="cmd">ctx</span>…) or use the chips.</div></div>
+    <div id="lenses" data-w="lenses" data-role="composite" tabindex="-1">context after each stop:
       <button class="chip" data-lens="rules">rules</button>
       <button class="chip" data-lens="measure">measure</button>
       <button class="chip" data-lens="tokens">tokens</button>
       <button class="chip" data-lens="proof">proof</button>
     </div>
-    <div id="chips">
+    <div id="chips" data-w="chips" data-role="composite" tabindex="-1">
       <button class="chip" data-cmd="run 50" title="run to quiescence (≤50 steps)">run</button>
       <button class="chip" data-cmd="step">step</button>
       <button class="chip" data-cmd="events">events</button>
@@ -179,46 +195,52 @@ details summary{cursor:pointer;color:var(--dim)}
       <button class="chip" data-cmd="undo">undo</button>
     </div>
     <div id="promptrow"><span id="busy" hidden><span class="st-quiescent">running</span> <span id="busycmd" class="v"></span><span id="busyq" class="empty"></span> <button class="btn" id="stopcmd" title="interrupt the running command and drop the queued ones">stop</button></span><span class="p">llp&gt;</span>
-      <input id="prompt" aria-label="REPL line" autocomplete="off" spellcheck="false" placeholder="a REPL line — Enter queues it">
+      <input id="prompt" data-w="prompt" data-role="editable" aria-label="REPL line" autocomplete="off" spellcheck="false" placeholder="a REPL line — Enter queues it">
     </div>
   </section>
   <div id="split" role="separator" aria-orientation="vertical" tabindex="0"></div>
   <aside id="right" aria-label="tool panels">
-    <section class="dock" id="dock-claude" data-dock="claude" aria-label="Claude">
+    <section class="dock" id="dock-talk" data-dock="talk" aria-label="the dialog" data-w="talk" data-role="dock" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">TALK · the navigation agent</span><button class="x" title="hide (the strip brings it back)">✕</button></header>
+      <div class="dbody"><div id="talkpanel" data-port-off></div></div>
+    </section>
+    <section class="dock" id="dock-claude" data-dock="claude" aria-label="Claude" data-w="chat" data-role="dock" tabindex="-1">
       <header><span class="tw">▾</span><span class="tt">CLAUDE</span><button class="x" title="hide (the strip brings it back)">✕</button></header>
       <div class="dbody">
         <p class="ph" id="chatsub">reinterprets the machine; acts only through the REPL (its lines show as claude&gt; on the left)</p>
-        <div id="chatlog" aria-live="polite"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
+        <div id="chatlog" aria-live="polite" data-w="chatlog" data-role="container" tabindex="-1"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
         <div id="chatstate" role="status"></div>
         <div id="chatinterim" aria-live="polite"></div>
         <div id="chatin">
-          <textarea id="chatq" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
+          <textarea id="chatq" data-w="chatq" data-role="editable" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
           <button class="btn" id="chatmic" hidden title="dictate (browser speech recognition)">mic</button>
           <button class="btn" id="chatsend">send</button>
           <button class="btn" id="chatstop" hidden>stop</button>
         </div>
       </div>
     </section>
-    <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and extensions">
+    <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and extensions" data-w="catalog" data-role="dock" tabindex="-1">
       <header><span class="tw">▾</span><span class="tt">CATALOG · working copy &amp; extensions</span><button class="x" title="hide">✕</button></header>
       <div class="dbody" id="catdock"><div class="empty">Open a catalog — its working copy and extensions show here.</div></div>
     </section>
-    <section class="dock" id="dock-candidates" data-dock="candidates" aria-label="candidates">
+    <section class="dock" id="dock-candidates" data-dock="candidates" aria-label="candidates" data-w="candidates" data-role="dock" tabindex="-1">
       <header><span class="tw">▾</span><span class="tt">CANDIDATES</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="cands"><div class="empty">No candidates.</div></div></div>
     </section>
-    <section class="dock" id="dock-records" data-dock="records" aria-label="surprise records">
+    <section class="dock" id="dock-records" data-dock="records" aria-label="surprise records" data-w="records" data-role="dock" tabindex="-1">
       <header><span class="tw">▾</span><span class="tt">SURPRISE RECORDS</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="records"><div class="empty">No surprise records.</div></div></div>
     </section>
   </aside>
   <nav id="strip" aria-label="tool windows">
+    <button data-strip="talk" title="the dialog with the navigation agent" hidden>Talk</button>
     <button data-strip="claude" title="Claude">Claude</button>
     <button data-strip="catalog" title="working copy and extensions">Catalog</button>
     <button data-strip="candidates" title="candidates">Candidates</button>
     <button data-strip="records" title="surprise records">Records</button>
   </nav>
 </main>
+</div>
 
 <script src="lib/shell.js"></script>
 <script src="sdk/catalog/catalog.js"></script>
@@ -689,7 +711,8 @@ const chatIn={get:()=>$("#chatq").value,set:v=>{$("#chatq").value=v},focus:()=>$
     q.selectionStart=q.selectionEnd=a+t.length}};
 async function chatInputCM(){
   const lib=await loadCM(),cm=lib&&lib.mod;if(!cm||!cm.minimalSetup)return;
-  const host=document.createElement("div");host.id="chatcm";const ta=$("#chatq");ta.replaceWith(host);
+  const host=document.createElement("div");host.id="chatcm";const ta=$("#chatq");
+  Object.assign(host.dataset,{w:"chatq",role:"editable"});ta.replaceWith(host);   // the ui instance's chatq (console-nav)
   const send=()=>{chatSend();return true};
   const view=new cm.EditorView({parent:host,doc:ta.value,extensions:[cm.minimalSetup,cm.EditorView.lineWrapping,cm.oneDark,
     cm.placeholder(ta.placeholder),cm.EditorView.contentAttributes.of({"aria-label":"message to Claude"}),
@@ -788,7 +811,7 @@ function wsHandle(f){
   if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];domainsSeen=true;renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="readme"){rootReadme=f.readme||null;renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="records"){fileRecs=f.records||[];renderRecords();return}
-  if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();return}
+  if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();agentSeen(f);return}
   if(f.ch==="repl"&&f.type==="sink"){if(f.session===sid)afterSink(f);return}
   if(f.ch==="repl"&&f.type==="save"){if(f.session===sid)showSave(f);return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
@@ -796,7 +819,7 @@ function wsHandle(f){
   if(f.ch==="chat"){chatFrame(f);return}
   if(f.ch!=="repl")return;
   if(f.type==="error"){
-    if(f.req&&f.req===pendingReq)pendingReq=null;
+    if(f.req&&f.req===pendingReq){pendingReq=null;opened(f.req,null,f.error+(f.detail?" — "+f.detail:""))}
     if(f.error==="gone"&&f.session===sid){sid=null;sstore.set("loopconsole.sid",null);sess=null;
       intents=new Map();renderBand();renderBusy();
       $("#stream").innerHTML='<div class="empty">'+esc(f.detail||"session gone")+'</div>';return}
@@ -808,7 +831,8 @@ function wsHandle(f){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
       intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatTurns=[];chatBusyUi(false);renderChat();
       const file=f.ctx&&f.ctx.file;if(file)$("#catin").value=String(file).replace(/\.llp$/,"");
-      if(pendingRec)wsSend({ch:"repl",type:"sink",session:sid,file:pendingRec.file})}   // a record picked before its domain was open
+      if(pendingRec)wsSend({ch:"repl",type:"sink",session:sid,file:pendingRec.file});   // a record picked before its domain was open
+      opened(f.req,sid);navHook("onSession",sid)}
     if(f.session!==sid)return;
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
@@ -955,11 +979,12 @@ async function openEditor(t,opt){
   if(!w){const el=document.createElement("section");el.className="fwin";el.setAttribute("aria-label","editor "+t);
     const n=wins.size;el.style.left=(80+n*28)+"px";el.style.top=(70+n*28)+"px";el.style.width="640px";el.style.height="420px";
     el.innerHTML=`<div class="fhead"><span class="t"></span><span class="badge"></span>
-      <button class="btn" data-w="recompile" title="build the session from this copy + extensions">recompile</button>
-      ${t==="copy"?'<button class="btn" data-w="extension" title="a new extension on top of the copy">+ extension</button>':""}
-      <button class="btn" data-w="download">download</button><button class="btn" data-w="min" title="minimize">_</button><button class="btn" data-w="close">✕</button></div>
+      <button class="btn" data-ed="recompile" title="build the session from this copy + extensions">recompile</button>
+      ${t==="copy"?'<button class="btn" data-ed="extension" title="a new extension on top of the copy">+ extension</button>':""}
+      <button class="btn" data-ed="download">download</button><button class="btn" data-ed="min" title="minimize">_</button><button class="btn" data-ed="close">✕</button></div>
       <div class="fbody"></div><div class="ffoot"></div>`;
-    document.body.appendChild(el);
+    Object.assign(el.dataset,{w:"editor",role:"dock"});el.tabIndex=-1;   // the ui instance's editor (console-nav)
+    $("#root").appendChild(el);if(wins.size===0)navHook("onEditor",true);
     const body=el.querySelector(".fbody");const lib=await loadCM();let get,set,view=null;
     if(lib){let syncing=false;
       view=new lib.EditorView({doc:workTarget(t),parent:body,extensions:[lib.basicSetup,...lib.ext,
@@ -975,8 +1000,8 @@ async function openEditor(t,opt){
     head.addEventListener("pointerdown",e=>{if(e.target.closest("button"))return;dx=e.clientX-el.offsetLeft;dy=e.clientY-el.offsetTop;head.setPointerCapture(e.pointerId)});
     head.addEventListener("pointermove",e=>{if(dx===null)return;el.style.left=Math.max(0,e.clientX-dx)+"px";el.style.top=Math.max(0,e.clientY-dy)+"px"});
     head.addEventListener("pointerup",()=>{dx=null});
-    head.addEventListener("click",e=>{const b=e.target.closest("[data-w]");if(!b)return;const a=b.dataset.w;
-      if(a==="close"){if(view)view.destroy();el.remove();wins.delete(t)}
+    head.addEventListener("click",e=>{const b=e.target.closest("[data-ed]");if(!b)return;const a=b.dataset.ed;
+      if(a==="close"){if(view)view.destroy();el.remove();wins.delete(t);if(!wins.size)navHook("onEditor",false)}
       else if(a==="min")el.classList.toggle("min");
       else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});
         wsSend({ch:"repl",type:"recompile",session:sid});w.el.querySelector(".ffoot").textContent="recompiling…"}
@@ -1016,9 +1041,9 @@ function downloadWork(){if(!work){banner("nothing to save — open a catalog fir
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: lib/shell.js, this console's copy) ---- */
-const DOCKS=["claude","catalog","candidates","records"];
+const DOCKS=["talk","claude","catalog","candidates","records"];
 const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v2",store,defaults:{claude:{shown:true,open:true},catalog:{shown:true,open:true},
-  candidates:{shown:!GW,open:false},records:{shown:true,open:true}}});
+  candidates:{shown:!GW,open:false},records:{shown:true,open:true}},onChange:st=>navHook("onDocks",st)});
 const applyDocks=dockUI.apply;
 
 /* the CATALOG panel: the catalogs of metis-catalog (the domains first, one
@@ -1057,15 +1082,20 @@ function saveWork(){
   if(work){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions})}
   wsSend({ch:"repl",type:"save",session:sid})}
 function showSave(f){
-  if(f.written){$("#savewin").hidden=true;saveTok=null;
+  if(f.written){closeSave();
     banner("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)",7000);return}
   saveTok=f.token;
   const files=f.files||[];
   $("#savebody").innerHTML=files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
       <pre>${esc(x.diff).split("\n").map(l=>l.startsWith("+")&&!l.startsWith("+++")?`<span class="add">${l}</span>`:l.startsWith("-")&&!l.startsWith("---")?`<span class="del">${l}</span>`:l.startsWith("@@")?`<span class="hunk">${l}</span>`:l).join("\n")}</pre></div>`).join("")
     :'<div class="empty">Nothing to save: the copy and its extensions equal the checkout.</div>';
-  $("#savego").disabled=!files.length;$("#savewin").hidden=false}
-$("#savex").addEventListener("click",()=>{$("#savewin").hidden=true;saveTok=null});
+  $("#savego").disabled=!files.length;openSave()}
+/* the APPLY dialog is a modal <dialog>: up through the navigation's port when it runs (its
+   +opened), else showModal; down by close() only, so the browser gives the focus back */
+function openSave(){const d=$("#savewin");if(d.open)return;if(!navHook("onDialog",d))d.showModal()}
+function closeSave(){saveTok=null;const d=$("#savewin");if(d.open)d.close()}
+$("#savewin").addEventListener("close",()=>{saveTok=null});
+$("#savex").addEventListener("click",closeSave);
 $("#savego").addEventListener("click",()=>{if(saveTok&&sid)wsSend({ch:"repl",type:"save",session:sid,token:saveTok})});
 $("#records").addEventListener("click",e=>{
   if(e.target.closest("#recref")){wsSend({ch:"repl",type:"records"});return}
@@ -1193,6 +1223,22 @@ $("#prompt").addEventListener("keydown",e=>{
     hpos=hist.length;p.value="";queue(v)}
   else if(e.key==="ArrowUp"&&hpos>0){e.preventDefault();p.value=hist[--hpos]}
   else if(e.key==="ArrowDown"){e.preventDefault();hpos=Math.min(hist.length,hpos+1);p.value=hist[hpos]||""}});
+/* ---- the voice navigation (console-nav s-b923ebfe step 2: lib/nav.js) — the page's API for
+   it; nav.js sets the on* hooks. It starts when the gateway names a metis-agent (meta/agent) ---- */
+let agentWait=null;const opens=new Map();   // open req -> {res, rej}
+function agentSeen(f){if(agentWait){agentWait(f);agentWait=null}}
+function opened(req,s,err){const o=opens.get(req);if(!o)return;opens.delete(req);err?o.rej(new Error(err)):o.res(s)}
+function navHook(name,...a){const h=window.consolePage&&window.consolePage[name];return h?(h(...a),true):false}
+window.consolePage={
+  gw:GW,sid:()=>sid,manifest:()=>manifestM,banner,docks:dockUI,
+  agent:()=>agentM?Promise.resolve(agentM):new Promise(res=>{agentWait=res;setTimeout(()=>res(null),15000)}),
+  open:(llp,host)=>new Promise((res,rej)=>{openCatalog({path:llp,host});
+    if(!pendingReq){rej(new Error("the console backend is not connected"));return}opens.set(pendingReq,{res,rej})}),
+  say:text=>{chatIn.set(text);chatSend()},              // the formalization agent's chat, the person's own words
+  apply:saveWork,select:v=>{$("#catin").value=v},
+  openEditor:()=>openEditor("copy"),
+  closeEditors:()=>{for(const [t,w] of [...wins]){if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}navHook("onEditor",false)},
+};
 MetisShell.splitter();
 syncLenses();renderBand();renderRight();applyDocks();renderCatalogDock();
 
@@ -1217,4 +1263,9 @@ claude.use("downloads").then(ns=>{downloadsNs=ns});
     records=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderRight()},e=>banner("Records lost: "+e.message));
   renderRight();subscribeSession();
 })();
+</script>
+<script type="module">
+import {startNav} from "./lib/nav.js";
+const p=window.consolePage;
+if(p&&p.gw)startNav(p).catch(e=>p.banner("voice navigation: "+(e&&e.message||e),8000));
 </script>

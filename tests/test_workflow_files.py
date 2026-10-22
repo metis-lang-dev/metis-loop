@@ -162,3 +162,18 @@ def test_the_manifests_serves_names_the_extensions(srv, tmp_path):
     assert [p.name for p in srv.checkout_extensions(d / "plant.llp")] == ["visitor.llp"]
     (d / "domain.yaml").write_text(yaml.safe_dump({**man, "serves": ["metis.domains.kitchen:catalogs/kitchen_host.llp"]}))
     assert srv.checkout_extensions(d / "plant.llp") == []
+
+
+def test_the_navigation_agents_records_are_listed(srv, tmp_path):
+    """console-nav step 2: the console's own domains (ui, repl), served by console-nav.sh's
+    agent, sink their records in .metis/console-nav/records/<domain>/records/; the RECORDS dock
+    lists them; any other .metis/ records stay the loop's own (unlisted)."""
+    nav = tmp_path / ".metis/console-nav/records/ui/records/20261022-1.jsonl"
+    nav.parent.mkdir(parents=True)
+    nav.write_text(json.dumps({"kind": "unmodeled", "record": 0, "ts": "2026-10-22T11:18:48",
+                               "observed": {"focused(root)": 1}, "close": {"status": "escalated", "beat": 5}}) + "\n")
+    own = tmp_path / ".metis/records/x.jsonl"
+    own.parent.mkdir(parents=True)
+    own.write_text(json.dumps({"kind": "rare", "record": 0}) + "\n")
+    rows = srv.records()
+    assert [(r["domain"].split("/")[-1], r["status"]) for r in rows] == [("ui", "escalated")]
