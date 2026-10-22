@@ -83,8 +83,18 @@ def _record(rec, instance_text):
     return "\n".join("  " + l for l in lines)
 
 
+SKILL = {"text": ""}
+
+
+def set_skill(text):
+    """The skill the brain follows (policy-tuning s-1caedae5): procedures a careful formalizer keeps —
+    read into every prompt after the task, before the person's instruction. Empty: no skill."""
+    SKILL["text"] = (text or "").strip()
+
+
 def instruction(note):
-    return ("\n\nThe person's instruction (at the last disengagement): %s\n" % note) if note else ""
+    out = ("\n\nThe skill — the procedures a careful formalizer follows here:\n%s\n" % SKILL["text"]) if SKILL["text"] else ""
+    return out + (("\n\nThe person's instruction (at the last disengagement): %s\n" % note) if note else "")
 
 
 def explore(base, commands, rec, similar, instance_text, note=None):

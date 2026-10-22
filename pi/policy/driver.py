@@ -76,12 +76,14 @@ def jl_read(path):
 
 
 class Driver:
-    def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print, world="alfworld"):
+    def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print, world="alfworld", skill=None):
         from metis import gate
         global DOMAIN
         self.World, empty_base = WORLDS[world]
         DOMAIN = self.World.DOMAIN
         prompts.set_world(self.World)
+        self.skill = Path(skill).resolve() if skill else None            # policy-tuning: the skill file the prompts carry
+        prompts.set_skill(self.skill.read_text() if self.skill else "")
         self.run, self.brain, self.family, self.seed = Path(run).resolve(), brain, family, seed
         self.cfg = dict(DEFAULTS, **(cfg or {}))
         self.out = out
@@ -92,7 +94,7 @@ class Driver:
         self.state = json.loads((self.state_dir / "run.json").read_text()) if (self.state_dir / "run.json").exists() else {
             "phase": "explore", "proposals": 0, "accepted": 0, "refused_run": 0, "accepts_since_refactor": 0,
             "family": family, "seed": seed, "discovery": discovery, "gate_games": gate_games, "notes": [],
-            "status": "running", "cfg": self.cfg}
+            "status": "running", "cfg": self.cfg, "world": world, "skill": str(self.skill) if self.skill else None}
         self.cfg = dict(self.state.get("cfg") or self.cfg, **(cfg or {}))
         if not (self.root / "domains" / DOMAIN / ("%s.llp" % DOMAIN)).exists():
             d = self.root / "domains" / DOMAIN
@@ -727,6 +729,7 @@ def main(argv=None):
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (heldout, or the world's own name): no brain")
     ap.add_argument("--n", type=int, default=10)
+    ap.add_argument("--skill", metavar="FILE", help="a skill the brain follows: its text in every prompt (policy-tuning)")
     ap.add_argument("--mode", choices=["flat", "hier", "director"], default="flat", help="--evaluate: the base whole, its split, or its director")
     a = ap.parse_args(argv)
     if a.brain.startswith("openrouter/") and a.budget is None:
@@ -736,7 +739,7 @@ def main(argv=None):
     if unknown:
         ap.error("--set: unknown %s (one of %s)" % (", ".join(sorted(unknown)), ", ".join(DEFAULTS)))
     brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
-    d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg, world=a.world)
+    d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg, world=a.world, skill=a.skill)
     if a.evaluate:
         return d.evaluate(a.evaluate, a.n, a.mode)
     return d.resume() if a.resume else d.go(a.phase)
