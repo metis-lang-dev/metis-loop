@@ -38,7 +38,7 @@ from pathlib import Path
 
 from . import measure, prompts
 from .alfworld import AlfWorld, empty_base, rules_of
-from .brain import Brain, Budget, block_of, splice
+from .brain import Brain, Budget, PromptCap, block_of, splice
 
 DOMAIN = "alf"
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
@@ -104,6 +104,8 @@ class Driver:
         self.where = None                     # the world's snapshot where the loop last acted (N1: the disengagement keeps it)
         self._trans = None
         self.brain.keep(self.state)           # nina's R1: a resumed run keeps the first start's meter and its cap
+        if self.state.get("prompt_chars"):
+            self.brain.prompt_chars = self.state["prompt_chars"]
         self.save()
 
     def transitions(self):
@@ -227,9 +229,9 @@ class Driver:
         except Budget as e:
             raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
                             options=["budget: more spend", "abandon"]) from None
-        except ValueError as e:
+        except PromptCap as e:
             raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
-                            "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: a larger prompt cap", "abandon"]) from None
+                            "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: prompt_chars, a larger cap", "abandon"]) from None
 
     def judge(self, kind, by="brain", info=None, cost=None, **args):
         """A proposal through the gate (the brain's or, at re-engagement, the person's rule or edit),
@@ -522,6 +524,8 @@ class Driver:
             for key, cfgk in (("proposals", "proposals"), ("beats", "explore_steps")):
                 if ins.get(key):
                     self.cfg[cfgk] = self.cfg[cfgk] + int(ins[key])
+            if ins.get("prompt_chars"):                       # the option the prompt cap's ask offers (nina's N7)
+                self.brain.prompt_chars = self.state["prompt_chars"] = int(ins["prompt_chars"])
             if ins.get("spend") and self.brain.spend is not None:
                 self.brain.spend += float(ins["spend"])
                 self.state["spend_cap"] = self.brain.spend          # the cap the meter keeps across resumes (R1)
@@ -536,7 +540,10 @@ class Driver:
             self.seed_record = None
             text, info = splice(self.base(), block_of(ins["text"]))
             self.judge("program", by="person", info=info, text=text)
-        if k == "edit":
+        if k == "edit" and (ins.get("path") or "%s.llp" % DOMAIN).split("/")[-1] != "%s.llp" % DOMAIN:
+            self.say("proposal", verdict="error", by="person",                # nina's N9: the base is the one file the loop writes
+                     why="an edit of %s: the loop's one file is the base, %s.llp" % (ins.get("path"), DOMAIN))
+        elif k == "edit":
             # the person's edit applied to the base's text and judged as the base it makes: the SDK's edit check
             # compiles the file alone, and a lifted base has no types of its own (the instance declares them)
             self.seed_record = None

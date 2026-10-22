@@ -51,6 +51,10 @@ class Budget(RuntimeError):
     """The run's spend is exhausted: the driver disengages (reason budget)."""
 
 
+class PromptCap(ValueError):
+    """A prompt past the per-request cap (nina's N7: caught by name, not as any ValueError)."""
+
+
 class Brain:
     def __init__(self, model, run_dir, spend=None, max_tokens=2048, prompt_chars=40000, env=None):
         self.model, self.run_dir = model, Path(run_dir)
@@ -97,11 +101,14 @@ class Brain:
         if state.get("spend_start") is None:
             state["spend_start"], state["spend_cap"] = self.start_usage, self.spend
         else:
-            self.start_usage, self.spend = state["spend_start"], state["spend_cap"]
+            # the run's meter goes on; its cap is the kept one, or a resume's lower --budget (nina's N8):
+            # only a budget answer raises it
+            self.start_usage = state["spend_start"]
+            self.spend = state["spend_cap"] = min(state["spend_cap"], self.spend)
 
     def ask(self, prompt, purpose=""):
         if len(prompt) > self.prompt_chars:
-            raise ValueError("the prompt is %d characters, past the per-request cap %d" % (len(prompt), self.prompt_chars))
+            raise PromptCap("the prompt is %d characters, past the per-request cap %d" % (len(prompt), self.prompt_chars))
         before = None
         if self.paid and self.spend is not None:
             before = self.spent()

@@ -108,6 +108,9 @@ def test_the_spend_meter_survives_a_resume(tmp_path, monkeypatch):
     b2 = B.Brain("openrouter/m", tmp_path, spend=1.0, env={"OPENROUTER_API_KEY": "k"})     # the resume: a new brain
     b2.keep(state)
     assert b2.start_usage == 5.0 and b2.spent() == pytest.approx(0.6)
+    b3 = B.Brain("openrouter/m", tmp_path, spend=0.5, env={"OPENROUTER_API_KEY": "k"})     # a resume with a lower --budget
+    b3.keep(dict(state))
+    assert b3.spend == 0.5                                                # nina's N8: the lower cap holds
     usage[0] = 6.05
     with pytest.raises(B.Budget):
         b2.ask("a prompt", "explore")                                     # stopped before the call: no network
