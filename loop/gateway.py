@@ -113,6 +113,8 @@ DEFAULTS = {
     "max_usd": 1.00,                # per session, OpenRouter's reported cost
     # take (loop-parity step 2): the operator's other catalog a domain is taken into; "" = take is off
     "take_into": "",
+    # loop-policy: a loop's state directory (pi's --state) whose asks the GATE shows and answers; "" = the console's own
+    "loop_state": "",
     # the agent seat's writes wait for the person's confirm this long, then count as refused (seconds)
     "agent_gate_timeout": 600,
     "narrate_reasoning": "low",     # OpenRouter's narrate (formalize: off); off invented events
@@ -241,9 +243,11 @@ class Sess:
 class Gateway:
     def __init__(self, cfg: dict, srv: Optional[ConsoleServer] = None):
         self.cfg = cfg
-        self.srv = srv or ConsoleServer(take_into=cfg.get("take_into") or None)
+        self.srv = srv or ConsoleServer(take_into=cfg.get("take_into") or None, loop_state=cfg.get("loop_state") or None)
         if cfg.get("take_into") and not getattr(self.srv, "take_into", None):
             self.srv.take_into = Path(cfg["take_into"]).expanduser()
+        if cfg.get("loop_state") and not getattr(self.srv, "loop_state", None):
+            self.srv.loop_state = Path(cfg["loop_state"]).expanduser()
         self.sessions: Dict[str, Sess] = {}
         self.rates: Dict[object, deque] = {}
         self.pages = set()
@@ -453,11 +457,22 @@ class Gateway:
         """The console's other writes through the loop's gate (docs/LOOP.md): propose a plan
         (to the asking socket only), confirm it (the write), refuse it (remembered)."""
         loop, op = asyncio.get_running_loop(), msg.get("op")
+        if op == "asks":
+            asks = await loop.run_in_executor(None, self.srv.gate_asks)
+            return await self._send(ws, {"ch": "repl", "type": "gate", "op": "asks", "asks": asks})
         if op == "propose":
             plan = await loop.run_in_executor(None, self.srv.gate_plan, str(msg.get("kind") or ""),
                                               str(msg.get("domain") or ""), msg.get("args") or {})
+            if plan.get("kind") == "ask":              # a takeover request is for every page of the person's
+                asks = await loop.run_in_executor(None, self.srv.gate_asks)
+                return await self._send_all({"ch": "repl", "type": "gate", "op": "asks", "asks": asks})
             return await self._send(ws, {"ch": "repl", "type": "gate", "op": "plan", "req": msg.get("req"), **plan})
         tok = str(msg.get("token") or "")
+        if op == "answer":
+            out = await loop.run_in_executor(None, self.srv.gate_answer, tok, msg.get("instruction"))
+            await self._send(ws, {"ch": "repl", "type": "gate", "op": "answered", "req": msg.get("req"), **out})
+            asks = await loop.run_in_executor(None, self.srv.gate_asks)
+            return await self._send_all({"ch": "repl", "type": "gate", "op": "asks", "asks": asks})
         if op == "confirm":
             out = await loop.run_in_executor(None, self.srv.gate_confirm, tok)
             await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
@@ -468,7 +483,7 @@ class Gateway:
             out = await loop.run_in_executor(None, self.srv.gate_refuse, tok)
             return await self._send(ws, {"ch": "repl", "type": "gate", "op": "refused", "req": msg.get("req"),
                                          "token": tok, **out})
-        raise ValueError(f"gate op: propose | confirm | refuse, not {op!r}")
+        raise ValueError(f"gate op: propose | confirm | refuse | asks | answer, not {op!r}")
 
     async def ask_person(self, s: "Sess", plan: dict) -> tuple:
         """The agent seat's write waits for the person (docs/LOOP.md rule 1, as pi's gate):

@@ -109,13 +109,17 @@ NAV_RECORDS = ".metis/console-nav/records/"
 class ConsoleServer:
     """{sid: Repl} plus the per-session epoch."""
 
-    def __init__(self, root: Optional[Path] = None, seed: int = 1, take_into: Optional[Path] = None):
+    def __init__(self, root: Optional[Path] = None, seed: int = 1, take_into: Optional[Path] = None,
+                 loop_state: Optional[Path] = None):
         self.root = Path(root) if root else catalog_root()
         self.seed = seed
         # every catalog write is a plan the person confirms (loop-parity step 2, docs/LOOP.md): the
         # loop's one policy, its memory of refused proposals in this process
         self.gate = Gate()
         self.take_into = Path(take_into) if take_into else None
+        # a loop running elsewhere (pi, unattended) keeps its gate in its state directory: its asks
+        # (the disengagement records, loop-policy) are shown and answered here ([console] loop_state)
+        self.loop_state = Path(loop_state).expanduser() if loop_state else None
         self.shells: Dict[str, object] = {}
         self.epochs: Dict[str, int] = {}
         self._roots = sorted({str(self.root), str(self.root.resolve())},
@@ -511,11 +515,37 @@ class ConsoleServer:
             if not self.take_into:
                 raise ValueError("take writes into another catalog: set [console] take_into (a directory)")
             pl = self.gate.propose("take", domain, self.take_into, src=str(self.root))
-        elif kind in ("edit", "readme", "intents", "program", "extension"):
-            pl = self.gate.propose(kind, domain, self.root, **a)
+        elif kind in ("edit", "readme", "intents", "program", "extension", "ask"):
+            try:
+                pl = self.gate.propose(kind, domain, self.root, **a)
+            except Refused as e:
+                raise ValueError(str(e)) from None
         else:
-            raise ValueError(f"the console's writes: edit, readme, intents, take, program, extension; not {kind!r}")
+            raise ValueError(f"the console's writes: edit, readme, intents, take, program, extension, ask; not {kind!r}")
         return self._shown(pl)
+
+    def gate_asks(self) -> list:
+        """The asks waiting for the person (loop-policy, docs/LOOP.md): the console's own gate's
+        and the gate of the loop in [console] loop_state, each with `where` it waits."""
+        out = [dict(a, where="console") for a in self.gate.asks()]
+        if self.loop_state and (self.loop_state / "gate.json").is_file():
+            with Gate.locked(self.loop_state) as g:
+                out += [dict(a, where="loop") for a in g.asks()]
+        return self.scrub(out)
+
+    def gate_answer(self, token: str, instruction) -> dict:
+        """The person's instruction for the ask `token`, in the gate that holds it (the loop reads
+        it when it re-engages)."""
+        token = str(token or "")
+        try:
+            if any(a["token"] == token for a in self.gate.asks()):
+                return self.scrub(self.gate.answer(token, instruction))
+            if self.loop_state and (self.loop_state / "gate.json").is_file():
+                with Gate.locked(self.loop_state) as g:
+                    return self.scrub(g.answer(token, instruction))
+            raise Refused("no such ask: it was answered, or never asked")
+        except Refused as e:
+            raise ValueError(str(e)) from None
 
     def gate_confirm(self, token: str) -> dict:
         """Write exactly the plan `token` names (the gate's confirm: a source changed since
