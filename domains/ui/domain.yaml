@@ -9,3 +9,6 @@ intent: {spec: intent.yaml}
 clock: {beats: 1, lockstep: true}
 display: the loop console's widgets and the person's focus
 line: "ui — voice navigation over the page's widget tree; the lifted base ui_domain.llp, the console's facts ui.llp"
+# the page's moves: a result is spoken as the fired rule's %% line, never re-voiced by the model
+# (metis-agent: console-nav step 2 F4)
+voice: line

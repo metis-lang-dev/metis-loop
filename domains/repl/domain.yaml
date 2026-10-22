@@ -7,3 +7,6 @@ intent: {spec: intent.yaml}
 clock: {beats: 1}
 display: the loop console's REPL — load, run, step, undo, reset, narrate, records, apply, stop, tell
 line: "repl — the console's REPL commands under the session's state; apply only shows the plan; tell hands over to the formalizer"
+# the REPL's tasks: a result is spoken as the fired rule's %% line, never re-voiced by the model
+# (metis-agent: console-nav step 2 F4)
+voice: line
