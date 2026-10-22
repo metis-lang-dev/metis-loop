@@ -520,11 +520,14 @@ def split_vector(game, sp, run_dir, base_name, steps=60):
 
 
 def director_base_path():
-    """The lifted director (metis-worlds alfworld/domains/director_domain.llp: world-neutral, DIRECTOR.md)."""
+    """The lifted director (DIRECTOR.md; world-neutral): its canonical home, metis-catalog
+    domains/director/ (the architect's G5 ruling: the catalog is the domains' repo), else the worlds'
+    copy (metis-worlds alfworld/domains/director_domain.llp)."""
     d = Path(__file__).resolve()
     for _ in range(8):
         d = d.parent
-        c = d / "metis-worlds" / "alfworld" / "domains" / "director_domain.llp"
-        if c.exists():
-            return c
-    raise SystemExit("no metis-worlds checkout beside this one (alfworld/domains/director_domain.llp)")
+        for c in (d / "metis-catalog" / "domains" / "director" / "director_domain.llp",
+                  d / "metis-worlds" / "alfworld" / "domains" / "director_domain.llp"):
+            if c.exists():
+                return c
+    raise SystemExit("no lifted director beside this checkout (metis-catalog domains/director/, or metis-worlds alfworld/domains/)")
