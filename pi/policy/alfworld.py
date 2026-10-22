@@ -330,6 +330,14 @@ class AlfWorld:
         h = {v: k for k, v in host.to_name.items()}
         return [h[x] for x in h if x in command]
 
+    def _verb_of(self, command):
+        """A command's verb (the hierarchy's guided replay: which domain sends it)."""
+        c = command.strip()
+        for word, verb in (("go to ", "go"), ("open ", "open"), ("take ", "take"), ("move ", "put"), ("put ", "put")):
+            if c.startswith(word):
+                return verb
+        return None
+
     def _command_of(self, host, name):
         """The command the host would send for the rule (the guided replay compares it)."""
         try:

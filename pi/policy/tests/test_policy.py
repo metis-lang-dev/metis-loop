@@ -71,7 +71,9 @@ def test_the_scripted_brain_builds_the_family_from_the_empty_domain(tmp_path):
     assert any(e["numbers"]["success"] > 0 for e in exploit)                     # the policy: the gate split won
     assert any(e["numbers"]["likelihood"] > 0 and e["numbers"]["success"] == 0 for e in exploit)   # a precondition from a refusal
     ref = [e for e in props if e["phase"] == "refactor"]
-    assert ref and all(e["verdict"] == "refuse" and e["numbers"]["replay_identical"] is False for e in ref)
+    split = [e for e in ref if (e["numbers"] or {}).get("move") == "split"]
+    assert split and split[0]["verdict"] == "accept" and split[0]["numbers"]["replay_identical"]     # the policy's split by verb (2b)
+    assert all(e["numbers"].get("replay_identical") is False or e["numbers"].get("success", 0) < 0 for e in ref if e["verdict"] == "refuse")
     won = [e["won"] for e in out if e.get("event") == "episode"][-2:]
     assert won == [True, True]
     assert (tmp_path / "run" / "records" / "heldout.jsonl").exists() and (tmp_path / "run" / "cost.jsonl").exists()

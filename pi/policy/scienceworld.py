@@ -263,6 +263,11 @@ class ScienceWorld:
     def _rule_verb(self, name):
         return rule_verb(name, COMMANDS, COMMANDS)
 
+    def _verb_of(self, command):
+        """A command's verb (the hierarchy's guided replay: which domain sends it)."""
+        w = command.strip().split()
+        return w[0] if w else None
+
     def _command_of(self, host, name):
         """The command the host would send for the rule (the guided replay compares it)."""
         try:

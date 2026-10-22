@@ -282,6 +282,15 @@ class Hier:
         (pkg / self.g.path.name).write_text(narrow(self.inst, keep))
         return Repl.open(pkg / self.g.path.name)
 
+    def feeds(self, ev, command):
+        """Whether the event gives the domain that sends COMMAND (by its verb, the world's DOMAINS) one of
+        its goal tokens: the guided replay's choice among the planner's bookkeeping."""
+        verb = self.w._verb_of(command) if hasattr(self.w, "_verb_of") else None
+        names = getattr(self.w, "DOMAINS", {}) or {}
+        d = names.get(verb, verb)
+        goals = self.sp.goal.get(d, set())
+        return bool(goals) and any(kind_of(a) in goals for a in ev.produce)
+
     def ground(self, d, pool):
         r = self.session(d, pool)
         return len(r.shell.events_tbl)
@@ -307,16 +316,18 @@ class Hier:
         out_for_others = self.sp.out.get(d, set())
         why = acting.fire(self.w, host, sh, rng, out, steps,
                           stop=lambda s: any(kind_of(a) in out_for_others for a, n in s.counts.items() if n > 0
-                                             and a not in pool), guide=guide)
+                                             and a not in pool), guide=guide, feeds=self.feeds)
         rows = [{"kind": kind, "produce": sorted(ev.produce)} for kind, _, ev in sh.fired_rows[k:]]
         new = {a: n for a, n in sh.counts.items() if n > 0 and kind_of(a) in self.sp.tokens}
         new.update(held)
         return new, rows, why
 
-    def next_domain(self, host, pool, last, skip=()):
-        """The manual switch: the domain whose rules are enabled now — the last one first, then the
-        specialists, the planner last (skip: domains whose narrowed activation fired nothing here)."""
-        order = [last] + [d for d in self.sp.specialists if d != last] + [self.sp.planner]
+    def next_domain(self, host, pool, last, skip=(), handed=()):
+        """The manual switch: the domain whose rules are enabled now — the ones that take what the last
+        activation put out first (its results handed on), then the last one, the specialists, the
+        planner (skip: domains whose narrowed activation fired nothing here)."""
+        takers = [d for d in self.sp.domains if d != last and set(handed) & self.sp.goal.get(d, set())]
+        order = takers + [last] + [d for d in self.sp.specialists if d != last] + [self.sp.planner]
         for d in dict.fromkeys(order):
             if d is None or d in skip:
                 continue
@@ -361,9 +372,9 @@ def run(game, sp, run_dir, base_name, steps=60, seed=1, director=None, max_activ
     pool = h.start_pool()
     try:
         if director is None:
-            last, skip = None, set()
+            last, skip, handed = None, set(), ()
             for _ in range(max_activations):
-                d = h.next_domain(host, pool, last, skip)
+                d = h.next_domain(host, pool, last, skip, handed)
                 if d is None or host.won or out["stuck"]:
                     break
                 goal = sorted(a for a, n in pool.items() if n > 0 and kind_of(a) in sp.goal.get(d, ()))
@@ -371,8 +382,9 @@ def run(game, sp, run_dir, base_name, steps=60, seed=1, director=None, max_activ
                 if why == "diverged":
                     out["diverged"] = True
                 skip = skip | {d} if not rows else set()          # enabled whole, nothing once narrowed: the next one
-                out["activations"].append({"domain": d, "goal": goal, "results": sorted({a for r in rows for a in r["produce"]
-                                                                                       if kind_of(a) in sp.out.get(d, ())})})
+                out["activations"].append({"domain": d, "goal": goal, "fired": len(rows),
+                                           "results": sorted({a for r in rows for a in r["produce"] if kind_of(a) in sp.out.get(d, ())})})
+                handed = {kind_of(a) for a in out["activations"][-1]["results"]}
                 last = d
                 if out["steps"] >= steps:
                     break
@@ -413,8 +425,8 @@ def run_directed(h, host, pool, rng, out, steps, make_loop, max_activations, gui
         box["pool"], rows, why = h.activate(d, host, box["pool"], rng, out, steps - out["steps"], guide)
         if why == "diverged":
             out["diverged"] = True
-        out["activations"].append({"domain": d, "goal": goal, "results": sorted({a for r in rows for a in r["produce"]
-                                                                                 if kind_of(a) in h.sp.out.get(d, ())})})
+        out["activations"].append({"domain": d, "goal": goal, "fired": len(rows),
+                                   "results": sorted({a for r in rows for a in r["produce"] if kind_of(a) in h.sp.out.get(d, ())})})
         loop.produced(d, {"fired": rows})
         loop.step()
         n += 1

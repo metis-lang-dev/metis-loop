@@ -674,7 +674,13 @@ class Driver:
                "commands": [len(e["commands"]) for e in eps], "refused": [e["refused"] for e in eps],
                "games": [{k: e[k] for k in ("game", "won", "commands", "refused", "stuck")} for e in eps]}
         if mode != "flat":
+            sp = hier.Split.of(self.base(), self.World, self.start)
             out["activations"] = [len(e.get("activations") or []) for e in eps]
+            out["domains"] = sorted(sp.domains)                    # the structural column (policy-tuning step 3)
+            out["ports"] = sp.ports()
+            out["handles_declared"] = hier.director_text(sp, "director_domain.llp")[0].count("handles(") if sp.is_split() else None
+            for g, e in zip(out["games"], eps):
+                g["activations"] = [{"domain": x["domain"], "fired": x.get("fired"), "results": x["results"]} for x in e.get("activations") or []]
             out["beats"] = [len(e.get("beats") or []) for e in eps] if mode == "director" else None
         (self.rec_dir / ("evaluate-%s%s.json" % (split, "" if mode == "flat" else "-" + mode))).write_text(json.dumps(out, indent=1))
         self.say("evaluate", split=split, mode=mode, won=out["won"], n=out["n"], commands=out["commands"], refused=out["refused"])

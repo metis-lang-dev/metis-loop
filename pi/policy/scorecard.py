@@ -78,10 +78,59 @@ def score_one(variant, world, seed, a, runs):
     return row
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(prog="policy.scorecard")
-    ap.add_argument("--variant", required=True)
-    ap.add_argument("--skill")
+def structural_of(d, world, a, row):
+    """The structural column (step 3): the hierarchy the refactor built — its domains, those exercised on
+    the discovery games (an activation with a result; the planner by any activation), the director's
+    handles derived (its instance) and declared (the split's ports), the attended miss rate where a
+    corpus exists (none for a learned base: no card) — and the guards it is judged under: the split's and
+    the director's replay accepted, the director's held-out wins not below the flat program's, every
+    domain exercised. Reported always; a comparison reads `exercised` only when `guards` holds."""
+    sys.path.insert(0, str(HERE.parent))
+    from policy import hier
+    from policy.alfworld import rules_of  # noqa: F401
+    llp = next((d / "catalog" / "domains").glob("*/*.llp"), None)
+    if llp is None or llp.parent.name == "director":
+        llp = next((p for p in (d / "catalog" / "domains").glob("*/*.llp") if p.parent.name != "director"), None)
+    if llp is None:
+        return None
+    text = llp.read_text()
+    marks = {m.group(1) for m in (hier.ANNOT.search(l) for l in text.splitlines()) if m}
+    out = {"domains": None, "exercised": None, "active": None, "handles_derived": None, "handles_declared": None, "miss_rate": None, "guards": None}
+    if not marks:
+        return dict(out, why="not split")
+    rc, _, err, _ = run([str(RUN_SH), "--run", str(d), "--world", world, "--family", FAMILY[world], "--evaluate", "discovery",
+                         "--n", str(a.discovery), "--mode", "hier"], a.timeout)
+    ev = d / "records" / "evaluate-discovery-hier.json"
+    if rc != 0 or not ev.exists():
+        return dict(out, why="the discovery hierarchy did not run: " + ((err.strip().splitlines() or ["?"])[-1])[:120])
+    e = json.loads(ev.read_text())
+    doms = sorted(set(e.get("domains") or []))
+    seen, active = set(), set()
+    for g in e.get("games", []):
+        for act in g.get("activations") or []:
+            if act.get("fired"):
+                active.add(act["domain"])
+            if act.get("results") or (act["domain"] == "task" and act.get("fired")):
+                seen.add(act["domain"])            # exercised: an activation that put a result out (the planner: that acted)
+    out.update(domains=len(doms), exercised=len(seen & set(doms)), active=len(active & set(doms)))
+    dfile = d / "catalog" / "domains" / "director" / "director.llp"
+    if dfile.exists():
+        dt = dfile.read_text()
+        out["handles_derived"] = dt.count("handles(")
+        out["handles_declared"] = e.get("handles_declared")
+    journal = jl(d / "state" / "journal.jsonl")
+    moves = {(x.get("numbers") or {}).get("move"): x for x in journal if x.get("event") == "proposal"}
+    replay = all((moves[m]["numbers"].get("replay_identical") and moves[m]["verdict"] == "accept") for m in ("split", "direct") if m in moves)
+    def n_won(v):
+        return int(v.split("/")[0]) if isinstance(v, str) and "/" in v and not v.startswith("error") else None
+    flat, director = n_won(row.get("heldout_flat")), n_won(row.get("heldout_director"))
+    heldout_ok = director is None or flat is None or director >= flat
+    out["guards"] = bool(replay and heldout_ok and out["exercised"] == out["domains"])
+    out["guard_parts"] = {"replay": replay, "heldout_not_down": heldout_ok, "all_exercised": out["exercised"] == out["domains"]}
+    return out
+
+
+def add_arguments(ap):
     ap.add_argument("--worlds", default="alfworld,scienceworld")
     ap.add_argument("--seeds", default="1")
     ap.add_argument("--brain", default="script:/dev/null")
@@ -92,23 +141,40 @@ def main(argv=None):
     ap.add_argument("--set", action="append", default=[])
     ap.add_argument("--runs", default=str(HERE.parent / "policy-runs"))
     ap.add_argument("--timeout", type=int, default=3600)
-    a = ap.parse_args(argv)
-    if a.brain.startswith("openrouter/") and a.budget is None:
-        ap.error("a paid brain needs --budget per run")
-    runs = Path(a.runs).resolve()
+
+
+def score_variant(a, variant, skill, runs):
+    """One variant's card: every world × seed scored (score_one), the structural column beside it."""
+    a.skill = skill
     rows = []
     for world in a.worlds.split(","):
         for seed in (int(x) for x in a.seeds.split(",")):
-            row = score_one(a.variant, world, seed, a, runs)
+            row = score_one(variant, world, seed, a, runs)
+            row["structural"] = structural_of(runs / variant / ("%s-s%d" % (world, seed)), world, a, row)
             rows.append(row)
-            print("%-12s %-13s s%d  %-9s acc %s/%s  calls %s  usd %s  rules %s  usd/rule %s  heldout flat %s director %s  %s" % (
-                a.variant, world, seed, row.get("phase"), row.get("accepted"), row.get("proposals"), row.get("calls"), row.get("usd"),
-                row.get("rules"), row.get("usd_per_rule"), row.get("heldout_flat"), row.get("heldout_director"), row.get("status")), flush=True)
-    card = {"variant": a.variant, "skill": a.skill, "brain": a.brain, "rows": rows,
+            st = row["structural"] or {}
+            print("%-12s %-13s s%d  %-9s acc %s/%s  calls %s  usd %s  rules %s  usd/rule %s  heldout flat %s director %s  "
+                  "domains %s exercised %s guards %s  %s" % (
+                      variant, world, seed, row.get("phase"), row.get("accepted"), row.get("proposals"), row.get("calls"), row.get("usd"),
+                      row.get("rules"), row.get("usd_per_rule"), row.get("heldout_flat"), row.get("heldout_director"),
+                      st.get("domains"), st.get("exercised"), st.get("guards"), row.get("status")), flush=True)
+    card = {"variant": variant, "skill": skill, "brain": a.brain, "rows": rows,
             "usd": round(sum(r["usd"] for r in rows), 4), "rules": sum(r.get("rules") or 0 for r in rows)}
-    (runs / a.variant).mkdir(parents=True, exist_ok=True)
-    (runs / a.variant / "scorecard.json").write_text(json.dumps(card, indent=1))
-    print("scorecard: %s  total usd %s" % (runs / a.variant / "scorecard.json", card["usd"]))
+    (runs / variant).mkdir(parents=True, exist_ok=True)
+    (runs / variant / "scorecard.json").write_text(json.dumps(card, indent=1))
+    print("scorecard: %s  total usd %s" % (runs / variant / "scorecard.json", card["usd"]), flush=True)
+    return card
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="policy.scorecard")
+    ap.add_argument("--variant", required=True)
+    ap.add_argument("--skill")
+    add_arguments(ap)
+    a = ap.parse_args(argv)
+    if a.brain.startswith("openrouter/") and a.budget is None:
+        ap.error("a paid brain needs --budget per run")
+    score_variant(a, a.variant, a.skill, Path(a.runs).resolve())
     return 0
 
 

@@ -272,6 +272,11 @@ class MiniHack:
     def _rule_verb(self, name):
         return rule_verb(name, COMMANDS, COMMANDS)
 
+    def _verb_of(self, command):
+        """A command's verb (the hierarchy's guided replay: which domain sends it)."""
+        c = command.strip()
+        return c[4:].split("(")[0] if c.startswith("cmd_") else None
+
     def _command_of(self, host, name):
         """The command the host would send for the rule (the guided replay compares it)."""
         rv = self._rule_verb(name)

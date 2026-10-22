@@ -176,3 +176,29 @@ The world adapter's hooks for the moves:
 
 ALFWorld has them all. ScienceWorld and MiniHack name their domains by verb and narrow the planner
 not at all, until they give `DOMAINS` and `planner_keep`.
+
+## Tuning the policy (policy-tuning s-1caedae5: `scorecard.py`, `rewrite.py`)
+
+- **The card** (`python -m policy.scorecard --variant V [--skill FILE] …`): one variant × worlds × seeds. It runs the loop
+  from the empty domain with a brain, then the held-out evaluation flat and through the director.
+  - Per row: calls, usd, rules, usd/rule, held-out wins, the end.
+  - **The structural column** (`structural_of`, step 3): the hierarchy the refactor built.
+    - `domains`, and the domains `exercised` on the discovery games: an activation that put a result
+      out; the planner, one that acted.
+    - `active`: the domains that fired at all.
+    - The director's handles, `handles_derived` (its instance) and `handles_declared` (the split's
+      ports).
+    - The attended miss rate where a corpus exists (none for a learned base).
+    - `guards`: the split's and the director's replay accepted, the director's held-out wins not below
+      the flat program's, every domain exercised. It is reported always, and judged only when
+      `guards` holds.
+- **The rewrite** (`python -m policy.rewrite --skill FILE --rounds 3 …`, step 2). Each round:
+  1. the kept skill's runs are digested: every proposal with its numbers, verdict and reasons, the
+     brain's lines where refused, the fit-repairs, the disengagements;
+  2. the brain proposes the whole edited skill (one ```md block, the headings kept), one budgeted call;
+  3. the edited skill is scored as a new variant;
+  4. the better card is kept: no world's held-out wins lower and their sum higher; then, when both
+     cards' guards hold, more domains exercised; then a lower usd/rule.
+
+  `RUNS/rewrite/history.json` is the result: every round's skill, its card, the verdict and the diff.
+  An edit that loses a heading, or changes nothing, is not scored.
