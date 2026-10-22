@@ -15,9 +15,9 @@ try:
     import scienceworld  # noqa: F401
     from policy.scienceworld import ScienceWorld, empty_base, rules_of
     HAVE = True
-except Exception:  # noqa: BLE001
-    HAVE = False
-pytestmark = pytest.mark.skipif(not HAVE, reason="no ScienceWorld (the world's venv) or no metis-worlds checkout")
+except (Exception, SystemExit) as e:  # noqa: BLE001 — the reason says which: the world's venv, the checkout, the import
+    HAVE = "%s: %s" % (type(e).__name__, e)
+pytestmark = pytest.mark.skipif(HAVE is not True, reason="no ScienceWorld world here (%s)" % HAVE)
 
 
 def test_the_empty_base_has_the_perception_and_no_rule():

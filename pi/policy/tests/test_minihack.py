@@ -14,10 +14,10 @@ try:
     import minihack  # noqa: F401
     from policy.minihack import MiniHack, empty_base, rules_of
     from policy import measure, prompts
-    HAVE = hasattr(__import__("policy.minihack", fromlist=["_world"])._world()[1], "base_source")
-except Exception:  # noqa: BLE001
-    HAVE = False
-pytestmark = pytest.mark.skipif(not HAVE, reason="no MiniHack (the world's venv) or no metis-worlds checkout with gen_level.base_source")
+    HAVE = hasattr(__import__("policy.minihack", fromlist=["_world"])._world()[1], "base_source") or "gen_level has no base_source"
+except (Exception, SystemExit) as e:  # noqa: BLE001 — the reason says which: the world's venv, the checkout, the import
+    HAVE = "%s: %s" % (type(e).__name__, e)
+pytestmark = pytest.mark.skipif(HAVE is not True, reason="no MiniHack world here (%s)" % HAVE)
 
 MOVE = """  %% I step {D}.
   move [dyn] : agent_at(C) * $next(C, D, C2) * floor(C2) -o agent_at(C2) * floor(C2)."""

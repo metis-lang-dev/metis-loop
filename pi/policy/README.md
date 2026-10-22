@@ -121,13 +121,15 @@ discovery never shows (a monster and a trap, a door and a key). The family `room
 monster levels: a monster moves on its own, so its records are not the command's alone.
 
 ```sh
-run.sh --world minihack --family room_quiet --brain claude/claude-opus-5-5 --set explore_steps=120
+run.sh --world minihack --family room_quiet --brain claude/claude-opus-5-5 --set explore_steps=120   # 9 verbs: 120, not ALFWorld's 40
 ```
 
 - **The instance** (world/gen_level.py with a base) declares the level's types (cell, thing, beast),
   the grid as static facts `next(C, D, C2)` (the cell one step from C in direction D: the cells are
   named by their coordinates, so this is the frame the perception already has) and the perceived
-  start. The base (`gen_level.base_source`) has the predicates and no rule.
+  start. The base (`gen_level.base_source`) has the predicates and no rule. The grid is instance
+  knowledge of the same kind as ScienceWorld's house graph and ALFWorld's `recat`: the world's layout,
+  not a property an experiment would reveal (the architect's ruling).
 - **The actions:** MiniHack lists none, so `actions()` is every command the host can send (37: move,
   open, kick and apply × 8 directions, and pickup, eat, down, wait, search). The world REFUSES one
   by changing nothing it perceives (mh_host.act's test), and that is the record's `admissible`.
