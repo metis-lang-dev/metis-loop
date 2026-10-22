@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(HAVE is not True, reason="no ScienceWorld world 
 
 def test_the_empty_base_has_the_perception_and_no_rule():
     text = empty_base("sw")
-    assert rules_of(text) == [] and "pred here(thing) : sw." in text and "pred said(said_kind) : sw." in text and "stage act {" in text
+    assert rules_of(text) == [] and "pred here(room) : sw." in text and "pred said(said_kind) : sw." in text and "stage act {" in text
 
 
 def test_a_variation_over_the_empty_base(tmp_path):
