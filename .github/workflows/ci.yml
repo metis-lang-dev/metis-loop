@@ -178,7 +178,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install metispy, metis-catalog and the loop SDK (this checkout's sdk/: one tag with the extensions)
+      - name: "Install metispy, metis-catalog and the loop SDK (this checkout's sdk/, one tag with the extensions)"
         run: |
           pip install ./metispy ./metis-catalog ./metis-loop/sdk
           python -m metis_loop_sdk.catalog ts --json | python -c "import json,sys,os; d=json.load(sys.stdin)['dir']; assert os.path.isfile(os.path.join(d,'catalog.ts')), d"
