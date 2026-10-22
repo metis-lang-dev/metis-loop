@@ -228,6 +228,7 @@ class Driver:
             self.state["refused_run"] = 0
             self.pred = None
             self._sync_tree("current", self.base())
+            self.check_contradiction()
         else:
             self.state["refused_run"] += 1
         self.save()
@@ -283,6 +284,27 @@ class Driver:
                     return
             w.close()
         self.say("explore-ends", why="the discovery games' steps are spent")
+
+    def check_contradiction(self):
+        """contradiction (POLICY.md): two accepted rules answering one action in one state with two
+        afters, on the recent records; or a base that comes back to an earlier accepted text (a
+        refactoring undone)."""
+        sha = hashlib.sha256(self.base().encode()).hexdigest()[:12]
+        seen = self.state.setdefault("bases", [])
+        if sha in seen[:-1]:
+            raise Disengage("contradiction", "The base came back to an earlier accepted version (%s): a change undone. "
+                            "Which of the two should stand?" % sha, options=["note: which version", "phase: skip", "abandon"],
+                            believes=[l for _, l in rules_of(self.base())])
+        seen.append(sha)
+        for rec in jl_read(self.rec_dir / "transitions.jsonl")[-60:]:
+            by = {}
+            for name, after in self.current().events(rec):
+                by.setdefault(name.split("[")[0], set()).add(frozenset(after))
+            afters = set().union(*by.values()) if by else set()
+            if len(by) > 1 and len(afters) > 1:
+                raise Disengage("contradiction", "Rules %s answer %s in one state with different outcomes. Which one is right there?"
+                                % (" and ".join(sorted(by)), rec["command"]), options=["note: which rule", "rule: the right one", "abandon"],
+                                tried=[rec["game"], rec["t"]], believes=[l for n, l in rules_of(self.base()) if n in by])
 
     def check_vocabulary(self, rec):
         """out_of_vocabulary: the same before-facts and command, another after (the host does not read
@@ -371,6 +393,11 @@ class Driver:
     # ── refactor ──
     def refactor(self):
         text = self.base()
+        sha = hashlib.sha256(text.encode()).hexdigest()[:12]
+        if self.state.get("refactored_at") == sha:          # the same base the last refactoring saw: nothing new to ask
+            self.say("refactor-skipped", why="the base is unchanged since the last refactoring")
+            return
+        self.state["refactored_at"] = sha
         p = (f"You are refactoring the rules of a household world (ALFWorld) without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
              f"{prompts.vocabulary(self.commands)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
              "Make it smaller and clearer: merge rules that differ only in a fact they read, drop a rule no state can enable, "
@@ -408,6 +435,18 @@ class Driver:
             return 0
         except Disengage as d:
             return self.disengage(d)
+
+    def evaluate(self, split, n):
+        """The base as it is, acting on N games of SPLIT (valid_unseen: the held-out): no brain, no
+        write. → RUN/records/evaluate-<split>.json and the summary line."""
+        games = [AlfWorld(g, self.run / "trees" / "current") for g in AlfWorld.sample(split, self.family, n, self.seed)]
+        eps = [w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed) for w in games]
+        out = {"split": split, "n": len(eps), "won": sum(e["won"] for e in eps), "rules": len(rules_of(self.base())),
+               "commands": [len(e["commands"]) for e in eps], "refused": [e["refused"] for e in eps],
+               "games": [{k: e[k] for k in ("game", "won", "commands", "refused", "stuck")} for e in eps]}
+        (self.rec_dir / ("evaluate-%s.json" % split)).write_text(json.dumps(out, indent=1))
+        self.say("evaluate", split=split, won=out["won"], n=out["n"], commands=out["commands"], refused=out["refused"])
+        return 0
 
     def disengage(self, d):
         """The minimal-risk condition: nothing more is sent; the snapshot; the ask."""
@@ -478,6 +517,8 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--set", action="append", default=[], help="KEY=N: a budget of DEFAULTS (explore_steps, proposals, …)")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (valid_unseen): no brain")
+    ap.add_argument("--n", type=int, default=10)
     a = ap.parse_args(argv)
     if a.brain.startswith("openrouter/") and a.budget is None:
         ap.error("a paid brain needs --budget (USD): the run's spend is capped where it is spent")
@@ -487,6 +528,8 @@ def main(argv=None):
         ap.error("--set: unknown %s (one of %s)" % (", ".join(sorted(unknown)), ", ".join(DEFAULTS)))
     brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
     d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg)
+    if a.evaluate:
+        return d.evaluate(a.evaluate, a.n)
     return d.resume() if a.resume else d.go(a.phase)
 
 

@@ -7,7 +7,8 @@ operator's `claude`), behind one call, with the run's cost log and the caps.
 Backends:
   openrouter/<model>   metis_loop_sdk.models.openai (reasoning off, temperature 0, providers that keep
                        no prompts); the key from $OPENROUTER_API_KEY only, never printed
-  claude[/<model>]     the operator's `claude` login (metis_loop_sdk.models.claude), no spend
+  claude[/<model>]     the operator's `claude` login (metis_loop_sdk.models' claude-command under the
+                       workspace's .venv; default claude-opus-5-5, thinking off), no spend
   script:<file>        the answers in a JSON-lines file ({"text", "when"?: a regex on the prompt, "keep"?}):
                        the first whose `when` matches, used once unless `keep` — the tests' and a
                        dry run's brain, no model
@@ -29,6 +30,21 @@ if str(SDK) not in sys.path:
     sys.path.insert(0, str(SDK))
 
 OPENROUTER = "https://openrouter.ai/api/v1"
+
+
+def sdk_python():
+    """The python whose site has claude_agent_sdk: $METIS_LOOP_SDK_PY, else the workspace's .venv
+    (the first parent with one)."""
+    p = os.environ.get("METIS_LOOP_SDK_PY")
+    if p:
+        return p
+    d = Path(__file__).resolve()
+    for _ in range(8):
+        d = d.parent
+        c = d / ".venv" / "bin" / "python"
+        if c.exists():
+            return str(c)
+    return sys.executable
 
 
 class Budget(RuntimeError):
@@ -95,10 +111,16 @@ class Brain:
             last = json.loads(calls.read_text().splitlines()[-1])
             self._log(dict(last, purpose=purpose, usage_before=before))
         elif self.model.split("/")[0] == "claude":
-            import asyncio
-            from metis_loop_sdk.models import claude
-            m = self.model.split("/", 1)[1] if "/" in self.model else claude.DEFAULT_MODEL
-            text = asyncio.run(claude.complete(prompt, model=m))
+            # the SDK's command face under the python that has claude_agent_sdk (the workspace's .venv:
+            # $METIS_LOOP_SDK_PY), the prompt on stdin: the operator's login, no spend
+            import subprocess
+            m = self.model.split("/", 1)[1] if "/" in self.model else "claude-opus-5-5"
+            r = subprocess.run([sdk_python(), "-m", "metis_loop_sdk.models", "claude-command", "--model", m, "--thinking", "0"],
+                               input=prompt, text=True, capture_output=True, timeout=900,
+                               env=dict(self.env, PYTHONPATH=str(SDK)))
+            if r.returncode != 0:
+                raise RuntimeError("claude-command: %s" % r.stderr.strip()[-400:])
+            text = r.stdout
             self._log({"model": self.model, "purpose": purpose, "cost": 0, "prompt_chars": len(prompt)})
         else:
             raise ValueError("brain %r: openrouter/<model> | claude[/<model>] | script:<file>" % self.model)
