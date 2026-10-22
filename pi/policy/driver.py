@@ -1,0 +1,494 @@
+"""The phase driver (loop-policy step 2; docs/POLICY.md): the agentic loop's policy over a world host.
+
+    python -m policy.driver --run DIR --world alfworld --family pick_and_place_simple \\
+        --phase explore|exploit|refactor --brain openrouter/<model>|claude|script:<file> --budget USD
+    python -m policy.driver --run DIR --resume          # re-engage after the person answered the ask
+
+The loop's catalog is RUN/catalog: one domain, `alf`, the lifted BASE every game's instance includes
+(the world's generator writes the instances). It starts EMPTY (the generator's declarations, no rule).
+Every write is a proposal to metis.gate's EXPERIMENTAL policy, judged by the numbers this driver
+measures (gain): on its records and on the GATE split's games (never shown to the brain).
+
+  explore   the brain's rules from TRANSITIONS: each discovery game is walked (the admissible commands,
+            the untried first), every step a record (before, command, after, text); a record the rules
+            do not predict is the seed of a proposal (gate: fits_records, likelihood not down). Ends
+            after K unexplained records without an accept, or when W steps in a row are all predicted.
+  exploit   the program acts (the kernel, the host attached); a refused command is a SURPRISE → revise
+            (gate: likelihood up, or success up with the likelihood not down); an episode not won with
+            no surprise → the policy's rules (the same gate). A surprise refused twice at one rule
+            sends the loop to a PROBE there (snapshot, each admissible command once, restore): records.
+  refactor  after R rules or K accepts: the brain's refactoring of the base (gate: the discovery games
+            replay the same commands, the gate split's success not down, the vector down).
+
+DISENGAGEMENT (POLICY.md): cornered by budget | no_progress | out_of_vocabulary | contradiction |
+stuck, the loop stops acting, snapshots (the world's commands, the base, the records, its counters),
+and proposes an ASK (one question) through the gate; the run ends with the record as its last line
+(exit 3). `--resume` reads the person's answer (metis.gate answer TOKEN) and re-engages from the
+snapshot in the phase it names, the instruction in the brain's context.
+
+Records: RUN/records/{transitions,surprises,heldout}.jsonl; RUN/state/{gate.json,journal.jsonl,run.json};
+RUN/cost.jsonl (one line per brain call: its reported cost, the key's usage before it); RUN/prompts.jsonl."""
+import argparse
+import hashlib
+import json
+import random
+import sys
+import time
+from pathlib import Path
+
+from . import measure, prompts
+from .alfworld import AlfWorld, empty_base, rules_of
+from .brain import Brain, Budget, block_of, splice
+
+DOMAIN = "alf"
+DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
+            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2}
+
+
+class Disengage(Exception):
+    def __init__(self, reason, question, options=(), tried=(), believes=()):
+        super().__init__(question)
+        self.reason, self.question = reason, question
+        self.options, self.tried, self.believes = list(options)[:3], list(tried), list(believes)
+
+
+def by_verb(rng, acts):
+    """A verb first (uniformly), then a command of it: the game lists far more goes than opens,
+    takes and puts, and a uniform pick over commands would walk and never act."""
+    verbs = sorted({a["verb"] for a in acts})
+    v = rng.choice(verbs)
+    return rng.choice([a for a in acts if a["verb"] == v])
+
+
+def jl_append(path, rec):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
+def jl_read(path):
+    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+
+
+class Driver:
+    def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print):
+        from metis import gate
+        self.run, self.brain, self.family, self.seed = Path(run).resolve(), brain, family, seed
+        self.cfg = dict(DEFAULTS, **(cfg or {}))
+        self.out = out
+        self.root = self.run / "catalog"
+        self.rec_dir, self.state_dir = self.run / "records", self.run / "state"
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.gate = gate.Gate.at(self.state_dir, policy="experimental", gain=self.gain)
+        self.state = json.loads((self.state_dir / "run.json").read_text()) if (self.state_dir / "run.json").exists() else {
+            "phase": "explore", "proposals": 0, "accepted": 0, "refused_run": 0, "accepts_since_refactor": 0,
+            "family": family, "seed": seed, "discovery": discovery, "gate_games": gate_games, "notes": [],
+            "status": "running", "cfg": self.cfg}
+        self.cfg = dict(self.state.get("cfg") or self.cfg, **(cfg or {}))
+        if not (self.root / "domains" / DOMAIN / ("%s.llp" % DOMAIN)).exists():
+            d = self.root / "domains" / DOMAIN
+            d.mkdir(parents=True, exist_ok=True)
+            (d / ("%s.llp" % DOMAIN)).write_text(empty_base(DOMAIN))      # the generator's start, not a proposal
+            (d / "domain.yaml").write_text("program: %s.llp\ndisplay: ALFWorld, learned\nline: \"the loop's base over ALFWorld's facts\"\n" % DOMAIN)
+        self.disc = [AlfWorld(g, self.run / "trees" / "current")
+                     for g in AlfWorld.sample("train", family, self.state["discovery"], seed)]
+        self.held = [AlfWorld(g, self.run / "trees" / "current")
+                     for g in AlfWorld.sample("valid_seen", family, self.state["gate_games"], seed)]
+        self.games = {w.iid: w for w in self.disc + self.held}
+        w0 = self.disc[0]
+        self.dynamic, self.commands = w0.alf_host.DYNAMIC_PREDS, w0.alf_host.COMMANDS
+        self._sync_tree("current", self.base())
+        self.pred = None
+        self.seed_record = None
+        self.revised_in_vain = {}
+
+    # ── the base and its trees ──
+    def base(self):
+        return (self.root / "domains" / DOMAIN / ("%s.llp" % DOMAIN)).read_text()
+
+    def _sync_tree(self, name, text):
+        b = self.run / "trees" / name / "base"
+        b.mkdir(parents=True, exist_ok=True)
+        (b / "alf.llp").write_text(text)
+        return self.run / "trees" / name
+
+    def predictor(self, name="current", text=None):
+        tree = self._sync_tree(name, self.base() if text is None else text)
+        return measure.Predictor(tree, self.games, self.dynamic, self.commands)
+
+    def current(self):
+        if self.pred is None:
+            self.pred = self.predictor("current")
+        return self.pred
+
+    def save(self):
+        (self.state_dir / "run.json").write_text(json.dumps(self.state, indent=1))
+
+    def say(self, what, **kw):
+        line = dict({"t": time.strftime("%H:%M:%S"), "phase": self.state["phase"], "event": what}, **kw)
+        jl_append(self.run / "run.log.jsonl", line)
+        self.out(json.dumps(line))
+
+    # ── the held-out records (the likelihood's set): a seeded walk on the gate split, once ──
+    def heldout(self):
+        p = self.rec_dir / "heldout.jsonl"
+        if not p.exists():
+            rng = random.Random(self.seed + 1000)
+            for w in self.held:
+                w.reset()
+                for _ in range(self.cfg["explore_steps"] // 2):
+                    acts = w.actions()
+                    if not acts or w.done:
+                        break
+                    for c in w.unadmissible(rng):          # the refusals, from the same state
+                        jl_append(p, dict(w.step(c), phase="heldout"))
+                    jl_append(p, dict(w.step(by_verb(rng, acts)["command"]), phase="heldout"))
+                w.close()
+        return jl_read(p)
+
+    # ── the gate's numbers ──
+    def gain(self, plan, phase):
+        text = next(f["text"] for f in plan["files"] if f["path"].endswith("%s.llp" % DOMAIN))
+        cand, cur = self.predictor("candidate", text), self.current()
+        held = self.heldout()
+        bad = next((cand.compiles(i) for i in self.games if cand.compiles(i)), None)
+        if bad:
+            return {"fits_records": False, "likelihood": -1.0, "success": -1.0, "replay_identical": False,
+                    "vector": {"before": 0, "after": 1}}
+        n = {}
+        if phase in ("exploit", "refactor"):
+            # the success first: its runs' refusals on the gate split join the likelihood's records
+            s_c, rc = self.success(self.run / "trees" / "candidate")
+            s_0, r0 = self.success(self.run / "trees" / "current")
+            n["success"] = round(s_c - s_0, 6)
+            held = held + rc + r0
+        lk = measure.likelihood(cand, held) - measure.likelihood(cur, held)
+        n["likelihood"] = round(lk, 6)
+        if phase == "explore":
+            ok, why = measure.fits(cand, text, self.base(), self.seed_record,
+                                   jl_read(self.rec_dir / "transitions.jsonl") + jl_read(self.rec_dir / "surprises.jsonl"))
+            n["fits_records"] = ok
+            self.say("fits", ok=ok, why=why)
+        if phase == "refactor":
+            n["replay_identical"] = self.replay(self.run / "trees" / "candidate") == self.replay(self.run / "trees" / "current")
+            v0, v1 = measure.vector(self.base(), cur, self.disc[0].iid), measure.vector(text, cand, self.disc[0].iid)
+            n["vector"] = {"before": (v0.get("ground") or 0) + v0["rules"], "after": (v1.get("ground") or 0) + v1["rules"]}
+        return n
+
+    def success(self, tree):
+        """The gate split's win rate under TREE's program, and the refusals its runs met."""
+        eps = [w.act(tree, self.cfg["act_steps"], seed=self.seed) for w in self.held]
+        return (sum(e["won"] for e in eps) / max(1, len(eps)),
+                [t for e in eps for t in e["transitions"] if t["kind"] == "surprise"])
+
+    def replay(self, tree):
+        return [w.act(tree, self.cfg["act_steps"], seed=self.seed)["commands"] for w in self.disc]
+
+    # ── a proposal ──
+    def propose(self, prompt, purpose, seed_game):
+        """The brain's lines → the candidate base (repaired until it compiles in the seed record's
+        instance) → the gate. → the verdict ("accept" | "refuse" | "error")."""
+        if self.state["proposals"] >= self.cfg["proposals"]:
+            raise Disengage("budget", "The proposals budget (%d) is spent. More proposals, another phase, or stop?" % self.cfg["proposals"],
+                            options=["budget: more proposals", "phase: refactor now", "abandon"])
+        try:
+            answer = self.brain.ask(prompt, purpose)
+        except Budget as e:
+            raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
+                            options=["budget: more spend", "abandon"]) from None
+        lines = block_of(answer)
+        text, info = splice(self.base(), lines)
+        if text == self.base():
+            self.say("proposal", verdict="none", why="the brain proposed no change", purpose=purpose)
+            return "none"
+        for _ in range(self.cfg["repairs"]):
+            words = self.predictor("candidate", text).compiles(seed_game)
+            if not words:
+                break
+            try:
+                lines = block_of(self.brain.ask(prompt + "\n\n" + prompts.repair(lines, words), purpose + "-repair"))
+            except Budget as e:
+                raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
+                                options=["budget: more spend", "abandon"]) from None
+            text, info = splice(self.base(), lines)
+        self.state["proposals"] += 1
+        cost = self.last_cost()
+        try:
+            pl = self.gate.propose("program", DOMAIN, self.root, text=text, phase=self.state["phase"], cost=cost)
+        except Exception as e:                      # noqa: BLE001 — the gate's refusal in words (no plan left waiting)
+            self.say("proposal", verdict="error", why=str(e), **info)
+            self.state["refused_run"] += 1
+            self.save()
+            return "error"
+        v = pl["verdict"]
+        self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, **info)
+        if v["verdict"] == "accept":
+            self.state["accepted"] += 1
+            self.state["accepts_since_refactor"] += 1
+            self.state["refused_run"] = 0
+            self.pred = None
+            self._sync_tree("current", self.base())
+        else:
+            self.state["refused_run"] += 1
+        self.save()
+        if self.state["refused_run"] >= self.cfg["no_progress"]:
+            raise Disengage("no_progress", "%d proposals in a row were refused (the last: %s). Give me a note on what I miss, "
+                            "a rule to try, or another phase?" % (self.state["refused_run"], "; ".join(v["why"][-2:])),
+                            options=["note: what the rules miss", "phase: skip this state", "abandon"],
+                            tried=self.journal_tail(), believes=[l for _, l in rules_of(self.base())])
+        return v["verdict"]
+
+    def last_cost(self):
+        rows = jl_read(self.run / "cost.jsonl")
+        return float(rows[-1].get("cost") or 0) if rows else 0.0
+
+    def journal_tail(self, n=4):
+        return [{k: e.get(k) for k in ("phase", "verdict", "why")} for e in self.gate.journal()[-n:] if e.get("event") == "proposal"]
+
+    def note(self):
+        return "; ".join(self.state.get("notes") or []) or None
+
+    # ── explore ──
+    def explore(self):
+        rng = random.Random(self.seed)
+        tried, unexplained, explained_run = set(), 0, 0
+        trans = self.rec_dir / "transitions.jsonl"
+        for w in self.disc:
+            w.reset()
+            for _ in range(self.cfg["explore_steps"]):
+                acts = w.actions()
+                if not acts or w.done:
+                    break
+                fresh = [a for a in acts if (a["verb"], a["command"]) not in tried]
+                a = by_verb(rng, fresh or acts)
+                tried.add((a["verb"], a["command"]))
+                rec = w.step(a["command"])
+                jl_append(trans, rec)
+                self.check_vocabulary(rec)
+                if self.current().predicts(rec):
+                    explained_run += 1
+                    if explained_run >= self.cfg["explore_w"]:
+                        self.say("explore-complete", why="%d steps in a row predicted" % explained_run)
+                        return
+                    continue
+                explained_run = 0
+                self.seed_record = rec
+                sims = [r for r in jl_read(trans) if r["action"]["verb"] == rec["action"]["verb"]
+                        and (r["game"], r["t"]) != (rec["game"], rec["t"])][-2:]
+                verdict = self.propose(prompts.explore(self.base(), self.commands, rec, sims, w.instance_text(), self.note()),
+                                       "explore", rec["game"])
+                unexplained = 0 if verdict == "accept" else unexplained + 1
+                if unexplained >= self.cfg["explore_k"]:
+                    self.say("explore-ends", why="%d unexplained records without an accept" % unexplained)
+                    return
+            w.close()
+        self.say("explore-ends", why="the discovery games' steps are spent")
+
+    def check_vocabulary(self, rec):
+        """out_of_vocabulary: the same before-facts and command, another after (the host does not read
+        a fact the world has, or the world is not deterministic there)."""
+        for r in jl_read(self.rec_dir / "transitions.jsonl")[:-1]:
+            if r["game"] == rec["game"] and r["command"] == rec["command"] and r["before"] == rec["before"] and r["after"] != rec["after"]:
+                raise Disengage("out_of_vocabulary", "The same command in the same observed state gave two outcomes (%s): the world has a "
+                                "fact the host does not read. Which fact, or skip this command?" % rec["command"],
+                                options=["note: the missing fact", "phase: skip this state", "abandon"],
+                                tried=[r["t"], rec["t"]], believes=[rec["added"], r["added"]])
+
+    # ── exploit ──
+    def exploit(self):
+        refused_at = {}
+        episodes = 0
+        while episodes < self.cfg["exploit_episodes"]:
+            all_won = True
+            for w in self.disc:
+                episodes += 1
+                ep = w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed + episodes)
+                for t in ep["transitions"]:
+                    jl_append(self.rec_dir / ("surprises.jsonl" if t["kind"] == "surprise" else "transitions.jsonl"), t)
+                self.say("episode", game=w.iid, won=ep["won"], commands=len(ep["commands"]), refused=ep["refused"])
+                if ep["stuck"]:
+                    raise Disengage("stuck", "The task is stuck (%s) and no rule handles it. What should it do?" % ", ".join(ep["stuck"]),
+                                    options=["note: what to do when stuck", "rule: a rule for it", "abandon"],
+                                    believes=[l for _, l in rules_of(self.base())])
+                if ep["won"]:
+                    continue
+                all_won = False
+                # a surprise at a rule not yet revised in vain → revise; else the episode's failure is the policy's
+                sur = next((t for t in ep["transitions"] if t["kind"] == "surprise"
+                            and refused_at.get(t["rule"].split("[")[0], 0) == 0), None)
+                if sur is not None:
+                    key = sur["rule"].split("[")[0]
+                    refused_at[key] = refused_at.get(key, 0)
+                    line = next((l for n, l in rules_of(self.base()) if n == key), "")
+                    self.seed_record = sur
+                    v = self.propose(prompts.revise(self.base(), self.commands, sur, line, w.instance_text(), self.note()), "revise", w.iid)
+                    if v != "accept":
+                        refused_at[key] += 1
+                        self.revised_in_vain[key] = self.revised_in_vain.get(key, 0) + 1
+                        if self.revised_in_vain[key] >= 2:          # refused twice at one rule: data, not another guess
+                            self.probe(w, ep, sur)
+                            self.revised_in_vain[key] = 0
+                else:
+                    self.propose(prompts.policy(self.base(), self.commands, prompts.task_facts(w.instance_text()), ep,
+                                                w.instance_text(), self.note()), "policy", w.iid)
+                if self.should_refactor():
+                    return "refactor"
+            if all_won:
+                self.say("exploit-ends", why="every discovery game won")
+                return "refactor" if self.should_refactor(force=True) else None
+        return None
+
+    def probe(self, w, ep, sur):
+        """Snapshot at the surprise's state, each admissible command once from it, restore: the
+        records the exploration lacked (POLICY.md: data, not another guess)."""
+        k = ep["commands"].index(sur["command"]) if sur["command"] in ep["commands"] else len(ep["commands"])
+        snap = {"game": w.iid, "game_dir": w.game_dir, "commands": ep["commands"][:k]}
+        w.restore(snap)
+        n = 0
+        for a in w.actions():
+            w.restore(snap)
+            rec = dict(w.step(a["command"]), phase="probe")
+            jl_append(self.rec_dir / "transitions.jsonl", rec)
+            n += 1
+        w.close()
+        self.say("probe", game=w.iid, at=k, records=n)
+        # back to exploration around that state: each record the rules do not predict, a proposal
+        recs = [r for r in jl_read(self.rec_dir / "transitions.jsonl")[-n:] if not self.current().predicts(r)]
+        phase, self.state["phase"] = self.state["phase"], "explore"
+        try:
+            for rec in recs[:3]:
+                if self.current().predicts(rec):
+                    continue
+                self.seed_record = rec
+                self.propose(prompts.explore(self.base(), self.commands, rec, [], w.instance_text(), self.note()), "probe", w.iid)
+        finally:
+            self.state["phase"] = phase
+
+    def should_refactor(self, force=False):
+        n = len(rules_of(self.base()))
+        return n and (force or n > self.cfg["refactor_rules"] or self.state["accepts_since_refactor"] >= self.cfg["refactor_k"])
+
+    # ── refactor ──
+    def refactor(self):
+        text = self.base()
+        p = (f"You are refactoring the rules of a household world (ALFWorld) without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
+             f"{prompts.vocabulary(self.commands)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
+             "Make it smaller and clearer: merge rules that differ only in a fact they read, drop a rule no state can enable, "
+             "name the program's tokens so each rule's role reads. Every command the program sends in a state must stay the same."
+             f"{prompts.instruction(self.note())}\n\nAnswer with ONE ```llp block of the replaced lines and `drop NAME` lines.")
+        self.state["accepts_since_refactor"] = 0
+        self.propose(p, "refactor", self.disc[0].iid)
+
+    # ── the run ──
+    def go(self, phase=None):
+        if phase:
+            self.state["phase"] = phase
+        self.save()
+        try:
+            while True:
+                ph = self.state["phase"]
+                if ph == "explore":
+                    self.explore()
+                    self.state["phase"] = "exploit"
+                elif ph == "exploit":
+                    nxt = self.exploit()
+                    if nxt is None:
+                        break
+                    self.state["phase"] = nxt
+                elif ph == "refactor":
+                    self.refactor()
+                    self.state["phase"] = "exploit"
+                    if self.state.get("refactored"):
+                        break
+                    self.state["refactored"] = True
+                self.save()
+            self.state["status"] = "done"
+            self.save()
+            self.say("done", accepted=self.state["accepted"], proposals=self.state["proposals"], spent=round(self.brain.spent(), 4))
+            return 0
+        except Disengage as d:
+            return self.disengage(d)
+
+    def disengage(self, d):
+        """The minimal-risk condition: nothing more is sent; the snapshot; the ask."""
+        for w in self.games.values():
+            w.close()
+        snap = {"phase": self.state["phase"], "base_sha": hashlib.sha256(self.base().encode()).hexdigest()[:12],
+                "records": str(self.rec_dir), "state": dict(self.state)}
+        sp = self.state_dir / ("snapshot-%d.json" % (len(self.gate.asks()) + len(self.gate.answers()) + 1))
+        sp.write_text(json.dumps(snap, indent=1))
+        a = self.gate.propose("ask", DOMAIN, self.root, phase=self.state["phase"], reason=d.reason, tried=d.tried,
+                              believes=d.believes, options=d.options, question=d.question, snapshot=str(sp))
+        self.state.update(status="disengaged", ask=a["token"])
+        self.save()
+        self.say("disengaged", reason=d.reason, token=a["token"])
+        self.out(json.dumps({"disengaged": a["ask"], "token": a["token"],
+                             "answer": "python -m metis.gate --state %s answer %s" % (self.state_dir, a["token"])}))
+        return 3
+
+    def resume(self):
+        """Re-engagement: the person's answer read, the instruction applied, the phase resumed."""
+        tok = self.state.get("ask")
+        ans = self.gate.answers(tok) if tok else None
+        if ans is None:
+            self.out(json.dumps({"waiting": tok, "ask": next((a["ask"] for a in self.gate.asks() if a["token"] == tok), None)}))
+            return 4
+        ins = ans["instruction"]
+        self.say("re-engaged", instruction=ins)
+        self.state.update(status="running", ask=None, refused_run=0)
+        k = ins["kind"]
+        if k == "abandon":
+            self.state["status"] = "abandoned"
+            self.save()
+            return 0
+        if k in ("note", "rule"):
+            self.state.setdefault("notes", []).append(ins.get("text", ""))
+        if k == "budget":
+            for key, cfgk in (("proposals", "proposals"), ("beats", "explore_steps")):
+                if ins.get(key):
+                    self.cfg[cfgk] = self.cfg[cfgk] + int(ins[key])
+            if ins.get("spend") and self.brain.spend is not None:
+                self.brain.spend += float(ins["spend"])
+            self.state["cfg"] = self.cfg
+        phase = None
+        if k == "phase":
+            phase = ins.get("phase") if ins.get("phase") in ("explore", "exploit", "refactor") else None
+            if ins.get("phase") == "skip":
+                phase = {"explore": "exploit", "exploit": "refactor", "refactor": "exploit"}[self.state["phase"]]
+        if k == "rule":
+            self.seed_record = None
+            pl = self.gate.propose("program", DOMAIN, self.root, text=splice(self.base(), block_of(ins["text"]))[0],
+                                   phase="exploit" if self.state["phase"] == "explore" else self.state["phase"])
+            self.say("proposal", verdict=pl["verdict"]["verdict"], by="person")
+            self.pred = None
+        return self.go(phase)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="policy.driver", description=__doc__.split("\n")[0])
+    ap.add_argument("--run", required=True)
+    ap.add_argument("--world", default="alfworld", choices=["alfworld"])
+    ap.add_argument("--family", default="pick_and_place_simple")
+    ap.add_argument("--phase", choices=["explore", "exploit", "refactor"])
+    ap.add_argument("--brain", default="script:/dev/null")
+    ap.add_argument("--budget", type=float, default=None, help="the run's spend cap (USD), the key's own usage the meter")
+    ap.add_argument("--max-tokens", type=int, default=2048, help="the per-request cap on the answer")
+    ap.add_argument("--discovery", type=int, default=2)
+    ap.add_argument("--gate-games", type=int, default=2)
+    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--set", action="append", default=[], help="KEY=N: a budget of DEFAULTS (explore_steps, proposals, …)")
+    ap.add_argument("--resume", action="store_true")
+    a = ap.parse_args(argv)
+    if a.brain.startswith("openrouter/") and a.budget is None:
+        ap.error("a paid brain needs --budget (USD): the run's spend is capped where it is spent")
+    cfg = {k: int(v) for k, v in (s.split("=", 1) for s in a.set)}
+    unknown = set(cfg) - set(DEFAULTS)
+    if unknown:
+        ap.error("--set: unknown %s (one of %s)" % (", ".join(sorted(unknown)), ", ".join(DEFAULTS)))
+    brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
+    d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg)
+    return d.resume() if a.resume else d.go(a.phase)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
