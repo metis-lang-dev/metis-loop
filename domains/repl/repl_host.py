@@ -358,7 +358,8 @@ class ReplHost:
             self._counters(f)
         elif ch == "repl" and typ == "posting" and self.sid and f.get("session") == self.sid:
             self._counters(f)
-        elif ch == "repl" and typ == "save" and "apply" in self.pending.values() and not f.get("written"):
+        elif ch == "repl" and typ == "save" and "apply" in self.pending.values() and not f.get("written") \
+                and f.get("by") != "agent":     # the agent seat's plan (loop-parity 2: it waits for the person) is not ours
             self.pending = {k: v for k, v in self.pending.items() if v != "apply"}
             self._report("apply", bool(f.get("files")))
         elif ch == "chat" and f.get("session") == self.sid and "tell" in self.pending.values() \

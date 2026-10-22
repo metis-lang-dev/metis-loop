@@ -331,6 +331,17 @@ def test_a_load_the_page_could_not_open_is_absent(gw):
     assert h.tick({}) == ["+absent"] and h.error == "no such catalog file"
 
 
+def test_the_agent_seats_plan_is_not_the_hosts():
+    """loop-parity 2: the agent seat's apply broadcasts its plan to the session as save {by: agent};
+    a host with an APPLY of its own pending does not take it for its plan."""
+    h = repl_host.ReplHost(url="ws://127.0.0.1:9/ws")
+    h.sid, h.pending = "w1", {"nav-apply-1": "apply"}
+    h._frame_in({"ch": "repl", "type": "save", "session": "w1", "by": "agent", "files": [{"path": "x"}], "token": "t"})
+    assert h.pending == {"nav-apply-1": "apply"} and h.reports == []
+    h._frame_in({"ch": "repl", "type": "save", "session": "w1", "files": [{"path": "x"}], "token": "t2"})
+    assert h.pending == {} and h.reports == ["+plan_shown"]
+
+
 def test_tell_is_the_pages_and_told_when_the_chat_has_it(gw):
     h = host(gw.url, own=False)
     with page_open(gw, "domains/plant/plant") as (ws, sid):
