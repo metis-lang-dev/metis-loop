@@ -111,6 +111,7 @@ class Driver:
         self.seed_record = None
         self.where = None                     # the world's snapshot where the loop last acted (N1: the disengagement keeps it)
         self._trans = None
+        self.move = None                      # the refactoring move being judged (step 2c: the gate's per-move criteria)
         self.brain.keep(self.state)           # nina's R1: a resumed run keeps the first start's meter and its cap
         if self.state.get("prompt_chars"):
             self.brain.prompt_chars = self.state["prompt_chars"]
@@ -199,6 +200,8 @@ class Driver:
             n["fits_records"] = ok
             self.say("fits", ok=ok, why=why)
         if phase == "refactor":
+            if self.move:
+                n["move"] = self.move
             n["replay_identical"] = self.replay(self.run / "trees" / "candidate") == self.replay(self.run / "trees" / "current")
             v0, v1 = measure.vector(self.base(), cur, self.disc[0].iid), measure.vector(text, cand, self.disc[0].iid)
             n["vector"] = {"before": (v0.get("ground") or 0) + v0["rules"], "after": (v1.get("ground") or 0) + v1["rules"]}
@@ -250,10 +253,16 @@ class Driver:
         rc = self.hier_runs(self.disc, text, "candidate", guides=[r["commands"] for r in r0])
         gc, g0 = self.runs_of(self.held, text, "candidate"), self.runs_of(self.held, base, "current")
         held = self.heldout() + [t for e in gc + g0 for t in e["transitions"] if t["kind"] == "surprise"]
-        n = {"replay_identical": self.replays(r0, rc),
+        amb = lambda t: len(hier.Split.of(t, self.World, self.start).ambiguous())
+        n = {"move": self.move or "split",
+             "replay_identical": self.replays(r0, rc),
              "success": round(sum(e["won"] for e in gc) / max(1, len(gc)) - sum(e["won"] for e in g0) / max(1, len(g0)), 6),
              "likelihood": round(measure.likelihood(cand, held) - measure.likelihood(cur, held), 6),
-             "vector": {"before": self.flat_vector(base), "after": self.vector_of(text, "candidate")}}
+             # step 2c (the architect's ruling): each move against the base it replaces; the flat program's
+             # vector beside it (the conventions' cap)
+             "vector": {"before": self.vector_of(base, "current"), "after": self.vector_of(text, "candidate")},
+             "flat": self.flat_vector(base),
+             "ambiguous": {"before": amb(base), "after": amb(text)}}
         self.say("split-numbers", activations=[[a["domain"] for a in r.get("activations", [])] for r in rc][:1],
                  alternatives=sum(r.get("alternatives", 0) for r in rc), **n)
         return n
@@ -268,11 +277,15 @@ class Driver:
         rm = self.hier_runs(self.disc, base, "manual")
         rd = self.hier_runs(self.disc, base, "directed", make, guides=[r["commands"] for r in rm])
         gd, gm = self.hier_runs(self.held, base, "directed", make), self.hier_runs(self.held, base, "manual")
-        n = {"replay_identical": self.replays(rm, rd),
+        amb = len(sp.ambiguous())
+        n = {"move": "direct",
+             "replay_identical": self.replays(rm, rd),
              "success": round(sum(e["won"] for e in gd) / max(1, len(gd)) - sum(e["won"] for e in gm) / max(1, len(gm)), 6),
              "likelihood": 0.0,
-             "vector": {"before": self.flat_vector(base),
-                        "after": self.vector_of(base, "current") + len(rules_of(hier.director_base_path().read_text()))}}
+             "vector": {"before": self.vector_of(base, "current"),
+                        "after": self.vector_of(base, "current") + len(rules_of(hier.director_base_path().read_text()))},
+             "flat": self.flat_vector(base),
+             "ambiguous": {"before": amb, "after": amb}}
         self.say("direct-numbers", beats=len(rd[0].get("beats") or []) if rd else 0,
                  alternatives=sum(r.get("alternatives", 0) for r in rd), **n)
         return n
@@ -550,16 +563,19 @@ class Driver:
         dead = hier.never_firing(text, self.dynamic, self.start)
         if dead:
             pruned, info = splice(text, ["drop %s" % n for n in dead])
+            self.move = "prune"
             moved |= self.judge("program", info=dict(info, prune=dead), text=pruned) == "accept"
         sp = hier.Split.of(self.base(), self.World, self.start)
         if not sp.is_split():
             cand = hier.split_by_verb(self.base(), self.World, start=self.start)
             if len(cand.specialists) >= 2:
+                self.move = "split"
                 moved |= self.judge("program", info={"split": cand.ports()}, text=hier.annotate(self.base(), cand)) == "accept"
                 sp = hier.Split.of(self.base(), self.World, self.start)
         if sp.is_split():
             amb = sp.ambiguous()
             if amb:
+                self.move = "conventions"
                 v = self.propose(prompts.conventions(self.base(), (self.commands, self.verbs), sp.ports(), amb, self.note()),
                                  "conventions", self.disc[0].iid)
                 moved |= v == "accept"
@@ -570,9 +586,11 @@ class Driver:
                 ddir.mkdir(parents=True, exist_ok=True)
                 shutil.copy(hier.director_base_path(), ddir / "director_domain.llp")      # the lifted director: the world's, as the empty base is
                 dtext, _ = hier.director_text(sp, "director_domain.llp")
+                self.move = "direct"
                 moved |= self.judge("program", domain="director", info={"direct": sp.ports()}, text=dtext) == "accept"
             elif amb:
                 self.say("direct-waits", why="goal kinds with more than one specialist: %s" % json.dumps(amb))
+        self.move = None
         self.state["refactored_at"] = hashlib.sha256(self.base().encode()).hexdigest()[:12]
         if moved or sp.is_split():
             return

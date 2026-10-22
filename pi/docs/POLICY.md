@@ -79,7 +79,20 @@ from another domain, its results the tokens it gives one. As built:
   enabled event that sends the next recorded command; else a bookkeeping event that names its
   things), must send every recorded command in order. Strict identity of two programs' samples is
   too strict where the flat program chooses at random among equal options.
-- **The vector** is always compared with the flat program the hierarchy replaces.
+- **Each move is judged against the base it replaces** (step 2c, the architect's ruling on nina's 2b
+  review). All four need the records' replay and the held-out success not down; the driver passes
+  the move, the ambiguity before and after, the current base's vector and the flat program's
+  (`move`, `ambiguous`, `vector`, `flat`):
+
+  | move | its own criteria |
+  |---|---|
+  | prune | the likelihood not down, the vector down |
+  | split | the vector down against the current (flat) base |
+  | conventions | the ambiguity down (fewer goal kinds with several specialists), the vector not above the flat program's |
+  | direct | no ambiguous goal kind left; the vector reported, not judged |
+
+  The conventions and DIRECT each add rules to the base before them; judged against the flat
+  program alone, every move would pass on the first split's gain.
 
 ## The experimental gate, restated
 
