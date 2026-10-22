@@ -53,6 +53,8 @@ def test_a_variation_over_the_empty_base(tmp_path):
         dyn, commands, verbs_ = ScienceWorld.vocabulary()
         assert "here" in dyn and commands["connect"] == ("connect", "A", "B") and verbs_ is commands
         assert ScienceWorld.task_facts(w.instance_text())[0].startswith("task(conductivity")
+        keep = ScienceWorld.planner_keep(w.instance_text())
+        assert "thing" in keep and len(keep["thing"]) == 3 and ScienceWorld.DOMAINS["connect"] == "circuit" and ScienceWorld.DOMAINS["open"] == "nav"
     finally:
         w.close()
     ep = w.act(tree, steps=5)                       # the empty base: no rule fires, nothing sent

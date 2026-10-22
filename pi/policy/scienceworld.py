@@ -64,6 +64,25 @@ def iid_of(game):
 
 
 class ScienceWorld:
+    # the specialists SPLIT names by the host verb their rules send (loop-policy 2b; the hand hierarchy's
+    # names, scienceworld/domains/hier: nav walks and opens doors, grasp picks up and focuses, the circuit
+    # drops, wires, waits and looks, the verdict moves the thing into its box)
+    DOMAINS = {"go": "nav", "open": "nav", "close": "nav", "take": "grasp", "focus": "grasp", "drop": "circuit", "connect": "circuit",
+               "wait": "circuit", "look": "circuit", "activate": "circuit", "deactivate": "circuit", "move": "verdict"}
+
+    @staticmethod
+    def planner_keep(instance_text):
+        """The planner's narrowing: the things the task's text names (the thing under test and its two
+        boxes, from `#init task(kind, O, Y, N)`); the rooms and parts stay whole."""
+        things = set()
+        for l in instance_text.splitlines():
+            l = l.strip()
+            if l.startswith("#init task("):
+                things |= set(args_of(l[6:-2].strip())[1:])
+            if l.startswith("#init where("):
+                things.add(args_of(l[6:-2].strip())[0])
+        return {"thing": things} if things else {}
+
     DOMAIN = "sw"
     DESCRIPTION = "a text laboratory (ScienceWorld: rooms behind doors, containers, devices, wires, substances; a task whose answer only an experiment shows)"
     SPLITS = {"discovery": "train", "gate": "dev", "heldout": "test"}
