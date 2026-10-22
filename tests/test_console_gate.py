@@ -175,7 +175,7 @@ ASK = {"phase": "exploit", "reason": "no_progress", "tried": ["revise water: ref
 def test_the_loops_asks_shown_and_answered(tmp_path):
     """loop-policy s-dd842f2a: the console's own asks and those of a loop elsewhere ([console]
     loop_state: pi's gate state, written by its CLI), each answered in the gate that holds it."""
-    from metis_loop_sdk.gate import Gate
+    from metis.gate import Gate
     srv = server(tmp_path)
     assert srv.gate_asks() == []
     mine = srv.gate_plan("ask", "plant", ASK)

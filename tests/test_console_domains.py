@@ -80,7 +80,7 @@ def test_the_case_in_both_toolchains():
 
 
 def test_the_cards_generated_files_are_the_generators():
-    from metis_loop_sdk import catalog
+    from metis import catalog
     for n in ("repl", "ui"):
         d = ROOT / "domains" / n
         files = catalog.intent_files(n, (d / "intent.yaml").read_text(), ROOT)
