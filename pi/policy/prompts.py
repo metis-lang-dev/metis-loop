@@ -5,24 +5,36 @@ import json
 
 from .alfworld import args_of
 
-LANGUAGE = """The language (metis LL, linear logic over counted facts):
+LANGUAGE_T = """The language (metis LL, linear logic over counted facts):
   NAME [dyn] : A * B * $S(X) * X <> Y -o C * D.
 - the left side's plain atoms are CONSUMED when the rule fires; an atom that stays true must be produced again on the right;
-- `$S(X)` reads a fact without consuming it (the static facts — recat, openable, notopenable, rtype, otype, pickupable, target, dest, … — are always read with $);
+- `$S(X)` reads a fact without consuming it (the static facts — {statics} — are always read with $);
 - variables are Capitalized, typed by the predicates' declarations; `X <> Y` says two values differ;
 - a `%% words with {X}` line above a rule is its spoken line;
 - a new predicate needs a declaration line: `pred NAME(type, …) : NS.` (NS is the base's dynamic namespace: the one its other predicates use);
 - the rule's NAME decides what the world does when it fires (the table below): a rule named otherwise is the program's own bookkeeping and sends nothing."""
 
-
-WORLD = {"description": "a household world (ALFWorld)",
-         "verb_text": {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R", "take": "take O from R", "put": "put O in/on R"}}
+# the world's words in the prompts (an adapter class's attributes; these defaults are ALFWorld's)
+ALF = {"description": "a household world (ALFWorld)",
+       "verb_text": {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R", "take": "take O from R", "put": "put O in/on R"},
+       "statics": "recat, openable, notopenable, rtype, otype, pickupable, target, dest, …",
+       "task_text": "the episode is WON when the target object is in/on a dest receptacle. The instance starts with the token `unchosen` and declares `placed` (the query).",
+       "plan_text": "choose a target, go where it is, open what must be opened, take it, go to a dest, open it if needed, put it.",
+       "statics_for": None}
+WORLD = dict(ALF)
+LANGUAGE = LANGUAGE_T.replace("{statics}", ALF["statics"])
 
 
 def set_world(cls):
-    """The world the prompts speak of: its description and its verbs' words (the adapter class)."""
-    WORLD["description"] = getattr(cls, "DESCRIPTION", WORLD["description"])
-    WORLD["verb_text"] = getattr(cls, "VERB_TEXT", WORLD["verb_text"])
+    """The world the prompts speak of (the adapter class): its description, its verbs' words, its static
+    facts' names (STATICS), the task's won condition (TASK_TEXT), the plan's outline (PLAN_TEXT), and
+    which static facts a record's prompt shows (statics_for(rec, instance_text), else those naming the
+    action's arguments)."""
+    global LANGUAGE
+    for key, attr in (("description", "DESCRIPTION"), ("verb_text", "VERB_TEXT"), ("statics", "STATICS"),
+                      ("task_text", "TASK_TEXT"), ("plan_text", "PLAN_TEXT"), ("statics_for", "statics_for")):
+        WORLD[key] = getattr(cls, attr, ALF[key])
+    LANGUAGE = LANGUAGE_T.replace("{statics}", WORLD["statics"])
 
 
 def vocabulary(commands, verbs=None):
@@ -60,7 +72,7 @@ def statics_about(instance_text, handles):
 
 def _record(rec, instance_text):
     hs = list(rec["action"]["args"].values()) if rec.get("action") else []
-    st = statics_about(instance_text, [h for h in hs if h])
+    st = WORLD["statics_for"](rec, instance_text) if WORLD["statics_for"] else statics_about(instance_text, [h for h in hs if h])
     lines = ["the command: %s   (the action: %s %s)" % (rec["command"], rec["action"]["verb"], json.dumps(rec["action"]["args"])),
              "the facts before: " + ", ".join(rec["before"]),
              "the world's text: " + rec.get("text", "").replace("\n", " ")[:300]]
@@ -133,11 +145,11 @@ The base as it is:
 {base.strip()}
 ```
 
-The task (this game's facts): {', '.join(task_facts)}; the episode is WON when the target object is in/on a dest receptacle. The instance starts with the token `unchosen` and declares `placed` (the query).
+The task (this game's facts): {', '.join(task_facts)}; {WORLD['task_text']}
 The last episode was NOT won ({episode['steps']} rule firings, {len(episode['commands'])} commands); its last steps:
 {steps}
 
-Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: choose a target, go where it is, open what must be opened, take it, go to a dest, open it if needed, put it.{instruction(note)}
+Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: {WORLD['plan_text']}{instruction(note)}
 
 Answer with ONE ```llp block of only the new or replaced lines."""
 

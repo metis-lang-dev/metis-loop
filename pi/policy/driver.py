@@ -37,11 +37,12 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import alfworld, scienceworld
+from . import alfworld, minihack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
-WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base)}
+WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base),
+          "minihack": (minihack.MiniHack, minihack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
             "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2}
@@ -135,7 +136,7 @@ class Driver:
 
     def predictor(self, name="current", text=None):
         tree = self._sync_tree(name, self.base() if text is None else text)
-        return measure.Predictor(tree, self.games, self.dynamic, self.commands, self.verbs)
+        return measure.Predictor(tree, self.games, self.dynamic, self.commands, self.verbs, getattr(self.World, "UNCOMPARED", ()))
 
     def current(self):
         if self.pred is None:

@@ -32,6 +32,7 @@ def test_a_variation_over_the_empty_base(tmp_path):
     g = ScienceWorld.sample("discovery", "conductivity", 1, seed=1)[0]
     w = ScienceWorld(g, tree)
     assert w.iid.startswith("test_conductivity") and 'include "../base/sw.llp"' in w.instance_text()
+    assert ScienceWorld(w.game_dir, tree).iid == w.iid                 # the snapshot's name opens the same game
     if os.environ.get("METISC"):
         out = subprocess.run([os.environ["METISC"], "--diagnostics-json", str(w.path)], capture_output=True, text=True, timeout=120)
         assert out.returncode == 0, out.stdout[-300:] + out.stderr[-200:]

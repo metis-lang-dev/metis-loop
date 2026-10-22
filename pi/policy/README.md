@@ -13,10 +13,14 @@ run.sh --run DIR --resume --brain …                        # re-engage from th
 ```
 
 `run.sh` runs `python -m policy.driver` under the world's venv (`.worlds/alf` for ALFWorld,
-`.worlds/sw` for ScienceWorld; metispy in both), in a memory-capped scope. `--world` picks the
-adapter (`policy/alfworld.py`, `policy/scienceworld.py`: the contract is the class's surface —
-sample, open/step/snapshot/restore/act, actions/unadmissible, vocabulary, task_facts, and the
-class's DOMAIN, DESCRIPTION, SPLITS and VERB_TEXT the driver and the prompts read). `--set KEY=N` changes a budget (`DEFAULTS` in driver.py:
+`.worlds/sw` for ScienceWorld, `.worlds/mh` for MiniHack; metispy in each), in a memory-capped
+scope. `--world` picks the adapter (`policy/alfworld.py`, `policy/scienceworld.py`,
+`policy/minihack.py`: the contract is the class's surface — sample, open/step/snapshot/restore/act,
+actions/unadmissible, vocabulary, task_facts, `iid` and `game_dir` (a snapshot's name of the game),
+and the class's DOMAIN, DESCRIPTION, SPLITS and VERB_TEXT the driver and the prompts read; optional:
+STATICS, TASK_TEXT, PLAN_TEXT and `statics_for(rec, instance_text)`, the prompts' world-specific
+words, ALFWorld's when absent, and UNCOMPARED, the dynamic predicates a rule may need but is not
+judged on producing). `--set KEY=N` changes a budget (`DEFAULTS` in driver.py:
 explore_steps, explore_k, explore_w, exploit_episodes, act_steps, proposals, no_progress,
 refactor_rules, refactor_k, repairs).
 
@@ -107,3 +111,30 @@ Every request is capped (`--max-tokens`, 40 000 prompt characters). The brain an
 ` ```llp ` block of lines (`pred …`, rules with their `%%` line, `drop NAME`), spliced into the base.
 A candidate that does not compile in the seed record's instance goes back with the compiler's
 words, up to `repairs` rounds.
+
+## MiniHack (`policy/minihack.py`)
+
+The room family (metis-worlds `minihack/`): a game is a level variant at a layout seed
+(`levels.sample`). discovery is the discovery split's variants; the **gate** is the same variants at
+other layouts (seed 1000 + the run's: seen kinds, unseen layouts); **heldout** is the compositions
+discovery never shows (a monster and a trap, a door and a key). The family `room_quiet` drops the
+monster levels: a monster moves on its own, so its records are not the command's alone.
+
+```sh
+run.sh --world minihack --family room_quiet --brain claude/claude-opus-5-5 --set explore_steps=120
+```
+
+- **The instance** (world/gen_level.py with a base) declares the level's types (cell, thing, beast),
+  the grid as static facts `next(C, D, C2)` (the cell one step from C in direction D: the cells are
+  named by their coordinates, so this is the frame the perception already has) and the perceived
+  start. The base (`gen_level.base_source`) has the predicates and no rule.
+- **The actions:** MiniHack lists none, so `actions()` is every command the host can send (37: move,
+  open, kick and apply × 8 directions, and pickup, eat, down, wait, search). The world REFUSES one
+  by changing nothing it perceives (mh_host.act's test), and that is the record's `admissible`.
+  With 9 verbs, a walk picks a move one step in 9: set `explore_steps` well above ALFWorld's 40.
+- **The numbers:** hp(16) is read as hp(n16) (the base's `num`). The turn, the hunger and hpmax are
+  read but never predicted. The terrain (floor, wall, corridor, the stairs, unknown) is UNCOMPARED:
+  NetHack shows the arrival stairs only when the agent leaves them, and the room behind a door
+  only once it opens. Judged on those, no move rule fits a level's first step.
+- **The prompts** show the `next` facts from the agent's cell (`statics_for`), not every fact
+  naming the direction.

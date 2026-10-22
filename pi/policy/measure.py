@@ -24,10 +24,13 @@ EPS = 1e-3
 
 
 class Predictor:
-    def __init__(self, tree, games, dynamic, commands, verbs=None):
+    def __init__(self, tree, games, dynamic, commands, verbs=None, uncompared=()):
         """tree: the base's tree; games: {iid: AlfWorld}; dynamic: the host's dynamic predicates;
-        commands: the host's command table."""
+        commands: the host's command table; uncompared: dynamic predicates a rule may NEED but is not
+        judged on producing — what the perception reveals rather than what an action changes (the
+        adapter's UNCOMPARED: MiniHack's terrain, seen as the agent moves and doors open)."""
         self.tree, self.games, self.dynamic, self.commands, self.verbs = tree, games, set(dynamic), commands, verbs
+        self.uncompared = set(uncompared)
         self.sessions, self.errors = {}, {}
 
     def session(self, iid):
@@ -47,8 +50,9 @@ class Predictor:
         self.session(iid)
         return self.errors.get(iid)
 
-    def _dyn(self, atoms):
-        return {a for a in atoms if kind_of(a) in self.dynamic}
+    def _cmp(self, atoms):
+        """The facts an after is judged on: the dynamic ones, the uncompared left out."""
+        return {a for a in atoms if kind_of(a) in self.dynamic and kind_of(a) not in self.uncompared}
 
     def table(self, iid):
         """The session's events the host sends a command for, by verb: [(name, base, bindings,
@@ -83,7 +87,7 @@ class Predictor:
                 continue
             if not all(a in before for a in needs):
                 continue
-            out.append((name, self._dyn((before - set(c)) | set(pr))))
+            out.append((name, self._cmp((before - set(c)) | set(pr))))
         return out
 
     def predicts(self, rec, names=None):
@@ -93,7 +97,7 @@ class Predictor:
         evs = self.events(rec, names)
         if refused(rec):
             return not evs
-        want = self._dyn(rec["after"])
+        want = self._cmp(rec["after"])
         return any(after == want for _, after in evs)
 
     def contradicted(self, rec, names):
@@ -102,7 +106,7 @@ class Predictor:
         evs = self.events(rec, names)
         if refused(rec):
             return [n for n, _ in evs]
-        want = self._dyn(rec["after"])
+        want = self._cmp(rec["after"])
         return [n for n, after in evs if after != want]
 
 

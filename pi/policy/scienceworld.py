@@ -75,6 +75,7 @@ class ScienceWorld:
         self.game = (game[0], int(game[1])) if isinstance(game, (tuple, list)) else (game.rsplit(":", 1)[0], int(game.rsplit(":", 1)[1]))
         self.tree = Path(tree)
         self.iid = iid_of(self.game)
+        self.game_dir = "%s:%d" % self.game            # the game's name in a snapshot (the driver's exploit and probe read it)
         self.pkg = self.tree / self.iid
         if not (self.pkg / ("%s.llp" % self.iid)).exists():
             self.tree.mkdir(parents=True, exist_ok=True)

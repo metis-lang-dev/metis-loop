@@ -31,12 +31,14 @@ while [ $# -gt 0 ]; do
     *) ARGS+=("$1"); shift ;;
   esac
 done
-# the world's venv: ALFWorld's (.worlds/alf, its games in ALFWORLD_DATA) or ScienceWorld's (.worlds/sw: the simulator's jar on the system java)
+# the world's venv: ALFWorld's (.worlds/alf, its games in ALFWORLD_DATA), ScienceWorld's (.worlds/sw: the simulator's jar on the
+# system java) or MiniHack's (.worlds/mh: NetHack's learning environment; the levels are generated in the driver's process)
 case "$WORLD" in
   scienceworld) PY="${METIS_POLICY_PY:-$PKGS/.worlds/sw/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=conductivity && ARGS+=(--family conductivity) ;;
+  minihack) PY="${METIS_POLICY_PY:-$PKGS/.worlds/mh/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=room && ARGS+=(--family room) ;;
   *) PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"; export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}" ;;
 esac
-[ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: the world's venv with metispy: .worlds/alf for alfworld, .worlds/sw for scienceworld)" >&2; exit 1; }
+[ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: the world's venv with metispy: .worlds/alf for alfworld, .worlds/sw for scienceworld, .worlds/mh for minihack)" >&2; exit 1; }
 RUN="${RUN:-$PWD/policy-run-$WORLD-$FAMILY}"
 if [ ${#ANSWER[@]} -gt 0 ]; then
   exec "$PY" -m metis.gate --state "$RUN/state" --policy experimental answer "${ANSWER[0]}" <<<"${ANSWER[1]}"
