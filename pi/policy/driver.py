@@ -104,7 +104,8 @@ class Driver:
         self.held = [self.World(g, self.run / "trees" / "current")
                      for g in self.World.sample("gate", family, self.state["gate_games"], seed)]
         self.games = {w.iid: w for w in self.disc + self.held}
-        self.dynamic, self.commands, self.verbs = self.World.vocabulary()   # the host's dynamic predicates, its table, its verb_why convention
+        self.dynamic, self.commands, self.verbs = self.World.vocabulary()
+        self.start = set(hier.START) | hier.start_tokens(self.disc[0].instance_text(), self.dynamic)   # the instance's own start tokens (N5)   # the host's dynamic predicates, its table, its verb_why convention
         self._sync_tree("current", self.base())
         self.pred = None
         self.seed_record = None
@@ -175,7 +176,7 @@ class Driver:
         if plan.get("domain") == "director":
             return self.gain_direct(next(f["text"] for f in plan["files"] if f["path"].endswith("director.llp")))
         text = next(f["text"] for f in plan["files"] if f["path"].endswith("%s.llp" % DOMAIN))
-        if phase == "refactor" and hier.Split.of(text, self.World).is_split():
+        if phase == "refactor" and hier.Split.of(text, self.World, self.start).is_split():
             return self.gain_split(text)
         cand, cur = self.predictor("candidate", text), self.current()
         held = self.heldout()
@@ -208,7 +209,7 @@ class Driver:
         """The split of TEXT acting on GAMES (the manual switch, or with `director` a DirectorLoop
         factory the director's rules), each in RUN/hier/<label>/; with `guides` (each game's recorded
         commands) the records' replay."""
-        sp = hier.Split.of(text, self.World)
+        sp = hier.Split.of(text, self.World, self.start)
         return [hier.run(w, sp, self.run / "hier" / label, "%s.llp" % DOMAIN, self.cfg["act_steps"], self.seed, director=director,
                          guide=(guides[i] if guides else None)) for i, w in enumerate(games)]
 
@@ -220,14 +221,14 @@ class Driver:
 
     def runs_of(self, games, text, label):
         """A base acting on GAMES: its hierarchy (the manual switch) when it is split, else flat."""
-        if hier.Split.of(text, self.World).is_split():
+        if hier.Split.of(text, self.World, self.start).is_split():
             return self.hier_runs(games, text, label)
         return [w.act(self._sync_tree(label, text), self.cfg["act_steps"], seed=self.seed) for w in games]
 
     def vector_of(self, text, label):
         """The complexity vector's one number: rules + the events the instance grounds — summed over
         the domains (each specialist narrowed to its first activation's goal) when the base is split."""
-        sp = hier.Split.of(text, self.World)
+        sp = hier.Split.of(text, self.World, self.start)
         if sp.is_split():
             return hier.split_vector(self.disc[0], sp, self.run / "hier" / ("v-" + label), "%s.llp" % DOMAIN)
         v = measure.vector(text, self.predictor(label, text), self.disc[0].iid)
@@ -242,7 +243,7 @@ class Driver:
         """A split (or a split rewritten to the conventions): its manual switch replays what the
         current program sends on the discovery games, the gate split's success not down, the
         likelihood (the rules' world behaviour) not down, the vector — summed over the narrowed
-        domains — below the current's."""
+        domains and the world model — below the flat program's (the program the hierarchy replaces)."""
         cand, cur = self.predictor("candidate", text), self.current()
         base = self.base()
         r0 = self.runs_of(self.disc, base, "current")
@@ -253,7 +254,8 @@ class Driver:
              "success": round(sum(e["won"] for e in gc) / max(1, len(gc)) - sum(e["won"] for e in g0) / max(1, len(g0)), 6),
              "likelihood": round(measure.likelihood(cand, held) - measure.likelihood(cur, held), 6),
              "vector": {"before": self.flat_vector(base), "after": self.vector_of(text, "candidate")}}
-        self.say("split-numbers", activations=[[a["domain"] for a in r.get("activations", [])] for r in rc][:1], **n)
+        self.say("split-numbers", activations=[[a["domain"] for a in r.get("activations", [])] for r in rc][:1],
+                 alternatives=sum(r.get("alternatives", 0) for r in rc), **n)
         return n
 
     def gain_direct(self, dtext):
@@ -261,7 +263,7 @@ class Driver:
         discovery games, the gate split's success not down; the vector the hierarchy's with the
         director's rules, against the flat program's."""
         base = self.base()
-        sp = hier.Split.of(base, self.World)
+        sp = hier.Split.of(base, self.World, self.start)
         make, _ = hier.director_factory(sp, self.run / "hier" / "director", text=dtext)
         rm = self.hier_runs(self.disc, base, "manual")
         rd = self.hier_runs(self.disc, base, "directed", make, guides=[r["commands"] for r in rm])
@@ -271,7 +273,8 @@ class Driver:
              "likelihood": 0.0,
              "vector": {"before": self.flat_vector(base),
                         "after": self.vector_of(base, "current") + len(rules_of(hier.director_base_path().read_text()))}}
-        self.say("direct-numbers", beats=len(rd[0].get("beats") or []) if rd else 0, **n)
+        self.say("direct-numbers", beats=len(rd[0].get("beats") or []) if rd else 0,
+                 alternatives=sum(r.get("alternatives", 0) for r in rd), **n)
         return n
 
     def success(self, tree):
@@ -544,23 +547,23 @@ class Driver:
             return
         self.state["accepts_since_refactor"] = 0
         moved = False
-        dead = hier.never_firing(text, self.dynamic)
+        dead = hier.never_firing(text, self.dynamic, self.start)
         if dead:
             pruned, info = splice(text, ["drop %s" % n for n in dead])
             moved |= self.judge("program", info=dict(info, prune=dead), text=pruned) == "accept"
-        sp = hier.Split.of(self.base(), self.World)
+        sp = hier.Split.of(self.base(), self.World, self.start)
         if not sp.is_split():
-            cand = hier.split_by_verb(self.base(), self.World)
+            cand = hier.split_by_verb(self.base(), self.World, start=self.start)
             if len(cand.specialists) >= 2:
                 moved |= self.judge("program", info={"split": cand.ports()}, text=hier.annotate(self.base(), cand)) == "accept"
-                sp = hier.Split.of(self.base(), self.World)
+                sp = hier.Split.of(self.base(), self.World, self.start)
         if sp.is_split():
             amb = sp.ambiguous()
             if amb:
                 v = self.propose(prompts.conventions(self.base(), (self.commands, self.verbs), sp.ports(), amb, self.note()),
                                  "conventions", self.disc[0].iid)
                 moved |= v == "accept"
-                sp = hier.Split.of(self.base(), self.World)
+                sp = hier.Split.of(self.base(), self.World, self.start)
                 amb = sp.ambiguous()
             ddir = self.root / "domains" / "director"
             if not amb and not (ddir / "director.llp").exists():
@@ -623,7 +626,7 @@ class Driver:
                 dfile = self.root / "domains" / "director" / "director.llp"
                 if not dfile.exists():
                     raise SystemExit("no director in the catalog yet (the refactor phase's DIRECT)")
-                make, _ = hier.director_factory(hier.Split.of(self.base(), self.World), self.run / "hier" / "evaluate-director",
+                make, _ = hier.director_factory(hier.Split.of(self.base(), self.World, self.start), self.run / "hier" / "evaluate-director",
                                                 text=dfile.read_text())
             eps = self.hier_runs(games, self.base(), "evaluate-" + mode, director=make)
         out = {"split": split, "mode": mode, "n": len(eps), "won": sum(e["won"] for e in eps), "rules": len(rules_of(self.base())),

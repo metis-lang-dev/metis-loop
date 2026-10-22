@@ -43,9 +43,10 @@ def fire(w, host, sh, rng, out, steps, stop=None, guide=None):
             return "done"
         pre = w._before(host)
         if guide is not None:
-            i = _guided(w, host, sh, ws, guide)
+            i, alt = _guided(w, host, sh, ws, guide)
             if i is None:
                 return "diverged"
+            out["alternatives"] = out.get("alternatives", 0) + alt      # nina's N1: another command was enabled beside it
         else:
             i = rng.choices([i for i, _ in ws], weights=[x for _, x in ws])[0]
         name = sh._fire(i, ws=ws)
@@ -73,20 +74,26 @@ def fire(w, host, sh, rng, out, steps, stop=None, guide=None):
 
 def _guided(w, host, sh, ws, guide):
     """The enabled event that sends the next recorded command; else one that sends nothing — the one
-    whose bindings name the next command's things first (a planner's choice the command follows from)."""
-    quiet = []
+    whose bindings name the next command's things first (a planner's choice the command follows from).
+    → (the event, 1 when another command event was enabled beside the recorded one: the replay shows the
+    candidate CAN send the records; `alternatives` counts where it need not)."""
+    quiet, hit, other = [], None, 0
     for i, _ in ws:
         name = sh.events_tbl[i][2].name
         cmd = w._command_of(host, name) if w._rule_verb(name) is not None else None
         if cmd is None:
             quiet.append((i, name))
-        elif guide and cmd == guide[0]:
-            return i
+        elif hit is None and guide and cmd == guide[0]:
+            hit = i
+        else:
+            other += 1
+    if hit is not None:
+        return hit, 1 if other else 0
     if not quiet:
-        return None
+        return None, 0
     want = set(w._handles_of(host, guide[0])) if guide and hasattr(w, "_handles_of") else set()
     if want:
         best = max(quiet, key=lambda x: len(want & set(v for kv in x[1].partition("[")[2].rstrip("]").split(",")
                                                        for v in [kv.partition("=")[2]] if v)))
-        return best[0]
-    return quiet[0][0]
+        return best[0], 0
+    return quiet[0][0], 0
