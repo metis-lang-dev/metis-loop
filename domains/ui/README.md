@@ -46,7 +46,7 @@ editor needs an open catalog). The page says it on the port, as the pair `presen
 `absent(W)`; the instance starts every widget present, and the takeover report restates
 the pair for the widgets the page has only sometimes (`+absent(editor)` while no catalog is
 open, `+present(editor)` when one opens). `go_hidden` and `show` take `$present(W)`; a GO or a
-SHOW to an absent widget is refused by `p_go_absent` / `p_show_absent`, "{W} is not on the page
+SHOW to an absent widget is refused by `p_go_absent` / `p_show_absent` (a jump label naming one by `p_jumped_absent`; `jump_ok_hidden` takes `$present(W)` too), "{W} is not on the page
 now." The instance's own reason (the console: say "load <package>" first) is the page's band
 text, not the base's line. `observe()` returns
 the page's real `focused(W)`, `shown`/`hidden`, `present`/`absent` and `modal` atoms: a focus change the

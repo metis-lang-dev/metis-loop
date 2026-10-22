@@ -281,7 +281,7 @@ stage global {
   %% I jump to {W}.
   jump_ok [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * shown(W) * $free -o idle_jump * focused(W) * prev(F) * shown(W) * done(jump).
   %% I show {W} and jump to it.
-  jump_ok_hidden [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * hidden(W) * $role(W, dock) * $free -o idle_jump * focused(W) * prev(F) * shown(W) * done(jump).
+  jump_ok_hidden [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * hidden(W) * $role(W, dock) * $present(W) * $free -o idle_jump * focused(W) * prev(F) * shown(W) * done(jump).
   %% I jump to {W}, inside the dialog.
   jump_ok_dialog [dyn] : resolving * jumped(W) * focused(F) * prev(Q) * $modal(D) * inside(W, D) -o idle_jump * focused(W) * prev(F) * done(jump).
   %% No label by that number.
@@ -372,6 +372,8 @@ stage post {
   p_jump_to_picking [dyn] : cmd_jump_to(L) * $idle_jump * $picking -o refused(jump).
   %% I can't jump to {W}: the {D} dialog holds the focus until it is done.
   p_jumped_modal [dyn] : resolving * jumped(W) * $modal(D) -o idle_jump * refused(jump).
+  %% {W} is not on the page now.
+  p_jumped_absent [dyn] : resolving * jumped(W) * $absent(W) * $free -o idle_jump * refused(jump).
   %% The numbers are off while the labels are up: say a number, or "cancel".
   p_numbers_jumping [dyn] : cmd_numbers * $jumping -o refused(numbers).
   %% The numbers are up already.
@@ -385,7 +387,7 @@ stage post {
   %% I can't show {W}: the {D} dialog holds the focus until it is done.
   p_show_modal [dyn] : cmd_show(W) * $hidden(W) * $role(W, dock) * $present(W) * $modal(D) -o refused(show).
   %% {W} is not on the page now.
-  p_show_absent [dyn] : cmd_show(W) * $absent(W) * $role(W, dock) -o refused(show).
+  p_show_absent [dyn] : cmd_show(W) * $absent(W) * $hidden(W) * $role(W, dock) -o refused(show).
   %% I can't close here: {W} is not a dock.
   p_close [dyn] : cmd_close * $focused(W) * $role(W, R) * notdock(R) -o refused(close).
   %% {W} is hidden already.
