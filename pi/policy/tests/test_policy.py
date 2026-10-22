@@ -54,7 +54,7 @@ def _run(run, brain, cfg=None, resume=False):
     from policy.brain import Brain
     from policy.driver import Driver
     out = []
-    d = Driver(run, Brain(brain, run), discovery=2, gate_games=2, cfg=dict({"explore_steps": 25, "exploit_episodes": 6}, **(cfg or {})),
+    d = Driver(run, Brain(brain, run), discovery=2, gate_games=2, cfg=dict({"explore_steps": 25, "exploit_episodes": 10}, **(cfg or {})),
                out=out.append)
     code = d.resume() if resume else d.go()
     return code, [json.loads(l) for l in out], d
@@ -92,3 +92,64 @@ def test_a_cornered_run_asks_and_resumes_with_the_answer(tmp_path):
     prompts = [json.loads(l) for l in (tmp_path / "run" / "prompts.jsonl").read_text().splitlines()]
     assert prompts and all(note in p["prompt"] for p in prompts)
     assert [e["event"] for e in d2.gate.journal()].count("answer") == 1
+
+
+def test_the_spend_meter_survives_a_resume(tmp_path, monkeypatch):
+    """nina's R1: a resumed brain keeps the run's first start and its cap (the state), and N2: the
+    spent amount is the larger of the key's delta and the reported costs. No network: /key stubbed."""
+    from policy import brain as B
+    usage = [5.0]
+    monkeypatch.setattr(B.Brain, "usage", lambda self: usage[0])
+    state = {}
+    b1 = B.Brain("openrouter/m", tmp_path, spend=1.0, env={"OPENROUTER_API_KEY": "k"})
+    b1.keep(state)
+    assert state == {"spend_start": 5.0, "spend_cap": 1.0}
+    usage[0] = 5.6
+    b2 = B.Brain("openrouter/m", tmp_path, spend=1.0, env={"OPENROUTER_API_KEY": "k"})     # the resume: a new brain
+    b2.keep(state)
+    assert b2.start_usage == 5.0 and b2.spent() == pytest.approx(0.6)
+    usage[0] = 6.05
+    with pytest.raises(B.Budget):
+        b2.ask("a prompt", "explore")                                     # stopped before the call: no network
+    (tmp_path / "cost.jsonl").write_text(json.dumps({"cost": 1.5}) + "\n")
+    usage[0] = 5.1
+    assert b2.spent() == pytest.approx(1.5)                               # the key lags: the reported costs win
+
+
+@live
+def test_a_rule_revised_in_vain_twice_is_probed_in_the_same_phase(tmp_path):
+    """nina's R2: two refused revises at one rule within one exploit pass send the loop to the probe."""
+    code, out, d = _run(tmp_path / "run", "script:%s" % (HERE / "probe-script.jsonl"), cfg={"exploit_episodes": 2, "no_progress": 9})
+    revises = [e for e in out if e.get("event") == "proposal" and e.get("phase") == "exploit" and e.get("verdict") == "refuse"]
+    assert len(revises) >= 2
+    probes = [e for e in out if e.get("event") == "probe"]
+    assert probes and probes[0]["records"] > 0
+
+
+@live
+def test_the_persons_edit_is_judged_and_the_tree_follows(tmp_path):
+    """nina's R3 and R4: an edit answer goes through the gate like a rule, with the counters and the
+    current tree re-synced; R5: a prompt past the per-request cap is an ask, not a traceback."""
+    from policy.brain import Brain
+    from policy.driver import Driver
+    if not os.environ.get("METISC"):                    # the gate checks a .llp edit with metisc (run.sh sets it)
+        c = next((p / "metis-lang" / "src" / "metisc" for p in HERE.parents if (p / "metis-lang" / "src" / "metisc").exists()), None)
+        if c is None:
+            pytest.skip("no metisc: set METISC")
+        os.environ["METISC"] = str(c)
+    out = []
+    d = Driver(tmp_path / "run", Brain("script:%s" % SCRIPT, tmp_path / "run", prompt_chars=500), discovery=2, gate_games=2,
+               cfg={"explore_steps": 25}, out=out.append)
+    assert d.go() == 3
+    ask = json.loads(out[-1])
+    assert ask["disengaged"]["reason"] == "budget" and "per-request cap" in ask["disengaged"]["question"]
+    rule = "  %% I go to {R}.\n  go [dyn] : at(L) * $recat(R, L2) * L <> L2 -o at(L2)."
+    d.gate.answer(ask["token"], {"kind": "edit", "path": "alf.llp", "old": "stage act {", "new": "stage act {\n" + rule})
+    out2 = []
+    d2 = Driver(tmp_path / "run", Brain("script:%s" % SCRIPT, tmp_path / "run"), discovery=2, gate_games=2,
+                cfg={"explore_steps": 25, "exploit_episodes": 2}, out=out2.append)
+    d2.resume()
+    mine = next(json.loads(l) for l in out2 if '"by": "person"' in l)
+    assert mine["verdict"] == "accept" and mine["numbers"]["likelihood"] > 0
+    assert "go [dyn]" in (tmp_path / "run" / "trees" / "current" / "base" / "alf.llp").read_text()
+    assert d2.state["accepted"] >= 1

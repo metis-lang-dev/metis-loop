@@ -78,12 +78,26 @@ class Brain:
             d = json.loads(r.read()).get("data") or {}
         return float(d.get("usage") or 0.0)
 
-    def spent(self):
-        """USD spent by this run: the key's usage since the start (a paid brain with a budget), else
-        the calls' reported costs."""
-        if self.start_usage is not None:
-            return self.usage() - self.start_usage
+    def reported(self):
+        """The calls' reported costs (USD), summed over the run's cost log (every resume's calls too)."""
         return sum(float(json.loads(l).get("cost") or 0) for l in self.log.read_text().splitlines()) if self.log.exists() else 0.0
+
+    def spent(self):
+        """USD spent by this run: the larger of the key's usage since the run's first start (a paid
+        brain with a budget; OpenRouter's /key can lag the calls) and the calls' reported costs."""
+        if self.start_usage is not None:
+            return max(self.usage() - self.start_usage, self.reported())
+        return self.reported()
+
+    def keep(self, state):
+        """The meter across resumes (nina's R1): the run's first start_usage and its cap live in
+        the run's state; a resumed brain takes them, it never starts the meter again."""
+        if not (self.paid and self.spend is not None):
+            return
+        if state.get("spend_start") is None:
+            state["spend_start"], state["spend_cap"] = self.start_usage, self.spend
+        else:
+            self.start_usage, self.spend = state["spend_start"], state["spend_cap"]
 
     def ask(self, prompt, purpose=""):
         if len(prompt) > self.prompt_chars:

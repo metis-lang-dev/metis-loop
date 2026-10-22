@@ -11,7 +11,7 @@ is the mean of log(1) and log(ε) — a change of +x/n·log(1/ε) per newly pred
 
     p = Predictor(tree, games)                  # one session per game, opened once per base
     p.predicts(rec)                             # True | False
-    fits(cand, cur, record, records)            # the candidate's new rules fire on the record, and on
+    fits(p, cand, cur, record, records)         # the candidate's new rules fire on the record, and on
                                                 # no record they contradict (gate: fits_records)
     likelihood(p, records)                      # the mean log-probability
     vector(text, p)                             # {rules, ground}: the complexity vector's two numbers
@@ -24,10 +24,10 @@ EPS = 1e-3
 
 
 class Predictor:
-    def __init__(self, tree, games, dynamic, commands):
+    def __init__(self, tree, games, dynamic, commands, verbs=None):
         """tree: the base's tree; games: {iid: AlfWorld}; dynamic: the host's dynamic predicates;
         commands: the host's command table."""
-        self.tree, self.games, self.dynamic, self.commands = tree, games, set(dynamic), commands
+        self.tree, self.games, self.dynamic, self.commands, self.verbs = tree, games, set(dynamic), commands, verbs
         self.sessions, self.errors = {}, {}
 
     def session(self, iid):
@@ -61,7 +61,7 @@ class Predictor:
         if not hasattr(r, "_by_verb"):
             by = {}
             for _, _, ev in r.shell.events_tbl:
-                rv = rule_verb(ev.name, self.commands)
+                rv = rule_verb(ev.name, self.commands, self.verbs)
                 if rv is None:
                     continue
                 dyn = lambda d: {a: n for a, n in dict(d).items() if kind_of(a) in self.dynamic}

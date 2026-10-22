@@ -125,17 +125,25 @@ def args_of(atom):
     return [x.strip() for x in atom[i + 1:atom.rindex(")")].split(",")] if i >= 0 else []
 
 
-def rule_verb(name, commands):
+def rule_verb(name, commands, verbs=None):
     """A fired rule's name (`go[R=…,L2=…]`) → (verb, bindings) when the host sends a command for
-    it, else None (a rule of the policy's own tokens)."""
+    it, else None (a rule of the policy's own tokens). The host's table first; else, when the host
+    has the convention (alf_host.VERBS: `verb` or `verb_why`), the name's first token — a go there
+    may leave L2 to the host (it reads the receptacle's location)."""
     base, _, rest = name.partition("[")
-    spec = commands.get(base.split("-")[0])
+    base = base.split("-")[0]
+    spec, optional = commands.get(base), ()
+    if not spec and verbs:
+        spec = verbs.get(base.split("_")[0])
+        optional = ("L2",) if spec and spec[0] == "go" else ()
     if not spec:
         return None
     b = {}
     for kv in rest.rstrip("]").split(",") if rest else []:
         k, _, v = kv.partition("=")
         b[k.strip()] = v.strip()
+    if not all(v in b for v in spec[1:] if v not in optional):     # the command needs the entry's variables bound (nina's N3)
+        return None
     return spec[0], b
 
 
@@ -276,7 +284,7 @@ class AlfWorld:
         host = self.alf_host.AlfHost(str(path.parent), max_steps=self.max_steps)
         r = Repl.open(path)
         sh = r.shell
-        commands = self.alf_host.COMMANDS
+        commands, verbs = self.alf_host.COMMANDS, getattr(self.alf_host.AlfHost, "VERBS", None)
         out = {"game": self.iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": []}
         try:
             for _ in range(steps):
@@ -288,7 +296,7 @@ class AlfWorld:
                 i = rng.choices([i for i, _ in ws], weights=[w for _, w in ws])[0]      # the reference sampler's tier, seeded
                 name = sh._fire(i, ws=ws)
                 out["steps"] += 1
-                rv = rule_verb(name, commands)
+                rv = rule_verb(name, commands, verbs)
                 if rv is not None:
                     host.on_event(name, ())
                 if len(host.commands) > k:

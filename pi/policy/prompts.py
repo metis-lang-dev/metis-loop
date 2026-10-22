@@ -15,7 +15,9 @@ LANGUAGE = """The language (metis LL, linear logic over counted facts):
 - the rule's NAME decides what the world does when it fires (the table below): a rule named otherwise is the program's own bookkeeping and sends nothing."""
 
 
-def vocabulary(commands):
+def vocabulary(commands, verbs=None):
+    if isinstance(commands, tuple):
+        commands, verbs = commands
     rows = []
     for name, spec in sorted(commands.items()):
         if not spec:
@@ -24,7 +26,14 @@ def vocabulary(commands):
         what = {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R",
                 "take": "take O from R", "put": "put O in/on R"}[verb]
         rows.append("  %-12s binds %-8s → the command: %s" % (name, ", ".join(vars_), what))
-    return "The rule names the world sends a command for (its host's table; a rule's name is one of these, its variables bound by these names):\n" + "\n".join(rows)
+    head = "The rule names the world sends a command for (its host's table; a rule's name is one of these, its variables bound by these names):\n"
+    if verbs:
+        conv = ", ".join("%s_<why> binds %s" % (v, ", ".join(x for x in spec[1:] if not (v == "go" and x == "L2")) + (" (L2 optional)" if v == "go" else ""))
+                         for v, spec in sorted(verbs.items()))
+        head = ("A rule sends the world a command when its name is a verb, or a verb and why (`take_from_shelf`, `go_to_dest`): "
+                + conv + ". So a rule of the program's own bookkeeping (it only moves tokens) must NOT begin with go, open, "
+                "take or put. The host's own names below keep their bindings:\n")
+    return head + "\n".join(rows)
 
 
 def statics_about(instance_text, handles):

@@ -97,10 +97,25 @@ class Driver:
         self.games = {w.iid: w for w in self.disc + self.held}
         w0 = self.disc[0]
         self.dynamic, self.commands = w0.alf_host.DYNAMIC_PREDS, w0.alf_host.COMMANDS
+        self.verbs = getattr(w0.alf_host.AlfHost, "VERBS", None)       # the host's verb_why convention, when it has one
         self._sync_tree("current", self.base())
         self.pred = None
         self.seed_record = None
-        self.revised_in_vain = {}
+        self.where = None                     # the world's snapshot where the loop last acted (N1: the disengagement keeps it)
+        self._trans = None
+        self.brain.keep(self.state)           # nina's R1: a resumed run keeps the first start's meter and its cap
+        self.save()
+
+    def transitions(self):
+        """The transition records so far (read once, then kept: nina's N6)."""
+        if self._trans is None:
+            self._trans = jl_read(self.rec_dir / "transitions.jsonl")
+        return self._trans
+
+    def record(self, rec, surprise=False):
+        jl_append(self.rec_dir / ("surprises.jsonl" if surprise else "transitions.jsonl"), rec)
+        if not surprise:
+            self.transitions().append(rec)
 
     # ── the base and its trees ──
     def base(self):
@@ -114,7 +129,7 @@ class Driver:
 
     def predictor(self, name="current", text=None):
         tree = self._sync_tree(name, self.base() if text is None else text)
-        return measure.Predictor(tree, self.games, self.dynamic, self.commands)
+        return measure.Predictor(tree, self.games, self.dynamic, self.commands, self.verbs)
 
     def current(self):
         if self.pred is None:
@@ -166,7 +181,7 @@ class Driver:
         n["likelihood"] = round(lk, 6)
         if phase == "explore":
             ok, why = measure.fits(cand, text, self.base(), self.seed_record,
-                                   jl_read(self.rec_dir / "transitions.jsonl") + jl_read(self.rec_dir / "surprises.jsonl"))
+                                   self.transitions() + jl_read(self.rec_dir / "surprises.jsonl"))
             n["fits_records"] = ok
             self.say("fits", ok=ok, why=why)
         if phase == "refactor":
@@ -191,11 +206,7 @@ class Driver:
         if self.state["proposals"] >= self.cfg["proposals"]:
             raise Disengage("budget", "The proposals budget (%d) is spent. More proposals, another phase, or stop?" % self.cfg["proposals"],
                             options=["budget: more proposals", "phase: refactor now", "abandon"])
-        try:
-            answer = self.brain.ask(prompt, purpose)
-        except Budget as e:
-            raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
-                            options=["budget: more spend", "abandon"]) from None
+        answer = self.ask(prompt, purpose)
         lines = block_of(answer)
         text, info = splice(self.base(), lines)
         if text == self.base():
@@ -205,23 +216,37 @@ class Driver:
             words = self.predictor("candidate", text).compiles(seed_game)
             if not words:
                 break
-            try:
-                lines = block_of(self.brain.ask(prompt + "\n\n" + prompts.repair(lines, words), purpose + "-repair"))
-            except Budget as e:
-                raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
-                                options=["budget: more spend", "abandon"]) from None
+            lines = block_of(self.ask(prompt + "\n\n" + prompts.repair(lines, words), purpose + "-repair"))
             text, info = splice(self.base(), lines)
-        self.state["proposals"] += 1
-        cost = self.last_cost()
+        return self.judge("program", info=info, cost=self.last_cost(), text=text)
+
+    def ask(self, prompt, purpose):
+        """One brain call; its caps cornered as a budget disengagement (the spend, nina's R5: the prompt's size)."""
         try:
-            pl = self.gate.propose("program", DOMAIN, self.root, text=text, phase=self.state["phase"], cost=cost)
+            return self.brain.ask(prompt, purpose)
+        except Budget as e:
+            raise Disengage("budget", "The spend budget is exhausted (%s). Raise it, or stop?" % e,
+                            options=["budget: more spend", "abandon"]) from None
+        except ValueError as e:
+            raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
+                            "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: a larger prompt cap", "abandon"]) from None
+
+    def judge(self, kind, by="brain", info=None, cost=None, **args):
+        """A proposal through the gate (the brain's or, at re-engagement, the person's rule or edit),
+        its bookkeeping one path for both: the counters, the current tree re-synced, the
+        contradiction check; a gate's refusal in words is a refused proposal, not an end.
+        → "accept" | "refuse" | "error"."""
+        self.state["proposals"] += 1
+        phase = self.state["phase"] if not (by == "person" and self.state["phase"] == "explore") else "exploit"
+        try:
+            pl = self.gate.propose(kind, DOMAIN, self.root, phase=phase, cost=cost, **args)
+            v = pl["verdict"]
         except Exception as e:                      # noqa: BLE001 — the gate's refusal in words (no plan left waiting)
-            self.say("proposal", verdict="error", why=str(e), **info)
+            self.say("proposal", verdict="error", why=str(e), by=by, **(info or {}))
             self.state["refused_run"] += 1
             self.save()
             return "error"
-        v = pl["verdict"]
-        self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, **info)
+        self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, by=by, **(info or {}))
         if v["verdict"] == "accept":
             self.state["accepted"] += 1
             self.state["accepts_since_refactor"] += 1
@@ -232,7 +257,7 @@ class Driver:
         else:
             self.state["refused_run"] += 1
         self.save()
-        if self.state["refused_run"] >= self.cfg["no_progress"]:
+        if by == "brain" and self.state["refused_run"] >= self.cfg["no_progress"]:
             raise Disengage("no_progress", "%d proposals in a row were refused (the last: %s). Give me a note on what I miss, "
                             "a rule to try, or another phase?" % (self.state["refused_run"], "; ".join(v["why"][-2:])),
                             options=["note: what the rules miss", "phase: skip this state", "abandon"],
@@ -252,38 +277,48 @@ class Driver:
     # ── explore ──
     def explore(self):
         rng = random.Random(self.seed)
-        tried, unexplained, explained_run = set(), 0, 0
-        trans = self.rec_dir / "transitions.jsonl"
+        tried, counters = set(), [0, 0]          # unexplained, explained in a row: carried across the games
         for w in self.disc:
             w.reset()
-            for _ in range(self.cfg["explore_steps"]):
-                acts = w.actions()
-                if not acts or w.done:
-                    break
-                fresh = [a for a in acts if (a["verb"], a["command"]) not in tried]
-                a = by_verb(rng, fresh or acts)
-                tried.add((a["verb"], a["command"]))
-                rec = w.step(a["command"])
-                jl_append(trans, rec)
-                self.check_vocabulary(rec)
-                if self.current().predicts(rec):
-                    explained_run += 1
-                    if explained_run >= self.cfg["explore_w"]:
-                        self.say("explore-complete", why="%d steps in a row predicted" % explained_run)
-                        return
-                    continue
-                explained_run = 0
-                self.seed_record = rec
-                sims = [r for r in jl_read(trans) if r["action"]["verb"] == rec["action"]["verb"]
-                        and (r["game"], r["t"]) != (rec["game"], rec["t"])][-2:]
-                verdict = self.propose(prompts.explore(self.base(), self.commands, rec, sims, w.instance_text(), self.note()),
-                                       "explore", rec["game"])
-                unexplained = 0 if verdict == "accept" else unexplained + 1
-                if unexplained >= self.cfg["explore_k"]:
-                    self.say("explore-ends", why="%d unexplained records without an accept" % unexplained)
+            try:
+                if self._explore_game(w, rng, tried, counters):
                     return
-            w.close()
+            finally:
+                w.close()                         # nina's N4: every return closes the game's gym child
         self.say("explore-ends", why="the discovery games' steps are spent")
+
+    def _explore_game(self, w, rng, tried, run):
+        """One discovery game walked; → True when exploration is over (run: the counters, carried)."""
+        unexplained, explained_run = run
+        for _ in range(self.cfg["explore_steps"]):
+            acts = w.actions()
+            if not acts or w.done:
+                break
+            fresh = [a for a in acts if (a["verb"], a["command"]) not in tried]
+            a = by_verb(rng, fresh or acts)
+            tried.add((a["verb"], a["command"]))
+            rec = w.step(a["command"])
+            self.where = w.snapshot()
+            self.check_vocabulary(rec)
+            self.record(rec)
+            if self.current().predicts(rec):
+                explained_run += 1
+                if explained_run >= self.cfg["explore_w"]:
+                    self.say("explore-complete", why="%d steps in a row predicted" % explained_run)
+                    return True
+                continue
+            explained_run = 0
+            self.seed_record = rec
+            sims = [r for r in self.transitions() if r["action"]["verb"] == rec["action"]["verb"]
+                    and (r["game"], r["t"]) != (rec["game"], rec["t"])][-2:]
+            verdict = self.propose(prompts.explore(self.base(), (self.commands, self.verbs), rec, sims, w.instance_text(), self.note()),
+                                   "explore", rec["game"])
+            unexplained = 0 if verdict == "accept" else unexplained + 1
+            if unexplained >= self.cfg["explore_k"]:
+                self.say("explore-ends", why="%d unexplained records without an accept" % unexplained)
+                return True
+        run[:] = [unexplained, explained_run]
+        return False
 
     def check_contradiction(self):
         """contradiction (POLICY.md): two accepted rules answering one action in one state with two
@@ -296,7 +331,7 @@ class Driver:
                             "Which of the two should stand?" % sha, options=["note: which version", "phase: skip", "abandon"],
                             believes=[l for _, l in rules_of(self.base())])
         seen.append(sha)
-        for rec in jl_read(self.rec_dir / "transitions.jsonl")[-60:]:
+        for rec in self.transitions()[-60:]:
             by = {}
             for name, after in self.current().events(rec):
                 by.setdefault(name.split("[")[0], set()).add(frozenset(after))
@@ -309,7 +344,7 @@ class Driver:
     def check_vocabulary(self, rec):
         """out_of_vocabulary: the same before-facts and command, another after (the host does not read
         a fact the world has, or the world is not deterministic there)."""
-        for r in jl_read(self.rec_dir / "transitions.jsonl")[:-1]:
+        for r in self.transitions():
             if r["game"] == rec["game"] and r["command"] == rec["command"] and r["before"] == rec["before"] and r["after"] != rec["after"]:
                 raise Disengage("out_of_vocabulary", "The same command in the same observed state gave two outcomes (%s): the world has a "
                                 "fact the host does not read. Which fact, or skip this command?" % rec["command"],
@@ -326,7 +361,8 @@ class Driver:
                 episodes += 1
                 ep = w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed + episodes)
                 for t in ep["transitions"]:
-                    jl_append(self.rec_dir / ("surprises.jsonl" if t["kind"] == "surprise" else "transitions.jsonl"), t)
+                    self.record(t, surprise=t["kind"] == "surprise")
+                self.where = {"game": w.iid, "game_dir": w.game_dir, "commands": list(ep["commands"])}
                 self.say("episode", game=w.iid, won=ep["won"], commands=len(ep["commands"]), refused=ep["refused"])
                 if ep["stuck"]:
                     raise Disengage("stuck", "The task is stuck (%s) and no rule handles it. What should it do?" % ", ".join(ep["stuck"]),
@@ -335,23 +371,21 @@ class Driver:
                 if ep["won"]:
                     continue
                 all_won = False
-                # a surprise at a rule not yet revised in vain → revise; else the episode's failure is the policy's
+                # a surprise at a rule revised in vain fewer than twice → revise; refused twice at one rule →
+                # the probe there (data, not another guess: nina's R2); then that rule's failures are the policy's
                 sur = next((t for t in ep["transitions"] if t["kind"] == "surprise"
-                            and refused_at.get(t["rule"].split("[")[0], 0) == 0), None)
+                            and refused_at.get(t["rule"].split("[")[0], 0) < 2), None)
                 if sur is not None:
                     key = sur["rule"].split("[")[0]
-                    refused_at[key] = refused_at.get(key, 0)
                     line = next((l for n, l in rules_of(self.base()) if n == key), "")
                     self.seed_record = sur
-                    v = self.propose(prompts.revise(self.base(), self.commands, sur, line, w.instance_text(), self.note()), "revise", w.iid)
+                    v = self.propose(prompts.revise(self.base(), (self.commands, self.verbs), sur, line, w.instance_text(), self.note()), "revise", w.iid)
                     if v != "accept":
-                        refused_at[key] += 1
-                        self.revised_in_vain[key] = self.revised_in_vain.get(key, 0) + 1
-                        if self.revised_in_vain[key] >= 2:          # refused twice at one rule: data, not another guess
+                        refused_at[key] = refused_at.get(key, 0) + 1
+                        if refused_at[key] >= 2:
                             self.probe(w, ep, sur)
-                            self.revised_in_vain[key] = 0
                 else:
-                    self.propose(prompts.policy(self.base(), self.commands, prompts.task_facts(w.instance_text()), ep,
+                    self.propose(prompts.policy(self.base(), (self.commands, self.verbs), prompts.task_facts(w.instance_text()), ep,
                                                 w.instance_text(), self.note()), "policy", w.iid)
                 if self.should_refactor():
                     return "refactor"
@@ -370,19 +404,19 @@ class Driver:
         for a in w.actions():
             w.restore(snap)
             rec = dict(w.step(a["command"]), phase="probe")
-            jl_append(self.rec_dir / "transitions.jsonl", rec)
+            self.record(rec)
             n += 1
         w.close()
         self.say("probe", game=w.iid, at=k, records=n)
         # back to exploration around that state: each record the rules do not predict, a proposal
-        recs = [r for r in jl_read(self.rec_dir / "transitions.jsonl")[-n:] if not self.current().predicts(r)]
+        recs = [r for r in self.transitions()[-n:] if not self.current().predicts(r)] if n else []
         phase, self.state["phase"] = self.state["phase"], "explore"
         try:
             for rec in recs[:3]:
                 if self.current().predicts(rec):
                     continue
                 self.seed_record = rec
-                self.propose(prompts.explore(self.base(), self.commands, rec, [], w.instance_text(), self.note()), "probe", w.iid)
+                self.propose(prompts.explore(self.base(), (self.commands, self.verbs), rec, [], w.instance_text(), self.note()), "probe", w.iid)
         finally:
             self.state["phase"] = phase
 
@@ -399,7 +433,7 @@ class Driver:
             return
         self.state["refactored_at"] = sha
         p = (f"You are refactoring the rules of a household world (ALFWorld) without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
-             f"{prompts.vocabulary(self.commands)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
+             f"{prompts.vocabulary(self.commands, self.verbs)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
              "Make it smaller and clearer: merge rules that differ only in a fact they read, drop a rule no state can enable, "
              "name the program's tokens so each rule's role reads. Every command the program sends in a state must stay the same."
              f"{prompts.instruction(self.note())}\n\nAnswer with ONE ```llp block of the replaced lines and `drop NAME` lines.")
@@ -453,7 +487,9 @@ class Driver:
         for w in self.games.values():
             w.close()
         snap = {"phase": self.state["phase"], "base_sha": hashlib.sha256(self.base().encode()).hexdigest()[:12],
-                "records": str(self.rec_dir), "state": dict(self.state)}
+                "base": self.base(), "world": self.where, "records": str(self.rec_dir), "state": dict(self.state),
+                "resume": "the phase re-enters from its start with the base and the records as they are; the world's "
+                          "commands (world) say where it stood"}
         sp = self.state_dir / ("snapshot-%d.json" % (len(self.gate.asks()) + len(self.gate.answers()) + 1))
         sp.write_text(json.dumps(snap, indent=1))
         a = self.gate.propose("ask", DOMAIN, self.root, phase=self.state["phase"], reason=d.reason, tried=d.tried,
@@ -488,18 +524,28 @@ class Driver:
                     self.cfg[cfgk] = self.cfg[cfgk] + int(ins[key])
             if ins.get("spend") and self.brain.spend is not None:
                 self.brain.spend += float(ins["spend"])
+                self.state["spend_cap"] = self.brain.spend          # the cap the meter keeps across resumes (R1)
             self.state["cfg"] = self.cfg
         phase = None
         if k == "phase":
             phase = ins.get("phase") if ins.get("phase") in ("explore", "exploit", "refactor") else None
             if ins.get("phase") == "skip":
                 phase = {"explore": "exploit", "exploit": "refactor", "refactor": "exploit"}[self.state["phase"]]
+        # the person's rule or edit: through the gate as the brain's are, one path (nina's R3, R4)
         if k == "rule":
             self.seed_record = None
-            pl = self.gate.propose("program", DOMAIN, self.root, text=splice(self.base(), block_of(ins["text"]))[0],
-                                   phase="exploit" if self.state["phase"] == "explore" else self.state["phase"])
-            self.say("proposal", verdict=pl["verdict"]["verdict"], by="person")
-            self.pred = None
+            text, info = splice(self.base(), block_of(ins["text"]))
+            self.judge("program", by="person", info=info, text=text)
+        if k == "edit":
+            # the person's edit applied to the base's text and judged as the base it makes: the SDK's edit check
+            # compiles the file alone, and a lifted base has no types of its own (the instance declares them)
+            self.seed_record = None
+            base, old = self.base(), ins.get("old", "")
+            if not old or base.count(old) != 1:
+                self.say("proposal", verdict="error", by="person", why="the edit's old text occurs %d times in the base, not once"
+                         % (base.count(old) if old else 0))
+            else:
+                self.judge("program", by="person", info={"edit": True}, text=base.replace(old, ins.get("new", ""), 1))
         return self.go(phase)
 
 

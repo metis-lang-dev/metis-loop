@@ -13,6 +13,7 @@
 #             builds), records, the gate's state and journal, the cost log, the brain's prompts
 #   METIS_POLICY_PY  the python (default: the workspace's .worlds/alf venv: ALFWorld, metispy)
 #   ALFWORLD_DATA    the games (default: the workspace's .worlds/alfworld-data)
+#   METISC           metis-lang's metisc (default: the workspace's build): the gate checks a person's .llp edit with it
 #   Every run is a child in a memory-capped scope (systemd-run --user, MemoryMax=6G) when systemd-run is there.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +21,7 @@ PKGS="$HERE"                                          # the workspace: the first
 while [ "$PKGS" != / ] && [ ! -d "$PKGS/.worlds" ]; do PKGS="$(dirname "$PKGS")"; done
 PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"
 export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}"
+[ -n "${METISC:-}" ] || [ ! -x "$PKGS/metis-lang/src/metisc" ] || export METISC="$PKGS/metis-lang/src/metisc"   # the gate checks a .llp edit with it
 [ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: a venv with ALFWorld and metispy)" >&2; exit 1; }
 WORLD=alfworld FAMILY=pick_and_place_simple RUN="" ANSWER=() ARGS=()
 while [ $# -gt 0 ]; do

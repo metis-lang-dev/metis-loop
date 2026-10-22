@@ -1,0 +1,6 @@
+{"when": "the action: go ", "text": "```llp\n%% I go to {R}.\ngo [dyn] : at(L) * $recat(R, L2) * L <> L2 -o at(L2).\n```", "keep": true}
+{"when": "the action: open ", "text": "```llp\n%% I open {R}.\nopen_closed [dyn] : $at(L) * $recat(R, L) * closed(R) -o opened(R) * checked(R).\n```", "keep": true}
+{"when": "the action: take ", "text": "```llp\n%% I take {O} from {R}.\ntake_plain [dyn] : $at(L) * $recat(R, L) * inrecep(O, R) * objat(O, L) * handsfree -o holds(O) * holding.\n```", "keep": true}
+{"when": "the action: put ", "text": "```llp\n%% I put {O} in {R}.\nput_plain [dyn] : $at(L) * $recat(R, L) * holds(O) * holding -o inrecep(O, R) * objat(O, L) * handsfree.\n```", "keep": true}
+{"when": "SURPRISE", "keep": true, "text": "```llp\n%% I walk over to {R}.\ngo [dyn] : at(L) * $recat(R, L2) * L <> L2 -o at(L2).\n```"}
+{"when": "WHAT TO DO NEXT", "keep": true, "text": "```llp\n% nothing\n```"}
