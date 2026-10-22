@@ -21,7 +21,7 @@ DIR="$(cd "${METIS_CATALOG:-$PWD}" && pwd)"
 [ "$INTO" != "$DIR" ] || { echo "take.sh: --into $INTO is the catalog the domain is in" >&2; exit 1; }
 NAME="${1:-lamp}"
 SDK_PY="${METIS_LOOP_SDK_PY:-$PKGS/.venv/bin/python}"
-sdk() { "$SDK_PY" -m metis_loop_sdk.catalog --root "$INTO" "$@"; }
+sdk() { "$SDK_PY" -m metis.catalog --root "$INTO" "$@"; }
 field() { "$SDK_PY" -c 'import json,sys; o=json.load(sys.stdin); print(o.get(sys.argv[1]) or "", end="")' "$1"; }
 
 dry="$(sdk take "$NAME" --from "$DIR" --readme-from-run "$DIR/.metis" --dry-run --json)" ||

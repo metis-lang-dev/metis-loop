@@ -32,7 +32,8 @@ function scratch(): string {
 	return r;
 }
 const py = (r: string, ...args: string[]) =>
-	JSON.parse(execFileSync(PY, ["-m", "metis_loop_sdk.catalog", "--root", r, ...args, "--json"], { encoding: "utf8" }));
+	JSON.parse(execFileSync(PY, ["-m", "metis.catalog", "--root", r, ...args, "--json"], { encoding: "utf8" }));
+const web = (verb: string) => JSON.parse(execFileSync(PY, ["-m", "metis_loop_sdk.web", verb], { encoding: "utf8" }));   // the SDK's own
 
 test("the reads answer what the py CLI answers", () => {
 	const r = scratch();
@@ -44,7 +45,7 @@ test("the reads answer what the py CLI answers", () => {
 	assert.deepEqual(catalog.intents("dog", { spec: true }, r), py(r, "intents", "dog", "--spec"));
 	assert.equal(catalog.skeleton("plant", r), py(r, "intents", "plant", "--skeleton").skeleton);
 	assert.equal(catalog.fingerprint("dog", r), py(r, "fingerprint", "dog").fingerprint);
-	assert.deepEqual(catalog.widget(), py(r, "widget"));
+	assert.deepEqual(catalog.widget(), web("widget"));
 	assert.deepEqual(catalog.installed(), py(r, "installed"));                       // cwd-root: never the root
 	assert.equal(catalog.state(r), py(r, "state").state);
 	assert.ok(existsSync(join(r, ".metis")));
@@ -111,7 +112,7 @@ test("apply's readme, host and corpus; readme() and ts() — py's plan/apply key
 	execFileSync(PY, ["-c", `import json,sys; json.dump({"seed": "domains/fiction/x.llp"}, open(sys.argv[1], "w"))`, join(run, "seed.json")]);
 	assert.equal(catalog.readme("plant", r, run), py(r, "readme", "plant", "--run", run).readme);
 	assert.match(catalog.readme("plant", r, run), /seeded from `domains\/fiction\/x\.llp`/);
-	assert.deepEqual(catalog.ts(), py(r, "ts"));
+	assert.deepEqual(catalog.ts(), web("ts"));
 	assert.ok(existsSync(join(catalog.ts().dir, "catalog.ts")));
 });
 

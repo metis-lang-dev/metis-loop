@@ -8,7 +8,7 @@
 #   ./setup.sh --link   only the link to the loop SDK's TypeScript face (pi.sh runs it at each start)
 #
 # extensions/sdk (gitignored) links the loop SDK's TypeScript face, the catalog the
-# extensions import (./sdk/catalog.ts): the directory `python -m metis_loop_sdk.catalog ts`
+# extensions import (./sdk/catalog.ts): the directory `python -m metis_loop_sdk.web ts`
 # names in the installed SDK (METIS_LOOP_SDK_PY, default ../../.venv/bin/python, else python3),
 # so the py SDK and its TypeScript face are one install and one tag.
 set -euo pipefail
@@ -23,7 +23,7 @@ SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../../.venv/bin/python}"
 
 link() {
   local dir
-  dir="$("$SDK_PY" -m metis_loop_sdk.catalog ts --json | "$SDK_PY" -c 'import json,sys; print(json.load(sys.stdin)["dir"])')" ||
+  dir="$("$SDK_PY" -m metis_loop_sdk.web ts | "$SDK_PY" -c 'import json,sys; print(json.load(sys.stdin)["dir"])')" ||
     { echo "setup.sh: no loop SDK with its TypeScript face in $SDK_PY (pip install -e ../metis-loop/sdk; sdk-v0.1.5 or later)" >&2; return 1; }
   [ "$(readlink "$HERE/extensions/sdk" 2>/dev/null)" = "$dir" ] || ln -sfn "$dir" "$HERE/extensions/sdk"
 }

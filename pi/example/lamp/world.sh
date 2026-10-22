@@ -10,11 +10,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../../../../.venv/bin/python}"
 DIR="$(mkdir -p "${1:?usage: world.sh DIR}" && cd "$1" && pwd)"
-INST="$("$SDK_PY" -m metis_loop_sdk.catalog installed --json | "$SDK_PY" -c 'import json,sys; print(json.load(sys.stdin)["catalog"])')"
+INST="$("$SDK_PY" -m metis.catalog installed --json | "$SDK_PY" -c 'import json,sys; print(json.load(sys.stdin)["catalog"])')"
 if [ ! -d "$DIR/domains/plant" ]; then
   mkdir -p "$DIR/domains/plant"
   (cd "$INST/domains/plant" && tar --exclude=./build --exclude=./records --exclude=__pycache__ -cf - .) | (cd "$DIR/domains/plant" && tar -xf -)
 fi
 mkdir -p "$DIR/domains/lamp" && cp "$HERE/lamp_host.py" "$DIR/domains/lamp/"
-"$SDK_PY" -m metis_loop_sdk.catalog --root "$DIR" state --json > /dev/null
+"$SDK_PY" -m metis.catalog --root "$DIR" state --json > /dev/null
 echo "$DIR/domains/plant/plant.llp"

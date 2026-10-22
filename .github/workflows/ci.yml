@@ -181,8 +181,8 @@ jobs:
       - name: "Install metispy, metis-catalog and the loop SDK (this checkout's sdk/, one tag with the extensions)"
         run: |
           pip install ./metispy ./metis-catalog ./metis-loop/sdk
-          python -m metis_loop_sdk.catalog ts --json | python -c "import json,sys,os; d=json.load(sys.stdin)['dir']; assert os.path.isfile(os.path.join(d,'catalog.ts')), d"
-          python -c "import metis_loop_sdk.models.openai, metis_loop_sdk.catalog, metis.gate; print('sdk', metis_loop_sdk.__version__)"
+          python -m metis_loop_sdk.web ts | python -c "import json,sys,os; d=json.load(sys.stdin)['dir']; assert os.path.isfile(os.path.join(d,'catalog.ts')), d"
+          python -c "import metis_loop_sdk.models.openai, metis_loop_sdk.web, metis.catalog, metis.gate; print('sdk', metis_loop_sdk.__version__)"
       # nav's and wildfire's hosts step the IPPC gym in an interpreter of their own: pyRDDLGym and
       # rddlrepository, public on PyPI (MIT), pinned as the packages' .venv has them; ~15 s
       - name: The gym for the RDDL packages' hosts (its own venv, METIS_RDDL_PY)

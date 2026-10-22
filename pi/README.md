@@ -43,11 +43,13 @@ perotheia-packages/            (any parent directory)
 
 At run time the loop drives two processes over their JSON-lines wires,
 `metis --json` (metispy) and `python -m metis_agent.domain_agent` (metis-agent), and
-shares no code with them. Code it shares is the loop SDK's (`metis_loop_sdk`,
-pinned by tag in CI): the model adapters, and the catalog. The extensions read
-a domain's intents and make the writes (`catalog_apply`, `catalog_edit`, `catalog_take`) through the
-SDK's TypeScript face, `metis_loop_sdk/ts/catalog.ts`: one function per verb of its
-catalog CLI (`python -m metis_loop_sdk.catalog … --json`), shipped in the SDK's wheel.
+shares no code with them. Code it shares is metispy's catalog and gate (`metis.catalog`,
+`metis.gate`, since metis-packages) and the loop SDK's (`metis_loop_sdk`, pinned by tag in CI):
+the model adapters and the TypeScript face. The extensions read a domain's intents and make the
+writes (`catalog_apply`, `catalog_edit`, `catalog_take`) through that face,
+`metis_loop_sdk/ts/catalog.ts`: one function per verb of metispy's catalog CLI
+(`python -m metis.catalog … --json`; the gate's, `ts/gate.ts`, is `python -m metis.gate`),
+shipped in the SDK's wheel.
 `setup.sh` links it as `extensions/sdk` (gitignored; `pi.sh` refreshes the link at each
 start), so the py SDK and its TypeScript face are one install and one tag. This
 repository keeps only pi's glue: the tools, the gate, `loop.sh`, a thin `take.sh`. `METIS_AGENT` points elsewhere for
@@ -58,7 +60,7 @@ metis-agent; `METIS_LOOP_SDK_PY`, `METIS_LOOP_METIS` and `METIS_LOOP_AGENT_PY` f
 | Node | v22.23.3 (2026-09-23; pi needs >= 22.19) | `node/` (gitignored) | `setup.sh`: nodejs.org tarball, SHA-256 checked against SHASUMS256.txt |
 | pi | `@earendil-works/pi-coding-agent` 1.3.0 | `node_modules/` (gitignored) | `setup.sh`: `npm ci --ignore-scripts` from `package-lock.json` (integrity hashes) |
 | Ollama | 0.24.0 (the host's service) | — | its built-in Gemma 4 renderer and parser |
-| the loop SDK | metis-loop `sdk/` (`metis_loop_sdk.models`, `.catalog`, `ts/catalog.ts`) | the packages venv (`METIS_LOOP_SDK_PY`, default `../.venv/bin/python`); `extensions/sdk` links its TypeScript face | `pip install -e ../metis-loop/sdk`, then `./setup.sh --link`: the kernel's formalize through its Ollama or OpenAI-compatible command face (thinking off), the GPU probe, and the catalog (a domain's intents, `catalog_apply`, `catalog_take`, the README of a run, the bundle) |
+| the loop SDK | metis-loop `sdk/` (`metis_loop_sdk.models`, `.web`, `ts/catalog.ts`; the catalog and the gate are metispy's) | the packages venv (`METIS_LOOP_SDK_PY`, default `../.venv/bin/python`); `extensions/sdk` links its TypeScript face | `pip install -e ../metis-loop/sdk`, then `./setup.sh --link`: the kernel's formalize through its Ollama or OpenAI-compatible command face (thinking off), the GPU probe, and the catalog (a domain's intents, `catalog_apply`, `catalog_take`, the README of a run, the bundle) |
 | OpenRouter (trial) | pi's built-in provider | `MODEL=openrouter/<id>[:thinking]` | `OPENROUTER_API_KEY` from the environment only, never a file here; `agent/models.json` caps the trial's models at 2048 output tokens and routes them `data_collection: deny`; `example/openrouter_key.py` prints the key's spend (never the key). The kernel's formalize follows the driver (`FORMALIZE_MODEL=openrouter/<id>`, through the loop SDK's `openai-command`: reasoning off, 2048 tokens, `data_collection: deny`, each call and its cost in `records/formalize-calls.jsonl`); `FORMALIZE_MODEL=metis-gemma4-e4b` keeps it on Ollama |
 | model | our Gemma 4 E4B Q5_K_M GGUF (metis-agent `go/models/gemma4/`) | Ollama: `metis-gemma4-e4b`, `metis-gemma4-e4b-cpu` | `ollama create … -f ollama/Modelfile` (`Modelfile.cpu`: `num_gpu 0`) |
 

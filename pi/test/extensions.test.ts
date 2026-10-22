@@ -21,7 +21,7 @@ const AGENT = join(PKGS, "metis-agent");
 // the fixtures' catalog (the plant, nav, love_triangle): $TEST_CATALOG, else the installed
 // metis-catalog's own (the loop SDK's catalog.installed(): never a checkout beside this one)
 const CATALOG = process.env.TEST_CATALOG ?? JSON.parse(spawnSync(process.env.TEST_SDK_PY ?? join(PKGS, ".venv", "bin", "python"),
-	["-m", "metis_loop_sdk.catalog", "installed", "--json"], { encoding: "utf8" }).stdout).catalog;
+	["-m", "metis.catalog", "installed", "--json"], { encoding: "utf8" }).stdout).catalog;
 
 function fakePi() {
 	const tools = new Map<string, any>();
@@ -390,7 +390,7 @@ test("example/seeded.ts: a fiction program seeded, applied as it is, opened, run
 // loop-fixes s-855d8067: catalog_edit, the gate after a refusal, a world with no commands, display/line
 const SDK_PY = () => process.env.TEST_SDK_PY ?? join(PKGS, ".venv", "bin", "python");
 const HAS_METISC = (() => {
-	const r = spawnSync(SDK_PY(), ["-c", "from metis_loop_sdk import catalog; print(catalog.metisc() or '')"], { encoding: "utf8" });
+	const r = spawnSync(SDK_PY(), ["-c", "from metis import catalog; print(catalog.metisc() or '')"], { encoding: "utf8" });
 	return !!r.stdout?.trim();
 })();
 if (!HAS_METISC && process.env.TEST_REQUIRE_METISC) throw new Error("TEST_REQUIRE_METISC: the loop SDK finds no metisc (METISC)");
@@ -796,7 +796,7 @@ test("loop.sh --seed PKG_DIR: the package whole in DIR/.metis/seed/domains/NAME/
 	// no tools/ copied: an RDDL host imports rddl_host from the installed metis-catalog's tools/, on PYTHONPATH
 	assert.ok(!existsSync(join(dir, ".metis", "seed", "tools")));
 	const tools = JSON.parse(spawnSync(process.env.TEST_SDK_PY ?? join(PKGS, ".venv", "bin", "python"),
-		["-m", "metis_loop_sdk.catalog", "installed", "--json"], { encoding: "utf8" }).stdout).tools;
+		["-m", "metis.catalog", "installed", "--json"], { encoding: "utf8" }).stdout).tools;
 	assert.equal(a.out.env.PYTHONPATH.split(":")[0], tools);
 	assert.deepEqual(JSON.parse(readFileSync(join(dir, ".metis", "seed.json"), "utf8")), { seed: src, name: "pigs", package: true });
 	assert.equal(run(dir, "--seed", src).code, 0);                                      // the same package again: the same run

@@ -8,7 +8,7 @@
 // person approves every write into the catalog); catalog_edit, one exact edit of a
 // domain's file (comments and all), behind the same gate; and catalog_take, which
 // takes a finished domain from the loop's catalog into the person's, behind it too.
-// Their rules are the loop SDK's gate (metis_loop_sdk.gate, ./sdk/gate.ts; metis-loop
+// Their rules are metispy's gate (metis.gate, through ./sdk/gate.ts; metis-loop
 // docs/LOOP.md), the policy the human loop's console follows too: propose, the person
 // reads the plan, confirm writes exactly it; a refused file's next proposal shows what
 // changed since; the seed first; an applied program that won't load never replaces the one served.
@@ -130,7 +130,7 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	// ---- the catalog's writes, gated: the loop SDK's gate (loop-parity s-72d9d36b) ----------
-	// The policy is the SDK's (metis_loop_sdk.gate, its TypeScript face ./sdk/gate.ts): a write is a
+	// The policy is metispy's (metis.gate, its TypeScript face ./sdk/gate.ts): a write is a
 	// proposal, its plan the files it writes with their diffs; the person reads it at pi's tool_call
 	// gate, then the tool confirms it, which writes exactly that plan; a refused proposal is
 	// remembered (its next plan shows what changed since); the seed-first and README-refused rules

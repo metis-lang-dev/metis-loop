@@ -53,9 +53,9 @@ for a in "$@"; do
 done
 # the loop SDK's python (metis_loop_sdk: the catalog's root and state, the model adapters)
 SDK_PY="${METIS_LOOP_SDK_PY:-$PKGS/.venv/bin/python}"
-"$SDK_PY" -c "import metis_loop_sdk.models, metis_loop_sdk.catalog" 2>/dev/null || {
+"$SDK_PY" -c "import metis_loop_sdk.models, metis.catalog" 2>/dev/null || {
   echo "no loop SDK in $SDK_PY: pip install metis-loop-sdk (its sdk-vX.Y.Z tag), or set METIS_LOOP_SDK_PY" >&2; exit 1; }
-sdk() { "$SDK_PY" -m metis_loop_sdk.catalog --root "$DIR" "$@" --json; }
+sdk() { "$SDK_PY" -m metis.catalog --root "$DIR" "$@" --json; }
 field() { "$SDK_PY" -c 'import json,sys; o=json.load(sys.stdin); print(o.get(sys.argv[1]) or "", end="")' "$1"; }
 TASK=()
 SEED="" NAME="" EPISODES="" INTO="${METIS_LOOP_TAKE_INTO:-}"
@@ -113,7 +113,7 @@ if [ -n "$SEED" ]; then
     printf '%s' "$WANT" > "$ST/seed.json"
   fi
   if [ -n "$PACKAGE" ]; then                                          # its program where it is, so its includes resolve
-    METIS_LOOP_LLP="$("$SDK_PY" -m metis_loop_sdk.catalog --root "$ST/seed" get "$NAME" --json | field program)" || true
+    METIS_LOOP_LLP="$("$SDK_PY" -m metis.catalog --root "$ST/seed" get "$NAME" --json | field program)" || true
     [ -n "$METIS_LOOP_LLP" ] || { echo "loop.sh: --seed $SEED: its domain.yaml names no program the loop SDK reads" >&2; exit 1; }
     export METIS_LOOP_LLP
   else
@@ -130,7 +130,7 @@ export METIS_CATALOG="$DIR" METIS_LOOP_RECORDS="$ST/records" PI_LOOP_SESSIONS="$
 export METIS_LOOP_TAKE_INTO="$INTO"
 # an RDDL world's host imports tools/rddl_host.py, which it looks for above its own directory;
 # a DIR without tools/ (any DIR, a seed under .metis/) gets the installed metis-catalog's
-TOOLS="$("$SDK_PY" -m metis_loop_sdk.catalog installed --json | field tools)"
+TOOLS="$("$SDK_PY" -m metis.catalog installed --json | field tools)"
 export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR

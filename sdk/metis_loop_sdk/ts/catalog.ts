@@ -1,11 +1,11 @@
 // metis_loop_sdk/ts/catalog.ts — the loop SDK's catalog for node (fiction-port s-e3d0942d
-// step 1): the same catalog as metis_loop_sdk.catalog, at parity with it, for a TypeScript
+// step 1): the same catalog as metispy's metis.catalog, at parity with it, for a TypeScript
 // consumer (metis-agentic-loop's pi extensions). It has no catalog code of its own: each
-// function is one call of the py SDK's CLI, `python -m metis_loop_sdk.catalog … --json`, so
+// function is one call of metispy's CLI, `python -m metis.catalog … --json`, so
 // both faces are one code and one tag. Node built-ins only, erasable TypeScript only
 // (node --experimental-strip-types and pi's loader both run it as it is).
 //
-//   import * as catalog from ".../metis_loop_sdk/ts/catalog.ts";   // `python -m metis_loop_sdk.catalog ts`: where
+//   import * as catalog from ".../metis_loop_sdk/ts/catalog.ts";   // `python -m metis_loop_sdk.web ts`: where
 //   catalog.get("dog")                       // the domain: manifest, program, serves, host, has, fingerprint
 //   catalog.plan("lamp", { program })        // what apply would write: [{path, new, diff}]
 //   catalog.apply("lamp", { program, manifest, display, line })
@@ -70,7 +70,7 @@ export function cli(args: string[], input?: string, root?: string): any {
 	const py = process.env.METIS_LOOP_SDK_PY || "python3";
 	try {
 		return JSON.parse(
-			execFileSync(py, ["-m", "metis_loop_sdk.catalog", ...(root ? ["--root", root] : []), ...args, "--json"], {
+			execFileSync(py, ["-m", "metis.catalog", ...(root ? ["--root", root] : []), ...args, "--json"], {
 				input: input ?? "",
 				encoding: "utf8",
 				maxBuffer: 1 << 26,
@@ -85,7 +85,17 @@ export function cli(args: string[], input?: string, root?: string): any {
 			// not the SDK's answer: the process itself failed
 		}
 		if (err) throw new CatalogError(args[0], err);
-		throw new CatalogError(args[0], `${py} -m metis_loop_sdk.catalog: ${String(e.stderr || e.message).trim().slice(-500)}`);
+		throw new CatalogError(args[0], `${py} -m metis.catalog: ${String(e.stderr || e.message).trim().slice(-500)}`);
+	}
+}
+
+/** The loop SDK's own (`python -m metis_loop_sdk.web widget|ts`): the widget and this face. */
+function web(verb: string): any {
+	const py = process.env.METIS_LOOP_SDK_PY || "python3";
+	try {
+		return JSON.parse(execFileSync(py, ["-m", "metis_loop_sdk.web", verb], { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }));
+	} catch (e: any) {
+		throw new CatalogError(verb, `${py} -m metis_loop_sdk.web: ${String(e.stderr || e.message).trim().slice(-500)}`);
 	}
 }
 
@@ -265,10 +275,10 @@ export function build(name: string, r?: string): string {
 
 /** The catalog widget's directory, URL and files. */
 export function widget(): { dir: string; url: string; files: string[] } {
-	return cli(["widget"]);
+	return web("widget");
 }
 
 /** This face's own directory and files, in the installed SDK. */
 export function ts(): { dir: string; files: string[] } {
-	return cli(["ts"]);
+	return web("ts");
 }

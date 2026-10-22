@@ -1,6 +1,6 @@
 // The loop SDK's gate, TypeScript face (loop-parity s-72d9d36b): the loop's policy for a
 // write into a catalog — propose, the person reads the plan's diff, confirm or refuse —
-// through the py SDK's CLI (python -m metis_loop_sdk.gate), so both loops follow one policy:
+// through metispy's gate CLI (python -m metis.gate), so both loops follow one policy:
 //
 //   import * as gate from "./gate.ts";
 //   const pl = gate.propose("program", "lamp", { text, display, line }, { root, run, state });
@@ -52,7 +52,7 @@ function cli(args: string[], state: string, label: string, input = ""): any {
 	const py = process.env.METIS_LOOP_SDK_PY || "python3";
 	try {
 		return JSON.parse(
-			execFileSync(py, ["-m", "metis_loop_sdk.gate", "--state", state, ...args, "--json"], {
+			execFileSync(py, ["-m", "metis.gate", "--state", state, ...args, "--json"], {
 				input,
 				encoding: "utf8",
 				maxBuffer: 1 << 26,
@@ -67,7 +67,7 @@ function cli(args: string[], state: string, label: string, input = ""): any {
 			// not the SDK's answer: the process itself failed
 		}
 		if (err) throw new GateError(`${label}: ${err}`);
-		throw new GateError(`${label}: ${py} -m metis_loop_sdk.gate: ${String(e.stderr || e.message).trim().slice(-500)}`);
+		throw new GateError(`${label}: ${py} -m metis.gate: ${String(e.stderr || e.message).trim().slice(-500)}`);
 	}
 }
 
