@@ -31,7 +31,7 @@ verbs:
   - {verb: NARRATE, meaning: "narrate what happened in the trace ('what did it do', 'what happened'; NOT the navigator's help)"}
   - {verb: RECORDS, meaning: "list the surprise records ('what surprised you', 'show the surprise list'; NOT the navigator's show of a dock)"}
   - {verb: APPLY, meaning: "open the APPLY dialog with the working copy's plan (the person then applies or cancels)"}
-  - {verb: STOP, meaning: "stop what is running ('stop', 'halt', 'that's enough'; NOT the navigator's cancel of pending numbers)"}
+  - {verb: STOP, meaning: "stop what is running ('stop the run', 'halt the run', 'stop running', 'that's enough'; the bare words 'stop' and 'halt' are the dialog's own: they cut the speech and never reach you; NOT the navigator's cancel of pending numbers)"}
   - {verb: TELL, meaning: "hand a message to the formalizer (the formalization agent): what the rules should say, a question about the run; also any long request that is not one of the commands above"}
   - {verb: HELP, meaning: "ask what can be said here"}
   - {verb: UNKNOWN, meaning: "anything that is none of these (a short non-command, chit-chat, something impossible)"}
@@ -81,8 +81,8 @@ examples:
   - ["apply the copy to the catalog", {"intent":"APPLY"}]
   - ["put that in the catalog", {"intent":"APPLY"}]
   - ["save it to the catalog", {"intent":"APPLY"}]
-  - ["stop", {"intent":"STOP"}]
-  - ["halt", {"intent":"STOP"}]
+  - ["stop the run", {"intent":"STOP"}]
+  - ["halt the run", {"intent":"STOP"}]
   - ["that's enough", {"intent":"STOP"}]
   - ["what surprised you", {"intent":"RECORDS"}]
   - ["show the surprise list", {"intent":"RECORDS"}]

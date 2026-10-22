@@ -17,7 +17,7 @@ records	RECORDS	prompt
 list the surprises	RECORDS	prompt
 apply	APPLY	prompt
 apply that	APPLY	prompt
-stop	STOP	prompt
+stop the run	STOP	prompt
 tell the formalizer the lamp should dim before it goes dark	TELL	prompt
 formalize: a worn lamp burns out when it is lit	TELL	prompt
 ask claude why blow brick is waiting	TELL	prompt
@@ -54,7 +54,7 @@ apply the working copy	APPLY	heldout
 put that in the catalog	APPLY	heldout
 apply these files	APPLY	heldout
 save it to the catalog	APPLY	heldout
-halt	STOP	heldout
+halt the run	STOP	heldout
 stop running	STOP	heldout
 that's enough	STOP	heldout
 tell the formalizer that watering a moist plant does nothing	TELL	heldout

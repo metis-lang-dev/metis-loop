@@ -203,7 +203,7 @@ stage serve {
   tell_refused_by_chat [dyn] : telling * tell_refused * busy -o idle * refused(tell).
 
   % ── help and the rest ──
-  %% You can say: load <package>, run <n>, step, undo, reset, narrate, records, apply, stop, or tell the formalizer <what>.
+  %% You can say: load <package>, run <n>, step, undo, reset, narrate, records, apply, stop the run, or tell the formalizer <what>.
   help [dyn] : cmd_help -o done(help).
   %% I can't do that: it is not a REPL command.
   unknown [dyn] : cmd_unknown -o refused(unknown).
