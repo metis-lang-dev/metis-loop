@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from metis_loop_sdk import catalog
-from metis_loop_sdk.gate import Gate, Refused, public
+from metis.gate import Gate, Refused, public          # metispy >= 0.1.2 (via the SDK); the SDK module is its shim
 
 
 def catalog_root() -> Path:
