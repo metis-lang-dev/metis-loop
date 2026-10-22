@@ -8,7 +8,7 @@ row per run and one per variant.
 
 Runs live under RUNS/<variant>/<world>-s<seed>/ (the driver's run directory: its catalog, records,
 cost.jsonl, journal); the card at RUNS/<variant>/scorecard.json. A paid brain needs --budget per run
-and the key (run.sh: the environment or ~/.config/openrouter/key); every run's spend is in its
+and the key (run.sh: the environment or ~/.config/metis/openrouter.env); every run's spend is in its
 cost.jsonl. The per-world venv is run.sh's; this script shells out to it."""
 import argparse
 import json

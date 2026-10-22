@@ -8,7 +8,7 @@
 #   run.sh --run DIR --answer TOKEN 'a note'        the person's answer to the ask (or JSON: {"kind": "budget", "proposals": 10})
 #   run.sh --run DIR --resume [--brain …]           re-engage from the snapshot with the answer in context
 #
-#   --brain   openrouter/<model> (the key from $OPENROUTER_API_KEY, else ~/.config/openrouter/key; --budget is required and the key's
+#   --brain   openrouter/<model> (the key from $OPENROUTER_API_KEY, else ~/.config/metis/openrouter.env; --budget is required and the key's
 #             own usage is the meter), claude[/<model>] (the operator's login), script:<file> (no model)
 #   --run     the run's directory (default: ./policy-run-<world>-<family>): its catalog (the base the loop
 #             builds), records, the gate's state and journal, the cost log, the brain's prompts
@@ -21,9 +21,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PKGS="$HERE"                                          # the workspace: the first parent with .worlds/ (a worktree sits deeper)
 while [ "$PKGS" != / ] && [ ! -d "$PKGS/.worlds" ]; do PKGS="$(dirname "$PKGS")"; done
 [ -n "${METISC:-}" ] || [ ! -x "$PKGS/metis-lang/src/metisc" ] || export METISC="$PKGS/metis-lang/src/metisc"   # the gate checks a .llp edit with it
-# the OpenRouter key: the environment, else the person's key file (mode 600; written once by hand, never printed or logged)
-KEYFILE="${OPENROUTER_KEY_FILE:-$HOME/.config/openrouter/key}"
-[ -n "${OPENROUTER_API_KEY:-}" ] || [ ! -r "$KEYFILE" ] || export OPENROUTER_API_KEY="$(tr -d '[:space:]' < "$KEYFILE")"
+# the OpenRouter key: the environment, else ~/.config/metis/openrouter.env (the one place the paid runs
+# have always used: `OPENROUTER_API_KEY=…`, mode 600) sourced into the environment — never in argv or a log
+ENVFILE="$HOME/.config/metis/openrouter.env"
+if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -r "$ENVFILE" ]; then set -a; . "$ENVFILE"; set +a; fi
 WORLD=alfworld FAMILY=pick_and_place_simple RUN="" ANSWER=() ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
