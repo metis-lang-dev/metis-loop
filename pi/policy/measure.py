@@ -16,6 +16,7 @@ is the mean of log(1) and log(ε) — a change of +x/n·log(1/ε) per newly pred
     likelihood(p, records)                      # the mean log-probability
     vector(text, p)                             # {rules, ground}: the complexity vector's two numbers
 """
+import json
 import math
 
 from .alfworld import kind_of, rule_verb, rules_of
@@ -132,6 +133,45 @@ def fits(p, cand_text, cur_text, record, records):
         if bad:
             return False, "%s contradicts record %s t%d (%s)" % (bad[0], r["game"], r["t"], r["command"])
     return True, "fits"
+
+
+def explain(p, cand_text, cur_text, record, records):
+    """Why the candidate does not fit (policy-tuning): what the new rules consume that the world
+    keeps, what they miss that the world adds, what they need that the record lacks, or the record
+    one of them contradicts — the gate's reason in the brain's terms, for one repair turn."""
+    names = new_rules(cand_text, cur_text)
+    if not names:
+        return "the lines change no rule: the base already has them (write a different rule, or none)"
+    before, after = set(record["before"]), p._dyn(record["after"])
+    evs = p.events(record, names)
+    verb = record["action"]["verb"]
+    if not evs:
+        needs = []
+        for name, base, b, nd, c, pr in p.table(record["game"]).get(verb, []):
+            if base in names and not any(record["action"]["args"].get(k) not in (None, v) for k, v in b.items() if k in record["action"]["args"]):
+                needs.append((name, sorted(a for a in nd if a not in before)))
+        if needs:
+            name, miss = min(needs, key=lambda x: len(x[1]))
+            return "no event of %s fires on the record: its left side needs %s, which the facts before lack — read only what the record has" % (name, ", ".join(miss) or "something the instance lacks")
+        return "no event of %s binds to the record's action %s %s: the rule's variables do not reach these things (a type or a static fact is wrong)" % (", ".join(sorted(names)), verb, json.dumps(record["action"]["args"]))
+    name, got = evs[0]
+    removed_wrongly = sorted((before & p._dyn(before)) - got - (p._dyn(before) - after))
+    missing = sorted(after - got)
+    extra = sorted(got - after)
+    parts = []
+    if removed_wrongly:
+        parts.append("it consumes %s, which the world keeps (read them with $, or produce them again)" % ", ".join(removed_wrongly))
+    if missing:
+        parts.append("it does not produce %s, which the world adds" % ", ".join(missing))
+    if extra:
+        parts.append("it leaves or produces %s, which the world does not have after" % ", ".join(extra))
+    if parts:
+        return "%s fires on the record but predicts the wrong facts after: %s" % (name, "; ".join(parts))
+    for r in records:
+        bad = p.contradicted(r, names)
+        if bad:
+            return "%s also fires on record %s t%d (%s) and predicts the wrong facts there: add the precondition that record lacks" % (bad[0], r["game"], r["t"], r["command"])
+    return "the new rules do not fit the record"
 
 
 def likelihood(p, records):

@@ -156,3 +156,30 @@ def test_the_persons_edit_is_judged_and_the_tree_follows(tmp_path):
     assert mine["verdict"] == "accept" and mine["numbers"]["likelihood"] > 0
     assert "go [dyn]" in (tmp_path / "run" / "trees" / "current" / "base" / "alf.llp").read_text()
     assert d2.state["accepted"] >= 1
+
+
+def test_explain_names_the_fact_the_rule_consumes_wrongly():
+    """policy-tuning: the gate's fits refusal in the brain's terms — a take rule that consumes at(L) is
+    told the world keeps it (measure.explain over a fake predictor)."""
+    from policy import measure
+
+    class P:
+        def _dyn(self, atoms):
+            return {a for a in atoms if not a.startswith("tok")}
+
+        def events(self, rec, names=None):
+            before = set(rec["before"])
+            return [("take_plain[O=o1,R=r1,Loc=l1]", self._dyn((before - {"at(l1)", "handsfree", "inrecep(o1,r1)"}) | {"holding", "holds(o1)"}))]
+
+        def table(self, iid):
+            return {}
+
+        def contradicted(self, r, names):
+            return []
+    rec = {"game": "g", "t": 1, "command": "take o1 from r1", "action": {"verb": "take", "args": {"O": "o1", "R": "r1"}},
+           "before": ["at(l1)", "handsfree", "inrecep(o1,r1)"], "after": ["at(l1)", "holding", "holds(o1)"]}
+    cur = "catalog alf 1.\nstage act {\n}\n"
+    cand = "catalog alf 1.\nstage act {\n  %% t\n  take_plain [dyn] : at(L) * handsfree * inrecep(O, R) -o holding * holds(O).\n}\n"
+    why = measure.explain(P(), cand, cur, rec, [rec])
+    assert "consumes at(l1), which the world keeps" in why, why
+    assert "the base already has them" in measure.explain(P(), cur, cur, rec, [rec])

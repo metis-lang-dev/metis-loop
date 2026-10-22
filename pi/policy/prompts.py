@@ -83,21 +83,43 @@ def _record(rec, instance_text):
     return "\n".join("  " + l for l in lines)
 
 
-SKILL = {"text": ""}
+SKILL = {"always": "", "explore": "", "exploit": "", "refactor": ""}
+PHASE_OF = {"explore": "explore", "probe": "explore", "revise": "exploit", "policy": "exploit", "conventions": "refactor", "refactor": "refactor"}
 
 
 def set_skill(text):
-    """The skill the brain follows (policy-tuning s-1caedae5): procedures a careful formalizer keeps —
-    read into every prompt after the task, before the person's instruction. Empty: no skill."""
-    SKILL["text"] = (text or "").strip()
+    """The skill the brain follows (policy-tuning s-1caedae5): procedures a careful formalizer keeps,
+    read into every prompt after the task, before the person's instruction. A skill file is split
+    by `## always`, `## explore`, `## exploit`, `## refactor` headings (a file without headings is
+    `always`): a phase's prompts carry `always` and their own section — a token guard is exploit's
+    advice, not explore's."""
+    for k in SKILL:
+        SKILL[k] = ""
+    cur = "always"
+    for line in (text or "").splitlines():
+        h = line.strip().lower()
+        if h.startswith("## ") and h[3:].strip() in SKILL:
+            cur = h[3:].strip()
+            continue
+        SKILL[cur] += line + "\n"
+    for k in SKILL:
+        SKILL[k] = SKILL[k].strip()
 
 
-def instruction(note):
-    out = ("\n\nThe skill — the procedures a careful formalizer follows here:\n%s\n" % SKILL["text"]) if SKILL["text"] else ""
+def instruction(note, purpose="explore"):
+    phase = PHASE_OF.get(purpose, "explore")
+    skill = "\n\n".join(x for x in (SKILL["always"], SKILL[phase]) if x)
+    out = ("\n\nThe skill — the procedures a careful formalizer follows here:\n%s\n" % skill) if skill else ""
     return out + (("\n\nThe person's instruction (at the last disengagement): %s\n" % note) if note else "")
 
 
+def fit_repair(lines, why):
+    return ("The gate checked your lines against the record and REFUSED them: %s.\n\nYour lines:\n```llp\n%s\n```\n\n"
+            "Fix exactly that and answer with ONE ```llp block of the corrected lines (the same rule name replaces the rule)." % (why, "\n".join(lines)))
+
+
 def explore(base, commands, rec, similar, instance_text, note=None):
+    PURPOSE = 'explore'
     sims = "".join("\n- another record of the same action:\n" + _record(r, instance_text) for r in similar[:2])
     return f"""You are building the rules of {WORLD['description']} from what the world does. The program has no rule yet that explains this TRANSITION; write the rule(s) that do.
 
@@ -113,12 +135,13 @@ The base as it is (its declarations and its rules so far):
 The transition to explain:
 {_record(rec, instance_text)}{sims}
 
-Write the rule for this action, LIFTED (variables, not the things' names): its left side the facts before that the action needs (consume what changes, read with $ what stays), its right side what is true after — so that, fired on the facts before, it gives exactly the facts after. It must not fire where the world would answer differently. Reuse a rule name only to REPLACE that rule (its new text in full).{instruction(note)}
+Write the rule for this action, LIFTED (variables, not the things' names): its left side the facts before that the action needs (consume what changes, read with $ what stays), its right side what is true after — so that, fired on the facts before, it gives exactly the facts after. It must not fire where the world would answer differently. Reuse a rule name only to REPLACE that rule (its new text in full).{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block of only the new lines (pred declarations if any, then the rule with its %% line)."""
 
 
 def revise(base, commands, sur, rule_line, instance_text, note=None):
+    PURPOSE = 'revise'
     return f"""You are maintaining the rules of {WORLD['description']}. A rule fired and the world did not do what it said: a SURPRISE. Revise the rule so it fires only where the world agrees.
 
 {LANGUAGE}
@@ -136,12 +159,13 @@ The rule that fired: {sur['rule']}
   the facts before: {', '.join(sur['before'])}
   the world's text: {sur.get('text', '')[:300]}
 
-Give the rule's new text in full under its own name (a missing precondition, read with $ or consumed and produced again), or `drop NAME` if no rule of that name can be right here.{instruction(note)}
+Give the rule's new text in full under its own name (a missing precondition, read with $ or consumed and produced again), or `drop NAME` if no rule of that name can be right here.{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block of only the changed lines."""
 
 
 def policy(base, commands, task_facts, episode, instance_text, note=None):
+    PURPOSE = 'policy'
     steps = "\n".join("  %s → %s%s" % (t.get("rule"), t.get("command"), "" if t.get("admissible") and t.get("changed", True) else "  (refused)")
                       for t in episode["transitions"][-12:]) or "  (no command was sent)"
     return f"""You are building the rules of {WORLD['description']}. The rules describe the actions; the program acts by firing an enabled rule (chosen at random among them), so the rules must also say WHAT TO DO NEXT toward the task: tokens of the program's own (declare them) that the action rules require and produce, so that from the start the enabled rules lead to the goal.
@@ -159,7 +183,7 @@ The task (this game's facts): {', '.join(task_facts)}; {WORLD['task_text']}
 The last episode was NOT won ({episode['steps']} rule firings, {len(episode['commands'])} commands); its last steps:
 {steps}
 
-Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: {WORLD['plan_text']}{instruction(note)}
+Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: {WORLD['plan_text']}{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block of only the new or replaced lines."""
 
@@ -185,6 +209,7 @@ CONVENTIONS = """The hierarchy's conventions (metis-worlds docs/HIERARCHY.md):
 
 
 def conventions(base, commands, ports, ambiguous, note=None):
+    PURPOSE = 'conventions'
     amb = "; ".join("%s is taken by %s" % (k, " and ".join(ds)) for k, ds in sorted(ambiguous.items()))
     return f"""You are refactoring the rules of {WORLD['description']} into a HIERARCHY: the base is split into specialists (each rule's `% @NAME`), but its tokens do not follow the conventions, so a director that routes by token kind cannot tell who acts: {amb}.
 
@@ -199,12 +224,13 @@ The split base as it is (its ports, read off the rules: {json.dumps(ports)}):
 {base.strip()}
 ```
 
-Rewrite the rules so each specialist has its own goal kind and result kinds, the planner turning one into the next. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note)}
+Rewrite the rules so each specialist has its own goal kind and result kinds, the planner turning one into the next. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block: the declarations, the rules (each specialist's with its `% @NAME`), and the drop lines."""
 
 
 def probe(reading, acts, miss, note=None):
+    PURPOSE = 'probe'
     """The walk found nothing new: which command, from here, teaches the rules the most?"""
     rows = "\n".join("%d. %s   (%s %s)" % (i + 1, a["command"], a["verb"], json.dumps(a["args"])) for i, a in enumerate(acts[:40]))
     weak = ", ".join("%s (%d unexplained)" % (v, n) for v, n in sorted(miss.items(), key=lambda x: -x[1])) or "none"
@@ -213,6 +239,6 @@ def probe(reading, acts, miss, note=None):
 The facts now: {", ".join(reading)}
 
 The commands the world takes here:
-{rows}{instruction(note)}
+{rows}{instruction(note, PURPOSE)}
 
 Answer with the number of ONE command."""

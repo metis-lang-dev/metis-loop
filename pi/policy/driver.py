@@ -47,7 +47,7 @@ WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (sciencew
           "minihack": (minihack.MiniHack, minihack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
-            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3}
+            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3, "fit_repairs": 1}
 
 
 class Disengage(Exception):
@@ -320,7 +320,21 @@ class Driver:
                 break
             lines = block_of(self.ask(prompt + "\n\n" + prompts.repair(lines, words), purpose + "-repair"))
             text, info = splice(self.base(), lines)
-        return self.judge("program", info=info, cost=self.last_cost(), text=text)
+        v = self.judge("program", info=info, cost=self.last_cost(), text=text)
+        # policy-tuning (s-1caedae5): a fits refusal in explore comes back to the brain ONCE, with the gate's
+        # reason in its terms — what the rule consumes that the world keeps, what it misses, what it needs
+        # that the record lacks, the record it contradicts (measure.explain); the repaired lines are judged
+        rec = self.seed_record
+        if v == "refuse" and purpose in ("explore", "probe") and rec is not None and self.cfg.get("fit_repairs", 1):
+            last = next((e for e in reversed(self.gate.journal()) if e.get("event") == "proposal"), {})
+            if (last.get("numbers") or {}).get("fits_records") is False:
+                why = measure.explain(self.predictor("candidate", text), text, self.base(), rec, self.transitions())
+                self.say("fit-repair", why=why, purpose=purpose)
+                lines = block_of(self.ask(prompt + "\n\n" + prompts.fit_repair(lines, why), purpose + "-fit"))
+                text2, info2 = splice(self.base(), lines)
+                if text2 != self.base() and text2 != text and not self.predictor("candidate", text2).compiles(seed_game):
+                    return self.judge("program", info=info2, cost=self.last_cost(), text=text2)
+        return v
 
     def ask(self, prompt, purpose):
         """One brain call; its caps cornered as a budget disengagement (the spend, nina's R5: the prompt's size)."""
