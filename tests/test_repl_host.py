@@ -81,6 +81,17 @@ def test_load_opens_the_package_the_payload_names(gw):
     assert gw.received[-1]["llp"] == "domains/ceptre/love_triangle/love_triangle"
 
 
+def test_a_name_twice_loads_the_domain():
+    """The console lists a domain and a golden case of one name (domains/plant/plant and
+    goldens/cases/plant): "load the plant" means the domain, with its host, whichever comes last."""
+    h = repl_host.ReplHost(url="ws://127.0.0.1:9/ws")
+    rows = [{"name": "plant", "path": "domains/plant/plant", "host": "plant_host.py:make"},
+            {"name": "plant", "path": "goldens/cases/plant", "host": None}]
+    for order in (rows, rows[::-1]):
+        h._frame_in({"ch": "meta", "type": "domains", "domains": order})
+        assert h.domains["plant"]["path"] == "domains/plant/plant"
+
+
 def test_an_unknown_package_is_absent_without_a_frame(gw):
     h = host(gw.url)
     h.connect()
@@ -170,6 +181,8 @@ def test_no_console_refuses_the_tasks():
     assert h.reports == ["+absent"] and "did not answer" in h.error
     event(h, "tell", text="x")
     assert h.reports[-1] == "+tell_refused"
+    event(h, "load_switch_ran", package="plant")
+    assert h.reports[-1] == "+absent"
     assert h.observe({}) == {}
 
 
@@ -267,6 +280,19 @@ def test_the_activate_bindings_name_the_socket_and_the_session(gw):
     event(g, "load", package="plant")
     g.take_bindings({"open_failed": "no such catalog file"})
     assert g.tick({}) == ["+absent"] and g.error == "no such catalog file"
+
+
+def test_a_load_over_an_open_session_is_the_pages_open_too(gw):
+    """repl.llp v3's switch rules (load_switch_fresh, load_switch_ran) open the package as load
+    does: the page's open, then its new session attached (+opened); found live in step 2."""
+    for rule in ("load_switch_fresh", "load_switch_ran"):
+        h = host(gw.url, own=False)
+        h.connect()
+        event(h, rule, package="the plant")
+        assert h.effects == [{"repl": "open", "llp": "domains/plant/plant", "host": True, "req": h.effects[0]["req"]}], rule
+        with page_open(gw, h.effects[0]["llp"]) as (ws, sid):
+            attached(h, gw, sid)
+            assert "+opened" in h.tick({}), rule
 
 
 def test_a_load_the_page_could_not_open_is_absent(gw):

@@ -6,7 +6,7 @@ a small stdlib websocket client (no metis-loop import, no websockets package), s
 in the domain agent's own venv.
 
   on_event              the frame sent                          the report at a later tick
-  load, load_switch     the page opens it ({"repl": "open"}; own  +opened (the session attached;
+  load, load_switch_*   the page opens it ({"repl": "open"}; own  +opened (the session attached;
                         sessions: repl/open {llp, host})         own: its frame) | +absent
   run, step             repl/intent ":run N" (N: the payload's  +stopped (posting done) |
                         n, default RUN_N) | ":step"              +run_refused (refused, error)
@@ -172,6 +172,12 @@ def _norm(name):
     return s.replace(" ", "_")
 
 
+def _rank(row):
+    """Which of two rows of one name a load means: a catalog domain (domains/…) over another
+    catalog's file (a golden case), and one with a host over one without."""
+    return (str(row.get("path") or "").startswith("domains/"), bool(row.get("host")))
+
+
 class ReplHost:
     def __init__(self, case=None, url=None, own_sessions=None):
         self.url = url or os.environ.get("METIS_LOOP_WS") or URL
@@ -305,7 +311,11 @@ class ReplHost:
         if ch == "meta" and typ == "manifest":
             self.chat_ok = (f.get("seats") or {}).get("chat") is not None
         elif ch == "meta" and typ == "domains":
-            self.domains = {_norm(d.get("name")): d for d in f.get("domains") or [] if d.get("name")}
+            self.domains = {}
+            for d in f.get("domains") or []:    # a name twice (a domain and a golden case): the domain's, with its host
+                k = _norm(d.get("name"))
+                if k and (k not in self.domains or _rank(d) > _rank(self.domains[k])):
+                    self.domains[k] = d
         elif ch == "meta" and typ == "closed":
             self.wire, self.error = None, "the loop console closed the connection"
             for kind in self.pending.values():
@@ -374,7 +384,7 @@ class ReplHost:
             self._drain()                   # the console as it is now (its domains, the session)
         if self.wire is None:
             frame = None
-        elif base in ("load", "load_switch"):
+        elif base == "load" or base.startswith("load_switch"):     # load, load_switch_fresh, load_switch_ran
             want = _norm(p.get("package"))
             row = self.domains.get(want)
             if row is None:
@@ -429,9 +439,9 @@ class ReplHost:
         if frame is not None:
             self._send(frame)
             self.acted += ((self.beat, name, frame["type"]),)
-        elif base in ("load", "load_switch", "run", "step", "narrate", "apply", "tell") and self.wire is None:
+        elif (base in ("load", "run", "step", "narrate", "apply", "tell") or base.startswith("load_switch")) and self.wire is None:
             # no console: the task ends as the console would refuse it
-            self._report({"load_switch": "load", "step": "run"}.get(base, base), False)
+            self._report("load" if base.startswith("load") else {"step": "run"}.get(base, base), False)
 
     def observe(self, counts):
         if self.pending or self.wire is None:
