@@ -8,7 +8,7 @@
 # demo.sh, example/person.py and example/scripted.ts run it.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../../../.venv/bin/python}"
+SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../../../../.venv/bin/python}"
 DIR="$(mkdir -p "${1:?usage: world.sh DIR}" && cd "$1" && pwd)"
 INST="$("$SDK_PY" -m metis_loop_sdk.catalog installed --json | "$SDK_PY" -c 'import json,sys; print(json.load(sys.stdin)["catalog"])')"
 if [ ! -d "$DIR/domains/plant" ]; then

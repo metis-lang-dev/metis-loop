@@ -1,5 +1,7 @@
 # metis-loop
 
+`pi/` is the agentic loop hosted in pi (was the repo metis-agentic-loop, merged 2026-10-22; see pi/README.md); `sdk/` the loop SDK; `console/` + `loop/` the human loop.
+
 [![ci](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml)
 
 **A loop starts in a directory, and that directory is the catalog and the

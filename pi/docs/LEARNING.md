@@ -65,8 +65,8 @@ rules about other agents are meaningful.
 ## Where the code lives
 
 Each world is its own repository (the user): the plug between a simulator and the loop is
-not generic enough to carry in metis-catalog. `metis-lang-dev/metis-world-alfworld` and
-`metis-lang-dev/metis-world-minihack` hold the world's host, its perception/grounding, the
+not generic enough to carry in metis-catalog. `metis-lang-dev/metis-worlds/alfworld` and
+`metis-lang-dev/metis-worlds/minihack` hold the world's host, its perception/grounding, the
 configuration families and the held-out splits, the experiment scripts and their records;
 the metis side (the closure in this repo, the gate policy, the metrics in the loop SDK, the
 domain agent's part) stays in the metis repos. The architect writes and tests the world

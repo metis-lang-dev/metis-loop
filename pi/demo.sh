@@ -15,7 +15,7 @@
 # (also in DIR/.metis/prompt.md): the goal and the lamp's prose, as example/person.py gives them.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PKGS="$(cd "$HERE/.." && pwd)"
+PKGS="$(cd "$HERE/../.." && pwd)"
 : "${OPENROUTER_API_KEY:?the OpenRouter key from the environment: export OPENROUTER_API_KEY=… (or set -a; . FILE; set +a)}"
 export MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro:off}"
 DIR="${1:-$HOME/lamp-demo-$(date +%Y%m%d-%H%M)}"

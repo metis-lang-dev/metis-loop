@@ -9,7 +9,7 @@
 #
 # extensions/sdk (gitignored) links the loop SDK's TypeScript face, the catalog the
 # extensions import (./sdk/catalog.ts): the directory `python -m metis_loop_sdk.catalog ts`
-# names in the installed SDK (METIS_LOOP_SDK_PY, default ../.venv/bin/python, else python3),
+# names in the installed SDK (METIS_LOOP_SDK_PY, default ../../.venv/bin/python, else python3),
 # so the py SDK and its TypeScript face are one install and one tag.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -18,7 +18,7 @@ NODE_DIST="node-$NODE_VERSION-linux-x64"
 NODE_URL="https://nodejs.org/dist/$NODE_VERSION/$NODE_DIST.tar.xz"
 PI_VERSION=1.3.0                        # @earendil-works/pi-coding-agent; its lock pins the tree
 NODE="$HERE/node/bin/node"
-SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../.venv/bin/python}"
+SDK_PY="${METIS_LOOP_SDK_PY:-$HERE/../../.venv/bin/python}"
 [ -x "$SDK_PY" ] || SDK_PY=python3
 
 link() {

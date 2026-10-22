@@ -135,3 +135,72 @@ jobs:
         # s-ddac2cbf; the wheel's catalog lacks domains/ceptre/, which the suite reads)
         env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_CATALOG: '${{ github.workspace }}/metis-catalog'}
         run: /tmp/sdk/bin/python -m pytest -q -p no:cacheprovider "$GITHUB_WORKSPACE/metis-loop/sdk/tests"
+
+  # ── pi/: the agentic loop (was the repo metis-agentic-loop; merged 2026-10-22) ──
+  # The extensions against stand-ins (no model, no GPU): test/extensions.test.ts.
+  # The stand-in metis forwards --tools-json to the real metispy; the domain
+  # tools read the catalog through the python the domain agent would use.
+  pi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metis-loop
+      - name: Checkout metispy (public)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metispy
+          path: metispy
+      - name: Checkout metis-catalog (public)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-catalog
+          path: metis-catalog
+      # the domain agent (public): the domain tools' sessions over the selected packages run it —
+      # example/seeded.ts on love_triangle and on nav, love_triangle's and nav's domain tools,
+      # wildfire's episodes; they skipped without it
+      - name: Checkout metis-agent (public; the domain agent the domain tools run)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-agent
+          path: metis-agent
+      - name: Checkout metis-lang (public; metisc checks a catalog_edit of a program)
+        uses: actions/checkout@v4
+        with:
+          repository: metis-lang-dev/metis-lang
+          path: metis-lang
+      - name: Install OCaml + build metisc
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ocaml-nox
+          make -C metis-lang metisc
+          echo "METISC=$GITHUB_WORKSPACE/metis-lang/src/metisc" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install metispy, metis-catalog and the loop SDK (this checkout's sdk/: one tag with the extensions)
+        run: |
+          pip install ./metispy ./metis-catalog ./metis-loop/sdk
+          python -m metis_loop_sdk.catalog ts --json | python -c "import json,sys,os; d=json.load(sys.stdin)['dir']; assert os.path.isfile(os.path.join(d,'catalog.ts')), d"
+          python -c "import metis_loop_sdk.models.openai, metis_loop_sdk.catalog, metis.gate; print('sdk', metis_loop_sdk.__version__)"
+      # nav's and wildfire's hosts step the IPPC gym in an interpreter of their own: pyRDDLGym and
+      # rddlrepository, public on PyPI (MIT), pinned as the packages' .venv has them; ~15 s
+      - name: The gym for the RDDL packages' hosts (its own venv, METIS_RDDL_PY)
+        run: |
+          python -m venv /tmp/gym
+          /tmp/gym/bin/pip install -q pyRDDLGym==2.7 rddlrepository==2.2
+          echo "METIS_RDDL_PY=/tmp/gym/bin/python" >> "$GITHUB_ENV"
+      - name: 'Node and pi, pinned (setup.sh: checksummed node, npm ci from the lock)'
+        working-directory: metis-loop/pi
+        run: ./setup.sh
+      - name: Shell syntax
+        working-directory: metis-loop/pi
+        run: bash -n setup.sh pi.sh loop.sh take.sh demo.sh example/lamp/world.sh
+      - name: node tests
+        working-directory: metis-loop/pi
+        run: |
+          export REAL_METIS="$(command -v metis)" TEST_AGENT_PY="$(command -v python)" TEST_SDK_PY="$(command -v python)" TEST_REQUIRE_METISC=1
+          export TEST_REQUIRE_AGENT=1 TEST_REQUIRE_GYM=1
+          # the fixtures' catalog (love_triangle, nav): the checkout, named (the installed wheel has no ceptre/)
+          export TEST_CATALOG="$GITHUB_WORKSPACE/metis-catalog"
+          ./node/bin/node --experimental-strip-types --test test/extensions.test.ts

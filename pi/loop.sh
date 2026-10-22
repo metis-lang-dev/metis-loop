@@ -46,7 +46,7 @@
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PKGS="$(cd "$HERE/.." && pwd)"                      # the workspace: its .venv, metis-agent (defaults only)
+PKGS="$(cd "$HERE/../.." && pwd)"                      # the workspace: its .venv, metis-agent (defaults only)
 AGENT="${METIS_AGENT:-$PKGS/metis-agent}"           # the domain agent's checkout
 for a in "$@"; do
   [ "$a" != --scratch ] || { echo "loop.sh: --scratch is gone: cd DIR && loop.sh (DIR is the catalog; cwd-root s-ddac2cbf)" >&2; exit 2; }

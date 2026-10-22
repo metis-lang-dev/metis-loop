@@ -16,7 +16,7 @@ import domain from "../extensions/metis-domain.ts";
 const HERE = dirname(fileURLToPath(import.meta.url));
 // the workspace (metis-agentic-loop beside metispy's venv and metis-agent: defaults only);
 // CI points these at its own installs
-const PKGS = join(HERE, "..", "..");
+const PKGS = join(HERE, "..", "..", "..");   // metis-loop/pi/test → the checkouts beside metis-loop
 const AGENT = join(PKGS, "metis-agent");
 // the fixtures' catalog (the plant, nav, love_triangle): $TEST_CATALOG, else the installed
 // metis-catalog's own (the loop SDK's catalog.installed(): never a checkout beside this one)
@@ -375,7 +375,7 @@ const hasAgent = spawnSync(AGENT_PY, ["-c", "import metis_agent.intent_domain"],
 if (!hasAgent && process.env.TEST_REQUIRE_AGENT) throw new Error(`TEST_REQUIRE_AGENT: ${AGENT_PY} cannot import metis_agent beside ${AGENT}`);
 test("example/seeded.ts: a fiction program seeded, applied as it is, opened, run and taken", { skip: !hasAgent && "no metis-agent" }, () => {
 	const dir = mkdtempSync(join(tmpdir(), "loop-seeded-e2e-"));
-	const r = spawnSync(join(PKGS, "metis-agentic-loop", "node", "bin", "node"),
+	const r = spawnSync(join(HERE, "..", "node", "bin", "node"),
 		["--experimental-strip-types", "--no-warnings", join(HERE, "..", "example", "seeded.ts"),
 			join(CATALOG, "domains", "ceptre", "love_triangle", "love_triangle.llp"), dir], {
 		encoding: "utf8", timeout: 240000,
@@ -806,7 +806,7 @@ test("loop.sh --seed PKG_DIR: the package whole in DIR/.metis/seed/domains/NAME/
 
 test("example/seeded.ts on a package (nav): served whole with its include and host, measured, edited, taken whole", { skip: !hasGym && "no metis-agent or pyRDDLGym" }, () => {
 	const dir = mkdtempSync(join(tmpdir(), "loop-seeded-nav-"));
-	const r = spawnSync(join(PKGS, "metis-agentic-loop", "node", "bin", "node"),
+	const r = spawnSync(join(HERE, "..", "node", "bin", "node"),
 		["--experimental-strip-types", "--no-warnings", join(HERE, "..", "example", "seeded.ts"), join(CATALOG, "domains", "nav"), dir], {
 		encoding: "utf8", timeout: 300000,
 		env: { ...process.env, METIS_LOOP_METIS: process.env.REAL_METIS ?? join(PKGS, ".venv", "bin", "metis"),

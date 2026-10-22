@@ -1,6 +1,11 @@
-# metis-agentic-loop — the agentic loop, hosted in pi (docs/LOOP-AGENT.md)
+# pi/ — the agentic loop, hosted in pi (docs/LOOP-AGENT.md)
 
-[![ci](https://github.com/metis-lang-dev/metis-agentic-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metis-agentic-loop/actions/workflows/ci.yml)
+This was the repository `metis-agentic-loop`; merged into metis-loop as `pi/` on 2026-10-22 (the
+user: both are the loop — the human console and the agentic one; history kept with git subtree; the
+old repo is archived). Its CI is the `pi` and `pi-installed` jobs of metis-loop's ci.yml. The npm
+packaging (pi-release s-8e13f6a8 step 2, `@metis-lang-dev/metis-agentic-loop` 0.1.0, publish.yml by
+trusted publishing) is PARKED on the archived repo's `pi-package` branch; when it resumes it lands
+here under a `pi-v*` tag.
 
 pi hosts the agentic loop. The two metis extensions give it its tools. Everything
 pi needs is pinned and installed here, not globally.
@@ -31,10 +36,9 @@ metis-agent (`tools/pi/`, `docs/LOOP-AGENT.md`) with its history.
 ```
 perotheia-packages/            (any parent directory)
   .venv/                       metispy (`metis`), metis-catalog, metis-loop-sdk
-  metis-agentic-loop/          this repository
+  metis-loop/pi/               this directory (the agentic loop); metis-loop/sdk/ the loop SDK
   metis-agent/                 the domain agent (py/.venv) and the Gemma 4 GGUF (go/models/)
   metis-catalog/               installed in .venv: the demo's plant, the RDDL hosts' tools/ (never a root)
-  metis-loop/sdk/              the loop SDK (pip install -e metis-loop/sdk)
 ```
 
 At run time the loop drives two processes over their JSON-lines wires,

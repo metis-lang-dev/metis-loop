@@ -23,7 +23,7 @@ import domain from "../extensions/metis-domain.ts";
 import * as catalog from "../extensions/sdk/catalog.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PKGS = join(HERE, "..", "..");                              // the workspace (its .venv, metis-agent: defaults)
+const PKGS = join(HERE, "..", "..", "..");                        // the workspace beside metis-loop (its .venv, metis-agent: defaults)
 const AGENT = process.env.METIS_AGENT ?? join(PKGS, "metis-agent");
 const seed = resolve(process.argv[2] ?? "");
 const dir = resolve(process.argv[3] ?? "/tmp/loop-seeded");

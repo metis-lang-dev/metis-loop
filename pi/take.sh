@@ -11,7 +11,7 @@
 #   METIS_CATALOG=DIR                      DIR, when take.sh runs elsewhere
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PKGS="$(cd "$HERE/.." && pwd)"
+PKGS="$(cd "$HERE/../.." && pwd)"
 INTO="${METIS_LOOP_TAKE_INTO:-}"
 if [ "${1:-}" = --into ]; then INTO="${2:?take.sh --into DIR2 [NAME]}"; shift 2; fi
 [ -n "$INTO" ] || { echo "usage: cd DIR && take.sh --into DIR2 [NAME]  (DIR2: the catalog to take the domain into; or METIS_LOOP_TAKE_INTO)" >&2; exit 2; }
