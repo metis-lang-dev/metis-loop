@@ -242,49 +242,42 @@ class ScienceWorld:
 
     # ── the kernel acting ──
     def act(self, tree, steps=120, seed=1):
+        """The program of TREE acting through the host, one rule at a time."""
         from metis.repl import Repl
-        rng = random.Random(seed)
+        from . import acting
         path = self.into(tree) if Path(tree) != self.tree else self.path
-        host = self.sw_host.SwHost(str(path.parent), max_steps=self.max_steps)
+        host = self._host_for(path.parent)
         r = Repl.open(path)
-        sh = r.shell
-        out = {"game": self.iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": []}
+        out = acting.new_out(self.iid)
         try:
-            for _ in range(steps):
-                ws = sh._candidates()
-                if not ws or host.done:
-                    break
-                before = sorted(a for a, n in host.reading().items() if n > 0)
-                k = len(host.actions)
-                i = rng.choices([i for i, _ in ws], weights=[w for _, w in ws])[0]
-                name = sh._fire(i, ws=ws)
-                out["steps"] += 1
-                rv = rule_verb(name, COMMANDS, COMMANDS)
-                if rv is not None:
-                    host.on_event(name, ())
-                if len(host.actions) > k:
-                    cmd = host.actions[-1]
-                    refused = any(e in ("said(unknown)", "said(cant)", "said(ambiguous)") for e in host.events)
-                    after = sorted(a for a, n in host.reading().items() if n > 0)
-                    ev = sh.events_tbl[i][2]
-                    verb, bnd = rv
-                    t = {"kind": "surprise" if refused else "transition", "phase": "exploit", "game": self.iid,
-                         "t": len(host.actions), "rule": name, "command": cmd, "admissible": not refused, "changed": not refused,
-                         "action": {"verb": verb, "args": {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}},
-                         "before": before, "after": after, "said": sorted(ev.produce), "consumed": sorted(ev.consume),
-                         "text": (host.message or "").strip()[:400], "won": host.won}
-                    out["transitions"].append(t)
-                    out["commands"].append(cmd)
-                    out["refused"] += 1 if refused else 0
-                for line in host.tick(dict(sh.counts)) or []:     # the world's facts and events back into the program
-                    sign, rest = line[0], line[1:].split()
-                    atom, n = rest[0], int(rest[1]) if len(rest) > 1 else 1
-                    sh.counts[atom] = max(0, sh.counts.get(atom, 0) + (n if sign == "+" else -n))
-                sh.counts = {a: n for a, n in sh.counts.items() if n > 0}
-                out["stuck"] = sorted(a for a in sh.counts if kind_of(a) == "stuck")
-                if host.won or out["stuck"]:
-                    break
+            acting.fire(self, host, r.shell, random.Random(seed), out, steps)
             out["won"] = bool(host.won)
         finally:
             host.gym.close()
         return out
+
+    # ── the acting loop's world parts (acting.py) ──
+    def _host_for(self, pkg):
+        return self.sw_host.SwHost(str(pkg), max_steps=self.max_steps)
+
+    def _rule_verb(self, name):
+        return rule_verb(name, COMMANDS, COMMANDS)
+
+    def _sync(self, host, counts):
+        return host.tick(counts)
+
+    def _before(self, host):
+        return {"before": sorted(a for a, n in host.reading().items() if n > 0), "k": len(host.actions)}
+
+    def _after(self, host, pre, name, rv, ev):
+        if len(host.actions) <= pre["k"]:
+            return None
+        cmd = host.actions[-1]
+        refused = any(e in ("said(unknown)", "said(cant)", "said(ambiguous)") for e in host.events)
+        verb, bnd = rv
+        return {"kind": "surprise" if refused else "transition", "phase": "exploit", "game": self.iid,
+                "t": len(host.actions), "rule": name, "command": cmd, "admissible": not refused, "changed": not refused,
+                "action": {"verb": verb, "args": {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}},
+                "before": pre["before"], "after": sorted(a for a, n in host.reading().items() if n > 0),
+                "said": sorted(ev.produce), "consumed": sorted(ev.consume),
+                "text": (host.message or "").strip()[:400], "won": host.won}

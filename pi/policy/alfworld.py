@@ -291,54 +291,44 @@ class AlfWorld:
     # ── the kernel acting ──
     def act(self, tree, steps=60, seed=1):
         """The program of TREE (its base, this game's instance) acting through the host, one rule
-        at a time: {commands, refused, won, steps, stuck, transitions} — each command's
+        at a time (acting.fire): {commands, refused, won, steps, stuck, transitions} — each command's
         transition (before, the rule, the command, admissible, after), the refused ones the
         exploitation's SURPRISES. A host of its own (the world as the game starts)."""
         import random
         from metis.repl import Repl
-        rng = random.Random(seed)
+        from . import acting
         path = self.into(tree) if Path(tree) != self.tree else self.path
-        host = self.alf_host.AlfHost(str(path.parent), max_steps=self.max_steps)
+        host = self._host_for(path.parent)
         r = Repl.open(path)
-        sh = r.shell
-        commands, verbs = self.alf_host.COMMANDS, getattr(self.alf_host.AlfHost, "VERBS", None)
-        out = {"game": self.iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": []}
+        out = acting.new_out(self.iid)
         try:
-            for _ in range(steps):
-                ws = sh._candidates()
-                if not ws or host.done:
-                    break
-                before = sorted(a for a, n in host.reading().items() if n > 0)
-                k = len(host.commands)
-                i = rng.choices([i for i, _ in ws], weights=[w for _, w in ws])[0]      # the reference sampler's tier, seeded
-                name = sh._fire(i, ws=ws)
-                out["steps"] += 1
-                rv = rule_verb(name, commands, verbs)
-                if rv is not None:
-                    host.on_event(name, ())
-                if len(host.commands) > k:
-                    _, _, cmd, adm, changed = host.commands[-1]
-                    after = sorted(a for a, n in host.reading().items() if n > 0)
-                    ev = sh.events_tbl[i][2]
-                    verb, bnd = rv
-                    t = {"kind": "surprise" if not (adm and changed) else "transition", "phase": "exploit", "game": self.iid,
-                         "t": len(host.commands), "rule": name, "command": cmd, "admissible": adm, "changed": changed,
-                         "action": {"verb": verb, "args": {k: bnd[k] for k in VERBS[verb][1] if k in bnd}},
-                         "before": before, "after": after, "said": sorted(ev.produce), "consumed": sorted(ev.consume),
-                         "text": (host.obs or "").strip()[:400], "won": host.won}
-                    out["transitions"].append(t)
-                    out["commands"].append(cmd)
-                    out["refused"] += 0 if (adm and changed) else 1
-                # the world's facts back into the program (the host's sync: its dynamic facts the game's)
-                for line in host.sync(dict(sh.counts)):
-                    sign, rest = line[0], line[1:].split()
-                    atom, n = rest[0], int(rest[1]) if len(rest) > 1 else 1
-                    sh.counts[atom] = max(0, sh.counts.get(atom, 0) + (n if sign == "+" else -n))
-                sh.counts = {a: n for a, n in sh.counts.items() if n > 0}
-                out["stuck"] = sorted(a for a in sh.counts if kind_of(a) == "stuck")
-                if host.won or out["stuck"]:
-                    break
+            acting.fire(self, host, r.shell, random.Random(seed), out, steps)
             out["won"] = bool(host.won)
         finally:
             host.gym.close()
         return out
+
+    # ── the acting loop's world parts (acting.py) ──
+    def _host_for(self, pkg):
+        return self.alf_host.AlfHost(str(pkg), max_steps=self.max_steps)
+
+    def _rule_verb(self, name):
+        return rule_verb(name, self.alf_host.COMMANDS, getattr(self.alf_host.AlfHost, "VERBS", None))
+
+    def _sync(self, host, counts):
+        return host.sync(counts)
+
+    def _before(self, host):
+        return {"before": sorted(a for a, n in host.reading().items() if n > 0), "k": len(host.commands)}
+
+    def _after(self, host, pre, name, rv, ev):
+        if len(host.commands) <= pre["k"]:
+            return None
+        _, _, cmd, adm, changed = host.commands[-1]
+        verb, bnd = rv
+        return {"kind": "surprise" if not (adm and changed) else "transition", "phase": "exploit", "game": self.iid,
+                "t": len(host.commands), "rule": name, "command": cmd, "admissible": adm, "changed": changed,
+                "action": {"verb": verb, "args": {k: bnd[k] for k in VERBS[verb][1] if k in bnd}},
+                "before": pre["before"], "after": sorted(a for a, n in host.reading().items() if n > 0),
+                "said": sorted(ev.produce), "consumed": sorted(ev.consume),
+                "text": (host.obs or "").strip()[:400], "won": host.won}

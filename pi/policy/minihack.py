@@ -253,52 +253,44 @@ class MiniHack:
         time: {commands, refused, won, steps, stuck, transitions}; a refused action (the perception did
         not change) is a SURPRISE."""
         from metis.repl import Repl
-        rng = random.Random(seed)
+        from . import acting
         path = self.into(tree) if Path(tree) != self.tree else self.path
-        host = host_class()(str(path.parent), max_steps=self.max_steps)
+        host = self._host_for(path.parent)
         r = Repl.open(path)
-        sh = r.shell
-        out = {"game": self.iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": []}
+        out = acting.new_out(self.iid)
         try:
-            for _ in range(steps):
-                ws = sh._candidates()
-                if not ws or host.done:
-                    break
-                before = sorted(a for a, n in host.reading().items() if n > 0)
-                seen = _perceived(host.atoms)
-                k = len(host.actions)
-                i = rng.choices([i for i, _ in ws], weights=[w for _, w in ws])[0]
-                name = sh._fire(i, ws=ws)
-                out["steps"] += 1
-                rv = rule_verb(name, COMMANDS, COMMANDS)
-                if rv is not None:
-                    host.on_event(name, ())
-                if len(host.actions) > k:
-                    sent = host.actions[k:]
-                    taken = (_perceived(host.atoms) != seen or host.done or host.reward > 0 or sent[0] in TAKEN_ANYWAY
-                             or bool(set(host.events) & FIGHT))
-                    after = sorted(a for a, n in host.reading().items() if n > 0)
-                    ev = sh.events_tbl[i][2]
-                    verb, bnd = rv
-                    args = {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}
-                    cmd = "cmd_%s(%s)" % (verb, args["D"]) if "D" in args else "cmd_" + verb
-                    t = {"kind": "transition" if taken else "surprise", "phase": "exploit", "game": self.iid,
-                         "t": len(out["commands"]) + 1, "rule": name, "command": cmd, "admissible": taken, "changed": taken,
-                         "action": {"verb": verb, "args": args}, "before": before, "after": after,
-                         "said": sorted(ev.produce), "consumed": sorted(ev.consume),
-                         "text": (host.message or "").strip()[:400], "won": host.won}
-                    out["transitions"].append(t)
-                    out["commands"].append(cmd)
-                    out["refused"] += 0 if taken else 1
-                for line in host.tick(dict(sh.counts)) or []:     # the world's facts and events back into the program
-                    sign, rest = line[0], line[1:].split()
-                    atom, n = rest[0], int(rest[1]) if len(rest) > 1 else 1
-                    sh.counts[atom] = max(0, sh.counts.get(atom, 0) + (n if sign == "+" else -n))
-                sh.counts = {a: n for a, n in sh.counts.items() if n > 0}
-                out["stuck"] = sorted(a for a in sh.counts if kind_of(a) == "stuck")
-                if host.won or out["stuck"]:
-                    break
+            acting.fire(self, host, r.shell, random.Random(seed), out, steps)
             out["won"] = bool(host.won)
         finally:
             host.gym.close()
         return out
+
+    # ── the acting loop's world parts (acting.py) ──
+    def _host_for(self, pkg):
+        return host_class()(str(pkg), max_steps=self.max_steps)
+
+    def _rule_verb(self, name):
+        return rule_verb(name, COMMANDS, COMMANDS)
+
+    def _sync(self, host, counts):
+        return host.tick(counts)
+
+    def _before(self, host):
+        return {"before": sorted(a for a, n in host.reading().items() if n > 0), "k": len(host.actions),
+                "seen": _perceived(host.atoms), "n": None}
+
+    def _after(self, host, pre, name, rv, ev):
+        if len(host.actions) <= pre["k"]:
+            return None
+        sent = host.actions[pre["k"]:]
+        taken = (_perceived(host.atoms) != pre["seen"] or host.done or host.reward > 0 or sent[0] in TAKEN_ANYWAY
+                 or bool(set(host.events) & FIGHT))
+        verb, bnd = rv
+        args = {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}
+        cmd = "cmd_%s(%s)" % (verb, args["D"]) if "D" in args else "cmd_" + verb
+        return {"kind": "transition" if taken else "surprise", "phase": "exploit", "game": self.iid,
+                "t": len(host.actions), "rule": name, "command": cmd, "admissible": taken, "changed": taken,
+                "action": {"verb": verb, "args": args}, "before": pre["before"],
+                "after": sorted(a for a, n in host.reading().items() if n > 0),
+                "said": sorted(ev.produce), "consumed": sorted(ev.consume),
+                "text": (host.message or "").strip()[:400], "won": host.won}
