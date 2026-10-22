@@ -34,8 +34,10 @@ event that consumes the command: the domain agent hands it over with take_payloa
 before on_event (metis-agent AgentHost).
 
 The person's session, never the host's own (the architect's ruling): the page names its
-session (the agent's activate bindings, step 2) and attach(sid) subscribes this socket to
-it, so its broadcasts (session, source, postings, chat) reach the host. What only the page
+session in the agent's activate bindings, {session, token, ws?, open_failed?} (take_bindings:
+the gateway's token and socket, then attach(sid), or open_failed(why) for a load it could
+not carry out), and attach(sid) subscribes this socket to it, so its broadcasts (session,
+source, postings, chat) reach the host. What only the page
 can do is an effect for it (`effects`, carried by the agent's wire in step 2):
   {"repl": "open", "llp", "host", "req"}   a load: the page opens the package; its new
                                            session's attach(sid) is +opened, open_failed(why)
@@ -54,7 +56,7 @@ words itself: a stand-alone run and the tests, never the live page.
   METIS_LOOP_WS            the gateway's socket (default ws://127.0.0.1:8770/ws; ?token=… as the URL has it)
   METIS_LOOP_SESSION       the page's session to attach to at the start
   METIS_LOOP_OWN_SESSIONS  1: the host's own sessions (above)
-PURITY: the world changes only in tick/on_event/attach; snapshot is total."""
+PURITY: the world changes only in tick/on_event/attach (take_bindings); snapshot is total."""
 import base64
 import json
 import os
@@ -244,6 +246,24 @@ class ReplHost:
             self._report("load", True)
         elif not was:
             self.reports += ["-unloaded", "+loaded", "+fresh", "+clean"]
+
+    def take_bindings(self, b):
+        """The page's activate bindings (metis-agent hands them over: WIRE.md activate): `ws`
+        and `token`, the gateway's socket as the page reaches it (a new one: this socket goes,
+        the next tick connects there); `session`, the page's session (attach); `open_failed`,
+        why the page could not open what a load named (+absent)."""
+        url = b.get("ws") or self.url.split("?")[0]
+        tok = b.get("token")
+        if tok is not None or b.get("ws"):
+            url = url.split("?")[0] + (f"?token={urllib.parse.quote(str(tok))}" if tok else "")
+            if url != self.url:
+                self.close()
+                self.url = url
+        if b.get("open_failed"):
+            self.open_failed(str(b["open_failed"]))
+        sid = b.get("session")
+        if sid and sid != self.sid:
+            self.attach(str(sid))
 
     def open_failed(self, why):
         """The page could not open the package a load named: +absent."""

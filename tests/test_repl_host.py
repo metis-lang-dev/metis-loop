@@ -244,6 +244,31 @@ def test_a_load_is_the_pages_open_then_its_session_attached(gw):
         tick_until(h, want="+stopped")
 
 
+def test_the_activate_bindings_name_the_socket_and_the_session(gw):
+    """step 2: the page's activate bindings (metis-agent's take_bindings): the gateway's socket
+    and token as the page reaches it, then its session attached; a load the page could not
+    carry out is +absent through them too."""
+    h = host(gw.url, own=False)                                  # the socket the agent started with, no token
+    h.connect()
+    event(h, "load", package="the plant")
+    with page_open(gw, h.effects[0]["llp"]) as (ws, sid):
+        n = len(gw.received)
+        h.take_bindings({"ws": gw.url, "token": "tk", "session": sid})
+        end = time.time() + 5
+        while len(gw.received) == n and time.time() < end:
+            time.sleep(0.01)
+        assert h.url == gw.url + "?token=tk" and h.sid == sid
+        assert gw.received[-1] == {"ch": "repl", "type": "open", "session": sid}
+        assert h.tick({}) == ["+opened"]
+        n = len(gw.received)
+        h.take_bindings({"token": "tk", "session": sid})            # the same again: no second attach
+        assert h.url == gw.url + "?token=tk" and len(gw.received) == n
+    g = host(gw.url, own=False)
+    event(g, "load", package="plant")
+    g.take_bindings({"open_failed": "no such catalog file"})
+    assert g.tick({}) == ["+absent"] and g.error == "no such catalog file"
+
+
 def test_a_load_the_page_could_not_open_is_absent(gw):
     h = host(gw.url, own=False)
     event(h, "load", package="plant")
