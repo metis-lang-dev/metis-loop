@@ -47,10 +47,9 @@ RUN="${RUN:-$PWD/policy-run-$WORLD-$FAMILY}"
 if [ ${#ANSWER[@]} -gt 0 ]; then
   exec "$PY" -m metis.gate --state "$RUN/state" --policy experimental answer "${ANSWER[0]}" <<<"${ANSWER[1]}"
 fi
-# the memory cap: ScienceWorld's simulator is a JVM of ~1 GB per open game (the discovery and gate
-# games stay open, an acting host adds one), so its scope gets 14G; the others 6G
-case "$WORLD" in scienceworld) MEM=14G ;; *) MEM=6G ;; esac
+# the memory cap: 6G for every world (the user's standing rule: a run that hits it is a finding, never a
+# raised cap); swap off so the cap is the cap
 CAP=()
-command -v systemd-run >/dev/null && CAP=(systemd-run --user --scope -q -p MemoryMax=$MEM)
+command -v systemd-run >/dev/null && CAP=(systemd-run --user --scope -q -p MemoryMax=6G -p MemorySwapMax=0)
 cd "$HERE"
 exec "${CAP[@]}" nice "$PY" -m policy.driver --run "$RUN" "${ARGS[@]}"
