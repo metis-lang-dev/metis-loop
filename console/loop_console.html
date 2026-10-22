@@ -83,13 +83,17 @@ pre.err{color:var(--red)}
 .rec .hd{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}.rec .mt{color:var(--dim);white-space:pre-wrap;margin-top:2px;max-height:5.5em;overflow:hidden}
 .rec.esc .st{color:var(--red);border-color:#5a2a2a}.rec .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line)}
 .newdom{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}.newdom input{background:var(--bg);border:1px solid var(--line);padding:1px 6px}
-.newdom input.nm{width:9em}.newdom input.ln{flex:1;min-width:12em}
+.newdom input.nm{width:9em}.newdom input.ln{flex:1;min-width:12em}.newdom input.sd{flex:1;min-width:14em}
 .rootrd{margin:0 0 10px;border:1px solid var(--line);border-radius:4px;padding:4px 8px}.rootrd>summary{cursor:pointer;color:var(--dim);font-size:11.5px}
 .rootrd .md{max-height:40vh;overflow:auto;font-size:12.5px;line-height:1.45}.rootrd .md h3,.rootrd .md h4,.rootrd .md h5{margin:8px 0 4px}
 .rootrd .md table{border-collapse:collapse;margin:4px 0}.rootrd .md td,.rootrd .md th{border:1px solid var(--line);padding:2px 6px;text-align:left;vertical-align:top}
 .rootrd .md pre{white-space:pre-wrap;background:var(--bg);padding:4px}.rootrd .md p{margin:4px 0}.rootrd .md ul{margin:4px 0;padding-left:18px}
 .rootrd .md a[data-pkg]{cursor:pointer}
-#savewin{position:fixed;z-index:30;left:8%;right:8%;top:8%;bottom:8%;display:flex;flex-direction:column;background:var(--panel);border:1px solid #3a4452}
+#savewin{position:fixed;inset:8% 8%;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:0;color:inherit;background:var(--panel);border:1px solid #3a4452}
+#savewin[open]{display:flex;flex-direction:column}#savewin::backdrop{background:rgba(0,0,0,.45)}
+#savewin .shown{display:flex;gap:6px;flex-wrap:wrap;padding:4px 10px;border-bottom:1px solid var(--line)}#savewin .shown input{flex:1;min-width:12em}
+#savewin .since{border-left:3px solid var(--yellow,#d4a72c);padding-left:6px}#savewin .note{padding:8px 0}
+.gform{display:flex;flex-direction:column;gap:4px;margin:4px 0}.gform textarea,.gform input:not([type]){width:100%;box-sizing:border-box;font:inherit;font-size:12px}
 #savewin header{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}
 #savewin header .grow{flex:1}#savewin .body{overflow:auto;padding:6px 10px;flex:1}
 #savewin pre{margin:4px 0 10px;white-space:pre;font-size:11.5px}#savewin .add{color:var(--green)}#savewin .del{color:var(--red)}#savewin .hunk{color:var(--cyan)}
@@ -169,9 +173,10 @@ details summary{cursor:pointer;color:var(--dim)}
   </div>
 </header>
 <div id="banner" role="status" hidden></div>
-<dialog id="savewin" data-w="apply" data-role="dialog" aria-label="apply to the catalog" tabindex="-1">
-  <header><b>APPLY</b><span class="empty" id="savesub">the working copy into the catalog source (the operator's checkout) — read the diff, then apply; metis-agent sees the change</span><span class="grow"></span>
-    <button class="btn" id="savego">apply these files</button><button class="btn" id="savex">cancel</button></header>
+<dialog id="savewin" data-w="apply" data-role="dialog" aria-label="the gate: a write into the catalog" tabindex="-1">
+  <header><b id="savetitle">APPLY</b><span class="empty" id="savesub">the working copy into the catalog source (the operator's checkout) — read the diff, then apply; metis-agent sees the change</span><span class="grow"></span>
+    <button class="btn" id="savego">apply these files</button><button class="btn" id="savex" title="refuse: nothing is written; the next plan of these files shows what changed since">refuse</button></header>
+  <div class="shown" id="saveshown" hidden><input id="savedisp" placeholder="display (the console's row name)" aria-label="display"><input id="saveline" placeholder="line (one line on the world)" aria-label="line"><button class="btn" id="saveredo" title="plan again with this display and line">re-plan</button></div>
   <div class="body" id="savebody"></div>
 </dialog>
 <main>
@@ -814,6 +819,8 @@ function wsHandle(f){
   if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();agentSeen(f);return}
   if(f.ch==="repl"&&f.type==="sink"){if(f.session===sid)afterSink(f);return}
   if(f.ch==="repl"&&f.type==="save"){if(f.session===sid)showSave(f);return}
+  if(f.ch==="repl"&&f.type==="refused"){if(f.session===sid)closeGate("refused: nothing written — the next plan shows what changed since");return}
+  if(f.ch==="repl"&&f.type==="gate"){showGatePlan(f);return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
     $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("");return}
   if(f.ch==="chat"){chatFrame(f);return}
@@ -1082,30 +1089,74 @@ function afterSink(f){
 function saveWork(){
   if(!GW||!sid){banner("apply needs an open session on the console backend (on the web: download)",4000);return}
   if(work){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions})}
-  wsSend({ch:"repl",type:"save",session:sid})}
-function showSave(f){
-  if(f.written){closeSave();
-    banner("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)",7000);return}
-  saveTok=f.token;
+  saveShown={};wsSend({ch:"repl",type:"save",session:sid})}
+/* the GATE (loop-parity step 2, docs/LOOP.md): every write into the catalog is a plan the
+   person confirms — the console's apply, the agent seat's apply (it waits for you), and the
+   catalog actions (edit a file, README, intents, take, a seed). The dialog is a modal
+   <dialog> (showModal; closed only through close(), so the browser gives the focus back). */
+let gateCur=null;          // {via:"save"|"gate", token, by?, purpose?, kind, shown?}
+let saveShown={};          // the display/line the next save plan is made with (re-plan sets it)
+function openGate(dlg){if(!dlg.open){if(!navHook("onDialog",dlg))dlg.showModal();dlg.focus()}}   // through the navigation's port when it runs (its +opened: console-nav); the entry is the dialog itself (ui.llp entry(apply, apply)), not its first button
+function closeGate(msg){const d=$("#savewin");gateCur=null;saveTok=null;if(d.open)d.close();if(msg)banner(msg,5000)}
+const DIFFHTML=t=>esc(t||"").split("\n").map(l=>l.startsWith("+")&&!l.startsWith("+++")?`<span class="add">${l}</span>`:l.startsWith("-")&&!l.startsWith("---")?`<span class="del">${l}</span>`:l.startsWith("@@")?`<span class="hunk">${l}</span>`:l).join("\n");
+const GATE_WORDS={program:["APPLY","the working copy into the catalog source (the operator's checkout) — read the diff, then apply; metis-agent sees the change"],
+  edit:["EDIT","one exact edit of a file on disk — read the diff, then apply"],readme:["README","the domain's README: your title and summary, the rest by the SDK"],
+  intents:["INTENTS","intent.yaml drafted from the program's cmd_* atoms (no model) and its generated files"],
+  take:["TAKE","the domain into your other catalog ([console] take_into), then its bundle — nothing committed"],
+  seed:["NEW DOMAIN","a new domain from the seed — read what it writes, then apply"]};
+function renderGate(f,kind){
   const files=f.files||[];
-  $("#savebody").innerHTML=files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
-      <pre>${esc(x.diff).split("\n").map(l=>l.startsWith("+")&&!l.startsWith("+++")?`<span class="add">${l}</span>`:l.startsWith("-")&&!l.startsWith("---")?`<span class="del">${l}</span>`:l.startsWith("@@")?`<span class="hunk">${l}</span>`:l).join("\n")}</pre></div>`).join("")
-    :'<div class="empty">Nothing to save: the copy and its extensions equal the checkout.</div>';
-  $("#savego").disabled=!files.length;openSave()}
-/* the APPLY dialog is a modal <dialog>: up through the navigation's port when it runs (its
-   +opened), else showModal; down by close() only, so the browser gives the focus back */
-function openSave(){const d=$("#savewin");if(d.open)return;if(!navHook("onDialog",d))d.showModal()}
-function closeSave(){saveTok=null;const d=$("#savewin");if(d.open)d.close()}
-$("#savewin").addEventListener("close",()=>{saveTok=null});
-$("#savex").addEventListener("click",closeSave);
-$("#savego").addEventListener("click",()=>{if(saveTok&&sid)wsSend({ch:"repl",type:"save",session:sid,token:saveTok})});
+  const [title,sub]=f.by==="agent"?["THE AGENT'S APPLY","Claude wants to write this — it waits for you: apply, or refuse (it is told)"]:(GATE_WORDS[kind]||GATE_WORDS.program);
+  $("#savetitle").textContent=title;$("#savesub").textContent=sub+(f.say?" "+f.say:"");
+  $("#saveshown").hidden=!(kind==="program"&&gateCur.via==="save"&&f.by!=="agent");
+  $("#savebody").innerHTML=f.note?`<div class="note empty">${esc(f.note)}</div>`:files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
+      ${x.since_diff?`<div class="since"><span class="empty">changed since you refused it</span><pre>${DIFFHTML(x.since_diff)}</pre></div>`:""}
+      <pre>${DIFFHTML(x.diff)}</pre></div>`).join("")
+    :'<div class="empty">Nothing to write: the catalog has it already.</div>';
+  $("#savego").disabled=!files.length;$("#savex").textContent=files.length?"refuse":"close";
+  openGate($("#savewin"))}
+function showSave(f){
+  if(f.written){closeGate("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)");return}
+  saveTok=f.token;gateCur={via:"save",token:f.token,by:f.by,kind:"program",files:(f.files||[]).length,shown:f.by==="agent"?{}:saveShown};
+  renderGate(f,"program")}
+function showGatePlan(f){
+  if(f.op==="written"){const seed=gateCur&&gateCur.purpose==="seed";closeGate("written: "+(f.written||[]).join(", ")+(f.bundle&&typeof f.bundle==="string"?" — the bundle: "+f.bundle:"")+" (nothing committed)");
+    const llp=(f.written||[]).find(p=>p.endsWith(".llp"));if(seed&&llp)openCatalog({path:llp.replace(/\.llp$/,""),host:false});return}
+  if(f.op==="refused"){closeGate("refused: nothing written — the next plan of it shows what changed since");return}
+  if(f.op!=="plan")return;
+  gateCur={via:"gate",token:f.token,purpose:f.purpose,kind:f.kind,files:(f.files||[]).length};
+  renderGate(f,f.purpose==="seed"?"seed":f.kind)}
+function gateRefuse(){
+  const g=gateCur;
+  if(!g||!g.files){closeGate();return}                            // nothing was proposed: only close
+  if(g.via==="save")wsSend({ch:"repl",type:"refuse",session:sid,token:g.token});
+  else wsSend({ch:"repl",type:"gate",op:"refuse",token:g.token})}
+$("#savex").addEventListener("click",gateRefuse);
+$("#savewin").addEventListener("cancel",e=>{e.preventDefault();gateRefuse()});          // Escape is a refusal too
+$("#savego").addEventListener("click",()=>{const g=gateCur;if(!g)return;
+  if(g.via==="save"){if(sid)wsSend({ch:"repl",type:"save",session:sid,token:g.token,...(g.shown||{})})}     // the plan as it was shown
+  else wsSend({ch:"repl",type:"gate",op:"confirm",token:g.token})});
+$("#saveredo").addEventListener("click",()=>{if(!sid)return;const d=$("#savedisp").value.trim(),l=$("#saveline").value.trim();
+  saveShown={...(d?{display:d}:{}),...(l?{line:l}:{})};wsSend({ch:"repl",type:"save",session:sid,...saveShown})});
+/* the catalog actions on the open domain: each is a plan in the gate */
+function domainOfWork(){const p=String(work&&work.name||"").split("/");return p.length>1?p[p.length-2]:p[0]}
+function gatePropose(kind,args){if(!wsUp){banner("Not connected to the console backend",4000);return}
+  wsSend({ch:"repl",type:"gate",op:"propose",kind,domain:domainOfWork(),args:args||{},req:"g"+Math.random().toString(36).slice(2,8)})}
 $("#records").addEventListener("click",e=>{
   if(e.target.closest("#recref")){wsSend({ch:"repl",type:"records"});return}
   const r=e.target.closest("[data-rec]");if(r&&fileRecs)pickRecord(fileRecs[+r.dataset.rec])});
-$("#catdock").addEventListener("submit",e=>{const f=e.target.closest("#newdom");if(!f)return;e.preventDefault();
-  const name=f.nm.value.trim(),line=f.ln.value.trim();if(!name){f.nm.focus();return}
+$("#catdock").addEventListener("submit",e=>{
+  const g=e.target.closest("#gedit,#greadme");
+  if(g){e.preventDefault();
+    if(g.id==="gedit"){if(!g.old.value){g.old.focus();return}gatePropose("edit",{path:g.path.value.trim(),old:g.old.value,new:g.new.value,replace_all:g.all.checked})}
+    else{if(!g.text.value.trim()){g.text.focus();return}gatePropose("readme",{text:g.text.value.trim(),...(g.title.value.trim()?{title:g.title.value.trim()}:{})})}
+    return}
+  const f=e.target.closest("#newdom");if(!f)return;e.preventDefault();
+  const name=f.nm.value.trim(),line=f.ln.value.trim(),seed=f.sd.value.trim();if(!name&&!seed){f.nm.focus();return}
   if(!wsUp){banner("Not connected to the console backend",4000);return}
-  pendingReq="r"+Math.random().toString(36).slice(2,8);wsSend({ch:"repl",type:"new",name,line,req:pendingReq})});
+  pendingReq="r"+Math.random().toString(36).slice(2,8);
+  if(seed){gateCur={via:"gate",purpose:"seed"};wsSend({ch:"repl",type:"new",name,line,seed,req:pendingReq})}   // a plan first, in the gate
+  else wsSend({ch:"repl",type:"new",name,line,req:pendingReq})});
 /* the list itself is the loop SDK's CATALOG widget (sdk/catalog/catalog.js,
    MetisCatalog.render: the same component the metis-agent console shows);
    this console adds the stale tag, the path, the new-domain form */
@@ -1143,7 +1194,8 @@ function renderRootReadme(){
     <div class="md">${mdRender(rootReadme.text,rootReadme.links)}</div></details>`}
 function renderDomainList(){
   const nf=GW&&(!manifestM||manifestM.mode!=="shared")?`<form class="newdom" id="newdom"><input class="nm" name="nm" placeholder="new domain" aria-label="new domain name" autocomplete="off" pattern="[a-z][a-z0-9_]{1,31}">
-      <input class="ln" name="ln" placeholder="its display line — what it is, what the person can ask" aria-label="display line"><button class="btn">new</button></form>`:"";
+      <input class="ln" name="ln" placeholder="its display line — what it is, what the person can ask" aria-label="display line">
+      <input class="sd" name="sd" placeholder="seed (optional): a package dir in a catalog's domains/, or an .llp" aria-label="seed" autocomplete="off"><button class="btn">new</button></form>`:"";
   return renderRootReadme()+(domainList.length||domainsSeen?nf:"")+'<div id="catrows"></div>'}
 function fillDomainList(){
   const box=$("#catrows");if(!box)return;
@@ -1175,11 +1227,21 @@ function renderCatalogDock(){
       <button class="btn" data-cw="open" data-k="${k+1}">open</button><button class="btn" data-cw="dl" data-k="${k+1}">download</button>
       <button class="btn" data-cw="rm" data-k="${k+1}" title="remove (uncertifies the copy)">remove</button></div>`).join("")
       :'<div class="empty">none — [+ extension] starts one on top of the copy</div>'}</div>
+    <div class="ph" style="margin-top:6px">ON DISK · ${esc(domainOfWork())}'s files, each write a plan you confirm (the gate)</div>
+    <div class="wrow"><button class="btn" data-cw="g-edit" title="one exact edit of a file on disk: README, domain.yaml, intent.yaml, the host, an included file (a .llp edit adds no diagnostic)">edit a file</button><button class="btn" data-cw="g-readme" title="the README: your title and summary paragraph, the rest by the SDK">README</button><button class="btn" data-cw="g-intents" title="intent.yaml drafted from the program's cmd_* atoms — no model">intents (skeleton)</button><button class="btn" data-cw="g-take" title="the domain into your other catalog ([console] take_into), then its bundle">take into…</button></div>
+    <div id="gform"></div>
     <div class="empty" style="margin-top:8px">Edits live in this browser (IndexedDB) and in the backend's memory — never on the server's disk. Download and merge by the one road: candidate → gates → approval → commit.</div>
     <div style="margin-top:10px">${list}</div>`;fillDomainList()}
 $("#catdock").addEventListener("click",e=>{const a=e.target.closest("a[data-pkg]");if(!a)return;e.preventDefault();
   const d=domainList.find(x=>x.path===a.dataset.pkg);openCatalog({path:a.dataset.pkg,host:!!(d&&d.host)})});
 $("#catdock").addEventListener("click",e=>{const b=e.target.closest("[data-cw]");if(!b||!work)return;const a=b.dataset.cw,k=b.dataset.k;
+  if(a==="g-intents"){gatePropose("intents",{});return}
+  if(a==="g-take"){gatePropose("take",{});return}
+  if(a==="g-edit"){$("#gform").innerHTML=`<form id="gedit" class="gform"><input name="path" value="README.md" aria-label="the file, relative to the domain" placeholder="file (relative to the domain)">
+      <textarea name="old" rows="3" placeholder="the exact text to replace (comments kept)" aria-label="old text"></textarea><textarea name="new" rows="3" placeholder="its replacement" aria-label="new text"></textarea>
+      <label><input type="checkbox" name="all"> every occurrence</label><button class="btn">plan the edit</button></form>`;return}
+  if(a==="g-readme"){$("#gform").innerHTML=`<form id="greadme" class="gform"><input name="title" placeholder="title (optional)" aria-label="README title">
+      <textarea name="text" rows="4" placeholder="the summary paragraph: what the program tells (the SDK writes the rest)" aria-label="README summary"></textarea><button class="btn">plan the README</button></form>`;return}
   if(a==="edit")openEditor("copy");else if(a==="extension")newExtension();else if(a==="download")downloadWork();else if(a==="save")saveWork();else if(a==="restore"&&offeredCopy){restoreCopy(offeredCopy);banner("restored your edited copy — uncertified until you recompile it",5000)}
   else if(a==="recompile"){clearTimeout(workTimer);wsSend({ch:"repl",type:"work",session:sid,copy:work.copy,extensions:work.extensions});wsSend({ch:"repl",type:"recompile",session:sid})}
   else if(a==="open")openEditor("extension:"+k);else if(a==="dl")downloadText("extension:"+k);

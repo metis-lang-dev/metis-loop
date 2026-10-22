@@ -1,5 +1,7 @@
 # metis-loop
 
+`pi/` is the agentic loop hosted in pi (was the repo metis-agentic-loop, merged 2026-10-22; see pi/README.md); `sdk/` the loop SDK; `console/` + `loop/` the human loop.
+
 [![ci](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/metis-lang-dev/metis-loop/actions/workflows/ci.yml)
 
 **A loop starts in a directory, and that directory is the catalog and the
@@ -48,6 +50,11 @@ narration invented events) and 4096 tokens; each call and its cost (OpenRouter's
 `DIR/.metis/formalize-calls.jsonl`, and a session stops calling once it has
 spent `[console] max_usd` (1.00 USD). A shared instance (`--mode shared`)
 serves no LLM seat on any brain.
+
+Every write into the catalog goes through the loop's gate (docs/LOOP.md): the apply,
+an edit of a file on disk, the README, the intents skeleton, take into `[console] take_into`,
+a new domain from a seed — each a diff you confirm or refuse. The agent seat's apply waits
+for your confirm too.
 
 The explanation / formalization loop for metis catalogs:
 

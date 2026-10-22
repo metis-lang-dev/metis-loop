@@ -57,3 +57,23 @@ The kinds are:
 
 Where the loop keeps its state: the catalog's `.metis/` (`catalog.state()`). The
 gate's memory over a CLI is `.metis/gate.json`; a console keeps it in its process.
+
+## The console's writes (loop-parity step 2)
+
+The console holds one `Gate()` in its process. Every write it makes is a plan the person reads in
+the GATE dialog (a modal; apply confirms, refuse and Escape refuse):
+
+- **apply** (the working copy and its extensions; display and line on the dialog), with the
+  since-diff of a refused proposal: `repl/save` → the plan, with its token → the write,
+  `repl/refuse`;
+- **on disk**, `repl/gate {op: propose, kind}`: **edit** a file (README, domain.yaml,
+  intent.yaml, the host, an included file), **README** (title and summary, the rest by the SDK),
+  **intents** (the skeleton from the program's `cmd_*` atoms, no model), **take** into the
+  operator's other catalog (`[console] take_into`), then `confirm` / `refuse`;
+- **a new domain from a seed** (the new-domain form): a package in a catalog's `domains/` is
+  taken whole, an `.llp` becomes `domains/<name>/` with its manifest.
+
+**The agent seat's apply waits for the person**, as pi's does: its plan goes to the session's
+pages as a save by the agent, and the person's apply or refuse decides it (the agent is told
+which). No answer within `[console] agent_gate_timeout` (600 s) counts as a refusal. Personal
+mode only; a shared instance refuses every write.

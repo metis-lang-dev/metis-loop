@@ -87,7 +87,7 @@ def test_an_empty_directory_is_an_empty_catalog(monkeypatch, tmp_path):
     assert sorted(out["written"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
     assert [e["name"] for e in catalog.index()] == ["lamp"] and [d.name for d in catalog.domains()] == ["lamp"]
     gen = catalog.generator()
-    assert not (tmp_path / "tools").exists() and Path(gen.__file__).parent == catalog._installed_tools()
+    assert not (tmp_path / "tools").exists() and Path(gen.__file__) == Path(__import__("metis.intents").intents.__file__)   # the generator is metispy's (metis-packages)
     assert gen.ROOT == tmp_path.resolve()
     rows = cli(["list", "--json"], cwd=tmp_path)          # the CLI in the cwd: the same catalog
     assert [e["name"] for e in rows] == ["lamp"]

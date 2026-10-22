@@ -327,9 +327,10 @@ class AgentService:
 
         async def apply(args):
             """The copy and its extensions written into the catalog source (the
-            save the person's "apply to catalog" does), only after a
-            recompile certified THIS copy; the diff is posted to the console
-            so the person sees what was written. Personal mode only."""
+            save the person's "apply to catalog" does), only after a recompile
+            certified THIS copy, and only when the person confirms: the plan goes
+            to the console as a save by the agent and waits for the person's
+            apply or refuse (docs/LOOP.md rule 1, as pi's gate). Personal mode only."""
             over = counted()
             if over:
                 return over
@@ -344,20 +345,23 @@ class AgentService:
             loop = asyncio.get_running_loop()
             try:
                 plan = await loop.run_in_executor(None, gw.srv.save_plan, w)
-                if not plan["files"]:
-                    return _ok({"written": [], "note": "nothing to apply: the copy and its extensions equal the checkout"})
-                out = await loop.run_in_executor(None, gw.srv.save_apply, w, plan["token"])
             except ValueError as e:
                 return _err(str(e))
-            w["certified"] = "checkout"
-            await gw._broadcast(s, gw._source_frame(s))
+            if not plan["files"]:
+                return _ok({"written": [], "note": "nothing to apply: the copy and its extensions equal the checkout"})
+            what, out = await gw.ask_person(s, plan)
+            if what == "refused":
+                return _err("the person refused the write: nothing written. Their refusal is remembered: "
+                            "the next apply shows them what changed since")
+            if what != "written":
+                return _err(f"not written: {out}")
             diff = "".join(f["diff"] for f in plan["files"])
             await gw._broadcast(s, {"ch": "repl", "type": "posting", "session": s.sid, "id": "a" + plan["token"][:8],
                                     "cmd": ":apply", "actor": "claude", "status": "done",
-                                    "result": "applied " + ", ".join(out["written"]) + " (not committed)\n" + diff,
+                                    "result": "applied " + ", ".join(out["written"]) + " (confirmed by the person; not committed)\n" + diff,
                                     "json": {"ok": True, "written": out["written"]}}, log=True)
             return _ok({"written": out["written"], "diff_lines": len(diff.splitlines()),
-                        "note": "written to the catalog source and shown to the person; say what you wrote"})
+                        "note": "the person confirmed; written to the catalog source; say what you wrote"})
 
         async def intents_read(args):
             over = counted()

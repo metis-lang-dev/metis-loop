@@ -1,7 +1,7 @@
 """The loop SDK over the selected packages (catalog-packages s-a2c529d6, part B):
 every verb the loop runs on a package, on each of dog (intents + host), plant
 (an extension), kitchen (a pair: take refuses it by name), nav (an RDDL world:
-the program includes its lifted domain) and love_triangle (a fiction world, no
+the program includes its lifted domain) and bridge (a puzzle world, no host, no
 intents). Unit level: the files as the catalog has them, written into scratch
 catalogs; no model, no gym.
 
@@ -22,7 +22,7 @@ CAT = installed_catalog()
 if not (CAT / "domains").is_dir():
     pytest.skip(f"no metis-catalog domains at {CAT} (METIS_CATALOG)", allow_module_level=True)
 
-SELECTED = ["dog", "plant", "kitchen", "nav", "love_triangle"]
+SELECTED = ["dog", "plant", "kitchen", "nav", "bridge"]   # bridge, not love_triangle: the Ceptre ports are not in the wheel (ceptre-carveout)
 # what take refuses, by the manifest key it names (the files take does not carry)
 NOT_TAKEN = {"kitchen": "agent, pair, serves"}
 

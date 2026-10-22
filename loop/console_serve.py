@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from metis_loop_sdk import catalog
+from metis.gate import Gate, Refused, public          # metispy >= 0.1.2 (via the SDK); the SDK module is its shim
 
 
 def catalog_root() -> Path:
@@ -108,9 +109,13 @@ NAV_RECORDS = ".metis/console-nav/records/"
 class ConsoleServer:
     """{sid: Repl} plus the per-session epoch."""
 
-    def __init__(self, root: Optional[Path] = None, seed: int = 1):
+    def __init__(self, root: Optional[Path] = None, seed: int = 1, take_into: Optional[Path] = None):
         self.root = Path(root) if root else catalog_root()
         self.seed = seed
+        # every catalog write is a plan the person confirms (loop-parity step 2, docs/LOOP.md): the
+        # loop's one policy, its memory of refused proposals in this process
+        self.gate = Gate()
+        self.take_into = Path(take_into) if take_into else None
         self.shells: Dict[str, object] = {}
         self.epochs: Dict[str, int] = {}
         self._roots = sorted({str(self.root), str(self.root.resolve())},
@@ -465,39 +470,126 @@ class ConsoleServer:
                              "Describe what there is, what can happen and what the person can ask.\n")
         return f"domains/{name}/{name}"
 
-    def save_plan(self, work: dict) -> dict:
-        """What `save` would write: the working copy over its checkout
-        program, each extension as <domain>/extensions/<name>.llp — each with its
-        unified diff (the SDK's catalog.plan). `token` names exactly this plan
-        (save checks it)."""
-        import hashlib
-        files = self._plan(work)
-        token = hashlib.sha256(json.dumps([(f["path"], f["text"]) for f in files]).encode()).hexdigest()[:16]
-        return {"files": [{k: v for k, v in f.items() if k != "text"} for f in files], "token": token}
+    # -- the gate: every write is a plan the person confirms (docs/LOOP.md) ----------
 
-    def save_apply(self, work: dict, token: str) -> dict:
-        """Write the plan the viewer saw (its token), never anything else;
-        never a git commit (that stays the operator's): the SDK's catalog.apply."""
-        plan = self.save_plan(work)
-        if not token or plan["token"] != token:
+    def save_plan(self, work: dict, display=None, line=None) -> dict:
+        """What `save` would write: the working copy over its checkout program, each
+        extension as <domain>/extensions/<name>.llp — each with its unified diff and,
+        when the person refused an earlier proposal of it, `since_diff` (what changed
+        since). The gate's plan; `token` names exactly it (save checks it)."""
+        domain, text, exts = self._plan_args(work)
+        pl = self.gate.propose("program", domain, self.root, text=text, extensions=exts,
+                               **{k: v for k, v in (("display", display), ("line", line)) if v})
+        return self._shown(pl)
+
+    def save_apply(self, work: dict, token: str, display=None, line=None) -> dict:
+        """Write the plan the viewer saw (its token), never anything else; never a git
+        commit (that stays the operator's). The copy as it is now must plan the same
+        token: a copy changed since the diff was shown refuses."""
+        now = self.save_plan(work, display, line)
+        if not token or now["token"] != token:
+            self.gate.store["plans"].pop(now["token"], None)
             raise ValueError("the copy changed since the diff was shown — review the new diff")
-        out = catalog.apply(*self._plan_args(work), r=self.root)
+        out = self.gate_confirm(token)
         return {"written": out["written"], "token": token}
 
+    def save_refuse(self, token: str) -> dict:
+        """The person said no to the save: the gate remembers what was refused (the next
+        plan of those files shows what changed since)."""
+        return self.gate_refuse(token)
+
+    def gate_plan(self, kind: str, domain: str, args: dict) -> dict:
+        """A plan of one of the console's writes (the loop's kinds, docs/LOOP.md):
+        edit {path, old, new, replace_all?} — one exact edit of a file on disk (README,
+        domain.yaml, intent.yaml, the host, an included file; a .llp edit adds no
+        diagnostic); readme {text, title?}; intents {text?} (without text: the skeleton
+        from the program's cmd_* atoms, no model); take — the domain into the operator's
+        other catalog ([console] take_into); program {text, display?, line?}. Refusals
+        come with the rule's words."""
+        a = dict(args or {})
+        if kind == "take":
+            if not self.take_into:
+                raise ValueError("take writes into another catalog: set [console] take_into (a directory)")
+            pl = self.gate.propose("take", domain, self.take_into, src=str(self.root))
+        elif kind in ("edit", "readme", "intents", "program", "extension"):
+            pl = self.gate.propose(kind, domain, self.root, **a)
+        else:
+            raise ValueError(f"the console's writes: edit, readme, intents, take, program, extension; not {kind!r}")
+        return self._shown(pl)
+
+    def gate_confirm(self, token: str) -> dict:
+        """Write exactly the plan `token` names (the gate's confirm: a source changed since
+        the plan refuses, nothing written)."""
+        try:
+            return self.gate.confirm(str(token or ""))
+        except Refused as e:
+            raise ValueError(str(e)) from None
+
+    def gate_refuse(self, token: str) -> dict:
+        try:
+            return self.gate.refuse(str(token or ""))
+        except Refused as e:
+            raise ValueError(str(e)) from None
+
+    def _shown(self, pl: dict) -> dict:
+        """A plan as the page shows it: the files without their text (the diffs), the token."""
+        out = public(pl)
+        out["files"] = [{k: v for k, v in f.items() if k != "text"} for f in pl["files"]]
+        return out
+
+    def seed_plan(self, name: str, seed: str, line: str = "") -> dict:
+        """A new domain from a seed (the new-domain form's seed field): a package
+        directory (one with a domain.yaml) is taken into the catalog whole; an .llp
+        file becomes domains/<name>/ with its manifest. Either way a plan the person
+        confirms."""
+        p = Path(str(seed or "")).expanduser()
+        if not p.exists():
+            raise ValueError(f"no seed at {seed}: a package directory (with domain.yaml) or an .llp file")
+        if p.is_dir():
+            if not (p / "domain.yaml").is_file():
+                raise ValueError(f"{seed} is a directory without domain.yaml: not a package")
+            if p.parent.name != "domains":
+                raise ValueError(f"{seed}: a package seed is a catalog's domains/<name>/ (take brings it from there)")
+            return self._shown(self.gate.propose("take", p.name, self.root, src=str(p.parent.parent)))
+        if p.suffix != ".llp":
+            raise ValueError(f"{seed}: a package directory or an .llp file")
+        name = (name or "").strip() or p.stem
+        if not self.NAME.match(name):
+            raise ValueError("a domain name is lower case, a-z 0-9 _, 2–32 characters, a letter first")
+        if (self.root / "domains" / name).exists():
+            raise ValueError(f"domains/{name} exists already — open it from the list")
+        line = " ".join((line or "").split())[:160]
+        return self._shown(self.gate.propose("program", name, self.root, text=p.read_text(),
+                                             **({"line": line} if line else {})))
+
     def _plan_args(self, work: dict):
-        """(the program's catalog path, its text, {extension name: text})."""
+        """(the domain, the copy's text, {extension name: text}) — the domain is the
+        package whose program the copy is."""
         try:
             prog = self.resolve(str(work.get("name") or ""))
         except ValueError:
             raise ValueError("save writes a checkout domain: this copy is in memory only "
                              "(start one with `new`, or open a catalog from the list)")
-        rel = prog.relative_to(self.root.resolve()).with_suffix("").as_posix()
-        exts = {str(pk.get("name") or f"extension{k}"): str(pk.get("source") or "")
-                for k, pk in enumerate(work.get("extensions") or [], 1)}
-        return rel, str(work.get("copy") or ""), exts
+        domain = self._domain_of(prog)
+        exts = {}
+        for k, pk in enumerate(work.get("extensions") or [], 1):
+            n = "_".join("".join(c if c.isalnum() else " " for c in str(pk.get("name") or "").lower()).split())
+            n = n if n[:1].isalpha() else f"extension{k}" if not n else f"x{n}"
+            exts[n] = str(pk.get("source") or "")
+        return domain, str(work.get("copy") or ""), exts
 
-    def _plan(self, work: dict) -> list:
-        return catalog.plan(*self._plan_args(work), r=self.root)
+    def _domain_of(self, prog: Path) -> str:
+        """The domain whose program `prog` is (its package's name: the directory holding
+        the domain.yaml that names it)."""
+        prog = Path(str(prog) + ("" if str(prog).endswith(".llp") else ".llp")).resolve()
+        for d in catalog.walk("domain.yaml", self.root):
+            try:
+                dom = catalog.get(Path(d).parent.name, self.root)
+            except Exception:  # noqa: BLE001 — a manifest the loader refuses is not this program's
+                continue
+            if dom.program and Path(dom.program).resolve() == prog:
+                return dom.name
+        raise ValueError(f"save writes a checkout domain: no package of the catalog serves {prog.name}")
 
     def domains_doc(self) -> dict:
         """The `meta/domains` write (the db transport's CATALOG panel)."""

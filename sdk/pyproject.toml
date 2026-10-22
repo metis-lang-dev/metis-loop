@@ -18,18 +18,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metis-loop-sdk"
-version = "0.1.10"
+version = "0.1.11"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 description = "The metis loop SDK: catalog access, the catalog widget and the model adapters, shared by metis-loop, metis-agent and metis-agentic-loop"
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6", "metis-catalog>=0.1.1", "metispy>=0.1.1"]   # 0.1.1: a package anywhere under the root
+dependencies = ["pyyaml>=6", "metispy>=0.1.2"]   # 0.1.2: metis.catalog, metis.intents, metis.gate (metis-packages: this SDK re-exports them)
 
 [project.optional-dependencies]
 # the claude adapter's seat on the Agent SDK (the command face needs only the `claude` CLI)
 claude = ["claude-agent-sdk"]
-test = ["pytest"]
+test = ["pytest", "metis-catalog>=0.1.1"]   # the tests read the installed metis-catalog's domains
 
 [tool.setuptools.packages.find]
 include = ["metis_loop_sdk*"]

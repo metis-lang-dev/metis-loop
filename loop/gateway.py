@@ -25,7 +25,14 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"records"} -> {ch:"meta", type:"records", records}
                  {ch:"repl", type:"sink", session, file}  a checkout records file into the session
                  {ch:"repl", type:"new", name, line, req}  domains/<name>/ made, then opened
-                 {ch:"repl", type:"save", session[, token]}  -> {type:"save", files:[{path,new,diff}], token[, written]}
+                 {ch:"repl", type:"new", name?, line?, seed, req}  -> {type:"gate", plan} a new domain from a
+                                    seed (a package dir: taken whole; an .llp: its program), confirmed by gate
+                 {ch:"repl", type:"save", session[, token][, display, line]}  -> {type:"save", files:[{path,new,diff,
+                                    since_diff?}], token[, written]} (the gate's plan: docs/LOOP.md)
+                 {ch:"repl", type:"refuse", session, token}  the person said no: remembered (the next plan's since_diff)
+                 {ch:"repl", type:"gate", op:"propose", session?, kind, domain, args, req}  -> {type:"gate", plan}
+                                    kind edit | readme | intents | take | program (loop-parity step 2)
+                 {ch:"repl", type:"gate", op:"confirm"|"refuse", token, req}  -> {type:"gate", written | refused}
                  {ch:"chat", type:"say"|"stop"|"history", session, text}
                                           (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
@@ -104,6 +111,10 @@ DEFAULTS = {
     "brain": "", "openrouter_model": "deepseek/deepseek-v4-pro",
     "openrouter_narrate_model": "deepseek/deepseek-v4-flash",
     "max_usd": 1.00,                # per session, OpenRouter's reported cost
+    # take (loop-parity step 2): the operator's other catalog a domain is taken into; "" = take is off
+    "take_into": "",
+    # the agent seat's writes wait for the person's confirm this long, then count as refused (seconds)
+    "agent_gate_timeout": 600,
     "narrate_reasoning": "low",     # OpenRouter's narrate (formalize: off); off invented events
 }
 # the LLM seats: never through the operator's credentials in shared mode
@@ -218,6 +229,7 @@ class Sess:
         self.pool = ThreadPoolExecutor(max_workers=1,
                                        thread_name_prefix=f"sess-{sid}")
         self.lock = threading.Lock()
+        self.gate_wait: Dict[str, asyncio.Future] = {}   # the agent seat's plans waiting for the person
         self.tid: Optional[int] = None
         self.running: Optional[dict] = None
         self.stopping = False
@@ -229,7 +241,9 @@ class Sess:
 class Gateway:
     def __init__(self, cfg: dict, srv: Optional[ConsoleServer] = None):
         self.cfg = cfg
-        self.srv = srv or ConsoleServer()
+        self.srv = srv or ConsoleServer(take_into=cfg.get("take_into") or None)
+        if cfg.get("take_into") and not getattr(self.srv, "take_into", None):
+            self.srv.take_into = Path(cfg["take_into"]).expanduser()
         self.sessions: Dict[str, Sess] = {}
         self.rates: Dict[object, deque] = {}
         self.pages = set()
@@ -390,9 +404,15 @@ class Gateway:
             if typ == "records":
                 rows = await loop.run_in_executor(None, self.srv.records)
                 return await self._send(ws, {"ch": "meta", "type": "records", "records": rows})
+            if typ in ("new", "gate") and self.cfg["mode"] == "shared":
+                raise ValueError(f"{typ} writes the operator's checkout: personal mode only")
+            if typ == "new" and msg.get("seed"):
+                plan = await loop.run_in_executor(None, self.srv.seed_plan, msg.get("name"), msg["seed"], msg.get("line"))
+                return await self._send(ws, {"ch": "repl", "type": "gate", "op": "plan", "req": msg.get("req"),
+                                             "purpose": "seed", **plan})
+            if typ == "gate":
+                return await self.gate(ws, msg, s)
             if typ == "new":
-                if self.cfg["mode"] == "shared":
-                    raise ValueError("new writes the operator's checkout: personal mode only")
                 llp = await loop.run_in_executor(None, self.srv.new_domain, msg.get("name"), msg.get("line"))
                 await self._send(ws, {"ch": "meta", "type": "domains", "domains": self.srv.domains()})
                 return await self.open(ws, ip, {"llp": llp, "req": msg.get("req")})
@@ -401,20 +421,78 @@ class Gateway:
             if typ == "sink":
                 out = await loop.run_in_executor(s.pool, self.srv.load_sink, s.sid, str(msg.get("file") or ""))
                 return await self._send(ws, {"ch": "repl", "type": "sink", "session": s.sid, **out})
-            # save: the plan (diffs + token), or with token the write
+            # save: the plan (diffs + token), or with token the write; refuse: the person said no
             if self.cfg["mode"] == "shared":
                 raise ValueError("save writes the operator's checkout: personal mode only")
             w = s.work
+            shown = {k: msg[k] for k in ("display", "line") if msg.get(k)}
+            if typ == "refuse":
+                tok = str(msg.get("token") or "")
+                out = await loop.run_in_executor(None, self.srv.save_refuse, tok)
+                self._decided(s, tok, ("refused", out))
+                return await self._send(ws, {"ch": "repl", "type": "refused", "session": s.sid, "token": tok, **out})
             if msg.get("token"):
-                out = await loop.run_in_executor(None, self.srv.save_apply, w, str(msg["token"]))
+                tok = str(msg["token"])
+                try:
+                    out = await loop.run_in_executor(None, lambda: self.srv.save_apply(w, tok, **shown))
+                except ValueError as e:
+                    self._decided(s, tok, ("error", str(e)))
+                    raise
                 w["certified"] = "checkout"
+                self._decided(s, tok, ("written", out))
                 await self._broadcast(s, self._source_frame(s))
+                await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
             else:
-                out = await loop.run_in_executor(None, self.srv.save_plan, w)
+                out = await loop.run_in_executor(None, lambda: self.srv.save_plan(w, **shown))
             return await self._send(ws, {"ch": "repl", "type": "save", "session": s.sid, **out})
         except ValueError as e:
             return await self._send(ws, {"ch": "repl", "type": "error", "session": msg.get("session"),
                                          "req": msg.get("req"), "error": str(e)})
+
+    async def gate(self, ws, msg, s):
+        """The console's other writes through the loop's gate (docs/LOOP.md): propose a plan
+        (to the asking socket only), confirm it (the write), refuse it (remembered)."""
+        loop, op = asyncio.get_running_loop(), msg.get("op")
+        if op == "propose":
+            plan = await loop.run_in_executor(None, self.srv.gate_plan, str(msg.get("kind") or ""),
+                                              str(msg.get("domain") or ""), msg.get("args") or {})
+            return await self._send(ws, {"ch": "repl", "type": "gate", "op": "plan", "req": msg.get("req"), **plan})
+        tok = str(msg.get("token") or "")
+        if op == "confirm":
+            out = await loop.run_in_executor(None, self.srv.gate_confirm, tok)
+            await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
+            await self._send(ws, {"ch": "meta", "type": "catalogs", "names": self.srv.catalogs()})
+            return await self._send(ws, {"ch": "repl", "type": "gate", "op": "written", "req": msg.get("req"),
+                                         "token": tok, **out})
+        if op == "refuse":
+            out = await loop.run_in_executor(None, self.srv.gate_refuse, tok)
+            return await self._send(ws, {"ch": "repl", "type": "gate", "op": "refused", "req": msg.get("req"),
+                                         "token": tok, **out})
+        raise ValueError(f"gate op: propose | confirm | refuse, not {op!r}")
+
+    async def ask_person(self, s: "Sess", plan: dict) -> tuple:
+        """The agent seat's write waits for the person (docs/LOOP.md rule 1, as pi's gate):
+        the plan goes to the session's pages as a save plan by the agent; the person's
+        save-with-token or refuse decides it. → ("written", out) | ("refused", out) |
+        ("error", words) | ("timeout", words)."""
+        fut = asyncio.get_running_loop().create_future()
+        s.gate_wait[plan["token"]] = fut
+        await self._broadcast(s, {"ch": "repl", "type": "save", "session": s.sid, "by": "agent", **plan})
+        try:
+            return await asyncio.wait_for(fut, float(self.cfg.get("agent_gate_timeout") or 600))
+        except asyncio.TimeoutError:
+            return ("timeout", "the person did not answer the agent's write")
+        finally:
+            s.gate_wait.pop(plan["token"], None)
+
+    def _decided(self, s: "Sess", token: str, outcome: tuple):
+        fut = s.gate_wait.get(token)
+        if fut is not None and not fut.done():
+            fut.set_result(outcome)
+
+    async def _send_all(self, frame: dict):
+        for ws in list(self.pages):
+            await self._send(ws, frame)
 
     async def recompile(self, s: "Sess") -> dict:
         """Build the session again from the working copy + extensions (in
@@ -764,7 +842,7 @@ class Gateway:
                     continue
                 if typ == "open":
                     await self.open(ws, ip, msg)
-                elif typ in ("records", "sink", "new", "save"):    # e2e-workflow step 1
+                elif typ in ("records", "sink", "new", "save", "refuse", "gate"):    # e2e-workflow step 1; the gate
                     await self.files(ws, ip, msg)
                 elif typ == "intent":
                     await self.intent(ws, msg)
