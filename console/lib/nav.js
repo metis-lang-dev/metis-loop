@@ -60,6 +60,12 @@ class ConsolePort extends UiPort {
     super.sync();
     for (const [w, has] of Object.entries(CONDITIONAL)) this.line(has(this.page) ? `+present(${w})` : `+absent(${w})`);
   }
+  // a conditional widget's element exists only once the page makes it (the editor's window):
+  // a show or a focus makes it first, through the page's own opener
+  effect(e) {
+    if ((e.ui === 'show' || e.ui === 'focus') && e.widget in CONDITIONAL && !this.el(e.widget)) this.onDock?.(e.widget, true);
+    super.effect(e);
+  }
   entries(w) { return ENTRIES[w] ? ENTRIES[w]() : super.entries(w); }
   badges(items) { this.unbadge(); items.forEach((e, i) => { if (i < 9) e.dataset.n = String(i + 1); }); }
   unbadge() { for (const e of document.querySelectorAll('[data-n]')) delete e.dataset.n; }

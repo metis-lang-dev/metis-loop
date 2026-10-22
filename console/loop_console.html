@@ -836,7 +836,8 @@ function wsHandle(f){
     if(f.session!==sid)return;
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
-    seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();return}
+    const confirmed=!sess;seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();
+    if(confirmed)navHook("onSession",sid);return}
   if((f.type==="queued"||f.type==="posting")&&f.session===sid){
     const old=intents.get(f.id);
     if(f.type==="queued"&&old&&old.status!=="queued")return;
@@ -1231,7 +1232,8 @@ function agentSeen(f){if(agentWait){agentWait(f);agentWait=null}}
 function opened(req,s,err){const o=opens.get(req);if(!o)return;opens.delete(req);err?o.rej(new Error(err)):o.res(s)}
 function navHook(name,...a){const h=window.consolePage&&window.consolePage[name];return h?(h(...a),true):false}
 window.consolePage={
-  gw:GW,sid:()=>sid,manifest:()=>manifestM,banner,docks:dockUI,
+  gw:GW,manifest:()=>manifestM,banner,docks:dockUI,
+  sid:()=>sess&&sess.session===sid?sid:null,   // a session the gateway confirmed (a stale one from before a restart is not bound)
   agent:()=>agentM?Promise.resolve(agentM):new Promise(res=>{agentWait=res;setTimeout(()=>res(null),15000)}),
   open:(llp,host)=>new Promise((res,rej)=>{openCatalog({path:llp,host});
     if(!pendingReq){rej(new Error("the console backend is not connected"));return}opens.set(pendingReq,{res,rej})}),
