@@ -144,6 +144,20 @@ def test_a_dock_shown_for_an_effect_is_the_pages_state_too():
     assert r["hidden(editor)"] == 1 and r["shown(editor)"] == 0
 
 
+def test_the_page_says_whether_it_has_a_widget():
+    """v6.5 (console-nav step 2 F3): the page has the editor only while a catalog is open. Its
+    +absent / +present are pair flips, as +shown / +hidden are, and observe() reads them back."""
+    h = ui_host.UiHost()
+    h.world(["+absent(editor)", "+blur"])                   # the takeover report with no catalog open
+    assert h.tick({}) == ["-present(editor)", "+absent(editor)", "+blur"]
+    r = h.observe({"focused(root)": 1})
+    assert r["present(editor)"] == 0 and r["absent(editor)"] == 1
+    h.world(["-absent(editor)", "+present(editor)"])        # a catalog opened: the page's own flip (its - lines are the host's)
+    assert h.tick({}) == ["-absent(editor)", "+present(editor)"]
+    assert h.observe({"focused(root)": 1})["present(editor)"] == 1
+    assert json.loads(json.dumps(h.snapshot()))             # still total
+
+
 def test_snapshot_is_json_and_restores():
     import json
     h = ui_host.UiHost()

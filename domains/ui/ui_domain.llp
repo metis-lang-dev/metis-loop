@@ -18,7 +18,9 @@
 % not — arrives as one `enter(W)` (the browser's focusin, coalesced: one per focus
 % change), and a focus that left every widget as `blur`. A dialog's rise and fall
 % arrive as `opened(D)` / `closed(D)`; a dock the page shows or hides itself as
-% `shown(W)` / `hidden(W)` world lines. The page is the host: a fired rule's event is
+% `shown(W)` / `hidden(W)` world lines, and whether it has a widget at all now as
+% `present(W)` / `absent(W)` (v6.5, console-nav step 2 F3: the loop console's editor
+% exists only while a catalog is open). The page is the host: a fired rule's event is
 % the frame the page carries out (focus, show, hide, numbers, pick), and the page's
 % real focus is what the host's observe() reads back — so a focus change the port
 % missed (the standards' silent cases: a removed element, aria-activedescendant, the
@@ -76,6 +78,8 @@ pred modal(widget) : ui.         % the dialog that holds the focus
 pred invoker(widget, widget) : ui.   % invoker(Dialog, the widget to restore)
 pred shown(widget) : ui.         % a widget's visibility, a pair the instance starts and the page keeps
 pred hidden(widget) : ui.
+pred present(widget) : ui.       % the page has the widget now (a pair the instance starts present and the page keeps: v6.5)
+pred absent(widget) : ui.
 pred mode(mode) : ui.            % exactly one
 pred was(mode) : ui.             % the mode before a push-to-talk hold (exactly one while held)
 
@@ -202,6 +206,10 @@ stage sync {
   shown_twice [dyn] : shown(W) * shown(W) -o shown(W).
   %% The page says {W} is hidden: it was.
   hidden_twice [dyn] : hidden(W) * hidden(W) -o hidden(W).
+  %% The page says it has {W}: it had.
+  present_twice [dyn] : present(W) * present(W) -o present(W).
+  %% The page says it has no {W}: it had none.
+  absent_twice [dyn] : absent(W) * absent(W) -o absent(W).
 }
 %% The focus is current; the focused widget takes its own commands first.
 qui sl [dyn] : sync -o local.
@@ -249,7 +257,7 @@ stage global {
   %% I move to {W}.
   go_named [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * child(P, W) * P <> F * shown(W) * $free -o focused(W) * prev(F) * shown(W) * done(go).
   %% I show {W} first, then move into it.
-  go_hidden [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * hidden(W) * $role(W, dock) * $free -o focused(W) * prev(F) * shown(W) * done(go).
+  go_hidden [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * hidden(W) * $role(W, dock) * $present(W) * $free -o focused(W) * prev(F) * shown(W) * done(go).
   %% I move into {W}, inside the dialog.
   go_in_dialog [dyn] : cmd_go(W) * focused(F) * prev(Q) * W <> F * $modal(D) * inside(W, D) -o focused(W) * prev(F) * done(go).
   %% You are in {W} already.
@@ -283,7 +291,7 @@ stage global {
   %% The jump is dropped.
   cancel_resolving [dyn] : cmd_cancel * resolving * $ready * $no_choice * $numbers_hidden -o idle_jump * done(cancel).
   %% I show {W}.
-  show [dyn] : cmd_show(W) * hidden(W) * $role(W, dock) * $free -o shown(W) * done(show).
+  show [dyn] : cmd_show(W) * hidden(W) * $role(W, dock) * $present(W) * $free -o shown(W) * done(show).
   %% The pick is dropped and the numbers are gone.
   cancel_pick_numbers [dyn] : cmd_cancel * picking * numbers_shown -o ready * numbers_hidden * done(cancel).
   %% The pick is dropped.
@@ -303,9 +311,11 @@ qui gp [dyn] : global -o post.
 % ═══ post: every command no stage took, refused with its reason ═══
 stage post {
   %% I can't go to {W}: the {D} dialog holds the focus until it is done.
-  p_go_modal [dyn] : cmd_go(W) * $modal(D) -o refused(go).
+  p_go_modal [dyn] : cmd_go(W) * $present(W) * $modal(D) -o refused(go).
   %% I can't reach {W} from here: say "exit", "home", or the name of a widget next to you.
-  p_go [dyn] : cmd_go(W) * $free -o refused(go).
+  p_go [dyn] : cmd_go(W) * $present(W) * $free -o refused(go).
+  %% {W} is not on the page now.
+  p_go_absent [dyn] : cmd_go(W) * $absent(W) -o refused(go).
   %% I can't step out: the {D} dialog holds the focus until it is done.
   p_exit_modal [dyn] : cmd_exit * $modal(D) -o refused(exit).
   %% I am at the root: there is nothing to step out to.
@@ -373,7 +383,9 @@ stage post {
   %% I can't show {W}: it is not a dock.
   p_show [dyn] : cmd_show(W) * $role(W, R) * notdock(R) -o refused(show).
   %% I can't show {W}: the {D} dialog holds the focus until it is done.
-  p_show_modal [dyn] : cmd_show(W) * $hidden(W) * $role(W, dock) * $modal(D) -o refused(show).
+  p_show_modal [dyn] : cmd_show(W) * $hidden(W) * $role(W, dock) * $present(W) * $modal(D) -o refused(show).
+  %% {W} is not on the page now.
+  p_show_absent [dyn] : cmd_show(W) * $absent(W) * $role(W, dock) -o refused(show).
   %% I can't close here: {W} is not a dock.
   p_close [dyn] : cmd_close * $focused(W) * $role(W, R) * notdock(R) -o refused(close).
   %% {W} is hidden already.

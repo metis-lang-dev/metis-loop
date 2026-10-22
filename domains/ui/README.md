@@ -21,7 +21,7 @@ input port.
 |---|---|
 | `ui_domain.llp` | the base: types `role`, `act`, `mode`, `num`; the facts an instance supplies (`child`, `role`, `entry`); `inside/2` by Horn rules; the stage pipeline `clear → sync → local → global → post` with its `qui` links; every rule with its `%%` line |
 | `ui.llp` | the loop console: 21 widgets (ids in comments), the tree, the roles, `entry(apply, apply)`, the start. The dialog panel (fsttm-web's, the one input) is the dock `talk` (#dock-talk): `dialog` is a role of the base and `voice` a word of its rules, so neither names a widget; an instance of another page (the world page, the synthetic page) uses `talk` for its panel too |
-| `cases/*.llp` | the cases, each including the program with its init: `ui` (go to catalog), `ui_dialog` (the APPLY dialog refuses exit), `ui_named` (go by name), `ui_mouse` (a mouse focus drops the numbers), `ui_pick` (a pick after a mouse focus into the list) |
+| `cases/*.llp` | the cases, each including the program with its init: `ui` (go to catalog), `ui_dialog` (the APPLY dialog refuses exit), `ui_named` (go by name), `ui_mouse` (a mouse focus drops the numbers), `ui_pick` (a pick after a mouse focus into the list), `ui_absent` (a GO or SHOW to a widget the page does not have now is refused), `ui_present` (the same widget present and hidden: shown first, then focused), and the rest of `cases/` |
 | `intent.yaml` | the card: GO(widget), EXIT, HOME, BACK, PICK(name | number), NUMBERS, SHOW(widget), CLOSE, CANCEL, MODE(to), HELP, UNKNOWN |
 | `intent/ui-corpus.tsv` | 91 rows: the examples and held-out paraphrases, the REPL's commands as UNKNOWN here |
 | `ui_host.py` | the page as host (the implementer's), below |
@@ -39,8 +39,17 @@ full visible state once when its hello claim succeeds: its real focus (`+enter(W
 `+blur`), every dock's `+shown(W)` / `+hidden(W)`, and for every dialog of the instance
 `+closed(D)` when it is not up or `+opened(D)` when it is — the rules then release a modal
 the old page left (`dialog_close`) or consume the stray report (`p_closed`); the sampler
-starts after that report. `observe()` returns
-the page's real `focused(W)`, `shown`/`hidden` and `modal` atoms: a focus change the
+starts after that report.
+
+**A widget the page has only sometimes** (v6.5, console-nav step 2 F3: the loop console's
+editor needs an open catalog). The page says it on the port, as the pair `present(W)` /
+`absent(W)`; the instance starts every widget present, and the takeover report restates
+the pair for the widgets the page has only sometimes (`+absent(editor)` while no catalog is
+open, `+present(editor)` when one opens). `go_hidden` and `show` take `$present(W)`; a GO or a
+SHOW to an absent widget is refused by `p_go_absent` / `p_show_absent`, "{W} is not on the page
+now." The instance's own reason (the console: say "load <package>" first) is the page's band
+text, not the base's line. `observe()` returns
+the page's real `focused(W)`, `shown`/`hidden`, `present`/`absent` and `modal` atoms: a focus change the
 port missed — the standards' silent cases (a removed element, `aria-activedescendant`,
 the viewport) — is a surprise record.
 

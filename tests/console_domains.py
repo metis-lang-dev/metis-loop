@@ -269,8 +269,22 @@ def inject_ui(path):
             return s.get(f"shown({w})", 0) > 0 or (w in DOCKS and s.get(f"hidden({w})", 0) > 0)
         return ok
     nums = [f"n{i}" for i in range(1, 10)]
+    # v6.5 (console-nav step 2 F3): the page says whether it has a widget now; the console's editor
+    # exists only while a catalog is open. Going absent hides it (and a focus in it falls to the
+    # viewport); the takeover report restates the pair
+    cond = ("editor",) if "present(" in program_text(path) else ()
+
+    pairs = ([((f"-present({w})", f"+absent({w})"), lambda s, w=w: has(f"present({w})", f"hidden({w})")(s)) for w in cond]
+             + [((f"-present({w})", f"+absent({w})", f"-shown({w})", f"+hidden({w})"),
+                 lambda s, w=w: has(f"present({w})", f"shown({w})")(s) and s.get(f"focused({w})", 0) <= 0) for w in cond]
+             + [((f"-present({w})", f"+absent({w})", f"-shown({w})", f"+hidden({w})", "+blur"),
+                 lambda s, w=w: has(f"present({w})", f"shown({w})", f"focused({w})")(s)) for w in cond]
+             + [((f"-absent({w})", f"+present({w})"), has(f"absent({w})")) for w in cond]
+             + [((f"+absent({w})",), has(f"absent({w})")) for w in cond]
+             + [((f"+present({w})",), has(f"present({w})")) for w in cond])
     return (
-        [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
+        pairs
+        + [((f"+cmd_go({w})",), always) for w in ws] + [((f"+cmd_show({w})",), always) for w in ws]
         + [((f"+cmd_{c}",), always) for c in ("exit", "home", "back", "pick", "numbers", "close", "cancel",
                                                 "dictate", "command", "help", "unknown", "jump", "hold", "release")]
         + [((f"+cmd_jump_to({l})",), always) for l in ("c", "r")]

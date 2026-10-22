@@ -31,6 +31,8 @@ The input port (the page's reports, port(report); the agent's world lines, world
   {"blur": true}          the focus left every widget: +blur
   {"opened": D} / {"closed": D}      a dialog rose / fell: +opened(D) / +closed(D)
   {"shown": W} / {"hidden": W}       the page showed / hid a dock itself: -hidden(W) +shown(W) …
+  {"present": W} / {"absent": W}     the page has the widget now / has none (v6.5: the console's
+                                     editor needs an open catalog): -absent(W) +present(W) …
   {"picked": true} / {"nothing_picked": true} / {"ambiguous": true}    a pick's answer
   {"jumped": W}           a jump label resolved to the widget W: +jumped(W) (a label that names
                           nothing: {"nothing_picked": true})
@@ -42,7 +44,7 @@ The input port (the page's reports, port(report); the agent's world lines, world
                           rules never see it; observe() reads it (the architect's H1)
 The outcome tokens of the last pass are retracted at the tick, as dog_host does.
 
-The sensor face: observe() is the page's real focused(W), shown(W)/hidden(W) and modal(D),
+The sensor face: observe() is the page's real focused(W), shown(W)/hidden(W), present(W)/absent(W) and modal(D),
 once the page has said anything and while no effect of ours waits for it (an effect the
 page has not carried out yet is not a surprise; one it never carries out is, after
 CATCH_UP beats). PURITY: the world changes only in tick/on_event/port; snapshot is total."""
@@ -87,6 +89,8 @@ class UiHost:
     def _page(self):
         if self.page is None:
             self.page = {"focus": "root", "shown": set(), "hidden": set(), "modal": None}
+        self.page.setdefault("present", set())
+        self.page.setdefault("absent", set())
         return self.page
 
     def port(self, report):
@@ -115,6 +119,16 @@ class UiHost:
             p["hidden"].add(w)
             p["shown"].discard(w)
             self.lines += [f"-shown({w})", f"+hidden({w})"]
+        elif "present" in report:
+            w = report["present"]
+            p["present"].add(w)
+            p["absent"].discard(w)
+            self.lines += [f"-absent({w})", f"+present({w})"]
+        elif "absent" in report:
+            w = report["absent"]
+            p["absent"].add(w)
+            p["present"].discard(w)
+            self.lines += [f"-present({w})", f"+absent({w})"]
         elif "sample" in report:            # the page's real focus where the port said otherwise: no line
             p["focus"] = report["sample"] or "root"
         if "jumped" in report:
@@ -135,13 +149,13 @@ class UiHost:
             m = re.match(r"^\+(\w+)(?:\((\w+)\))?$", l)
             if m and m.group(1) == "enter":
                 self.port({"focus": m.group(2)})
-            elif m and m.group(1) in ("opened", "closed", "shown", "hidden", "jumped"):
+            elif m and m.group(1) in ("opened", "closed", "shown", "hidden", "present", "absent", "jumped"):
                 self.port({m.group(1): m.group(2)})
             elif m and m.group(1) in ("blur", "picked", "nothing_picked", "ambiguous", "page_refused"):
                 self.port({m.group(1): True})
             elif not l.startswith("-"):
                 raise ValueError(f"world line {l!r}: the ui port takes +enter(W) +blur +opened(D) +closed(D) "
-                                 "+shown(W) +hidden(W) +picked +nothing_picked +ambiguous +page_refused +jumped(W) ?focus(W) ?blur")
+                                 "+shown(W) +hidden(W) +present(W) +absent(W) +picked +nothing_picked +ambiguous +page_refused +jumped(W) ?focus(W) ?blur")
 
     def take_payload(self, payload):
         self.payload = dict(payload or {})
@@ -263,6 +277,10 @@ class UiHost:
             out[f"shown({w})"], out[f"hidden({w})"] = 1, 0
         for w in p["hidden"]:
             out[f"shown({w})"], out[f"hidden({w})"] = 0, 1
+        for w in p.get("present", ()):
+            out[f"present({w})"], out[f"absent({w})"] = 1, 0
+        for w in p.get("absent", ()):
+            out[f"present({w})"], out[f"absent({w})"] = 0, 1
         modal = {a[6:-1] for a in counts if a.startswith("modal(")}
         for d in modal | ({p["modal"]} if p["modal"] else set()):
             out[f"modal({d})"] = 1 if d == p["modal"] else 0
@@ -273,14 +291,16 @@ class UiHost:
         return [self.beat, list(self.due), [list(a) for a in self.acted], self.believed, self.active, self.awaiting,
                 list(self.lines), self._focus_in,
                 None if p is None else {"focus": p["focus"], "shown": sorted(p["shown"]),
-                                        "hidden": sorted(p["hidden"]), "modal": p["modal"]}]
+                                        "hidden": sorted(p["hidden"]), "modal": p["modal"],
+                                        "present": sorted(p.get("present", ())), "absent": sorted(p.get("absent", ()))}]
 
     def restore(self, snap):
         beat, due, acted, self.believed, self.active, self.awaiting, lines, self._focus_in, p = snap
         self.beat, self.due = beat, tuple((b, d) for b, d in due)
         self.acted, self.lines = tuple((b, n) for b, n in acted), list(lines)
         self.page = None if p is None else {"focus": p["focus"], "shown": set(p["shown"]),
-                                            "hidden": set(p["hidden"]), "modal": p["modal"]}
+                                            "hidden": set(p["hidden"]), "modal": p["modal"],
+                                            "present": set(p.get("present", ())), "absent": set(p.get("absent", ()))}
 
 
 def make(case):

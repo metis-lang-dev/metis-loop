@@ -925,6 +925,7 @@ function restoreCopy(saved){
 async function onSource(f){
   const first=!work||work.name!==f.name;
   work={name:f.name,copy:f.copy,extensions:f.extensions||[],certified:f.certified,error:f.error,key:f.key};
+  if(first)navHook("onCatalog",true);   // the editor is on the page now (console-nav: the ui port's +present(editor))
   const underRecord=pendingRec||recordOpen;
   if((first||underRecord)&&f.certified==="checkout"){   // reopen: keep your edits (a record click re-opens the same domain)
     const saved=await idb.get(f.name);
@@ -1235,7 +1236,7 @@ window.consolePage={
   open:(llp,host)=>new Promise((res,rej)=>{openCatalog({path:llp,host});
     if(!pendingReq){rej(new Error("the console backend is not connected"));return}opens.set(pendingReq,{res,rej})}),
   say:text=>{chatIn.set(text);chatSend()},              // the formalization agent's chat, the person's own words
-  apply:saveWork,select:v=>{$("#catin").value=v},
+  apply:saveWork,select:v=>{$("#catin").value=v},hasCatalog:()=>!!work,
   openEditor:()=>openEditor("copy"),
   closeEditors:()=>{for(const [t,w] of [...wins]){if(w.view)w.view.destroy();w.el.remove();wins.delete(t)}navHook("onEditor",false)},
 };

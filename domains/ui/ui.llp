@@ -58,7 +58,8 @@ role(apply, dialog).
 entry(apply, apply).
 
 % the page at the start: the root focused, nothing to go back to, no dialog, every
-% widget shown but the editor and the dialog, nothing pending, commands
+% widget shown but the editor and the dialog, every widget present (the page says
+% +absent(editor) while no catalog is open), nothing pending, commands
 #init focused(root) 1
 #init prev(root) 1
 #init free 1
@@ -88,3 +89,24 @@ entry(apply, apply).
 #init shown(records) 1
 #init hidden(editor) 1
 #init hidden(apply) 1
+#init present(root) 1
+#init present(band) 1
+#init present(sessbar) 1
+#init present(catin) 1
+#init present(debugger) 1
+#init present(stream) 1
+#init present(lenses) 1
+#init present(chips) 1
+#init present(prompt) 1
+#init present(talk) 1
+#init present(chat) 1
+#init present(chatlog) 1
+#init present(chatq) 1
+#init present(catalog) 1
+#init present(copy) 1
+#init present(extensions) 1
+#init present(readme) 1
+#init present(candidates) 1
+#init present(records) 1
+#init present(editor) 1
+#init present(apply) 1

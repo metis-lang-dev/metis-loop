@@ -49,7 +49,17 @@ const ENTRIES = {
   candidates: () => [...document.querySelectorAll('#cands .cand')],
 };
 
+// the widgets the console has only sometimes (base v6.5's present/absent): the editor needs an
+// open catalog (a working copy to edit)
+const CONDITIONAL = { editor: page => page.hasCatalog() };
+
 class ConsolePort extends UiPort {
+  constructor(opts) { super(opts); this.page = opts.page; }
+  // sync: the takeover report says which conditional widgets the page has now, too
+  sync() {
+    super.sync();
+    for (const [w, has] of Object.entries(CONDITIONAL)) this.line(has(this.page) ? `+present(${w})` : `+absent(${w})`);
+  }
   entries(w) { return ENTRIES[w] ? ENTRIES[w]() : super.entries(w); }
   badges(items) { this.unbadge(); items.forEach((e, i) => { if (i < 9) e.dataset.n = String(i + 1); }); }
   unbadge() { for (const e of document.querySelectorAll('[data-n]')) delete e.dataset.n; }
@@ -94,6 +104,7 @@ export async function startNav(page) {
   // ── the port: the page as the ui domain's host ──
   let byEffect = null;                               // a dock the port shows or hides for an effect: not the person's
   const port = window.port = new ConsolePort({
+    page,
     root: document.getElementById('root'),
     syncDocks: true,
     send: lines => { rec('port', { lines }); send({ ev: 'world', domain: 'ui', atoms: lines }); },
@@ -120,6 +131,7 @@ export async function startNav(page) {
   };
   page.onEditor = on => { if (byEffect !== 'editor') port.docked('editor', on); };
   page.onDialog = dlg => port.openDialog(dlg);       // the APPLY dialog rises through the port (+opened)
+  page.onCatalog = () => port.line('+present(editor)');   // a catalog opened: the editor is on the page
   new MutationObserver(tagRendered).observe(document.getElementById('catdock'), { childList: true, subtree: true });
   tagRendered();
 
@@ -184,7 +196,12 @@ export async function startNav(page) {
       if (f.owns?.includes('repl') && replOn) activateRepl();
       return;
     }
-    if (f.ev !== 'journal' || !f.rec || f.rec.kind !== 'dlg-trace' || !f.rec.effects) return;
+    if (f.ev !== 'journal' || !f.rec || f.rec.kind !== 'dlg-trace') return;
+    for (const x of f.rec.fired ?? []) {
+      if (f.rec.domain === 'ui' && /^p_(go|show)_absent\b/.test(x.event ?? '') && !page.hasCatalog())
+        page.banner('the editor needs an open catalog: say "load <package>" first', 6000);
+    }
+    if (!f.rec.effects) return;
     for (const e of f.rec.effects) {
       rec('effect', { domain: f.rec.domain, effect: e });
       if (f.rec.domain === 'ui') uiEffect(e); else if (f.rec.domain === 'repl') replEffect(e);
