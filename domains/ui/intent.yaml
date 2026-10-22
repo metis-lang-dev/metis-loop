@@ -48,11 +48,10 @@ guidance: |
   The page's widgets: the BAND at the top (its SESSBAR holds the catalog input CATIN
   and the open/reset/edit buttons); the DEBUGGER on the left (its STREAM is the REPL
   log, its LENSES the context chips rules/measure/tokens/proof, its CHIPS the command
-  chips, its PROMPT the REPL line); the docks on the right: TALK (the dialog panel: what
-  you said and what the agent answered; "the dialog", "the voice panel", "the transcript" are
-  TALK), CHAT (the formalization
+  chips, its PROMPT the REPL line); the docks on the right: CHAT (the formalization
   agent, "Claude"; its CHATLOG and its text CHATQ), CATALOG (the working COPY, the
-  EXTENSIONS and the catalog's README), CANDIDATES, RECORDS (the surprise records);
+  EXTENSIONS and the catalog's README), CANDIDATES, RECORDS (the surprise records), TALK (the dialog panel: "the dialog",
+  "the voice panel");
   the floating EDITOR; the APPLY dialog. "the log" and "the output" are the STREAM;
   "the claude panel", "the chat" are CHAT; "the records", "the surprises" are
   RECORDS; "the catalog panel" is CATALOG; "the catalog input", "the open box" are
