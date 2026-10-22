@@ -12,8 +12,11 @@ run.sh --run DIR --answer TOKEN 'a note'                   # the person answers 
 run.sh --run DIR --resume --brain …                        # re-engage from the snapshot
 ```
 
-`run.sh` runs `python -m policy.driver` under the workspace's `.worlds/alf` venv (ALFWorld,
-metispy), in a memory-capped scope. `--set KEY=N` changes a budget (`DEFAULTS` in driver.py:
+`run.sh` runs `python -m policy.driver` under the world's venv (`.worlds/alf` for ALFWorld,
+`.worlds/sw` for ScienceWorld; metispy in both), in a memory-capped scope. `--world` picks the
+adapter (`policy/alfworld.py`, `policy/scienceworld.py`: the contract is the class's surface —
+sample, open/step/snapshot/restore/act, actions/unadmissible, vocabulary, task_facts, and the
+class's DOMAIN, DESCRIPTION, SPLITS and VERB_TEXT the driver and the prompts read). `--set KEY=N` changes a budget (`DEFAULTS` in driver.py:
 explore_steps, explore_k, explore_w, exploit_episodes, act_steps, proposals, no_progress,
 refactor_rules, refactor_k, repairs).
 

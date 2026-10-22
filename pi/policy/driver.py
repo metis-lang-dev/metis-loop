@@ -37,10 +37,12 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from .alfworld import AlfWorld, empty_base, rules_of
+from . import alfworld, scienceworld
+from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
-DOMAIN = "alf"
+WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base)}
+DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
             "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2}
 
@@ -71,8 +73,12 @@ def jl_read(path):
 
 
 class Driver:
-    def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print):
+    def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print, world="alfworld"):
         from metis import gate
+        global DOMAIN
+        self.World, empty_base = WORLDS[world]
+        DOMAIN = self.World.DOMAIN
+        prompts.set_world(self.World)
         self.run, self.brain, self.family, self.seed = Path(run).resolve(), brain, family, seed
         self.cfg = dict(DEFAULTS, **(cfg or {}))
         self.out = out
@@ -89,15 +95,13 @@ class Driver:
             d = self.root / "domains" / DOMAIN
             d.mkdir(parents=True, exist_ok=True)
             (d / ("%s.llp" % DOMAIN)).write_text(empty_base(DOMAIN))      # the generator's start, not a proposal
-            (d / "domain.yaml").write_text("program: %s.llp\ndisplay: ALFWorld, learned\nline: \"the loop's base over ALFWorld's facts\"\n" % DOMAIN)
-        self.disc = [AlfWorld(g, self.run / "trees" / "current")
-                     for g in AlfWorld.sample("train", family, self.state["discovery"], seed)]
-        self.held = [AlfWorld(g, self.run / "trees" / "current")
-                     for g in AlfWorld.sample("valid_seen", family, self.state["gate_games"], seed)]
+            (d / "domain.yaml").write_text("program: %s.llp\ndisplay: %s, learned\nline: \"the loop's base over %s\"\n" % (DOMAIN, world, self.World.DESCRIPTION))
+        self.disc = [self.World(g, self.run / "trees" / "current")
+                     for g in self.World.sample("discovery", family, self.state["discovery"], seed)]
+        self.held = [self.World(g, self.run / "trees" / "current")
+                     for g in self.World.sample("gate", family, self.state["gate_games"], seed)]
         self.games = {w.iid: w for w in self.disc + self.held}
-        w0 = self.disc[0]
-        self.dynamic, self.commands = w0.alf_host.DYNAMIC_PREDS, w0.alf_host.COMMANDS
-        self.verbs = getattr(w0.alf_host.AlfHost, "VERBS", None)       # the host's verb_why convention, when it has one
+        self.dynamic, self.commands, self.verbs = self.World.vocabulary()   # the host's dynamic predicates, its table, its verb_why convention
         self._sync_tree("current", self.base())
         self.pred = None
         self.seed_record = None
@@ -126,7 +130,7 @@ class Driver:
     def _sync_tree(self, name, text):
         b = self.run / "trees" / name / "base"
         b.mkdir(parents=True, exist_ok=True)
-        (b / "alf.llp").write_text(text)
+        (b / ("%s.llp" % DOMAIN)).write_text(text)
         return self.run / "trees" / name
 
     def predictor(self, name="current", text=None):
@@ -387,7 +391,7 @@ class Driver:
                         if refused_at[key] >= 2:
                             self.probe(w, ep, sur)
                 else:
-                    self.propose(prompts.policy(self.base(), (self.commands, self.verbs), prompts.task_facts(w.instance_text()), ep,
+                    self.propose(prompts.policy(self.base(), (self.commands, self.verbs), self.World.task_facts(w.instance_text()), ep,
                                                 w.instance_text(), self.note()), "policy", w.iid)
                 if self.should_refactor():
                     return "refactor"
@@ -434,7 +438,7 @@ class Driver:
             self.say("refactor-skipped", why="the base is unchanged since the last refactoring")
             return
         self.state["refactored_at"] = sha
-        p = (f"You are refactoring the rules of a household world (ALFWorld) without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
+        p = (f"You are refactoring the rules of {self.World.DESCRIPTION} without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
              f"{prompts.vocabulary(self.commands, self.verbs)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
              "Make it smaller and clearer: merge rules that differ only in a fact they read, drop a rule no state can enable, "
              "name the program's tokens so each rule's role reads. Every command the program sends in a state must stay the same."
@@ -475,7 +479,7 @@ class Driver:
     def evaluate(self, split, n):
         """The base as it is, acting on N games of SPLIT (valid_unseen: the held-out): no brain, no
         write. → RUN/records/evaluate-<split>.json and the summary line."""
-        games = [AlfWorld(g, self.run / "trees" / "current") for g in AlfWorld.sample(split, self.family, n, self.seed)]
+        games = [self.World(g, self.run / "trees" / "current") for g in self.World.sample(split, self.family, n, self.seed)]
         eps = [w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed) for w in games]
         out = {"split": split, "n": len(eps), "won": sum(e["won"] for e in eps), "rules": len(rules_of(self.base())),
                "commands": [len(e["commands"]) for e in eps], "refused": [e["refused"] for e in eps],
@@ -559,7 +563,7 @@ class Driver:
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="policy.driver", description=__doc__.split("\n")[0])
     ap.add_argument("--run", required=True)
-    ap.add_argument("--world", default="alfworld", choices=["alfworld"])
+    ap.add_argument("--world", default="alfworld", choices=sorted(WORLDS))
     ap.add_argument("--family", default="pick_and_place_simple")
     ap.add_argument("--phase", choices=["explore", "exploit", "refactor"])
     ap.add_argument("--brain", default="script:/dev/null")
@@ -570,7 +574,7 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--set", action="append", default=[], help="KEY=N: a budget of DEFAULTS (explore_steps, proposals, …)")
     ap.add_argument("--resume", action="store_true")
-    ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (valid_unseen): no brain")
+    ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (heldout, or the world's own name): no brain")
     ap.add_argument("--n", type=int, default=10)
     a = ap.parse_args(argv)
     if a.brain.startswith("openrouter/") and a.budget is None:
@@ -580,7 +584,7 @@ def main(argv=None):
     if unknown:
         ap.error("--set: unknown %s (one of %s)" % (", ".join(sorted(unknown)), ", ".join(DEFAULTS)))
     brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
-    d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg)
+    d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg, world=a.world)
     if a.evaluate:
         return d.evaluate(a.evaluate, a.n)
     return d.resume() if a.resume else d.go(a.phase)

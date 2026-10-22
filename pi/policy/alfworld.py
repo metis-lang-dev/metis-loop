@@ -148,6 +148,21 @@ def rule_verb(name, commands, verbs=None):
 
 
 class AlfWorld:
+    DOMAIN = "alf"
+    DESCRIPTION = "a household world (ALFWorld)"
+    SPLITS = {"discovery": "train", "gate": "valid_seen", "heldout": "valid_unseen"}
+    VERB_TEXT = {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R", "take": "take O from R", "put": "put O in/on R"}
+
+    @classmethod
+    def vocabulary(cls):
+        """(the host's dynamic predicates, its command table, its verb convention)."""
+        alf_host, _, _ = _world()
+        return set(alf_host.DYNAMIC_PREDS), alf_host.COMMANDS, getattr(alf_host.AlfHost, "VERBS", None)
+
+    @staticmethod
+    def task_facts(instance_text):
+        return [l.strip()[:-1] for l in instance_text.splitlines() if l.strip().startswith(("target(", "dest(")) and l.strip().endswith(".")]
+
     def __init__(self, game_dir, tree, max_steps=60):
         alf_host, gen_instance, _ = _world()
         self.alf_host, self.game_dir = alf_host, str(game_dir)
@@ -157,13 +172,15 @@ class AlfWorld:
         if not (self.pkg / ("%s.llp" % self.iid)).exists():
             self.tree.mkdir(parents=True, exist_ok=True)
             gen_instance.generate(self.game_dir, str(self.tree), domain_rel="../base/alf.llp")
+            gj = self.pkg / "game.json"                          # the loop's instance: a rule named verb_why is a command (alf_host's opt-in)
+            meta = json.loads(gj.read_text()); meta["verbs"] = True; gj.write_text(json.dumps(meta, indent=1))
         self.path = self.pkg / ("%s.llp" % self.iid)
         self.max_steps, self.host, self.commands = max_steps, None, []
 
     @classmethod
     def sample(cls, split, family, n, seed=1):
         _, _, families = _world()
-        return families.sample(split, family, n, seed)
+        return families.sample(cls.SPLITS.get(split, split), family, n, seed)
 
     def into(self, tree):
         """This game's instance in another tree (a candidate's): copied, the include the same."""

@@ -3,6 +3,7 @@
 # explore / exploit / refactor through metis.gate's experimental policy, disengaging with an ask.
 #
 #   run.sh --world alfworld --family pick_and_place_simple [--phase explore|exploit|refactor]
+#   run.sh --world scienceworld --family conductivity …        (the second world: metis-worlds/scienceworld)
 #          --brain openrouter/<model> --budget USD [--run DIR] [--discovery N] [--gate-games N] [--set KEY=N …]
 #   run.sh --run DIR --answer TOKEN 'a note'        the person's answer to the ask (or JSON: {"kind": "budget", "proposals": 10})
 #   run.sh --run DIR --resume [--brain …]           re-engage from the snapshot with the answer in context
@@ -19,10 +20,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PKGS="$HERE"                                          # the workspace: the first parent with .worlds/ (a worktree sits deeper)
 while [ "$PKGS" != / ] && [ ! -d "$PKGS/.worlds" ]; do PKGS="$(dirname "$PKGS")"; done
-PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"
-export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}"
 [ -n "${METISC:-}" ] || [ ! -x "$PKGS/metis-lang/src/metisc" ] || export METISC="$PKGS/metis-lang/src/metisc"   # the gate checks a .llp edit with it
-[ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: a venv with ALFWorld and metispy)" >&2; exit 1; }
 WORLD=alfworld FAMILY=pick_and_place_simple RUN="" ANSWER=() ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,6 +31,12 @@ while [ $# -gt 0 ]; do
     *) ARGS+=("$1"); shift ;;
   esac
 done
+# the world's venv: ALFWorld's (.worlds/alf, its games in ALFWORLD_DATA) or ScienceWorld's (.worlds/sw: the simulator's jar on the system java)
+case "$WORLD" in
+  scienceworld) PY="${METIS_POLICY_PY:-$PKGS/.worlds/sw/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=conductivity && ARGS+=(--family conductivity) ;;
+  *) PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"; export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}" ;;
+esac
+[ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: the world's venv with metispy: .worlds/alf for alfworld, .worlds/sw for scienceworld)" >&2; exit 1; }
 RUN="${RUN:-$PWD/policy-run-$WORLD-$FAMILY}"
 if [ ${#ANSWER[@]} -gt 0 ]; then
   exec "$PY" -m metis.gate --state "$RUN/state" --policy experimental answer "${ANSWER[0]}" <<<"${ANSWER[1]}"

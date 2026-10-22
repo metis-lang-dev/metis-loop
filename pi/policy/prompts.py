@@ -11,8 +11,18 @@ LANGUAGE = """The language (metis LL, linear logic over counted facts):
 - `$S(X)` reads a fact without consuming it (the static facts — recat, openable, notopenable, rtype, otype, pickupable, target, dest, … — are always read with $);
 - variables are Capitalized, typed by the predicates' declarations; `X <> Y` says two values differ;
 - a `%% words with {X}` line above a rule is its spoken line;
-- a new predicate needs a declaration line: `pred NAME(type, …) : alf.` (alf is the dynamic namespace);
+- a new predicate needs a declaration line: `pred NAME(type, …) : NS.` (NS is the base's dynamic namespace: the one its other predicates use);
 - the rule's NAME decides what the world does when it fires (the table below): a rule named otherwise is the program's own bookkeeping and sends nothing."""
+
+
+WORLD = {"description": "a household world (ALFWorld)",
+         "verb_text": {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R", "take": "take O from R", "put": "put O in/on R"}}
+
+
+def set_world(cls):
+    """The world the prompts speak of: its description and its verbs' words (the adapter class)."""
+    WORLD["description"] = getattr(cls, "DESCRIPTION", WORLD["description"])
+    WORLD["verb_text"] = getattr(cls, "VERB_TEXT", WORLD["verb_text"])
 
 
 def vocabulary(commands, verbs=None):
@@ -23,16 +33,15 @@ def vocabulary(commands, verbs=None):
         if not spec:
             continue
         verb, vars_ = spec[0], spec[1:]
-        what = {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R",
-                "take": "take O from R", "put": "put O in/on R"}[verb]
-        rows.append("  %-12s binds %-8s → the command: %s" % (name, ", ".join(vars_), what))
+        what = WORLD["verb_text"].get(verb, verb)
+        rows.append("  %-12s binds %-8s → the command: %s" % (name, ", ".join(vars_) or "nothing", what))
     head = "The rule names the world sends a command for (its host's table; a rule's name is one of these, its variables bound by these names):\n"
     if verbs:
         conv = ", ".join("%s_<why> binds %s" % (v, ", ".join(x for x in spec[1:] if not (v == "go" and x == "L2")) + (" (L2 optional)" if v == "go" else ""))
                          for v, spec in sorted(verbs.items()))
         head = ("A rule sends the world a command when its name is a verb, or a verb and why (`take_from_shelf`, `go_to_dest`): "
-                + conv + ". So a rule of the program's own bookkeeping (it only moves tokens) must NOT begin with go, open, "
-                "take or put. The host's own names below keep their bindings:\n")
+                + conv + ". So a rule of the program's own bookkeeping (it only moves tokens) must NOT begin with one of these verbs. "
+                "The host's own names below keep their bindings:\n")
     return head + "\n".join(rows)
 
 
@@ -68,7 +77,7 @@ def instruction(note):
 
 def explore(base, commands, rec, similar, instance_text, note=None):
     sims = "".join("\n- another record of the same action:\n" + _record(r, instance_text) for r in similar[:2])
-    return f"""You are building the rules of a household world (ALFWorld) from what the world does. The program has no rule yet that explains this TRANSITION; write the rule(s) that do.
+    return f"""You are building the rules of {WORLD['description']} from what the world does. The program has no rule yet that explains this TRANSITION; write the rule(s) that do.
 
 {LANGUAGE}
 
@@ -88,7 +97,7 @@ Answer with ONE ```llp block of only the new lines (pred declarations if any, th
 
 
 def revise(base, commands, sur, rule_line, instance_text, note=None):
-    return f"""You are maintaining the rules of a household world (ALFWorld). A rule fired and the world did not do what it said: a SURPRISE. Revise the rule so it fires only where the world agrees.
+    return f"""You are maintaining the rules of {WORLD['description']}. A rule fired and the world did not do what it said: a SURPRISE. Revise the rule so it fires only where the world agrees.
 
 {LANGUAGE}
 
@@ -113,7 +122,7 @@ Answer with ONE ```llp block of only the changed lines."""
 def policy(base, commands, task_facts, episode, instance_text, note=None):
     steps = "\n".join("  %s → %s%s" % (t.get("rule"), t.get("command"), "" if t.get("admissible") and t.get("changed", True) else "  (refused)")
                       for t in episode["transitions"][-12:]) or "  (no command was sent)"
-    return f"""You are building the rules of a household world (ALFWorld). The rules describe the actions; the program acts by firing an enabled rule (chosen at random among them), so the rules must also say WHAT TO DO NEXT toward the task: tokens of the program's own (declare them) that the action rules require and produce, so that from the start the enabled rules lead to the goal.
+    return f"""You are building the rules of {WORLD['description']}. The rules describe the actions; the program acts by firing an enabled rule (chosen at random among them), so the rules must also say WHAT TO DO NEXT toward the task: tokens of the program's own (declare them) that the action rules require and produce, so that from the start the enabled rules lead to the goal.
 
 {LANGUAGE}
 
