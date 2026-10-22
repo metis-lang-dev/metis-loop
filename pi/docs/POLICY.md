@@ -80,7 +80,8 @@ from another domain, its results the tokens it gives one. As built:
   things), must send every recorded command in order. Strict identity of two programs' samples is
   too strict where the flat program chooses at random among equal options.
 - **Each move is judged against the base it replaces** (step 2c, the architect's ruling on nina's 2b
-  review). All four need the records' replay and the held-out success not down; the driver passes
+  review). All four need the records' replay; the held-out success is required not down for split,
+  direct and prune, and checked when given for the conventions (the driver always gives it); the driver passes
   the move, the ambiguity before and after, the current base's vector and the flat program's
   (`move`, `ambiguous`, `vector`, `flat`):
 

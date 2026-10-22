@@ -550,6 +550,13 @@ class Driver:
 
     # ── refactor ──
     def refactor(self):
+        """The refactoring moves (see _refactor), the move marker cleared however they end (nina's 2c N1)."""
+        try:
+            return self._refactor()
+        finally:
+            self.move = None
+
+    def _refactor(self):
         """POLICY.md's refactoring, as built (step 2b): PRUNE the rules that can never fire; SPLIT the
         base by the host verb its rules send (the planner the rest); when a goal kind has more than one
         specialist, the brain rewrites the split to HIERARCHY.md's conventions; then DIRECT: the
