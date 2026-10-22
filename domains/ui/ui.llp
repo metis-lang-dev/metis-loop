@@ -7,7 +7,7 @@ catalog ui 1.
 provenance text "the loop console page: its widgets, tree and roles over ui_domain.llp, the lifted voice-navigation base" "2026-10-21".
 include "ui_domain.llp".
 
-type widget {root band sessbar catin debugger stream lenses chips prompt chat chatlog chatq catalog copy extensions readme candidates records editor apply}.
+type widget {root band sessbar catin debugger stream lenses chips prompt talk chat chatlog chatq catalog copy extensions readme candidates records editor apply}.
 
 % the tree: child(parent, child)
 child(root, band).
@@ -18,6 +18,7 @@ child(debugger, stream).       % #stream: the REPL log
 child(debugger, lenses).       % #lenses: rules measure tokens proof
 child(debugger, chips).        % #chips: run step events ctx graph why findings narrate undo
 child(debugger, prompt).       % #prompt: the REPL line
+child(root, talk).             % #dock-talk: the dialog panel (fsttm-web's: the one input, the intent chat; its text line is the page's, no widget)
 child(root, chat).             % #dock-claude: the formalization agent
 child(chat, chatlog).
 child(chat, chatq).            % #chatq: the message to the formalizer
@@ -40,6 +41,7 @@ role(stream, container).
 role(lenses, composite).
 role(chips, composite).
 role(prompt, editable).        % the REPL line
+role(talk, dock).
 role(chat, dock).
 role(chatlog, container).
 role(chatq, editable).         % the chat's text
@@ -74,6 +76,7 @@ entry(apply, apply).
 #init shown(lenses) 1
 #init shown(chips) 1
 #init shown(prompt) 1
+#init shown(talk) 1
 #init shown(chat) 1
 #init shown(chatlog) 1
 #init shown(chatq) 1

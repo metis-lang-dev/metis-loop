@@ -38,7 +38,7 @@ verbs:
   - {verb: UNKNOWN, meaning: "anything that is not a way to move around the page"}
 
 slots:
-  widget: {enum: [BAND, SESSBAR, CATIN, DEBUGGER, STREAM, LENSES, CHIPS, PROMPT, CHAT, CHATLOG, CHATQ, CATALOG, COPY, EXTENSIONS, README, CANDIDATES, RECORDS, EDITOR, APPLY]}
+  widget: {enum: [BAND, SESSBAR, CATIN, DEBUGGER, STREAM, LENSES, CHIPS, PROMPT, TALK, CHAT, CHATLOG, CHATQ, CATALOG, COPY, EXTENSIONS, README, CANDIDATES, RECORDS, EDITOR, APPLY]}
   name: string
   number: number
   to: {enum: [DICTATION, COMMAND]}
@@ -48,7 +48,9 @@ guidance: |
   The page's widgets: the BAND at the top (its SESSBAR holds the catalog input CATIN
   and the open/reset/edit buttons); the DEBUGGER on the left (its STREAM is the REPL
   log, its LENSES the context chips rules/measure/tokens/proof, its CHIPS the command
-  chips, its PROMPT the REPL line); the docks on the right: CHAT (the formalization
+  chips, its PROMPT the REPL line); the docks on the right: TALK (the dialog panel: what
+  you said and what the agent answered; "the dialog", "the voice panel", "the transcript" are
+  TALK), CHAT (the formalization
   agent, "Claude"; its CHATLOG and its text CHATQ), CATALOG (the working COPY, the
   EXTENSIONS and the catalog's README), CANDIDATES, RECORDS (the surprise records);
   the floating EDITOR; the APPLY dialog. "the log" and "the output" are the STREAM;
@@ -170,7 +172,7 @@ map:
   - {verb: UNKNOWN, atom: cmd_unknown, act: unknown}
 values:
   widget: {BAND: band, SESSBAR: sessbar, CATIN: catin, DEBUGGER: debugger, STREAM: stream, LENSES: lenses, CHIPS: chips,
-           PROMPT: prompt, CHAT: chat, CHATLOG: chatlog, CHATQ: chatq, CATALOG: catalog, COPY: copy, EXTENSIONS: extensions,
+           PROMPT: prompt, TALK: talk, CHAT: chat, CHATLOG: chatlog, CHATQ: chatq, CATALOG: catalog, COPY: copy, EXTENSIONS: extensions,
            README: readme, CANDIDATES: candidates, RECORDS: records, EDITOR: editor, APPLY: apply}
   num: {1: n1, 2: n2, 3: n3, 4: n4, 5: n5, 6: n6, 7: n7, 8: n8, 9: n9}
   letter: {A: a, B: b, C: c, D: d, E: e, F: f, G: g, H: h, I: i, J: j, K: k, L: l, M: m, N: n, O: o, P: p, Q: q, R: r, S: s, T: t, U: u, V: v, W: w, X: x, Y: y, Z: z}

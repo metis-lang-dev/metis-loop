@@ -20,7 +20,7 @@ input port.
 | file | what |
 |---|---|
 | `ui_domain.llp` | the base: types `role`, `act`, `mode`, `num`; the facts an instance supplies (`child`, `role`, `entry`); `inside/2` by Horn rules; the stage pipeline `clear → sync → local → global → post` with its `qui` links; every rule with its `%%` line |
-| `ui.llp` | the loop console: 20 widgets (ids in comments), the tree, the roles, `entry(apply, apply)`, the start |
+| `ui.llp` | the loop console: 21 widgets (ids in comments), the tree, the roles, `entry(apply, apply)`, the start |
 | `cases/*.llp` | the cases, each including the program with its init: `ui` (go to catalog), `ui_dialog` (the APPLY dialog refuses exit), `ui_named` (go by name), `ui_mouse` (a mouse focus drops the numbers), `ui_pick` (a pick after a mouse focus into the list) |
 | `intent.yaml` | the card: GO(widget), EXIT, HOME, BACK, PICK(name | number), NUMBERS, SHOW(widget), CLOSE, CANCEL, MODE(to), HELP, UNKNOWN |
 | `intent/ui-corpus.tsv` | 91 rows: the examples and held-out paraphrases, the REPL's commands as UNKNOWN here |

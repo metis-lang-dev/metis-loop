@@ -16,6 +16,6 @@ string ::= "\"" char* "\"" space
 to ::= "\"DICTATION\"" | "\"COMMAND\""
 to-kv ::= "\"to\"" space ":" space to
 to-rest ::= ( "," space letter-kv )?
-widget ::= "\"BAND\"" | "\"SESSBAR\"" | "\"CATIN\"" | "\"DEBUGGER\"" | "\"STREAM\"" | "\"LENSES\"" | "\"CHIPS\"" | "\"PROMPT\"" | "\"CHAT\"" | "\"CHATLOG\"" | "\"CHATQ\"" | "\"CATALOG\"" | "\"COPY\"" | "\"EXTENSIONS\"" | "\"README\"" | "\"CANDIDATES\"" | "\"RECORDS\"" | "\"EDITOR\"" | "\"APPLY\""
+widget ::= "\"BAND\"" | "\"SESSBAR\"" | "\"CATIN\"" | "\"DEBUGGER\"" | "\"STREAM\"" | "\"LENSES\"" | "\"CHIPS\"" | "\"PROMPT\"" | "\"TALK\"" | "\"CHAT\"" | "\"CHATLOG\"" | "\"CHATQ\"" | "\"CATALOG\"" | "\"COPY\"" | "\"EXTENSIONS\"" | "\"README\"" | "\"CANDIDATES\"" | "\"RECORDS\"" | "\"EDITOR\"" | "\"APPLY\""
 widget-kv ::= "\"widget\"" space ":" space widget
 widget-rest ::= ( "," space name-kv )? name-rest
