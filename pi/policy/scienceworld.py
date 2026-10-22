@@ -263,6 +263,13 @@ class ScienceWorld:
     def _rule_verb(self, name):
         return rule_verb(name, COMMANDS, COMMANDS)
 
+    def _command_of(self, host, name):
+        """The command the host would send for the rule (the guided replay compares it)."""
+        try:
+            return host.command_of(name, ())
+        except Exception:  # noqa: BLE001 — a rule the host cannot word sends nothing
+            return None
+
     def _sync(self, host, counts):
         return host.tick(counts)
 

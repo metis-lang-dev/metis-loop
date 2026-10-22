@@ -1,0 +1,87 @@
+% alf — the loop's base (loop-policy step 2): ALFWorld's facts as the hand base declares them,
+% no rule. The loop writes the rules: from the transitions (explore), the surprises (exploit),
+% and the hierarchy (refactor), each through the experimental gate.
+catalog alf 1.
+provenance text "the loop's base: the empty domain over ALFWorld's facts (loop-policy)" "2026-10-22".
+layers (dyn).
+stages (act).
+
+namespace alf produce (dyn).
+
+% ── the game's facts (the instance declares the types and gives the static ones) ──
+bwd recat(receptacle, location).          % the receptacle's location (static)
+bwd openable(receptacle).
+bwd notopenable(receptacle).              % the complement, given by the instance
+bwd rtype(receptacle, rtype).
+bwd otype(object, otype).
+bwd cancontain(rtype, otype).
+bwd pickupable(object).
+bwd cleanable(object).
+bwd heatable(object).
+bwd coolable(object).
+bwd toggleable(object).
+bwd sliceable(object).
+bwd recobj(object).
+bwd moveable(object).
+% the task (the instance's facts from the game's pddl_params, resolved to the game's things
+% by the generator so no rule carries a type variable: the grounding stays small)
+bwd target(object).                       % an object the task wants moved (of the target type, pickupable)
+bwd dest(receptacle).                     % a receptacle the task wants it in (of the parent type)
+
+% ── the dynamic facts: what the host reads back after every step ──
+pred at(location) : alf.                  % exactly one
+pred objat(object, location) : alf.
+pred inrecep(object, receptacle) : alf.
+pred opened(receptacle) : alf.
+pred closed(receptacle) : alf.            % the complement for openable receptacles
+pred holds(object) : alf.
+pred holding : alf.
+pred handsfree : alf.                     % the complement
+pred clean(object) : alf.
+pred hot(object) : alf.
+pred cool(object) : alf.
+pred on(object) : alf.
+pred toggled(object) : alf.
+pred sliced(object) : alf.
+pred checked(receptacle) : alf.
+pred examined(location) : alf.
+pred full(receptacle) : alf.
+pred inrecobj(object, object) : alf.
+pred recobjfull(object) : alf.
+pred wasin(object, receptacle) : alf.
+pred holdingrecobj : alf.
+
+% ── the tokens the instance's start names (the rest is the loop's to declare) ──
+pred unchosen : alf.
+pred placed : alf.
+
+pred tofetch(object) : alf.
+pred todeliver(object) : alf.
+pred arrived(object, receptacle) : alf.
+pred explore : alf.
+stage act {
+  %% choose the {O} as the target
+  choose [dyn] : unchosen * $target(O) -o tofetch(O).
+  %% go to the {R} at {L2}
+  go [dyn] : explore * at(L) * $recat(R, L2) * L <> L2 -o explore * at(L2).
+  %% open the {R}
+  open_closed [dyn] : explore * at(L) * $recat(R, L) * $openable(R) * closed(R) -o explore * at(L) * opened(R) * checked(R).
+  %% go to where the {O} is, at {L2}
+  go_obj [dyn] : tofetch(O) * at(L) * objat(O, L2) * L <> L2 -o tofetch(O) * at(L2) * objat(O, L2).
+  %% open the {R} that holds the target
+  open_obj [dyn] : tofetch(O) * at(L) * $recat(R, L) * $openable(R) * closed(R) * inrecep(O, R) -o tofetch(O) * at(L) * opened(R) * checked(R) * inrecep(O, R).
+  %% take the {O} from the {R}
+  take_plain [dyn] : tofetch(O) * at(L) * $recat(R, L) * $notopenable(R) * $pickupable(O) * inrecep(O, R) * objat(O, L) * handsfree -o todeliver(O) * at(L) * holds(O) * holding.
+  %% take the {O} from the {R}
+  take_open [dyn] : tofetch(O) * at(L) * $recat(R, L) * $openable(R) * opened(R) * $pickupable(O) * inrecep(O, R) * objat(O, L) * handsfree -o todeliver(O) * at(L) * opened(R) * holds(O) * holding.
+  %% go to the {R} at {L2} to put the target
+  go_target [dyn] : todeliver(O) * at(L) * $dest(R) * $recat(R, L2) * L <> L2 -o arrived(O, R) * at(L2).
+  %% already at the {R}
+  here_target [dyn] : todeliver(O) * at(L) * $dest(R) * $recat(R, L) -o arrived(O, R) * at(L).
+  %% open the {R}
+  open_target [dyn] : arrived(O, R) * at(L) * $recat(R, L) * $openable(R) * closed(R) -o arrived(O, R) * at(L) * opened(R) * checked(R).
+  %% put the {O} in/on the {R}
+  put_open [dyn] : arrived(O, R) * at(L) * $recat(R, L) * $openable(R) * opened(R) * holds(O) * holding -o placed * at(L) * opened(R) * inrecep(O, R) * objat(O, L) * handsfree.
+  %% put the {O} in/on the {R}
+  put_plain [dyn] : arrived(O, R) * at(L) * $recat(R, L) * $notopenable(R) * $rtype(R, RT) * $otype(O, OT) * $cancontain(RT, OT) * holds(O) * holding -o placed * at(L) * inrecep(O, R) * objat(O, L) * handsfree.
+}

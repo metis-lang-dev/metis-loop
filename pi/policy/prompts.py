@@ -161,3 +161,48 @@ def repair(lines, words):
 
 def task_facts(instance_text):
     return [l.strip()[:-1] for l in instance_text.splitlines() if l.strip().startswith(("target(", "dest(")) and l.strip().endswith(".")]
+
+
+CONVENTIONS = """The hierarchy's conventions (metis-worlds docs/HIERARCHY.md):
+- a SPECIALIST does one kind of thing in the world; its rules are marked with a trailing `% @NAME`;
+- it is woken by ONE goal kind of its own: a token the planner produces and no other specialist takes
+  (goto(R) for going, open(R) for opening, take(O) for taking, put(O, R) for putting — your names);
+- every outcome is a RESULT token the planner takes (reached(R), accessible(R), taken(O), placed …), and a dead
+  end is a refusal result (not_here(R), shut(R) …): a specialist never leaves the planner without an answer;
+- the PLANNER (rules with no `% @` mark) sends no command: its rules' names never begin with a verb; it reads the
+  world's facts with $ and turns the task and the results into the next goal;
+- the world's behaviour does not change: in every state, the same commands go out in the same order."""
+
+
+def conventions(base, commands, ports, ambiguous, note=None):
+    amb = "; ".join("%s is taken by %s" % (k, " and ".join(ds)) for k, ds in sorted(ambiguous.items()))
+    return f"""You are refactoring the rules of {WORLD['description']} into a HIERARCHY: the base is split into specialists (each rule's `% @NAME`), but its tokens do not follow the conventions, so a director that routes by token kind cannot tell who acts: {amb}.
+
+{LANGUAGE}
+
+{vocabulary(commands)}
+
+{CONVENTIONS}
+
+The split base as it is (its ports, read off the rules: {json.dumps(ports)}):
+```llp
+{base.strip()}
+```
+
+Rewrite the rules so each specialist has its own goal kind and result kinds, the planner turning one into the next. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note)}
+
+Answer with ONE ```llp block: the declarations, the rules (each specialist's with its `% @NAME`), and the drop lines."""
+
+
+def probe(reading, acts, miss, note=None):
+    """The walk found nothing new: which command, from here, teaches the rules the most?"""
+    rows = "\n".join("%d. %s   (%s %s)" % (i + 1, a["command"], a["verb"], json.dumps(a["args"])) for i, a in enumerate(acts[:40]))
+    weak = ", ".join("%s (%d unexplained)" % (v, n) for v, n in sorted(miss.items(), key=lambda x: -x[1])) or "none"
+    return f"""You are exploring {WORLD['description']} to learn its rules. The walk has tried every command here before; choose the one that teaches the rules the most — an action whose outcome the records lack, or one the rules explain least ({weak}).
+
+The facts now: {", ".join(reading)}
+
+The commands the world takes here:
+{rows}{instruction(note)}
+
+Answer with the number of ONE command."""

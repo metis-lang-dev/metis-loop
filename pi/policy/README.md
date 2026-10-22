@@ -140,3 +140,39 @@ run.sh --world minihack --family room_quiet --brain claude/claude-opus-5-5 --set
   only once it opens. Judged on those, no move rule fits a level's first step.
 - **The prompts** show the `next` facts from the agent's cell (`statics_for`), not every fact
   naming the direction.
+
+## The refactoring moves (step 2b, `hier.py`)
+
+`refactor()`, in order. Each move is a proposal judged in the refactor phase.
+
+| move | what | the gate's numbers |
+|---|---|---|
+| prune | drop the rules nothing can enable (`never_firing`: a fixpoint from the start's tokens) | the replay, the success, the likelihood (refused when they carry the world model), the vector |
+| split | `split_by_verb`: the action rules by the host verb they send (the world's `DOMAINS`), the planner the rest, never-firing rules as `% @model`; the base annotated (`% @nav` per rule) | the split's manual switch (`hier.run`) replays the current program's records; the gate split's success; the likelihood; the vector, Σ over the domains narrowed (`split_vector`), against the flat program's |
+| conventions | when a goal kind has several specialists (`Split.ambiguous`), the brain rewrites the split to HIERARCHY.md's conventions (`prompts.conventions`) | as for the split |
+| direct | the director's instance from the ports (`director_text`), written as `domains/director/director.llp` over the lifted director | the director's run (metis-agent's DirectorLoop, `hier.director_factory`) replays the manual switch; the success; the vector |
+
+- **The runner** (`hier.run`): one host for the episode. Each activation opens its domain's base
+  (`RUN/hier/<label>/trees/split/<D>/`) over the game's instance, NARROWED to the things its goal
+  tokens name; its state is the world's reading plus the token pool; its rules fire through
+  `acting.fire` until quiet or a result for another domain is out.
+  - The manual switch takes the domain whose rules are enabled now.
+  - The director's run feeds every produced token to the DirectorLoop and runs the domain a
+    forward names.
+- **The guided replay** (`acting.fire(guide=…)`): where the candidate may choose, it takes the
+  event that sends the next recorded command, or a bookkeeping event naming that command's things.
+  A recorded command it cannot send is a divergence.
+- **The probe** (`brain_pick`): after `probe_after` steps with no untried command, the brain chooses
+  the next command from the admissible ones (`prompts.probe`).
+- **`--evaluate SPLIT --n N --mode flat|hier|director`** runs the base as it is, its split, or its
+  director, on held-out games.
+
+The world adapter's hooks for the moves:
+- `_host_for`, `_before`, `_after`, `_sync`, `_rule_verb`: the acting loop;
+- `_command_of`: the guided replay;
+- `_handles_of`: the guide's things;
+- `DOMAINS`: the split's names;
+- `planner_keep(instance_text)`: the planner's narrowing.
+
+ALFWorld has them all. ScienceWorld and MiniHack name their domains by verb and narrow the planner
+not at all, until they give `DOMAINS` and `planner_keep`.

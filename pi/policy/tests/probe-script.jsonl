@@ -4,3 +4,4 @@
 {"when": "the action: put ", "text": "```llp\n%% I put {O} in {R}.\nput_plain [dyn] : $at(L) * $recat(R, L) * holds(O) * holding -o inrecep(O, R) * objat(O, L) * handsfree.\n```", "keep": true}
 {"when": "SURPRISE", "keep": true, "text": "```llp\n%% I walk over to {R}.\ngo [dyn] : at(L) * $recat(R, L2) * L <> L2 -o at(L2).\n```"}
 {"when": "WHAT TO DO NEXT", "keep": true, "text": "```llp\n% nothing\n```"}
+{"when": "teaches the rules the most", "keep": true, "text": "1"}

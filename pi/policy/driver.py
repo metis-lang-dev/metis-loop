@@ -32,12 +32,14 @@ import argparse
 import hashlib
 import json
 import random
+import re
+import shutil
 import sys
 import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import alfworld, minihack, scienceworld
+from . import alfworld, hier, minihack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
@@ -45,7 +47,7 @@ WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (sciencew
           "minihack": (minihack.MiniHack, minihack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
-            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2}
+            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3}
 
 
 class Disengage(Exception):
@@ -170,7 +172,11 @@ class Driver:
 
     # ── the gate's numbers ──
     def gain(self, plan, phase):
+        if plan.get("domain") == "director":
+            return self.gain_direct(next(f["text"] for f in plan["files"] if f["path"].endswith("director.llp")))
         text = next(f["text"] for f in plan["files"] if f["path"].endswith("%s.llp" % DOMAIN))
+        if phase == "refactor" and hier.Split.of(text, self.World).is_split():
+            return self.gain_split(text)
         cand, cur = self.predictor("candidate", text), self.current()
         held = self.heldout()
         bad = next((cand.compiles(i) for i in self.games if cand.compiles(i)), None)
@@ -195,6 +201,77 @@ class Driver:
             n["replay_identical"] = self.replay(self.run / "trees" / "candidate") == self.replay(self.run / "trees" / "current")
             v0, v1 = measure.vector(self.base(), cur, self.disc[0].iid), measure.vector(text, cand, self.disc[0].iid)
             n["vector"] = {"before": (v0.get("ground") or 0) + v0["rules"], "after": (v1.get("ground") or 0) + v1["rules"]}
+        return n
+
+    # ── the hierarchy's numbers (loop-policy step 2b) ──
+    def hier_runs(self, games, text, label, director=None, guides=None):
+        """The split of TEXT acting on GAMES (the manual switch, or with `director` a DirectorLoop
+        factory the director's rules), each in RUN/hier/<label>/; with `guides` (each game's recorded
+        commands) the records' replay."""
+        sp = hier.Split.of(text, self.World)
+        return [hier.run(w, sp, self.run / "hier" / label, "%s.llp" % DOMAIN, self.cfg["act_steps"], self.seed, director=director,
+                         guide=(guides[i] if guides else None)) for i, w in enumerate(games)]
+
+    def replays(self, recorded, runs):
+        """POLICY.md's regression: every command the current program sent, the candidate sends — the
+        candidate's records' replay (guided: where it may choose, it takes the recorded command) sent
+        them all, in order, and diverged nowhere."""
+        return all(not r.get("diverged") and r["commands"] == rec["commands"] for rec, r in zip(recorded, runs))
+
+    def runs_of(self, games, text, label):
+        """A base acting on GAMES: its hierarchy (the manual switch) when it is split, else flat."""
+        if hier.Split.of(text, self.World).is_split():
+            return self.hier_runs(games, text, label)
+        return [w.act(self._sync_tree(label, text), self.cfg["act_steps"], seed=self.seed) for w in games]
+
+    def vector_of(self, text, label):
+        """The complexity vector's one number: rules + the events the instance grounds — summed over
+        the domains (each specialist narrowed to its first activation's goal) when the base is split."""
+        sp = hier.Split.of(text, self.World)
+        if sp.is_split():
+            return hier.split_vector(self.disc[0], sp, self.run / "hier" / ("v-" + label), "%s.llp" % DOMAIN)
+        v = measure.vector(text, self.predictor(label, text), self.disc[0].iid)
+        return (v.get("ground") or 0) + v["rules"]
+
+    def flat_vector(self, text):
+        """The flat program's vector: the base read whole (the program the hierarchy replaces)."""
+        v = measure.vector(text, self.predictor("flat-v", text), self.disc[0].iid)
+        return (v.get("ground") or 0) + v["rules"]
+
+    def gain_split(self, text):
+        """A split (or a split rewritten to the conventions): its manual switch replays what the
+        current program sends on the discovery games, the gate split's success not down, the
+        likelihood (the rules' world behaviour) not down, the vector — summed over the narrowed
+        domains — below the current's."""
+        cand, cur = self.predictor("candidate", text), self.current()
+        base = self.base()
+        r0 = self.runs_of(self.disc, base, "current")
+        rc = self.hier_runs(self.disc, text, "candidate", guides=[r["commands"] for r in r0])
+        gc, g0 = self.runs_of(self.held, text, "candidate"), self.runs_of(self.held, base, "current")
+        held = self.heldout() + [t for e in gc + g0 for t in e["transitions"] if t["kind"] == "surprise"]
+        n = {"replay_identical": self.replays(r0, rc),
+             "success": round(sum(e["won"] for e in gc) / max(1, len(gc)) - sum(e["won"] for e in g0) / max(1, len(g0)), 6),
+             "likelihood": round(measure.likelihood(cand, held) - measure.likelihood(cur, held), 6),
+             "vector": {"before": self.flat_vector(base), "after": self.vector_of(text, "candidate")}}
+        self.say("split-numbers", activations=[[a["domain"] for a in r.get("activations", [])] for r in rc][:1], **n)
+        return n
+
+    def gain_direct(self, dtext):
+        """The director: its rules make the switch the manual one made — the same commands on the
+        discovery games, the gate split's success not down; the vector the hierarchy's with the
+        director's rules, against the flat program's."""
+        base = self.base()
+        sp = hier.Split.of(base, self.World)
+        make, _ = hier.director_factory(sp, self.run / "hier" / "director", text=dtext)
+        rm = self.hier_runs(self.disc, base, "manual")
+        rd = self.hier_runs(self.disc, base, "directed", make, guides=[r["commands"] for r in rm])
+        gd, gm = self.hier_runs(self.held, base, "directed", make), self.hier_runs(self.held, base, "manual")
+        n = {"replay_identical": self.replays(rm, rd),
+             "success": round(sum(e["won"] for e in gd) / max(1, len(gd)) - sum(e["won"] for e in gm) / max(1, len(gm)), 6),
+             "likelihood": 0.0,
+             "vector": {"before": self.flat_vector(base),
+                        "after": self.vector_of(base, "current") + len(rules_of(hier.director_base_path().read_text()))}}
+        self.say("direct-numbers", beats=len(rd[0].get("beats") or []) if rd else 0, **n)
         return n
 
     def success(self, tree):
@@ -238,7 +315,7 @@ class Driver:
             raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
                             "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: prompt_chars, a larger cap", "abandon"]) from None
 
-    def judge(self, kind, by="brain", info=None, cost=None, **args):
+    def judge(self, kind, by="brain", info=None, cost=None, domain=None, **args):
         """A proposal through the gate (the brain's or, at re-engagement, the person's rule or edit),
         its bookkeeping one path for both: the counters, the current tree re-synced, the
         contradiction check; a gate's refusal in words is a refused proposal, not an end.
@@ -246,7 +323,7 @@ class Driver:
         self.state["proposals"] += 1
         phase = self.state["phase"] if not (by == "person" and self.state["phase"] == "explore") else "exploit"
         try:
-            pl = self.gate.propose(kind, DOMAIN, self.root, phase=phase, cost=cost, **args)
+            pl = self.gate.propose(kind, domain or DOMAIN, self.root, phase=phase, cost=cost, **args)
             v = pl["verdict"]
         except Exception as e:                      # noqa: BLE001 — the gate's refusal in words (no plan left waiting)
             self.say("proposal", verdict="error", why=str(e), by=by, **(info or {}))
@@ -297,12 +374,18 @@ class Driver:
     def _explore_game(self, w, rng, tried, run):
         """One discovery game walked; → True when exploration is over (run: the counters, carried)."""
         unexplained, explained_run = run
+        stale = 0
         for _ in range(self.cfg["explore_steps"]):
             acts = w.actions()
             if not acts or w.done:
                 break
             fresh = [a for a in acts if (a["verb"], a["command"]) not in tried]
-            a = by_verb(rng, fresh or acts)
+            stale = 0 if fresh else stale + 1
+            if not fresh and self.cfg["probe_after"] and stale >= self.cfg["probe_after"]:
+                a = self.brain_pick(w, acts)              # the walk finds nothing new: the brain chooses the probe (2b)
+                stale = 0
+            else:
+                a = by_verb(rng, fresh or acts)
             tried.add((a["verb"], a["command"]))
             rec = w.step(a["command"])
             self.where = w.snapshot()
@@ -326,6 +409,22 @@ class Driver:
                 return True
         run[:] = [unexplained, explained_run]
         return False
+
+    def brain_pick(self, w, acts):
+        """The probe the brain chooses (step 2b; POLICY.md: exploration acts without a rule): the state,
+        its admissible commands, the verbs the rules explain least; its answer, a number."""
+        trans = self.transitions()
+        miss = {}
+        for r in trans[-200:]:
+            if not self.current().predicts(r):
+                miss[r["action"]["verb"]] = miss.get(r["action"]["verb"], 0) + 1
+        p = prompts.probe(w.reading(), acts, miss, self.note())
+        answer = self.ask(p, "probe-pick")
+        m = re.search(r"\d+", answer or "")
+        k = int(m.group(0)) - 1 if m else 0
+        a = acts[k] if 0 <= k < len(acts) else acts[0]
+        self.say("probe-pick", command=a["command"], answer=(answer or "").strip()[:80])
+        return a
 
     def check_contradiction(self):
         """contradiction (POLICY.md): two accepted rules answering one action in one state with two
@@ -433,18 +532,52 @@ class Driver:
 
     # ── refactor ──
     def refactor(self):
+        """POLICY.md's refactoring, as built (step 2b): PRUNE the rules that can never fire; SPLIT the
+        base by the host verb its rules send (the planner the rest); when a goal kind has more than one
+        specialist, the brain rewrites the split to HIERARCHY.md's conventions; then DIRECT: the
+        director's instance from the ports. Each a proposal judged by the replay, the success and the
+        vector; a base the moves leave alone gets the brain's flat refactoring."""
         text = self.base()
         sha = hashlib.sha256(text.encode()).hexdigest()[:12]
         if self.state.get("refactored_at") == sha:          # the same base the last refactoring saw: nothing new to ask
             self.say("refactor-skipped", why="the base is unchanged since the last refactoring")
             return
-        self.state["refactored_at"] = sha
+        self.state["accepts_since_refactor"] = 0
+        moved = False
+        dead = hier.never_firing(text, self.dynamic)
+        if dead:
+            pruned, info = splice(text, ["drop %s" % n for n in dead])
+            moved |= self.judge("program", info=dict(info, prune=dead), text=pruned) == "accept"
+        sp = hier.Split.of(self.base(), self.World)
+        if not sp.is_split():
+            cand = hier.split_by_verb(self.base(), self.World)
+            if len(cand.specialists) >= 2:
+                moved |= self.judge("program", info={"split": cand.ports()}, text=hier.annotate(self.base(), cand)) == "accept"
+                sp = hier.Split.of(self.base(), self.World)
+        if sp.is_split():
+            amb = sp.ambiguous()
+            if amb:
+                v = self.propose(prompts.conventions(self.base(), (self.commands, self.verbs), sp.ports(), amb, self.note()),
+                                 "conventions", self.disc[0].iid)
+                moved |= v == "accept"
+                sp = hier.Split.of(self.base(), self.World)
+                amb = sp.ambiguous()
+            ddir = self.root / "domains" / "director"
+            if not amb and not (ddir / "director.llp").exists():
+                ddir.mkdir(parents=True, exist_ok=True)
+                shutil.copy(hier.director_base_path(), ddir / "director_domain.llp")      # the lifted director: the world's, as the empty base is
+                dtext, _ = hier.director_text(sp, "director_domain.llp")
+                moved |= self.judge("program", domain="director", info={"direct": sp.ports()}, text=dtext) == "accept"
+            elif amb:
+                self.say("direct-waits", why="goal kinds with more than one specialist: %s" % json.dumps(amb))
+        self.state["refactored_at"] = hashlib.sha256(self.base().encode()).hexdigest()[:12]
+        if moved or sp.is_split():
+            return
         p = (f"You are refactoring the rules of {self.World.DESCRIPTION} without changing what they do.\n\n{prompts.LANGUAGE}\n\n"
              f"{prompts.vocabulary(self.commands, self.verbs)}\n\nThe base:\n```llp\n{text.strip()}\n```\n\n"
              "Make it smaller and clearer: merge rules that differ only in a fact they read, drop a rule no state can enable, "
              "name the program's tokens so each rule's role reads. Every command the program sends in a state must stay the same."
              f"{prompts.instruction(self.note())}\n\nAnswer with ONE ```llp block of the replaced lines and `drop NAME` lines.")
-        self.state["accepts_since_refactor"] = 0
         self.propose(p, "refactor", self.disc[0].iid)
 
     # ── the run ──
@@ -477,16 +610,30 @@ class Driver:
         except Disengage as d:
             return self.disengage(d)
 
-    def evaluate(self, split, n):
+    def evaluate(self, split, n, mode="flat"):
         """The base as it is, acting on N games of SPLIT (valid_unseen: the held-out): no brain, no
-        write. → RUN/records/evaluate-<split>.json and the summary line."""
+        write; mode flat (the base read whole), hier (its split, the manual switch) or director (the
+        catalog's director makes the switch). → RUN/records/evaluate-<split>[-mode].json."""
         games = [self.World(g, self.run / "trees" / "current") for g in self.World.sample(split, self.family, n, self.seed)]
-        eps = [w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed) for w in games]
-        out = {"split": split, "n": len(eps), "won": sum(e["won"] for e in eps), "rules": len(rules_of(self.base())),
+        if mode == "flat":
+            eps = [w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed) for w in games]
+        else:
+            make = None
+            if mode == "director":
+                dfile = self.root / "domains" / "director" / "director.llp"
+                if not dfile.exists():
+                    raise SystemExit("no director in the catalog yet (the refactor phase's DIRECT)")
+                make, _ = hier.director_factory(hier.Split.of(self.base(), self.World), self.run / "hier" / "evaluate-director",
+                                                text=dfile.read_text())
+            eps = self.hier_runs(games, self.base(), "evaluate-" + mode, director=make)
+        out = {"split": split, "mode": mode, "n": len(eps), "won": sum(e["won"] for e in eps), "rules": len(rules_of(self.base())),
                "commands": [len(e["commands"]) for e in eps], "refused": [e["refused"] for e in eps],
                "games": [{k: e[k] for k in ("game", "won", "commands", "refused", "stuck")} for e in eps]}
-        (self.rec_dir / ("evaluate-%s.json" % split)).write_text(json.dumps(out, indent=1))
-        self.say("evaluate", split=split, won=out["won"], n=out["n"], commands=out["commands"], refused=out["refused"])
+        if mode != "flat":
+            out["activations"] = [len(e.get("activations") or []) for e in eps]
+            out["beats"] = [len(e.get("beats") or []) for e in eps] if mode == "director" else None
+        (self.rec_dir / ("evaluate-%s%s.json" % (split, "" if mode == "flat" else "-" + mode))).write_text(json.dumps(out, indent=1))
+        self.say("evaluate", split=split, mode=mode, won=out["won"], n=out["n"], commands=out["commands"], refused=out["refused"])
         return 0
 
     def disengage(self, d):
@@ -577,6 +724,7 @@ def main(argv=None):
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (heldout, or the world's own name): no brain")
     ap.add_argument("--n", type=int, default=10)
+    ap.add_argument("--mode", choices=["flat", "hier", "director"], default="flat", help="--evaluate: the base whole, its split, or its director")
     a = ap.parse_args(argv)
     if a.brain.startswith("openrouter/") and a.budget is None:
         ap.error("a paid brain needs --budget (USD): the run's spend is capped where it is spent")
@@ -587,7 +735,7 @@ def main(argv=None):
     brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
     d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg, world=a.world)
     if a.evaluate:
-        return d.evaluate(a.evaluate, a.n)
+        return d.evaluate(a.evaluate, a.n, a.mode)
     return d.resume() if a.resume else d.go(a.phase)
 
 

@@ -272,6 +272,15 @@ class MiniHack:
     def _rule_verb(self, name):
         return rule_verb(name, COMMANDS, COMMANDS)
 
+    def _command_of(self, host, name):
+        """The command the host would send for the rule (the guided replay compares it)."""
+        rv = self._rule_verb(name)
+        if rv is None:
+            return None
+        verb, bnd = rv
+        args = {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}
+        return "cmd_%s(%s)" % (verb, args["D"]) if "D" in args else "cmd_" + verb
+
     def _sync(self, host, counts):
         return host.tick(counts)
 

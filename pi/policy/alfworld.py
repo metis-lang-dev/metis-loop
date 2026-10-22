@@ -148,6 +148,16 @@ def rule_verb(name, commands, verbs=None):
 
 
 class AlfWorld:
+    # the specialists SPLIT names by the host verb their rules send (hier.split_by_verb; HIERARCHY.md's names)
+    DOMAINS = {"go": "nav", "open": "access", "take": "grasp", "put": "place"}
+
+    @staticmethod
+    def planner_keep(instance_text):
+        """The planner's narrowing (hier.Hier.session): the objects the task names (its target(O) facts),
+        as alf-hierarchy's task instance sees its targets; the receptacles stay whole."""
+        objs = {l.strip()[len("target("):-2] for l in instance_text.splitlines() if l.strip().startswith("target(")}
+        return {"object": objs} if objs else {}
+
     DOMAIN = "alf"
     DESCRIPTION = "a household world (ALFWorld)"
     SPLITS = {"discovery": "train", "gate": "valid_seen", "heldout": "valid_unseen"}
@@ -314,6 +324,18 @@ class AlfWorld:
 
     def _rule_verb(self, name):
         return rule_verb(name, self.alf_host.COMMANDS, getattr(self.alf_host.AlfHost, "VERBS", None))
+
+    def _handles_of(self, host, command):
+        """The handles a command names (the game's names back to the program's)."""
+        h = {v: k for k, v in host.to_name.items()}
+        return [h[x] for x in h if x in command]
+
+    def _command_of(self, host, name):
+        """The command the host would send for the rule (the guided replay compares it)."""
+        try:
+            return host.command_of(name, ())
+        except Exception:  # noqa: BLE001 — a rule the host cannot word sends nothing
+            return None
 
     def _sync(self, host, counts):
         return host.sync(counts)

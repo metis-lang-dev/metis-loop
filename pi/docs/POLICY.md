@@ -53,6 +53,34 @@ success is not down, and the sum of the specialists' complexity vectors is below
 one's. The refactoring never changes what the program does in the world; that is why it
 can run unattended.
 
+**What SPLIT must separate (loop-policy step 2, F1; as built in step 2b, `pi/policy/hier.py`).**
+One flat program is both the world model and the policy. The kernel fires any enabled rule, so a
+rule general in the world's facts walks at random, and a rule narrowed to the task cannot explain
+the world's other transitions. The loop's rules come out general in the world's facts and GUARDED
+by tokens of the program's own (`tofetch(O)`, `todeliver(O)`, `arrived(O, R)`): the token says when
+to act, the facts what the world does. The likelihood is measured on the rules' world behaviour,
+tokens left out. Those tokens are what SPLIT separates: a domain's goal kinds are the tokens it takes
+from another domain, its results the tokens it gives one. As built:
+- **PRUNE** proposes dropping the rules nothing can enable (a guard no rule or start produces, by a
+  fixpoint). The gate refuses it when they carry the world model (the likelihood falls). Such a rule
+  is then kept as `% @model`: in the base for the likelihood, out of the acting hierarchy and its
+  vector.
+- **SPLIT** clusters the action rules by the host verb they send (the world's DOMAINS: go → nav,
+  open → access, take → grasp, put → place); the planner keeps the program's own bookkeeping. Each
+  rule carries its domain as a trailing `% @NAME`, so the split is ONE base the gate writes whole. Each
+  activation's instance is NARROWED to the things its goal names (the planner to the task's own,
+  `planner_keep`). That is where the vector falls.
+- **The conventions.** A token several specialists take (`tofetch`: nav, access and grasp) cannot be
+  routed by kind. The brain rewrites the split to HIERARCHY.md's conventions: one goal kind per
+  specialist, a result for every outcome, a planner that sends no command.
+- **DIRECT** writes the director's instance from the ports (`handles/2`, `result/1`, `finished/1`,
+  `end/1`) over the lifted director, and runs it with metis-agent's own DirectorLoop.
+- **The regression** is the records' replay. The candidate, guided wherever it may choose (an
+  enabled event that sends the next recorded command; else a bookkeeping event that names its
+  things), must send every recorded command in order. Strict identity of two programs' samples is
+  too strict where the flat program chooses at random among equal options.
+- **The vector** is always compared with the flat program the hierarchy replaces.
+
 ## The experimental gate, restated
 
 - EXPLORATION accept: the candidate fires on its record and on no record it contradicts;
