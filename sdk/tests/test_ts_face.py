@@ -30,14 +30,16 @@ def test_the_typescript_face_at_parity_with_the_cli():
     n = node()
     if not n:
         if os.environ.get("METIS_LOOP_REQUIRE_NODE") == "1":
-            pytest.fail("no node >= 22.6 for the TypeScript face (NODE, PATH, ../metis-agentic-loop/node)")
+            pytest.fail("no node >= 22.6 for the TypeScript face (NODE or PATH)")
         pytest.skip("no node >= 22.6 for the TypeScript face")
     if not (CAT / "domains").is_dir():
         pytest.skip(f"no metis-catalog checkout at {CAT}")
     env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG"}
     from metis_loop_sdk import catalog
     # the installed face (the sdk-alone job: site-packages), driven against the installed CLI
-    env.update(METIS_LOOP_SDK_PY=sys.executable, CAT=str(CAT), METIS_LOOP_SDK_TS=str(catalog.TS_DIR / "catalog.ts"))
-    p = subprocess.run([n, "--experimental-strip-types", "--no-warnings", "--test", str(HERE / "ts" / "catalog.test.ts")],
-                       capture_output=True, text=True, env=env, timeout=600)
-    assert p.returncode == 0, p.stdout[-4000:] + p.stderr[-2000:]
+    env.update(METIS_LOOP_SDK_PY=sys.executable, CAT=str(CAT), METIS_LOOP_SDK_TS=str(catalog.TS_DIR / "catalog.ts"),
+               METIS_LOOP_SDK_GATE_TS=str(catalog.TS_DIR / "gate.ts"))
+    for t in ("catalog.test.ts", "gate.test.ts"):          # the catalog's face, the gate's (loop-parity)
+        p = subprocess.run([n, "--experimental-strip-types", "--no-warnings", "--test", str(HERE / "ts" / t)],
+                           capture_output=True, text=True, env=env, timeout=600)
+        assert p.returncode == 0, t + ": " + p.stdout[-4000:] + p.stderr[-2000:]

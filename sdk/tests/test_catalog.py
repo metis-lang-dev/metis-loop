@@ -367,8 +367,9 @@ def test_readme_from_a_run_and_the_bundle(scratch, tmp_path):
 
 def test_the_typescript_face_is_package_data():
     rc, out, _ = _cli("ts", "--json")
-    assert rc == 0 and out["files"] == ["catalog.ts"] and Path(out["dir"]) == catalog.TS_DIR
+    assert rc == 0 and out["files"] == ["catalog.ts", "gate.ts"] and Path(out["dir"]) == catalog.TS_DIR
     assert (catalog.TS_DIR / "catalog.ts").read_text().startswith("// metis_loop_sdk/ts/catalog.ts")
+    assert (catalog.TS_DIR / "gate.ts").read_text().startswith("// The loop SDK's gate, TypeScript face")
 
 
 def test_a_host_stays_in_its_domain(scratch, tmp_path):
