@@ -85,10 +85,10 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     verdicts = [(e["domain"], e["verdict"]) for e in props]
     assert verdicts == [("alf", "refuse"), ("alf", "accept"), ("alf", "accept"), ("director", "accept")], verdicts
     prune, split, conv, direct = props
-    if any(w.startswith("move: ") for e in props for w in e["why"]):       # step 2c: the gate judges each move by its own gain
-        assert [e["why"][0] for e in props] == ["move: prune", "move: split", "move: conventions", "move: direct"]
-        assert conv["numbers"]["ambiguous"]["after"] < conv["numbers"]["ambiguous"]["before"]
-        assert conv["numbers"]["vector"]["after"] <= conv["numbers"]["flat"] and direct["numbers"]["ambiguous"]["after"] == 0
+    # step 2c: the gate judges each move by its own gain (metispy 48e091b)
+    assert [e["why"][0] for e in props] == ["move: prune", "move: split", "move: conventions", "move: direct"]
+    assert conv["numbers"]["ambiguous"]["after"] < conv["numbers"]["ambiguous"]["before"]
+    assert conv["numbers"]["vector"]["after"] <= conv["numbers"]["flat"] and direct["numbers"]["ambiguous"]["after"] == 0
     assert prune["numbers"]["likelihood"] < 0                                 # the never-firing rules carry the world model
     assert split["numbers"]["replay_identical"] and split["numbers"]["vector"]["after"] < split["numbers"]["vector"]["before"] / 5
     assert conv["numbers"]["replay_identical"] and direct["numbers"]["replay_identical"]
