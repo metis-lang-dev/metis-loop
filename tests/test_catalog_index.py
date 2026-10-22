@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from metis_loop_sdk.catalog import index
+from metis.catalog import index
 from loop.console_serve import ConsoleServer, catalog_root
 
 PAGE = (Path(__file__).resolve().parents[1] / "console/loop_console.html").read_text()

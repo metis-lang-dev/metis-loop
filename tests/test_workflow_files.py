@@ -20,7 +20,7 @@ def test_new_makes_a_domain_that_opens_and_runs(srv, tmp_path):
     assert llp == "domains/plant/plant" and sorted(p.name for p in d.iterdir()) == ["README.md", "domain.yaml", "plant.llp"]
     y = (d / "domain.yaml").read_text()
     assert "display: the plant" in y and 'line: "a potted plant that dries out"' in y and "program: plant.llp" in y
-    from metis_loop_sdk import catalog
+    from metis import catalog
     assert catalog.get("plant", tmp_path).name == "plant"            # the package's keys only: the loader takes it
     assert "%% I wake up." in (d / "plant.llp").read_text()                 # the rule with its %% line
     assert srv.open_session("s", {"llp": llp})["status"] == "running"

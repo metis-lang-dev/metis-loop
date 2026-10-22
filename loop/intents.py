@@ -6,9 +6,9 @@ and the check: the domain's corpus — or, before it has one, its examples —
 through the generated prompt and grammar on the intent model, every answer
 mapped to a command atom.
 
-The generator is metis-catalog's tools/intents.py (CATALOG.md
-"intent.yaml"), reached through the loop SDK (metis_loop_sdk.catalog: the
-generator, and the write — catalog.apply); the mapper and the model run in
+The generator is metispy's metis.intents (CATALOG.md "intent.yaml"),
+reached through metis.catalog (the generator, and the write —
+catalog.apply); the mapper and the model run in
 metis-agent's py venv (metis_agent.intent_check): $METIS_AGENT_PY, else
 this python when it has metis_agent.
 """
@@ -20,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from metis_loop_sdk import catalog
+from metis import catalog
 
 
 def generator(root):

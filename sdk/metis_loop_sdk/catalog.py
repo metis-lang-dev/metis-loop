@@ -1,7 +1,8 @@
 """metis_loop_sdk.catalog — the catalog's access moved into metispy as metis.catalog (metis-packages
 s-65778b98), re-exported here for one release (removed at r0.2). What stays metis-loop's own is here:
-the TypeScript face (ts/, TS_DIR) and the catalog widget (widget/, WIDGET_DIR, widget_file), and the
-CLI's `ts` and `widget` verbs beside metis.catalog's.
+the TypeScript face (ts/, TS_DIR) and the catalog widget (widget/, WIDGET_DIR, widget_file), which
+live in metis_loop_sdk.web (re-exported here), and the CLI's `ts` and `widget` verbs beside
+metis.catalog's.
 
     from metis_loop_sdk import catalog     # → from metis import catalog
     python -m metis_loop_sdk.catalog …     # metis.catalog's CLI, plus ts and widget (the TS face calls this one)
@@ -18,20 +19,7 @@ from metis.catalog import (STATE, Domain, ManifestError, _r, _text, data_dir, de
 warnings.warn("metis_loop_sdk.catalog is metis.catalog now (metispy >= 0.1.2); it re-exports it until r0.2",
               DeprecationWarning, stacklevel=2)
 
-WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the checkout: ../../web/catalog
-WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
-WIDGET_FILES = ("catalog.js", "catalog.css")
-
-TS_DIR = (Path(__file__).resolve().parent / "ts").resolve()          # the TypeScript face
-TS_FILES = ("catalog.ts", "gate.ts")
-
-
-def widget_file(name):
-    """(text, content type) of one widget file for WIDGET_URL<name>, or None."""
-    if name not in WIDGET_FILES:
-        return None
-    return (WIDGET_DIR / name).read_text(), ("text/javascript; charset=utf-8" if name.endswith(".js")
-                                             else "text/css; charset=utf-8")
+from .web import TS_DIR, TS_FILES, WIDGET_DIR, WIDGET_FILES, WIDGET_URL, widget_file  # noqa: E402,F401  (the loop's own: metis_loop_sdk.web)
 
 
 def _installed_tools() -> Path:

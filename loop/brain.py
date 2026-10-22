@@ -206,7 +206,7 @@ def openrouter_command(argv=None) -> int:
             if os.path.exists(one):                     # the face's line, the session and seat added
                 log = Path(a.log)
                 if log.parent.name == STATE and not log.parent.is_dir():
-                    from metis_loop_sdk import catalog
+                    from metis import catalog
                     catalog.state(log.parent.parent)    # DIR/.metis/, git-ignored in a checkout
                 log.parent.mkdir(parents=True, exist_ok=True)
                 with open(one) as f, open(a.log, "a") as out:

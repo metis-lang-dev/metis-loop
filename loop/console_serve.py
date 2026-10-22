@@ -32,13 +32,13 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from metis_loop_sdk import catalog
-from metis.gate import Gate, Refused, public          # metispy >= 0.1.2 (via the SDK); the SDK module is its shim
+from metis import catalog
+from metis.gate import Gate, Refused, public          # metispy's (metis-packages); the SDK modules are their shims
 
 
 def catalog_root() -> Path:
-    """The catalog root, by the loop SDK's one rule (metis_loop_sdk.catalog.root:
-    $METIS_CATALOG, else the cwd)."""
+    """The catalog root, by metispy's one rule (metis.catalog.root:
+    $METIS_CATALOG, else the installed catalog's data, else the cwd)."""
     return catalog.root()
 
 

@@ -6,7 +6,7 @@ on ONE port (D1), grown from console/dev_serve.py.
     GET /healthz     liveness
     GET /lib/<name>  the console's shell, console/lib/ (shell_lib; no token: public code)
     GET /sdk/catalog/<name>  the CATALOG widget (catalog.js, catalog.css) from the installed
-                     loop SDK (metis_loop_sdk.catalog.WIDGET_DIR; no token: public code)
+                     loop SDK (metis_loop_sdk.web.WIDGET_DIR; no token: public code)
     WS  /ws          one multiplexed socket per browser window
 
 Frames (JSON, one per message):
@@ -76,7 +76,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
-from metis_loop_sdk.catalog import WIDGET_URL, widget_file
+from metis_loop_sdk.web import WIDGET_URL, widget_file
 
 from . import brain, shell_lib
 from .console_serve import ConsoleServer
@@ -551,8 +551,8 @@ class Gateway:
 
     def calls_log(self) -> str:
         """The OpenRouter seats' call log: DIR/.metis/formalize-calls.jsonl (made
-        by the first call, through the SDK's catalog.state(); nothing here)."""
-        from metis_loop_sdk import catalog
+        by the first call, through metis.catalog.state(); nothing here)."""
+        from metis import catalog
         return str(Path(self.srv.root).resolve() / catalog.STATE / brain.LOG)
 
     def _gate(self, cmd: str) -> Optional[str]:
@@ -1050,7 +1050,7 @@ def main(argv=None) -> int:
               "token — anyone who can reach it can run catalogs (no AI "
               "is ever served in shared mode).")
     try:                        # the CATALOG panel's loader, before any page connects
-        from metis_loop_sdk import catalog
+        from metis import catalog
         catalog.loader()
     except ImportError as e:
         print(f"console-serve: {e}", file=sys.stderr)

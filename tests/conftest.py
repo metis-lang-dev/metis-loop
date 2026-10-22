@@ -11,8 +11,8 @@ def installed_catalog() -> Path:
     env = os.environ.get("METIS_CATALOG")
     if env:
         return Path(env).resolve()
-    import metis_catalog
-    own = Path(metis_catalog.__file__).resolve().parent
+    from metis.catalog.manifests import data_dir      # metispy's: the installed catalog's data, unimported
+    own = data_dir()
     return own if (own / "domains").is_dir() else own.parent
 
 

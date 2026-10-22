@@ -130,15 +130,15 @@ def test_the_catalog_list_is_the_sdks_widget():
     widget (MetisCatalog.render, the same component the metis-agent console
     shows), served from the installed SDK; the page keeps only its own extras
     (the stale tag, the path, the new-domain form) and no row markup of its own."""
-    from metis_loop_sdk import catalog
+    from metis_loop_sdk import web
     assert "MetisCatalog.render(box,domainList," in PAGE
     assert 'class="dm' not in PAGE and "data-dom=" not in PAGE
     # its box is its own: the open box's datalist is #catlist (the widget once rendered into it)
     assert PAGE.count('id="catrows"') == 1 and '$("#catrows")' in PAGE and PAGE.count('id="catlist"') == 1
-    js, css = catalog.widget_file("catalog.js"), catalog.widget_file("catalog.css")
+    js, css = web.widget_file("catalog.js"), web.widget_file("catalog.css")
     assert "window.MetisCatalog" in js[0] and js[1].startswith("text/javascript")
     assert ".tag.stale" in css[0] and css[1].startswith("text/css")
-    assert catalog.widget_file("../catalog.py") is None and catalog.widget_file("x.js") is None
+    assert web.widget_file("../catalog.py") is None and web.widget_file("x.js") is None
 
 
 UI = Path(__file__).resolve().parents[1] / "domains" / "ui" / "ui.llp"

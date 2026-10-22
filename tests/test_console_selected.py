@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from metis_loop_sdk.catalog import index
+from metis.catalog import index
 from loop.console_serve import ConsoleServer, catalog_root
 
 SELECTED = ["dog", "plant", "kitchen", "nav", "love_triangle"]

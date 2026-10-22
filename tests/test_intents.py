@@ -4,20 +4,17 @@ and every example map to a command atom, checked by metis-agent's generic
 domain agent), shown as a diff, written with its generated files. On a
 scratch checkout with a small plant."""
 import os
-import shutil
 from pathlib import Path
 
 import pytest
 
 from loop import intents as it
 from loop.console_serve import ConsoleServer
-from metis_loop_sdk import catalog
+from metis import catalog
 
-GEN = catalog._installed_tools() / "intents.py"          # the installed metis-catalog's generator
 AGENT_PY = Path(os.environ.get("METIS_AGENT_PY") or "/nonexistent")
 
-pytestmark = pytest.mark.skipif(not (GEN.exists() and AGENT_PY.exists()),
-                                reason="needs metis-agent's py venv (METIS_AGENT_PY) and the installed metis-catalog")
+pytestmark = pytest.mark.skipif(not AGENT_PY.exists(), reason="needs metis-agent's py venv (METIS_AGENT_PY)")
 
 PLANT = """catalog plant 1.
 provenance text "a potted plant that dries out; the person waters it or asks how it is" "2026-10-14".
@@ -49,8 +46,6 @@ stage serve {
 
 @pytest.fixture
 def srv(tmp_path, monkeypatch):
-    (tmp_path / "tools").mkdir()
-    shutil.copy(GEN, tmp_path / "tools/intents.py")
     s = ConsoleServer(tmp_path)
     s.new_domain("plant", "a potted plant that dries out")
     (tmp_path / "domains/plant/plant.llp").write_text(PLANT)
@@ -80,7 +75,7 @@ def test_draft_propose_save(srv, tmp_path):
     # the manifest names the spec only (the generated files at their fixed names), its own text kept,
     # and the loader derives them (catalog-entry step 2)
     import yaml
-    from metis_loop_sdk import catalog
+    from metis import catalog
     mtext = (tmp_path / "domains/plant/domain.yaml").read_text()
     m = yaml.safe_load(mtext)
     assert m["intent"] == {"spec": "intent.yaml"} and m["display"] == "the plant"

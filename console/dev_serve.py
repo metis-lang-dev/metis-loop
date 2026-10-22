@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from loop import shell_lib  # noqa: E402
-from metis_loop_sdk.catalog import WIDGET_URL, widget_file  # noqa: E402
+from metis_loop_sdk.web import WIDGET_URL, widget_file  # noqa: E402
 from loop.console_serve import ConsoleServer  # noqa: E402
 
 SHIM = r"""
