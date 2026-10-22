@@ -4,6 +4,7 @@ WIDGET_URL, widget_file) and the TypeScript face (ts/, TS_DIR). metis_loop_sdk.c
 these until r0.2; the catalog itself is `from metis import catalog`.
 
     from metis_loop_sdk.web import WIDGET_DIR, WIDGET_URL, widget_file
+    python -m metis_loop_sdk.web widget          # {dir, url, files} (the Go console reads it)
 """
 from pathlib import Path
 
@@ -21,3 +22,25 @@ def widget_file(name):
         return None
     return (WIDGET_DIR / name).read_text(), ("text/javascript; charset=utf-8" if name.endswith(".js")
                                              else "text/css; charset=utf-8")
+
+
+def main(argv=None):
+    """python -m metis_loop_sdk.web widget|ts: the directory, the URL and the files, as JSON
+    (the Go console's WidgetDir reads `widget`)."""
+    import json
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    verb = args[0] if args else ""
+    if verb == "widget":
+        out = {"dir": str(WIDGET_DIR), "url": WIDGET_URL, "files": list(WIDGET_FILES)}
+    elif verb == "ts":
+        out = {"dir": str(TS_DIR), "files": list(TS_FILES)}
+    else:
+        print("usage: python -m metis_loop_sdk.web widget|ts", file=sys.stderr)
+        return 2
+    print(json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

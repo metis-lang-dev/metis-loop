@@ -39,3 +39,15 @@ def test_version():
     import tomllib
     pp = Path(__file__).resolve().parents[1] / "pyproject.toml"
     assert metis_loop_sdk.__version__ == tomllib.loads(pp.read_text())["project"]["version"] == "0.1.12"
+
+
+def test_the_web_cli():
+    """python -m metis_loop_sdk.web widget: the loop SDK's own (the Go console's WidgetDir), with no
+    deprecated module in the way."""
+    import json
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, "-W", "error", "-m", "metis_loop_sdk.web", "widget"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    w = json.loads(r.stdout)
+    assert w["url"] == "/sdk/catalog/" and w["files"] == ["catalog.js", "catalog.css"] and Path(w["dir"]).is_dir()
