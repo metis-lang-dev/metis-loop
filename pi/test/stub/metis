@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""A stand-in for `metis` in the extensions' test: --tools-json from the real
+metispy ($REAL_METIS); --json speaks a fixed wire (help with one described
+verb; show / show llp from $STUB_GATED: a candidate, gated or not)."""
+import json, os, sys
+if "--tools-json" in sys.argv:
+    os.execv(os.environ["REAL_METIS"], [os.environ["REAL_METIS"], "--tools-json"])
+llp = [a for a in sys.argv[1:] if a.endswith(".llp")]
+with open(os.environ["STUB_LOG"], "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:]}) + "\n")
+gated = os.environ.get("STUB_GATED") == "1"
+if llp and os.environ.get("STUB_UNLOADABLE") == "1":   # a program metis cannot load (metispy: '#init dark 1.')
+    sys.stdin.readline()
+    print(json.dumps({"ok": False, "findings": ["invalid literal for int() with base 10: '1.'"]}), flush=True)
+    sys.exit(1)
+for line in sys.stdin:
+    r = json.loads(line); op = r.get("op")
+    with open(os.environ["STUB_LOG"], "a") as f:      # each request too: {"op": …}
+        f.write(json.dumps({"op": op, "arg": r.get("arg", "")}) + "\n")
+    if op == "help":
+        out = {"ok": True, "ops": ["formalize", "gate", "show", "state", "text"], "descriptions": {"state": "the domain's current state"}}
+    elif op == "reload":                                # the wire's reload: STUB_UNLOADABLE, the program stays
+        out = ({"ok": False, "findings": ["invalid literal for int() with base 10: '1.'"], "served": llp[0] if llp else None}
+               if os.environ.get("STUB_UNLOADABLE") == "1" else {"ok": True, "path": r.get("arg"), "key": "k", "host": None})
+    elif op == "show" and r.get("arg") == "llp":
+        out = {"ok": True, "llp": "catalog lamp 1.\n% the stub's candidate"}
+    elif op == "show":
+        out = {"ok": True, "candidate": True, "gated": gated, "file": llp[0] if llp else "scratch"}
+    else:
+        out = {"ok": True, "text": f"{op} {r.get('arg', '')}".strip()}
+    print(json.dumps(out), flush=True)
