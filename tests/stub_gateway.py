@@ -68,7 +68,7 @@ class StubGateway:
     def session_frame(self, sid, **extra):
         s = self.sessions[sid]
         return {"ch": "repl", "type": "session", "session": sid, "llp": s["llp"], "name": s["name"],
-                "status": "open", "busy": s["busy"], "running": None, "queued": 0, **extra}
+                "status": "open", "busy": s["busy"], "running": None, "queued": 0, "epoch": s.get("epoch", 1), **extra}
 
     def _name(self, llp):
         stem = str(llp).rstrip("/").split("/")[-1].removesuffix(".llp")
@@ -160,6 +160,17 @@ class StubGateway:
             for ws in list(self.clients):
                 await ws.send(json.dumps(frame))
         asyncio.run_coroutine_threadsafe(go(), self.loop).result(5)
+
+    def recycle(self, sid):
+        """The console restarts the session (its idle recycle): epoch + 1, the session frame to its subscribers."""
+        s = self.sessions[sid]
+        s["epoch"] = s.get("epoch", 1) + 1
+        self.push(self.session_frame(sid, recycled="idle"))
+
+    def drop(self, sid):
+        """The console closes the session: gone, to its subscribers."""
+        self.sessions.pop(sid)
+        self.push({"ch": "repl", "type": "error", "session": sid, "error": "gone", "detail": "recycled (idle)"})
 
     def start(self):
         ready = threading.Event()

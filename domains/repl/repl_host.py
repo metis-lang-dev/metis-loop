@@ -24,10 +24,16 @@ lines at the tick: the working copy (source.certified: checkout → clean, else 
 the brain's chat seat (manifest seats.chat → chat_seat | no_chat_seat). The outcome tokens
 of the last beat are retracted (the domain agent has read them), as dog_host does.
 
-The sensor face: observe() reads the console's session (loaded | unloaded) when no
-request is in flight. A reading the rules did not produce is the watch's surprise: the
-person opened or closed a session on the page itself, or the console kept one the program
-says it closed.
+The sensor face: observe() reads the console's session when no request is in flight. A
+reading the rules did not produce is the watch's surprise (console-nav step 2 F7, the
+architect's ruling: the sensor reads the console truthfully):
+  loaded | unloaded   the session is the page's and the console has it; the console closed
+                      it, or no longer knows it (`repl/error gone` for it, a `repl/session`
+                      with status closed): unloaded, whatever the program believes
+  fresh | ran         after the console restarted the session (a new epoch: the idle
+                      recycle, a recompile), the kernel is at its start: fresh, until a
+                      run or a step of it is posted (ran) or a reset is (fresh); before the
+                      first restart, and after an undo, not read (the program's own)
 
 The payload (the intent's slots the atoms do not carry: package, n, text) rides with the
 event that consumes the command: the domain agent hands it over with take_payload(p)
@@ -185,6 +191,8 @@ class ReplHost:
         self.beat, self.due, self.script, self.last = 0, (), {}, None     # AgentHost's hosted-day fields
         self.wire, self.frames = None, queue.Queue()
         self.sid = None
+        self.epoch = None           # the session's epoch, as its last session frame said
+        self.ran = None             # the kernel ran since its start (known after a restart), else None
         self.domains = {}           # name -> the meta/domains row (path, host)
         self.certified = UNSEEN     # the session's source.certified (None: edited, uncertified)
         self.chat_ok = None         # the manifest's chat seat (None: not seen yet)
@@ -242,6 +250,8 @@ class ReplHost:
         carried out ends here (+opened); a session the program did not ask for is said as world
         lines, so the program tracks it."""
         was, self.sid, self._attach = self.sid, sid, None
+        if sid != was:
+            self.epoch, self.ran = None, None
         if self.wire is None and not self.connect():
             return
         self._send({"ch": "repl", "type": "open", "session": sid})
@@ -329,10 +339,25 @@ class ReplHost:
             self.pending.pop(f["req"])
             self.error = f.get("error")
             self._report("load", False)
+        elif ch == "repl" and typ == "error" and f.get("error") == "gone" and self.sid and f.get("session") == self.sid:
+            self.sid, self.epoch, self.ran = None, None, None      # the console no longer has it: unloaded
+            self.error = f.get("detail") or "the console dropped the session"
+        elif ch == "repl" and typ == "session" and self.sid and f.get("session") == self.sid:
+            if f.get("status") == "closed":
+                self.sid, self.epoch, self.ran = None, None, None
+            else:
+                ep = f.get("epoch")
+                if ep is not None and self.epoch is not None and ep != self.epoch:
+                    self.ran = False        # a restart: the kernel is at its start again
+                if ep is not None:
+                    self.epoch = ep
         elif ch == "repl" and typ == "source" and f.get("session") == self.sid:
             self.certified = f.get("certified")
         elif ch == "repl" and typ == "posting" and f.get("id") in self.pending:
             self._report(self.pending.pop(f["id"]), f.get("status") == "done")
+            self._counters(f)
+        elif ch == "repl" and typ == "posting" and self.sid and f.get("session") == self.sid:
+            self._counters(f)
         elif ch == "repl" and typ == "save" and "apply" in self.pending.values() and not f.get("written"):
             self.pending = {k: v for k, v in self.pending.items() if v != "apply"}
             self._report("apply", bool(f.get("files")))
@@ -343,6 +368,18 @@ class ReplHost:
             if typ == "error":
                 self.error = f.get("error")
             self._report("tell", typ == "user")
+
+    def _counters(self, f):
+        """ran / fresh, once the host knows them (after a restart), from the session's postings."""
+        if self.ran is None or f.get("status") != "done":
+            return
+        verb = str(f.get("cmd") or "").lstrip(":").split(" ")[0]
+        if verb in ("run", "step"):
+            self.ran = True
+        elif verb == "reset":
+            self.ran = False
+        elif verb == "undo":
+            self.ran = None         # how far back it went is the kernel's: not read
 
     # -- the plugin faces ----------------------------------------------------
 
@@ -446,14 +483,18 @@ class ReplHost:
     def observe(self, counts):
         if self.pending or self.wire is None:
             return {}               # a request in flight: the console's answer is not in yet
-        return {"loaded": 1 if self.sid else 0, "unloaded": 0 if self.sid else 1}
+        out = {"loaded": 1 if self.sid else 0, "unloaded": 0 if self.sid else 1}
+        if self.sid and self.ran is not None:
+            out.update(ran=1 if self.ran else 0, fresh=0 if self.ran else 1)
+        return out
 
     def snapshot(self):
         return [self.beat, list(self.due), list(self.acted), self.sid, self.certified, self.chat_ok,
-                dict(self.pending), list(self.reports), self.tell_by]
+                dict(self.pending), list(self.reports), self.tell_by, self.epoch, self.ran]
 
     def restore(self, snap):
-        beat, due, acted, self.sid, self.certified, self.chat_ok, pending, reports, self.tell_by = snap
+        beat, due, acted, self.sid, self.certified, self.chat_ok, pending, reports, self.tell_by, *rest = snap
+        self.epoch, self.ran = (rest + [None, None])[:2]
         self.beat, self.due = beat, tuple((b, d) for b, d in due)
         self.acted = tuple((b, n, t) for b, n, t in acted)
         self.pending, self.reports = dict(pending), list(reports)

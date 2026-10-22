@@ -295,6 +295,35 @@ def test_a_load_over_an_open_session_is_the_pages_open_too(gw):
             assert "+opened" in h.tick({}), rule
 
 
+def test_the_sensor_reads_a_session_the_console_dropped_or_restarted(gw):
+    """console-nav step 2 F7 (the architect's ruling): a session the console drops (gone) reads
+    unloaded, whatever the program believes; a session it restarts (a new epoch) keeps loaded and
+    reads fresh until a run of it is posted. Before the first restart ran/fresh are not read."""
+    h = host(gw.url, own=False)
+    with page_open(gw, "domains/plant/plant") as (ws, sid):
+        h.connect()
+        attached(h, gw, sid)
+        h.tick({})
+        event(h, "run", gw=gw, n=3)
+        tick_until(h, want="+stopped")
+        assert h.observe({}) == {"loaded": 1, "unloaded": 0}             # ran/fresh: the program's own so far
+        gw.recycle(sid)
+        end = time.time() + 5
+        while h.ran is None and time.time() < end:
+            h.tick({})
+            time.sleep(0.01)
+        assert h.observe({}) == {"loaded": 1, "unloaded": 0, "ran": 0, "fresh": 1}     # the program's ran disagrees
+        event(h, "run", gw=gw, n=2)
+        tick_until(h, want="+stopped")
+        assert h.observe({})["ran"] == 1
+        gw.drop(sid)
+        end = time.time() + 5
+        while h.sid is not None and time.time() < end:
+            h.tick({})
+            time.sleep(0.01)
+        assert h.observe({}) == {"loaded": 0, "unloaded": 1} and "recycled" in h.error
+
+
 def test_a_load_the_page_could_not_open_is_absent(gw):
     h = host(gw.url, own=False)
     event(h, "load", package="plant")

@@ -31,3 +31,15 @@ The host keeps the pairs current from the gateway's frames: `session.busy` → `
 a session open → `loaded`, `source.certified != checkout` → `dirty`, the manifest's
 `chat_unavailable` → `no_chat_seat`. A line the gateway refused that a rule accepted (or
 the reverse) is a surprise: the console's formalization disagrees with the console.
+
+The sensor (`observe()`, when no request is in flight) reads the console as it is, never as the
+program expects (console-nav step 2 F7, the architect's ruling):
+
+| the console | `observe()` reads | against a program that believes `loaded`, `ran` |
+|---|---|---|
+| the page's session, open | `loaded` | agrees |
+| the session gone: `repl/error gone` for it, or a `repl/session` with status closed (the console closed or dropped it) | `unloaded` | a surprise record on `loaded`: the program has no rule for a console that dropped its session (the record drives that rule) |
+| the session restarted: a `repl/session` with a new epoch (the idle recycle, a recompile); the same session id, the package still loaded | `loaded`, `fresh` (until a run or step of it is posted: `ran`; a reset: `fresh`) | a surprise record on `ran`: the kernel is at its start again |
+| no restart seen yet, or an undo since | `loaded` only (`ran`/`fresh` are the program's own) | — |
+
+The person sees "unloaded" only when the session is really gone.
