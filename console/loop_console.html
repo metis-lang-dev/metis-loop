@@ -94,6 +94,8 @@ pre.err{color:var(--red)}
 .gform{display:flex;flex-direction:column;gap:4px;margin:4px 0}.gform textarea,.gform input:not([type]){width:100%;box-sizing:border-box;font:inherit;font-size:12px}
 #savewin header{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line)}
 #savewin header .grow{flex:1}#savewin .body{overflow:auto;padding:6px 10px;flex:1}
+#savewin .ask .q{font-size:14px;margin:8px 0 4px}#savewin .ask ul{margin:2px 0 6px 18px;padding:0}#savewin .ask .opts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+#savewin .ask form{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}#savewin .ask textarea{flex:1 1 100%;min-height:4em;font:inherit;color:inherit;background:var(--bg,#111);border:1px solid var(--line)}
 #savewin pre{margin:4px 0 10px;white-space:pre;font-size:11.5px}#savewin .add{color:var(--green)}#savewin .del{color:var(--red)}#savewin .hunk{color:var(--cyan)}
 .cand .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .ok{color:var(--green)}.bad{color:var(--red)}
@@ -147,6 +149,7 @@ details summary{cursor:pointer;color:var(--dim)}
       <button class="btn" id="open">open</button>
       <button class="btn" id="reset" title="queue reset">reset</button>
       <button class="btn" id="editbtn" title="the catalog's working copy (floating editor)" hidden>edit</button>
+      <button class="btn" id="asksbtn" title="the loop stopped and asks you: read its question, answer with an instruction" hidden>ASKS <span id="asksn"></span></button>
       <span id="b-sid" class="empty"></span>
     </span>
   </div>
@@ -783,7 +786,7 @@ function wsConnect(){
   const proto=location.protocol==="https:"?"wss://":"ws://";
   const q=GW.token?"?token="+encodeURIComponent(GW.token):"";
   try{wsock=new WebSocket(proto+location.host+GW.ws+q)}catch(e){wsRetryLater();return}
-  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid})};
+  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid});wsSend({ch:"repl",type:"gate",op:"asks"})};
   wsock.onclose=()=>{const was=wsUp;wsUp=false;
     if(was)banner("console backend connection lost — reconnecting…");wsRetryLater()};
   wsock.onmessage=e=>{let f;try{f=JSON.parse(e.data)}catch(x){return}wsHandle(f)}}
@@ -1086,13 +1089,57 @@ function renderGate(f,kind){
       ${x.since_diff?`<div class="since"><span class="empty">changed since you refused it</span><pre>${DIFFHTML(x.since_diff)}</pre></div>`:""}
       <pre>${DIFFHTML(x.diff)}</pre></div>`).join("")
     :'<div class="empty">Nothing to write: the catalog has it already.</div>';
-  $("#savego").disabled=!files.length;$("#savex").textContent=files.length?"refuse":"close";
+  $("#savego").disabled=!files.length;$("#savego").textContent="apply these files";$("#savex").textContent=files.length?"refuse":"close";
   openGate($("#savewin"))}
+/* the loop's ASKS (loop-policy, docs/LOOP.md): a loop that is cornered stops acting, keeps a
+   snapshot and asks the person ONE question (a disengagement record). The GATE shows it; the
+   person answers with an instruction the loop reads when it re-engages. Later (or Escape)
+   closes it: it keeps waiting, the ASKS button counts it. */
+let asksList=[];const asksSeen=new Set();
+const ASK_WHY={budget:"its budget is spent",no_progress:"it makes no progress",out_of_vocabulary:"the world does something its facts cannot explain",
+  contradiction:"two of its rules contradict",stuck:"the world says it is stuck"};
+const LIST=v=>Array.isArray(v)?(v.length?`<ul>${v.map(x=>`<li>${esc(typeof x==="string"?x:JSON.stringify(x))}</li>`).join("")}</ul>`:'<span class="empty">—</span>'):`<div>${esc(String(v||"—"))}</div>`;
+function showAsks(f){
+  asksList=f.asks||[];$("#asksbtn").hidden=!asksList.length;$("#asksn").textContent=asksList.length;
+  const fresh=asksList.find(a=>!asksSeen.has(a.token));asksList.forEach(a=>asksSeen.add(a.token));
+  if(gateCur&&gateCur.via==="ask"&&!asksList.some(a=>a.token===gateCur.token)){closeGate();return}   // answered elsewhere
+  if(fresh&&!$("#savewin").open)showAsk(fresh)}
+function showAsk(a){
+  const r=a.ask||{};gateCur={via:"ask",token:a.token,files:0};
+  $("#savetitle").textContent="THE LOOP ASKS";
+  $("#savesub").textContent=`${a.domain}: it stopped (${ASK_WHY[r.reason]||r.reason}, in ${r.phase}) and waits for your instruction`;
+  $("#saveshown").hidden=true;
+  $("#savebody").innerHTML=`<div class="ask"><p class="q">${esc(r.question||"")}</p>
+    <b>what it tried</b>${LIST(r.tried)}<b>what it believes</b>${LIST(r.believes)}
+    ${(r.options||[]).length?`<b>the options it sees</b><div class="opts">${r.options.map(o=>`<button class="chip" type="button" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}</div>`:""}
+    <form id="askform"><select name="kind" aria-label="the kind of instruction"><option value="note">a note (context for it)</option><option value="rule">a rule (LLP)</option>
+      <option value="phase">a phase</option><option value="budget">more budget</option><option value="abandon">abandon the run</option></select>
+      <select name="phase" aria-label="the phase" hidden><option>explore</option><option>exploit</option><option>refactor</option><option value="skip">skip this state</option></select>
+      <input name="beats" type="number" min="1" placeholder="more beats" aria-label="more beats" hidden><input name="spend" type="number" min="0" step="0.01" placeholder="more USD" aria-label="more spend" hidden>
+      <textarea name="text" placeholder="your instruction: the loop reads it as context when it re-engages" aria-label="your instruction"></textarea></form></div>`;
+  $("#savego").disabled=false;$("#savego").textContent="answer";$("#savex").textContent="later";
+  openGate($("#savewin"))}
+function askInstruction(){
+  const f=$("#askform");if(!f)return null;const k=f.kind.value,text=f.text.value.trim(),ins={kind:k};
+  if(text)ins.text=text;
+  if(k==="phase")ins.phase=f.phase.value;
+  if(k==="budget"){if(f.beats.value)ins.beats=+f.beats.value;if(f.spend.value)ins.spend=+f.spend.value}
+  if((k==="note"||k==="rule")&&!text){f.text.focus();return null}
+  if(k==="budget"&&ins.beats===undefined&&ins.spend===undefined){f.beats.focus();return null}
+  return ins}
+$("#savebody").addEventListener("click",e=>{const o=e.target.closest("[data-opt]");if(!o)return;
+  const f=$("#askform");f.text.value=o.dataset.opt;f.text.focus()});
+$("#savebody").addEventListener("change",e=>{const f=e.target.closest("#askform");if(!f||e.target.name!=="kind")return;
+  f.phase.hidden=f.kind.value!=="phase";f.beats.hidden=f.spend.hidden=f.kind.value!=="budget"});
+$("#asksbtn").addEventListener("click",()=>{if(asksList.length)showAsk(asksList[0])});
+setInterval(()=>{if(wsUp)wsSend({ch:"repl",type:"gate",op:"asks"})},10000);    // a loop elsewhere ([console] loop_state) asks too
 function showSave(f){
   if(f.written){closeGate("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)");return}
   saveTok=f.token;gateCur={via:"save",token:f.token,by:f.by,kind:"program",files:(f.files||[]).length,shown:f.by==="agent"?{}:saveShown};
   renderGate(f,"program")}
 function showGatePlan(f){
+  if(f.op==="asks"){showAsks(f);return}
+  if(f.op==="answered"){closeGate("answered: the loop reads your instruction when it re-engages");return}
   if(f.op==="written"){const seed=gateCur&&gateCur.purpose==="seed";closeGate("written: "+(f.written||[]).join(", ")+(f.bundle&&typeof f.bundle==="string"?" — the bundle: "+f.bundle:"")+" (nothing committed)");
     const llp=(f.written||[]).find(p=>p.endsWith(".llp"));if(seed&&llp)openCatalog({path:llp.replace(/\.llp$/,""),host:false});return}
   if(f.op==="refused"){closeGate("refused: nothing written — the next plan of it shows what changed since");return}
@@ -1101,12 +1148,13 @@ function showGatePlan(f){
   renderGate(f,f.purpose==="seed"?"seed":f.kind)}
 function gateRefuse(){
   const g=gateCur;
-  if(!g||!g.files){closeGate();return}                            // nothing was proposed: only close
+  if(!g||!g.files){closeGate();return}                            // nothing was proposed (or an ask: it keeps waiting): only close
   if(g.via==="save")wsSend({ch:"repl",type:"refuse",session:sid,token:g.token});
   else wsSend({ch:"repl",type:"gate",op:"refuse",token:g.token})}
 $("#savex").addEventListener("click",gateRefuse);
 $("#savewin").addEventListener("cancel",e=>{e.preventDefault();gateRefuse()});          // Escape is a refusal too
 $("#savego").addEventListener("click",()=>{const g=gateCur;if(!g)return;
+  if(g.via==="ask"){const ins=askInstruction();if(ins)wsSend({ch:"repl",type:"gate",op:"answer",token:g.token,instruction:ins});return}
   if(g.via==="save"){if(sid)wsSend({ch:"repl",type:"save",session:sid,token:g.token,...(g.shown||{})})}     // the plan as it was shown
   else wsSend({ch:"repl",type:"gate",op:"confirm",token:g.token})});
 $("#saveredo").addEventListener("click",()=>{if(!sid)return;const d=$("#savedisp").value.trim(),l=$("#saveline").value.trim();

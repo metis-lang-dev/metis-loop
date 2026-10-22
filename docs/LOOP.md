@@ -77,3 +77,25 @@ the GATE dialog (a modal; apply confirms, refuse and Escape refuse):
 pages as a save by the agent, and the person's apply or refuse decides it (the agent is told
 which). No answer within `[console] agent_gate_timeout` (600 s) counts as a refusal. Personal
 mode only; a shared instance refuses every write.
+
+## The loop's asks (loop-policy step 1)
+
+A loop that is cornered (metis-agentic-loop `docs/POLICY.md`: its budget spent, no progress, a
+transition its facts cannot explain, a contradiction, the world's `stuck`) stops acting, keeps a
+snapshot and proposes an **ask** to the gate (`metis.gate`, kind `ask`): the phase, the reason,
+what it tried, what it believes, at most three options and ONE question. Nothing is written and
+nothing confirms it; the person answers it with an instruction the loop reads when it
+re-engages (`answer`: a note, a rule, a phase, more budget, or abandon).
+
+The console shows the asks in the GATE dialog: its own gate's, and those of a loop running
+elsewhere whose state directory is `[console] loop_state` (pi's `--state`; the console reads
+and answers them under the gate's lock, as pi's CLI writes them). A new ask opens the dialog
+when nothing else is open; **later** (or Escape) closes it and it keeps waiting, counted by the
+ASKS button in the header. The frames: `repl/gate {op: asks}` → the list (sent to every page
+when an ask is proposed or answered; the page asks again every 10 s for a loop elsewhere),
+`repl/gate {op: answer, token, instruction}` → `answered`. Personal mode only.
+
+Under the experimental policy (`Gate(policy="experimental")`, `--policy experimental` on the
+gate's CLI) a program, extension or edit is judged by its numbers per phase and confirmed on
+accept, with no person; every verdict, ask and answer is journaled
+(`journal.jsonl` beside `gate.json`). The console's own gate stays the human one.

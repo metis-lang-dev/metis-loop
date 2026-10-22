@@ -165,3 +165,60 @@ def test_the_gateways_frames(tmp_path):
             assert "personal mode only" in err["error"]
     finally:
         shared.close()
+
+
+ASK = {"phase": "exploit", "reason": "no_progress", "tried": ["revise water: refused twice"],
+       "believes": ["water needs dry"], "options": ["explore here", "skip this state"],
+       "question": "The plant stays dry after `water`: is there a fact I do not read?", "snapshot": "snap/3.json"}
+
+
+def test_the_loops_asks_shown_and_answered(tmp_path):
+    """loop-policy s-dd842f2a: the console's own asks and those of a loop elsewhere ([console]
+    loop_state: pi's gate state, written by its CLI), each answered in the gate that holds it."""
+    from metis_loop_sdk.gate import Gate
+    srv = server(tmp_path)
+    assert srv.gate_asks() == []
+    mine = srv.gate_plan("ask", "plant", ASK)
+    assert mine["kind"] == "ask" and mine["files"] == [] and mine["ask"]["question"] == ASK["question"]
+    pi = tmp_path / "pi-state"
+    with Gate.locked(pi) as g:                                    # pi's CLI, another process in life
+        theirs = g.propose("ask", "plant", srv.root, **dict(ASK, reason="budget"))
+    srv.loop_state = pi
+    asks = srv.gate_asks()
+    assert [(a["token"], a["where"]) for a in asks] == [(mine["token"], "console"), (theirs["token"], "loop")]
+    with pytest.raises(ValueError, match="answer phase"):
+        srv.gate_answer(theirs["token"], {"kind": "phase", "phase": "nap"})
+    out = srv.gate_answer(theirs["token"], {"kind": "budget", "beats": 40})
+    assert out["instruction"] == {"kind": "budget", "beats": 40}
+    with Gate.locked(pi) as g:                                    # pi reads it when it re-engages
+        assert g.answers(theirs["token"])["ask"]["snapshot"] == "snap/3.json"
+    srv.gate_answer(mine["token"], "look at the pot's drain")
+    assert srv.gate_asks() == []
+    with pytest.raises(ValueError, match="no such ask"):
+        srv.gate_answer(mine["token"], "again")
+    with pytest.raises(ValueError, match="reason"):
+        srv.gate_plan("ask", "plant", dict(ASK, reason="bored"))
+
+
+def test_the_gateways_ask_frames(tmp_path):
+    srv = server(tmp_path)
+    r = Running(srv, mode="personal")
+    try:
+        with r.ws() as ws, r.ws() as other:
+            frames(ws, lambda f: f.get("type") == "catalogs")
+            frames(other, lambda f: f.get("type") == "catalogs")
+            ws.send(json.dumps({"ch": "repl", "type": "gate", "op": "asks"}))
+            assert frames(ws, lambda f: f.get("op") == "asks")[-1]["asks"] == []
+            ws.send(json.dumps({"ch": "repl", "type": "gate", "op": "propose", "kind": "ask", "domain": "plant",
+                                "args": ASK}))
+            seen = frames(other, lambda f: f.get("op") == "asks")[-1]["asks"]     # every page of the person's
+            assert [a["ask"]["question"] for a in seen] == [ASK["question"]]
+            other.send(json.dumps({"ch": "repl", "type": "gate", "op": "answer", "token": seen[0]["token"],
+                                   "instruction": {"kind": "note", "text": "check the drain"}, "req": 4}))
+            ans = frames(other, lambda f: f.get("op") == "answered")[-1]
+            assert ans["req"] == 4 and ans["instruction"]["text"] == "check the drain"
+            # the first page saw the ask broadcast, then the list without it once answered
+            seen = [f["asks"] for f in frames(ws, lambda f: f.get("op") == "asks" and not f["asks"]) if f.get("op") == "asks"]
+            assert len(seen[-2]) == 1 and seen[-1] == []
+    finally:
+        r.close()
