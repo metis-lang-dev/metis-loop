@@ -42,6 +42,18 @@ def test_propose_then_confirm_writes_exactly_the_plan(root):
         g.confirm(pl["token"])                                                # a plan is written once
 
 
+def test_a_program_plan_carries_its_extensions(root):
+    """loop-parity step 2: the console writes a program with its extensions in one plan."""
+    g = gate.Gate()
+    plant = (root / "domains/plant/plant.llp").read_text()
+    pl = g.propose("program", "plant", root, text=plant, extensions={"tired": "% an extension\n"})
+    assert [f["path"] for f in pl["files"]] == ["domains/plant/extensions/tired.llp"]   # the program is unchanged
+    g.confirm(pl["token"])
+    assert (root / "domains/plant/extensions/tired.llp").read_text() == "% an extension\n"
+    with pytest.raises(gate.Refused, match="lowercase"):
+        g.propose("program", "plant", root, text=plant, extensions={"Tired Plant": "x"})
+
+
 def test_a_new_domain_names_the_host_beside_it(root):
     (root / "domains" / "lamp").mkdir(parents=True)
     (root / "domains" / "lamp" / "lamp_host.py").write_text("# the world\n")

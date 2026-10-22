@@ -77,6 +77,24 @@ def say(ws, sid, text):
                   and f.get("type") in ("done", "error"), timeout=30)
 
 
+def say_answering(ws, sid, text, answer, timeout=30):
+    """A chat turn whose agent writes wait for the person: each save plan by the agent
+    is answered as the person would (answer: "confirm" — the apply with its token —
+    or "refuse"). Returns every frame up to the chat's end."""
+    import time as _t
+    ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": text}))
+    out, end = [], _t.time() + timeout
+    while _t.time() < end:
+        f = json.loads(ws.recv(timeout=max(0.1, end - _t.time())))
+        out.append(f)
+        if f.get("type") == "save" and f.get("by") == "agent":
+            ws.send(json.dumps({"ch": "repl", "type": "save" if answer == "confirm" else "refuse",
+                                "session": sid, "token": f["token"]}))
+        if f.get("ch") == "chat" and f.get("type") in ("done", "error"):
+            return out
+    raise AssertionError(f"timed out; got {out[-5:]}")
+
+
 def test_chat_turn_runs_the_repl_as_claude_and_streams(agent):
     FakeClient.script, FakeClient.hang = [("repl", {"line": ":run 3"}),
                                           ("ctx", {}),
@@ -245,8 +263,9 @@ def test_chat_needs_a_session_when_the_seat_exists(agent):
 def test_apply_writes_only_a_certified_copy_and_shows_the_diff(tmp_path):
     """human-loop step 1: `apply()` is the chat's "apply to catalog" — the
     copy written into the catalog source only after a recompile certified
-    it, the diff posted to the console (the person sees what was written);
-    nothing to apply on an unchanged copy. On a scratch checkout."""
+    it and the person confirmed the plan (loop-parity step 2: the agent's
+    write waits for the person, as pi's does); the diff posted to the
+    console; nothing to apply on an unchanged copy. On a scratch checkout."""
     from loop.console_serve import ConsoleServer
     srv = ConsoleServer(tmp_path)
     llp = srv.new_domain("plant", "a plant")
@@ -264,14 +283,47 @@ def test_apply_writes_only_a_certified_copy_and_shows_the_diff(tmp_path):
     try:
         with r.ws() as ws:
             sid = open3(ws, llp)["session"]
-            got = say(ws, sid, "make it wake up slowly and apply it")
+            got = say_answering(ws, sid, "make it wake up slowly and apply it", "confirm")
             parts = got[-1]["text"].split(" | ")
             assert [p[:3] for p in parts] == ["Don", "ok ", "ERR", "ok ", "ok "]
+            asked = [f for f in got if f.get("type") == "save" and f.get("by") == "agent"]
+            assert len(asked) == 1 and "+  %% I wake up slowly." in asked[0]["files"][0]["diff"]   # the person saw the plan
             assert '"written": []' in parts[0]                              # the notes are cut at 40 chars
             post = [f for f in got if f.get("type") == "posting" and f.get("cmd") == ":apply"]
             assert len(post) == 1 and "+  %% I wake up slowly." in post[0]["result"] and post[0]["actor"] == "claude"
             assert [f for f in got if f.get("type") == "source"][-1]["certified"] == "checkout"
         assert "%% I wake up slowly." in path.read_text()
+    finally:
+        r.close()
+
+
+def test_the_agents_apply_refused_by_the_person_writes_nothing(tmp_path):
+    """loop-parity step 2: the person refuses the agent's plan — nothing written, the
+    agent told so in words; the refusal is remembered (the next plan's since_diff)."""
+    from loop.console_serve import ConsoleServer
+    srv = ConsoleServer(tmp_path)
+    llp = srv.new_domain("plant", "a plant")
+    path = tmp_path / "domains/plant/plant.llp"
+    before = path.read_text()
+    r = Running(srv, mode="personal")
+    r.gw.agent.client_factory = FakeClient
+    FakeClient.hang = False
+    FakeClient.script = [
+        ("source_edit", {"target": "copy", "old_str": "%% I wake up.", "new_str": "%% I wake up slowly."}),
+        ("recompile", {}),
+        ("apply", {}),                                                       # refused by the person
+    ]
+    try:
+        with r.ws() as ws:
+            sid = open3(ws, llp)["session"]
+            got = say_answering(ws, sid, "make it wake up slowly and apply it", "refuse")
+            parts = got[-1]["text"].split(" | ")
+            assert [p[:3] for p in parts] == ["Don", "ok ", "ERR"] and "refused" in parts[2]
+            assert [f for f in got if f.get("type") == "refused"]
+        assert path.read_text() == before
+        w = next(iter(r.gw.sessions.values())).work
+        again = srv.save_plan(w)
+        assert again["files"][0].get("since_diff") is not None                # remembered: what changed since
     finally:
         r.close()
 

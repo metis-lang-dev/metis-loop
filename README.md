@@ -51,6 +51,11 @@ narration invented events) and 4096 tokens; each call and its cost (OpenRouter's
 spent `[console] max_usd` (1.00 USD). A shared instance (`--mode shared`)
 serves no LLM seat on any brain.
 
+Every write into the catalog goes through the loop's gate (docs/LOOP.md): the apply,
+an edit of a file on disk, the README, the intents skeleton, take into `[console] take_into`,
+a new domain from a seed — each a diff you confirm or refuse. The agent seat's apply waits
+for your confirm too.
+
 The explanation / formalization loop for metis catalogs:
 
     surprise records → mined text → formalize (LLM) → gated candidate
