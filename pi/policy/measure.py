@@ -142,7 +142,10 @@ def explain(p, cand_text, cur_text, record, records):
     names = new_rules(cand_text, cur_text)
     if not names:
         return "the lines change no rule: the base already has them (write a different rule, or none)"
-    before, after = set(record["before"]), p._dyn(record["after"])
+    words = p.compiles(record["game"]) if hasattr(p, "compiles") else None
+    if words:                                 # no event can bind in a program that does not compile: say the compiler's words
+        return "the lines do not compile in the world's instance (%s): fix the rule's text first" % words.strip().splitlines()[-1][:300]
+    before, after = set(record["before"]), p._cmp(record["after"])            # the facts an after is judged on (Predictor._cmp)
     evs = p.events(record, names)
     verb = record["action"]["verb"]
     if not evs:
@@ -155,7 +158,7 @@ def explain(p, cand_text, cur_text, record, records):
             return "no event of %s fires on the record: its left side needs %s, which the facts before lack — read only what the record has" % (name, ", ".join(miss) or "something the instance lacks")
         return "no event of %s binds to the record's action %s %s: the rule's variables do not reach these things (a type or a static fact is wrong)" % (", ".join(sorted(names)), verb, json.dumps(record["action"]["args"]))
     name, got = evs[0]
-    removed_wrongly = sorted((before & p._dyn(before)) - got - (p._dyn(before) - after))
+    removed_wrongly = sorted((before & p._cmp(before)) - got - (p._cmp(before) - after))
     missing = sorted(after - got)
     extra = sorted(got - after)
     parts = []

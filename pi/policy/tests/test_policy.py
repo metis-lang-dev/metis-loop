@@ -160,16 +160,21 @@ def test_the_persons_edit_is_judged_and_the_tree_follows(tmp_path):
 
 def test_explain_names_the_fact_the_rule_consumes_wrongly():
     """policy-tuning: the gate's fits refusal in the brain's terms — a take rule that consumes at(L) is
-    told the world keeps it (measure.explain over a fake predictor)."""
+    told the world keeps it. The predictor is measure.Predictor itself, its sessions faked: explain reads
+    the facts as the predictor judges them (_cmp), and a renamed method fails here, not in a paid run
+    (the step-1 card's runs died on `Predictor._dyn` after 4c473c6 renamed it)."""
     from policy import measure
 
-    class P:
-        def _dyn(self, atoms):
-            return {a for a in atoms if not a.startswith("tok")}
+    class P(measure.Predictor):
+        def __init__(self):
+            self.dynamic, self.uncompared = {"at", "handsfree", "inrecep", "holding", "holds"}, set()
+
+        def compiles(self, iid):
+            return None
 
         def events(self, rec, names=None):
             before = set(rec["before"])
-            return [("take_plain[O=o1,R=r1,Loc=l1]", self._dyn((before - {"at(l1)", "handsfree", "inrecep(o1,r1)"}) | {"holding", "holds(o1)"}))]
+            return [("take_plain[O=o1,R=r1,Loc=l1]", self._cmp((before - {"at(l1)", "handsfree", "inrecep(o1,r1)"}) | {"holding", "holds(o1)"}))]
 
         def table(self, iid):
             return {}
@@ -183,3 +188,8 @@ def test_explain_names_the_fact_the_rule_consumes_wrongly():
     why = measure.explain(P(), cand, cur, rec, [rec])
     assert "consumes at(l1), which the world keeps" in why, why
     assert "the base already has them" in measure.explain(P(), cur, cur, rec, [rec])
+
+    class Broken(P):                          # a candidate that does not compile: the compiler's words, not "no event binds"
+        def compiles(self, iid):
+            return "ParseError: 60:6: expected [, got ':'"
+    assert "do not compile" in measure.explain(Broken(), cand, cur, rec, [rec]) and "expected [" in measure.explain(Broken(), cand, cur, rec, [rec])
