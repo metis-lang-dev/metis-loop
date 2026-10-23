@@ -193,3 +193,12 @@ def test_explain_names_the_fact_the_rule_consumes_wrongly():
         def compiles(self, iid):
             return "ParseError: 60:6: expected [, got ':'"
     assert "do not compile" in measure.explain(Broken(), cand, cur, rec, [rec]) and "expected [" in measure.explain(Broken(), cand, cur, rec, [rec])
+
+
+def test_a_misleading_compiler_word_is_said_in_the_brains_terms():
+    """policy-tuning step 1: the brain wrote `go : …` (no layer); "expected [, got ':'" made it put the
+    variables in brackets twice. The repair prompt names the layer."""
+    from policy import prompts
+    p = prompts.repair(["go : at(L1) -o at(L2)."], "ParseError: 60:6: expected [, got ':'")
+    assert "`NAME [dyn] :`" in p and "LAYER" in p
+    assert "LAYER" not in prompts.repair(["go [dyn] : x -o y."], "TypeError: unknown predicate y")

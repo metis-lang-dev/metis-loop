@@ -188,9 +188,16 @@ Add or replace rules (keep every action rule's world behaviour: its facts before
 Answer with ONE ```llp block of only the new or replaced lines."""
 
 
+# the compiler's words in the brain's terms, where they mislead (policy-tuning step 1: "expected [, got ':'" was read
+# as "the head needs its variables in brackets" twice, never as the missing layer)
+HINTS = [("expected [, got ':'", "A rule's head is `NAME [dyn] :` — the LAYER in square brackets right after the name, never its "
+          "variables: `go [dyn] : at(L1) * $recat(R, L2) * L1 <> L2 -o at(L2).`")]
+
+
 def repair(lines, words):
-    return ("Your lines did not compile in the world's instance:\n%s\n\nYour lines:\n```llp\n%s\n```\n\n"
-            "Answer with ONE ```llp block of the corrected lines." % (words[:2000], "\n".join(lines)))
+    hint = "".join("\n" + h for k, h in HINTS if k in words)
+    return ("Your lines did not compile in the world's instance:\n%s%s\n\nYour lines:\n```llp\n%s\n```\n\n"
+            "Answer with ONE ```llp block of the corrected lines." % (words[:2000], hint, "\n".join(lines)))
 
 
 def task_facts(instance_text):
