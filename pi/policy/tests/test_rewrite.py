@@ -87,11 +87,16 @@ def test_the_series_stops_before_its_cap(tmp_path, monkeypatch):
     rc = rewrite.main(["--skill", str(skill), "--rounds", "3", "--worlds", "alfworld,scienceworld", "--brain", "openrouter/x/y",
                        "--budget", "0.5", "--series-budget", "1.2", "--runs", str(tmp_path / "runs")])
     assert rc == 0
-    # rw0's two runs (0.6), the rewrite call (0.65), rw1's first run (0.95); its second could pass 1.2: not started
+    # the headroom (the architect's N4): 1.5× the largest run seen (0.30 → 0.45), at least 0.10, never above --budget.
+    # rw0's two runs (0.60), the rewrite call (0.65), rw1's first run (0.95); its second (0.95 + 0.45) could pass 1.2
     assert runs_scored == [("rw0", "alfworld"), ("rw0", "scienceworld"), ("rw1", "alfworld")]
     h = json.loads((tmp_path / "runs" / "rewrite" / "history.json").read_text())
     assert h[1]["round"] == 1 and h[1]["why"] == "the series stopped while its card was scored"
-    assert "rw1's next run not started: spent 0.9500 of the series' 1.2000" in h[-1]["stopped"] and h[-1]["spent"] == 0.95
+    assert "rw1's next run not started: spent 0.9500 of the series' 1.2000 USD, and it may take up to 0.4500" in h[-1]["stopped"]
+    assert h[-1]["spent"] == 0.95
+    se = rewrite.Series("script:/dev/null", 1.0, 0.5, tmp_path / "s")
+    assert se.headroom() == 0.10 and se.headroom([{"usd": 0.04}]) == 0.10       # the floor
+    assert se.headroom([{"usd": 0.2}]) == pytest.approx(0.30) and se.headroom([{"usd": 0.45}]) == 0.5   # never above --budget
     with pytest.raises(SystemExit):                          # a paid brain without a series cap is refused
         rewrite.main(["--skill", str(skill), "--brain", "openrouter/x/y", "--budget", "0.5", "--runs", str(tmp_path / "r2")])
 

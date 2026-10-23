@@ -16,8 +16,9 @@ Round 0 is the given skill's card (scored here, or read from --start-card). Each
      both cards' structural guards hold (step 3) — in the domains exercised, then a lower usd/rule.
 A paid brain needs --series-budget too (nina's R1): the series' spend, the key's usage since the
 series started or the reported costs (the cards' runs, the rewrite calls), whichever is larger, is
-checked before every run and every rewrite call; one that could pass the cap (spent + its own
---budget) is not started, and the series stops there, its history written.
+checked before every run and every rewrite call; one that could pass the cap (spent + its headroom:
+1.5× the largest run seen so far, at least $0.10, never above --budget — the architect's N4; the
+per-run --budget stays the hard cap) is not started, and the series stops there, its history written.
 RUNS/rewrite/history.json is the result: each round's skill, its card's summary, the verdict, and the
 skill's diff against the one it rewrote."""
 import argparse
@@ -184,6 +185,7 @@ class Series:
     def __init__(self, model, cap, per_call, out):
         self.cap, self.per_call, self.out = cap, per_call, out
         self.done = 0.0                     # the scored cards' usd
+        self.largest = 0.0                  # the largest run's usd seen so far (the headroom, N4)
         self.key = Brain(model, out / "series", spend=cap) if cap is not None and model.startswith("openrouter/") else None
 
     def calls_usd(self):
@@ -195,13 +197,19 @@ class Series:
             return max(self.key.usage() - self.key.start_usage, reported)
         return reported
 
+    def headroom(self, rows=()):
+        """What the next run or call may take (the architect's N4): 1.5× the largest run seen, at least
+        $0.10, never above the per-run --budget."""
+        self.largest = max([self.largest] + [float(r.get("usd") or 0) for r in rows])
+        return min(self.per_call or 0, max(0.10, 1.5 * self.largest))
+
     def check(self, what, rows=()):
         if self.cap is None:
             return
-        spent = self.spent(rows)
-        if spent + (self.per_call or 0) > self.cap:
+        spent, need = self.spent(rows), self.headroom(rows)
+        if spent + need > self.cap:
             raise SeriesStop("%s not started: spent %.4f of the series' %.4f USD, and it may take up to %.4f"
-                             % (what, spent, self.cap, self.per_call or 0))
+                             % (what, spent, self.cap, need))
 
 
 def main(argv=None):
