@@ -50,6 +50,10 @@ def score_one(variant, world, seed, a, runs):
     row.update({"rc": rc, "seconds": secs})
     state = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
     row.update({"phase": state.get("phase"), "status": state.get("status"), "proposals": state.get("proposals"), "accepted": state.get("accepted")})
+    if rc != 0 and row["status"] in (None, "running"):
+        # the driver never wrote its end (opus's step 1 review N2: the OOM run's row said "running"): a
+        # signal's kill (the memory scope's OOM: SIGKILL, 137 through the shell) or a crash, said so
+        row["status"] = "killed" if rc in (-9, 137) or rc < 0 else "crashed (rc %d)" % rc
     cost = jl(d / "cost.jsonl")
     row.update({"calls": len(cost), "usd": round(sum(float(c.get("cost") or 0) for c in cost), 4)})
     events = jl(d / "run.log.jsonl")

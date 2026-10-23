@@ -116,3 +116,17 @@ def test_one_rewrite_round_scores_the_edited_skill(tmp_path):
     assert [x["round"] for x in h] == [0, 1] and h[1]["card"]["variant"] == "rw1" and "why" in h[1]
     assert "+0. Read the record's facts" in h[1]["diff"]
     assert (tmp_path / "rw0" / "scorecard.json").exists() and (tmp_path / "rw1" / "scorecard.json").exists()
+
+
+def test_a_killed_run_is_said_so(tmp_path, monkeypatch):
+    """opus's step 1 review N2: a driver killed before it wrote its end (the 6G scope's OOM) is
+    `killed` on the card, not `running`."""
+    from types import SimpleNamespace
+    from policy import scorecard
+    d = tmp_path / "v" / "alfworld-s1" / "state"
+    d.mkdir(parents=True)
+    (d / "run.json").write_text(json.dumps({"phase": "explore", "status": "running", "proposals": 3, "accepted": 0}))
+    rcs = iter([137, 1, 1])
+    monkeypatch.setattr(scorecard, "run", lambda cmd, timeout: (next(rcs), "", "", 1.0))
+    a = SimpleNamespace(brain="script:/dev/null", discovery=2, gate_games=2, budget=None, skill=None, set=[], heldout=2, timeout=10)
+    assert scorecard.score_one("v", "alfworld", 1, a, tmp_path)["status"] == "killed"
