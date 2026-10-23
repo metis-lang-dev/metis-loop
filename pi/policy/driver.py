@@ -312,7 +312,7 @@ class Driver:
         lines = block_of(answer)
         text, info = splice(self.base(), lines)
         if text == self.base():
-            self.say("proposal", verdict="none", why="the brain proposed no change", purpose=purpose)
+            self.say("proposal", verdict="none", why="the brain proposed no change", purpose=purpose, call=self.called())
             return "none"
         for _ in range(self.cfg["repairs"]):
             words = self.predictor("candidate", text).compiles(seed_game)
@@ -320,7 +320,7 @@ class Driver:
                 break
             lines = block_of(self.ask(prompt + "\n\n" + prompts.repair(lines, words), purpose + "-repair"))
             text, info = splice(self.base(), lines)
-        v = self.judge("program", info=info, cost=self.last_cost(), text=text)
+        v = self.judge("program", info=info, cost=self.last_cost(), call=self.called(), text=text)
         # policy-tuning (s-1caedae5): a fits refusal in explore comes back to the brain ONCE, with the gate's
         # reason in its terms — what the rule consumes that the world keeps, what it misses, what it needs
         # that the record lacks, the record it contradicts (measure.explain); the repaired lines are judged
@@ -333,7 +333,7 @@ class Driver:
                 lines = block_of(self.ask(prompt + "\n\n" + prompts.fit_repair(lines, why), purpose + "-fit"))
                 text2, info2 = splice(self.base(), lines)
                 if text2 != self.base() and text2 != text and not self.predictor("candidate", text2).compiles(seed_game):
-                    return self.judge("program", info=info2, cost=self.last_cost(), text=text2)
+                    return self.judge("program", info=info2, cost=self.last_cost(), call=self.called(), text=text2)
         return v
 
     def ask(self, prompt, purpose):
@@ -347,10 +347,12 @@ class Driver:
             raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
                             "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: prompt_chars, a larger cap", "abandon"]) from None
 
-    def judge(self, kind, by="brain", info=None, cost=None, domain=None, **args):
+    def judge(self, kind, by="brain", info=None, cost=None, domain=None, call=None, **args):
         """A proposal through the gate (the brain's or, at re-engagement, the person's rule or edit),
         its bookkeeping one path for both: the counters, the current tree re-synced, the
         contradiction check; a gate's refusal in words is a refused proposal, not an end.
+        `call`: the brain's call whose lines are judged (its line in prompts.jsonl; None for a move or
+        the person's), journaled with the proposal (nina's policy-tuning R2: the rewrite's digest).
         → "accept" | "refuse" | "error"."""
         self.state["proposals"] += 1
         phase = self.state["phase"] if not (by == "person" and self.state["phase"] == "explore") else "exploit"
@@ -358,11 +360,12 @@ class Driver:
             pl = self.gate.propose(kind, domain or DOMAIN, self.root, phase=phase, cost=cost, **args)
             v = pl["verdict"]
         except Exception as e:                      # noqa: BLE001 — the gate's refusal in words (no plan left waiting)
-            self.say("proposal", verdict="error", why=str(e), by=by, **(info or {}))
+            self.say("proposal", verdict="error", why=str(e), by=by, call=call, domain=domain or DOMAIN, **(info or {}))
             self.state["refused_run"] += 1
             self.save()
             return "error"
-        self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, by=by, **(info or {}))
+        self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, by=by, call=call,
+                 domain=domain or DOMAIN, **(info or {}))
         if v["verdict"] == "accept":
             self.state["accepted"] += 1
             self.state["accepts_since_refactor"] += 1
@@ -379,6 +382,11 @@ class Driver:
                             options=["note: what the rules miss", "phase: skip this state", "abandon"],
                             tried=self.journal_tail(), believes=[l for _, l in rules_of(self.base())])
         return v["verdict"]
+
+    def called(self):
+        """The brain's last call: its line in prompts.jsonl (1-based; the count survives a resume)."""
+        p = self.brain.run_dir / "prompts.jsonl"
+        return sum(1 for l in p.read_text().splitlines() if l.strip()) if p.exists() else None
 
     def last_cost(self):
         rows = jl_read(self.run / "cost.jsonl")

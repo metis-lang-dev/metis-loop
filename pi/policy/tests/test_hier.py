@@ -92,6 +92,11 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     assert prune["numbers"]["likelihood"] < 0                                 # the never-firing rules carry the world model
     assert split["numbers"]["replay_identical"] and split["numbers"]["vector"]["after"] < split["numbers"]["vector"]["before"] / 5
     assert conv["numbers"]["replay_identical"] and direct["numbers"]["replay_identical"]
+    # nina's R2: a move journals no call; the conventions, the brain's call whose lines were judged
+    logged = [json.loads(l) for l in (run / "run.log.jsonl").read_text().splitlines() if '"proposal"' in l]
+    calls = [e.get("call") for e in logged if e.get("event") == "proposal"]
+    prompts = (run / "prompts.jsonl").read_text().splitlines()
+    assert calls[0] is None and calls[1] is None and calls[3] is None and json.loads(prompts[calls[2] - 1])["purpose"] == "conventions"
     assert (run / "catalog" / "domains" / "director" / "director.llp").exists()
     assert d.evaluate("heldout", 2, "director") == 0
     ev = json.loads((run / "records" / "evaluate-heldout-director.json").read_text())

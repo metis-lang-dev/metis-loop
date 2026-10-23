@@ -119,8 +119,12 @@ def structural_of(d, world, a, row):
         out["handles_derived"] = dt.count("handles(")
         out["handles_declared"] = e.get("handles_declared")
     journal = jl(d / "state" / "journal.jsonl")
-    moves = {(x.get("numbers") or {}).get("move"): x for x in journal if x.get("event") == "proposal"}
-    replay = all((moves[m]["numbers"].get("replay_identical") and moves[m]["verdict"] == "accept") for m in ("split", "direct") if m in moves)
+    props = [x for x in journal if x.get("event") == "proposal"]
+
+    def held(m):        # nina's N2: a move tried is held when ANY of its proposals was accepted with the records replayed
+        ps = [x for x in props if (x.get("numbers") or {}).get("move") == m]
+        return not ps or any(x["verdict"] == "accept" and x["numbers"].get("replay_identical") for x in ps)
+    replay = held("split") and held("direct")
     def n_won(v):
         return int(v.split("/")[0]) if isinstance(v, str) and "/" in v and not v.startswith("error") else None
     flat, director = n_won(row.get("heldout_flat")), n_won(row.get("heldout_director"))
@@ -143,12 +147,15 @@ def add_arguments(ap):
     ap.add_argument("--timeout", type=int, default=3600)
 
 
-def score_variant(a, variant, skill, runs):
-    """One variant's card: every world × seed scored (score_one), the structural column beside it."""
+def score_variant(a, variant, skill, runs, guard=None):
+    """One variant's card: every world × seed scored (score_one), the structural column beside it.
+    `guard(rows)` is called before each run (the rewrite series' spend, nina's R1); it raises to stop."""
     a.skill = skill
     rows = []
     for world in a.worlds.split(","):
         for seed in (int(x) for x in a.seeds.split(",")):
+            if guard is not None:
+                guard(rows)
             row = score_one(variant, world, seed, a, runs)
             row["structural"] = structural_of(runs / variant / ("%s-s%d" % (world, seed)), world, a, row)
             rows.append(row)

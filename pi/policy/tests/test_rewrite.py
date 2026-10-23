@@ -37,14 +37,63 @@ def test_better_is_wins_on_every_world_then_structure_then_cost():
 
 def test_the_md_block_and_the_digest(tmp_path):
     assert rewrite.md_block("text\n```md\n## always\n1. x\n```\nmore") == "## always\n1. x\n"
+    inner = "```md\n## always\n1. e.g.\n```llp\ngo [dyn] : a -o b.\n```\n2. y\n```"
+    assert rewrite.md_block(inner) == "## always\n1. e.g.\n```llp\ngo [dyn] : a -o b.\n```\n2. y\n"     # nina's N1
     d = tmp_path / "v" / "alfworld-s1"
-    (d / "state").mkdir(parents=True)
-    (d / "state" / "journal.jsonl").write_text(json.dumps({"event": "proposal", "phase": "explore", "domain": "alf", "verdict": "refuse",
-                                                           "numbers": {"fits_records": False, "likelihood": 0.0}, "why": ["not: fits"]}) + "\n")
-    (d / "prompts.jsonl").write_text(json.dumps({"call": 1, "purpose": "explore", "answer": "go [dyn] : at(L) -o at(L2)."}) + "\n")
-    (d / "run.log.jsonl").write_text(json.dumps({"event": "fit-repair", "purpose": "explore", "why": "consumes at(L), which the world keeps"}) + "\n")
-    text = rewrite.digest(card("v", [dict(row("alfworld", "0/10"), phase="explore", accepted=0, proposals=1, status="disengaged")]), tmp_path)
-    assert "refuse" in text and "the brain's lines: go [dyn]" in text and "fit-repair (explore): consumes at(L)" in text
+    d.mkdir(parents=True)
+    # nina's R2: the split (a move, no call) between two brain proposals; the second judged its compile repair's lines
+    prompts = [{"purpose": "explore", "answer": "go [dyn] : at(L) -o at(L2)."},
+               {"purpose": "conventions", "answer": "broken"}, {"purpose": "conventions-repair", "answer": "the repaired lines"}]
+    (d / "prompts.jsonl").write_text("".join(json.dumps(p) + "\n" for p in prompts))
+    log = [{"event": "proposal", "phase": "explore", "domain": "alf", "verdict": "refuse", "by": "brain", "call": 1,
+            "numbers": {"fits_records": False, "likelihood": 0.0}, "why": ["not: fits"]},
+           {"event": "fit-repair", "purpose": "explore", "why": "consumes at(L), which the world keeps"},
+           {"event": "proposal", "phase": "refactor", "domain": "alf", "verdict": "refuse", "by": "brain", "call": None, "split": {}},
+           {"event": "proposal", "phase": "refactor", "domain": "alf", "verdict": "refuse", "by": "brain", "call": 3}]
+    (d / "run.log.jsonl").write_text("".join(json.dumps(e) + "\n" for e in log))
+    c = card("v", [dict(row("alfworld", "0/10"), phase="explore", accepted=0, proposals=3, status="disengaged")])
+    text = rewrite.digest(c, tmp_path)
+    assert "the brain's lines: go [dyn]" in text and "fit-repair (explore): consumes at(L)" in text
+    assert text.count("the brain's lines") == 2 and "the brain's lines: the repaired lines" in text and "broken" not in text
+    for e in log:                                         # a run journaled before the call ids: paired in order
+        e.pop("call", None)
+    (d / "run.log.jsonl").write_text("".join(json.dumps(e) + "\n" for e in log))
+    assert rewrite.digest(c, tmp_path) == text
+    assert rewrite.judged_calls(prompts + [{"purpose": "probe-pick"}, {"purpose": "explore-fit"}]) == [1, 3, 5]
+
+
+def test_the_series_stops_before_its_cap(tmp_path, monkeypatch):
+    """nina's R1: the series' spend (the key's /key usage, stubbed here) is checked before every run and
+    every rewrite call; one that could pass the cap is not started, and history.json says so."""
+    from policy import scorecard
+    from policy.brain import Brain
+    key = {"usage": 10.0}
+    monkeypatch.setattr(Brain, "usage", lambda self: key["usage"])
+    runs_scored = []
+
+    def score_one(variant, world, seed, a, runs):
+        runs_scored.append((variant, world))
+        key["usage"] += 0.3                                 # each run spends 0.30 on the key
+        return {"world": world, "seed": seed, "usd": 0.3, "rules": 5, "heldout_flat": "5/10"}
+
+    def ask(self, prompt, purpose=""):
+        key["usage"] += 0.05
+        return "```md\n## always\n0. new\n## explore\n## exploit\n## refactor\n```"
+    monkeypatch.setattr(scorecard, "score_one", score_one)
+    monkeypatch.setattr(scorecard, "structural_of", lambda *x: None)
+    monkeypatch.setattr(Brain, "ask", ask)
+    skill = tmp_path / "skill.md"
+    skill.write_text("## always\n## explore\n## exploit\n## refactor\n")
+    rc = rewrite.main(["--skill", str(skill), "--rounds", "3", "--worlds", "alfworld,scienceworld", "--brain", "openrouter/x/y",
+                       "--budget", "0.5", "--series-budget", "1.2", "--runs", str(tmp_path / "runs")])
+    assert rc == 0
+    # rw0's two runs (0.6), the rewrite call (0.65), rw1's first run (0.95); its second could pass 1.2: not started
+    assert runs_scored == [("rw0", "alfworld"), ("rw0", "scienceworld"), ("rw1", "alfworld")]
+    h = json.loads((tmp_path / "runs" / "rewrite" / "history.json").read_text())
+    assert h[1]["round"] == 1 and h[1]["why"] == "the series stopped while its card was scored"
+    assert "rw1's next run not started: spent 0.9500 of the series' 1.2000" in h[-1]["stopped"] and h[-1]["spent"] == 0.95
+    with pytest.raises(SystemExit):                          # a paid brain without a series cap is refused
+        rewrite.main(["--skill", str(skill), "--brain", "openrouter/x/y", "--budget", "0.5", "--runs", str(tmp_path / "r2")])
 
 
 slow = pytest.mark.skipif(not (os.environ.get("ALFWORLD_DATA") and os.environ.get("METIS_POLICY_SLOW")),
