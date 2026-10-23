@@ -24,7 +24,7 @@ gate games 2, held-out 10.
 | fit-skill | alfworld | 1 | exploit | 4 / 10 | 15 | 0.0332 | 4 | 0.0083 | 0/10 | no_progress |
 | fit-skill | alfworld | 2 | exploit | 5 / 9 | 17 | 0.0383 | 12 | 0.0032 | 0/10 | contradiction |
 | fit-skill | scienceworld | 1 | exploit | 5 / 13 | 36 | 0.0726 | 5 | 0.0145 | 0/10 | no_progress |
-| fit-skill | scienceworld | 2 | explore | 0 / 3 | 7 | 0.0178 | 0 | — | 0/10 | **oom-killed at 6G** |
+| fit-skill | scienceworld | 2 | explore | 0 / 3 | 7 | 0.0178 | 0 | — | 0/10 | **killed** (oom at the 6G cap) |
 
 **Spend:** $0.3208 by the key's meter ($0.3179 reported) for the eight runs. Before them, the
 regression below cost $0.0287 (seven crashed runs). Step 1 in all: **$0.35**.
@@ -44,8 +44,8 @@ regression below cost $0.0287 (seven crashed runs). Step 1 in all: **$0.35**.
   `fit-skill` 6/9). Explore now builds ALFWorld's action rules from the empty domain (all six
   of them for `fit` s1: go, take_plain/open, put_plain/open, open_closed), where the old driver
   stalled at one. Six of eight runs reached exploit.
-- **What is still refused:** in exploit, every policy proposal but one per ALFWorld seed failed the
-  generalization gain (the likelihood up, or the success up with it not down). No run built a policy
+- **What is still refused:** in exploit, the policy proposals failed the generalization gain, but for
+  one per variant on ALFWorld seed 2 (none on seed 1, none on ScienceWorld) (the likelihood up, or the success up with it not down). No run built a policy
   that wins a held-out game: **0/10 everywhere**, against the scripted reference's 10/10. The runs
   ended by the driver's own rules: no_progress (5), contradiction (2: both ALFWorld seed 2, where
   the policy's rules answered one action two ways).
@@ -98,11 +98,13 @@ regression below cost $0.0287 (seven crashed runs). Step 1 in all: **$0.35**.
 
 ### Reproduce
 ```sh
-cd metis-loop/pi    # the user's $1.00 stop is the series runner's, around policy.scorecard.score_one
-python -m policy.scorecard --variant fit --worlds alfworld,scienceworld --seeds 1,2 \
-    --brain openrouter/deepseek/deepseek-v4-pro --budget 0.50 --discovery 2 --gate-games 2 --heldout 10
-python -m policy.scorecard --variant fit-skill --skill policy/skills/hierarchy.md …   # the same
+cd metis-loop/pi    # policy/card.py: the variants interleaved under one series cap (the user's $1.00 stop)
+python -m policy.card --variant fit --variant fit-skill=policy/skills/hierarchy.md --worlds alfworld,scienceworld \
+    --seeds 1,2 --brain openrouter/deepseek/deepseek-v4-pro --budget 0.50 --series-budget 1.00 \
+    --discovery 2 --gate-games 2 --heldout 10
 ```
+The card's `status` for a driver the 6G scope killed is `killed` (scorecard 262bc46); the step-1 run
+was scored before that and its card file says `running`.
 The runs are under `policy-runs/fit*/` (git-ignored); the crashed ones under
 `policy-runs/_aborted/step1-crashed-20261023/`.
 
