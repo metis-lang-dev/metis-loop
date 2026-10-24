@@ -146,6 +146,9 @@ export async function startNav(page) {
   const panel = window.panel = new Panel(document.getElementById('talkpanel'), {
     backend, table: await (await fetch('lib/fsttm.json')).json(), title: 'navigation',
     flipKey,
+    // fsttm-web's one panel (dialog-panel s-277c33e3): the strip in the bar, the dialog's sections closed until
+    // opened, the console's own frames not kept as dialog events (frames: false); ?host: the backchannel to the host
+    sections: ['floor', 'state', 'turns', 'events'], frames: false, host: new URLSearchParams(location.search).has('host'),
     side: { label: 'formalization agent', send: async text => {
       if (!seat()) throw new Error(NO_SEAT);
       page.say(text);                                // the CLAUDE dock shows the agent's answer
