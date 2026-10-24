@@ -23,25 +23,11 @@ gateway and `dev_serve.py` serve them at `/lib/` (`loop/shell_lib.py`);
 an artifact publish passes them as files
 (`files: {"lib/shell.css": "console/lib/shell.css", "lib/shell.js": "console/lib/shell.js"}`).
 
-**The voice navigation** (console-nav s-b923ebfe step 2). Started by `console-nav.sh` (the
-console plus metis-agent's py service on Gemma E2B serving this checkout's `domains/ui` and
-`domains/repl`), and only when the gateway names an agent (`[console] metis_agent`, the
-meta/agent frame):
-- `lib/nav.js` wires it: the TALK dock holds fsttm-web's dialog panel (the one input, voice or
-  text), the page is the host of the `ui` domain through `lib/ui-port.js` (the browser's focus
-  events as the port's world lines, the agent's effects as what the page does), and the
-  `repl` domain's page effects (open, apply, tell) are the page's own open, plan and chat/say.
-- The input's two channels: navigation, and the formalization agent's chat. TELL and the flip
-  key (`[console] flip_key`, ctrl+space) move it; "metis, …" in the chat is navigation for one
-  utterance; a held Space is the chat while held (HOLD/RELEASE to the rules).
-- The widgets are the elements with `data-w` (the ui instance's names) and `data-role`; the
-  APPLY dialog is a modal `<dialog>` raised through the port. The editor's buttons use `data-ed`.
-- `lib/panel.js`, `panel.css`, `ws.js`, `dialog.js`, `fsttm.js`, `fsttm.json`, `attention.js` and
-  `tts.js` are copies of fsttm-web 0.5.1 (`lib/`, 49445a6), as the shell is a copy. The page's
-  import map resolves ws.js's one bare import. `lib/ui-port.js` is the synthetic page's port
-  (metis-loop tests/synth, b65401a) with the console's three additions in its header.
-- The agent's surprise records go to `.metis/console-nav/records/`, which the RECORDS dock lists
-  beside the catalog's.
+**No voice navigation** (voice-nav-removal s-90621b2c; the user, 2026-10-24: one voice
+paradigm, the dialog with the agent and the game; the web UI stays web). console-nav's TALK
+dock, its navigation agent (`console-nav.sh`, `domains/ui`, `domains/repl`), `lib/nav.js`,
+`lib/ui-port.js` and the fsttm-web copies it imported are removed: the CLAUDE dock is the
+console's one chat, as text. The docks keep the keyboard and the mouse.
 
 Contract with the loop (SPEC §6): the page renders records/candidates/
 catalogs read-only, writes ONLY candidate decisions (approve/reject)

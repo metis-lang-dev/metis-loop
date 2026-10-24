@@ -13,11 +13,8 @@ def test_skeleton_free_title_style_first_one_script():
     assert PAGE.lstrip().startswith("<title>")
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
     # one inline script; the shell (console/lib/) and the SDK's CATALOG widget
-    # (sdk/catalog/) linked relative, before the page's own; then the import map of
-    # fsttm-web's copies and the module that starts the voice navigation (console-nav)
-    assert PAGE.count("<script") == 5 and PAGE.count("<script>") == 1
-    assert PAGE.count('<script type="importmap">') == 1 and PAGE.count('<script type="module">') == 1
-    assert PAGE.index("<script>") < PAGE.index('<script type="module">')
+    # (sdk/catalog/) linked relative, before the page's own
+    assert PAGE.count("<script") == 3 and PAGE.count("<script>") == 1
     assert PAGE.index('<link rel="stylesheet" href="lib/shell.css">') < PAGE.index("<style>")
     assert PAGE.index('<link rel="stylesheet" href="sdk/catalog/catalog.css">') < PAGE.index("<style>")
     assert PAGE.index('<script src="lib/shell.js"></script>') < PAGE.index("<script>")
@@ -141,49 +138,16 @@ def test_the_catalog_list_is_the_sdks_widget():
     assert web.widget_file("../catalog.py") is None and web.widget_file("x.js") is None
 
 
-UI = Path(__file__).resolve().parents[1] / "domains" / "ui" / "ui.llp"
 LIB = Path(__file__).resolve().parents[1] / "console" / "lib"
 
 
-def test_every_widget_of_the_ui_instance_is_on_the_page():
-    """console-nav step 2: the ui instance's widgets are the page's elements (data-w, with the
-    instance's role in data-role): in the markup, or set where the page makes them (the
-    editor's windows, the CHAT dock's editor) or tags them as they render (lib/nav.js: the
-    CATALOG dock's readme, copy and extensions)."""
-    inst = UI.read_text()
-    widgets = re.search(r"^type\s+widget\s*\{([^}]*)\}", inst, re.M).group(1).split()
-    roles = dict(re.findall(r"^role\((\w+),\s*(\w+)\)\.", inst, re.M))
-    nav = (LIB / "nav.js").read_text()
-    for w in widgets:
-        r = roles[w]
-        static = re.search(r'data-w="%s" data-role="%s"' % (w, r), PAGE)
-        made = re.search(r'\{w:"%s",role:"%s"\}' % (w, r), PAGE)
-        tagged = re.search(r"tag\('[^']+', '%s', '%s'\)" % (w, r), nav)
-        assert static or made or tagged, f"{w} ({r}) is not on the page"
-    assert not re.search(r'data-w="(recompile|extension|download|min|close)"', PAGE)   # the editor's buttons are data-ed
-
-
-FSTTM_COPIES = ("panel.js", "panel.css", "bench.js", "fsmview.js", "ws.js", "dialog.js", "fsttm.js", "fsttm.json",
-                "attention.js", "tts.js")
-
-
-def test_the_fsttm_web_copies_are_its_lib():
-    """dialog-panel s-277c33e3 step 3: console/lib's fsttm-web files are byte copies of a sibling
-    fsttm-web checkout's lib/ (copies, not a dependency); skipped without one."""
-    import pytest
-    src = next((d / "fsttm-web" / "lib" for d in Path(__file__).resolve().parents[1:5] if (d / "fsttm-web" / "lib").is_dir()), None)
-    if src is None:
-        pytest.skip("no fsttm-web checkout beside this one")
-    differ = [f for f in FSTTM_COPIES if (LIB / f).read_bytes() != (src / f).read_bytes()]
-    assert not differ, "console/lib differs from %s: copy %s" % (src, ", ".join(differ))
-
-
-def test_the_fsttm_web_copies_and_the_port():
-    """The dialog panel is fsttm-web's (lib/panel.js and what it imports, copied as the shell
-    is); the page's import map resolves ws.js's one bare import; ui-port.js is the page as
-    the ui domain's host, nav.js the wiring."""
-    for f in FSTTM_COPIES + ("ui-port.js", "nav.js"):
-        assert (LIB / f).is_file(), f
-    assert '"fsttm-web/tts":"./lib/tts.js"' in PAGE and '<link rel="stylesheet" href="lib/panel.css">' in PAGE
-    assert 'import {startNav} from "./lib/nav.js";' in PAGE
-    assert '<dialog id="savewin" data-w="apply" data-role="dialog"' in PAGE   # a real modal: showModal through the port
+def test_no_voice_navigation_on_the_page():
+    """voice-nav-removal s-90621b2c (the user, 2026-10-24: one voice paradigm, the dialog with the
+    agent and the game; the web UI stays web): the console has no TALK dock, no navigation agent,
+    no flip key and no widget tags; CLAUDE is its one chat. console/lib is the shell alone — the
+    fsttm-web copies went with TALK (copies, not a dependency: none is left to keep equal)."""
+    assert sorted(p.name for p in LIB.iterdir()) == ["shell.css", "shell.js"]
+    for gone in ("dock-talk", 'data-strip="talk"', "nav.js", "ui-port", "importmap", "fsttm-web/",
+                 "navHook", "consolePage", "flip_key", "data-w=", "data-role=", "lib/panel.css"):
+        assert gone not in PAGE, gone
+    assert 'id="dock-claude"' in PAGE and '<dialog id="savewin"' in PAGE

@@ -102,10 +102,6 @@ def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-# the navigation agent's records (console-nav.sh): the console's own domains, ui and repl
-NAV_RECORDS = ".metis/console-nav/records/"
-
-
 class ConsoleServer:
     """{sid: Repl} plus the per-session epoch."""
 
@@ -401,13 +397,11 @@ class ConsoleServer:
     def records(self):
         """Every surprise record the domain agents sank in the checkout
         (domains/<…>/records/<session>.jsonl, one record per line with
-        its close), newest first; escalated ones carry mined_text. The
-        console's own domains' records too (console-nav.sh: the navigation
-        agent serving ui and repl sinks them in .metis/console-nav/records/)."""
+        its close), newest first; escalated ones carry mined_text."""
         out = []
         for f in self.root.rglob("records/*.jsonl"):
             rel = f.relative_to(self.root).as_posix()
-            if catalog.hidden(rel) and not rel.startswith(NAV_RECORDS):     # .metis/records: the loop's own, not a domain agent's
+            if catalog.hidden(rel):     # .metis/records: the loop's own, not a domain agent's
                 continue
             dom = f.parent.parent.relative_to(self.root).as_posix()
             try:
