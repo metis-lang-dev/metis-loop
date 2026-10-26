@@ -88,6 +88,7 @@ def _perceived(atoms):
 
 class MiniHack:
     DOMAIN = "mh"
+    HOST = "mh_host.py:make"
     DESCRIPTION = ("a NetHack room (MiniHack: a lit grid of cells; the agent, the stairs down — standing on them wins —, "
                    "and maybe an item, a monster, a closed door with the stairs behind it, a trap)")
     SPLITS = {"discovery": "discovery", "gate": "gate", "heldout": "held_out", "valid_unseen": "held_out"}

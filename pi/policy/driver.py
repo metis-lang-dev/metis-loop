@@ -31,6 +31,7 @@ RUN/cost.jsonl (one line per brain call: its reported cost, the key's usage befo
 import argparse
 import hashlib
 import json
+import os
 import random
 import re
 import shutil
@@ -39,7 +40,7 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import alfworld, hier, minihack, scienceworld
+from . import alfworld, compose, hier, minihack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
@@ -176,6 +177,8 @@ class Driver:
 
     # ── the gate's numbers ──
     def gain(self, plan, phase):
+        if plan.get("domain") == compose.DIRECTOR:
+            return self.gain_compose()
         if plan.get("domain") == "director":
             return self.gain_direct(next(f["text"] for f in plan["files"] if f["path"].endswith("director.llp")))
         text = next(f["text"] for f in plan["files"] if f["path"].endswith("%s.llp" % DOMAIN))
@@ -290,6 +293,49 @@ class Driver:
              "ambiguous": {"before": amb, "after": amb}}
         self.say("direct-numbers", beats=len(rd[0].get("beats") or []) if rd else 0,
                  alternatives=sum(r.get("alternatives", 0) for r in rd), **n)
+        return n
+
+    def composition(self, root, sp):
+        """SP as a tick tree under ROOT/domains/ (compose.compose) and its interface check. An I4 finding of two
+        writers of a state pred adds a second resource (hands, …) gating both writers' rules that write it, and
+        composes again (the architect's Q1 addition). → (Composition, the check's report, the resources added)."""
+        metisc = os.environ.get("METISC") or "metisc"
+        from metis.catalog import protocol_stub
+        home = Path(protocol_stub.__file__).resolve().parent              # its iface/: the protocol, the tree director
+        cap = compose.capacity_of(self.disc[0].instance_text())
+        extra, added = {}, []
+        while True:
+            comp = compose.compose(sp, self.World, root, cap, start=self.start, holds_extra=extra, display=self.World.DESCRIPTION)
+            rep_ = compose.interface(comp.path, metisc, home)
+            two = [(p, ws) for p, ws in compose.two_writers(rep_) if not any(p in r for r in added)]
+            if not two or len(extra) >= len(compose.SECOND):
+                self._composed = (comp, rep_, added)
+                return comp, rep_, added
+            for p, writers in two:
+                r = compose.SECOND[len(extra)]
+                extra[r] = {w: [n for n in sp.domains.get(w, ()) if p in hier.rule_atoms(sp.rules[n])[2]] for w in writers}
+                added.append({"resource": r, "pred": p, "writers": writers})
+
+    def gain_compose(self):
+        """The composition (written by `composition` under RUN/hier/compose/): metisc --interface's counts, the
+        split's replay of the current program's records and its held-out success against the flat program's — the
+        tree's own run on metis-agent's Live is the parity harness's (ALFWorld) — the vector the split's with the
+        tick's rules and the director's."""
+        base = self.base()
+        comp, rep_, _ = self._composed
+        tree = comp.path.parent
+        r0 = [w.act(self._sync_tree("current", base), self.cfg["act_steps"], seed=self.seed) for w in self.disc]
+        rm = self.hier_runs(self.disc, base, "compose", guides=[r["commands"] for r in r0])
+        gm = self.hier_runs(self.held, base, "compose")
+        g0 = [w.act(self._sync_tree("current", base), self.cfg["act_steps"], seed=self.seed) for w in self.held]
+        v0 = self.vector_of(base, "current")
+        n = {"move": "compose",
+             "replay_identical": self.replays(r0, rm),
+             "success": round(sum(e["won"] for e in gm) / max(1, len(gm)) - sum(e["won"] for e in g0) / max(1, len(g0)), 6),
+             "interface": {"errors": rep_["counts"][0], "warnings": rep_["counts"][1]},
+             "vector": {"before": v0, "after": v0 + sum(len(g) for g in comp.generated.values())},   # + the tick's rules
+             "tree_parity": "pending (pi/policy/parity.py: ALFWorld, after nav-belief 2b)"}
+        self.say("compose-numbers", errors=rep_["errors"][:12], warnings=rep_["warnings"], **n)
         return n
 
     def success(self, tree):
@@ -472,11 +518,14 @@ class Driver:
         refactoring undone)."""
         sha = hashlib.sha256(self.base().encode()).hexdigest()[:12]
         seen = self.state.setdefault("bases", [])
-        if sha in seen[:-1]:
+        if seen and seen[-1] == sha:                 # the base unchanged (a director's or the composition's accept)
+            pass
+        elif sha in seen[:-1]:
             raise Disengage("contradiction", "The base came back to an earlier accepted version (%s): a change undone. "
                             "Which of the two should stand?" % sha, options=["note: which version", "phase: skip", "abandon"],
                             believes=[l for _, l in rules_of(self.base())])
-        seen.append(sha)
+        else:
+            seen.append(sha)
         for rec in self.transitions()[-60:]:
             by = {}
             for name, after in self.current().events(rec):
@@ -621,6 +670,18 @@ class Driver:
                 moved |= self.judge("program", domain="director", info={"direct": sp.ports()}, text=dtext) == "accept"
             elif amb:
                 self.say("direct-waits", why="goal kinds with more than one specialist: %s" % json.dumps(amb))
+            # policy-tuning-2 (brief v2 §A): COMPOSE, the split as a tick tree — members that trigger themselves, the
+            # generic tree director's instance (the judged text), metisc --interface as the gate's step
+            if not amb and not (self.root / "domains" / compose.DIRECTOR / ("%s.llp" % compose.DIRECTOR)).exists():
+                self.move = "compose"
+                comp, rep_, added = self.composition(self.run / "hier" / "compose" / "catalog", sp)
+                dtext = (comp.path.parent / compose.DIRECTOR / ("%s.llp" % compose.DIRECTOR)).read_text()
+                v = self.judge("program", domain=compose.DIRECTOR, info={"compose": {
+                    "members": comp.members, "resources": comp.resources, "added": added,
+                    "interface": rep_["counts"], "errors": rep_["errors"][:12], "warnings": rep_["warnings"]}}, text=dtext)
+                if v == "accept":                            # the accepted director's composition, beside the base
+                    self.composition(self.root, sp)
+                moved |= v == "accept"
         self.move = None
         self.state["refactored_at"] = hashlib.sha256(self.base().encode()).hexdigest()[:12]
         if moved or sp.is_split():

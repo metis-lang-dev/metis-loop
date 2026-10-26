@@ -84,6 +84,7 @@ class ScienceWorld:
         return {"thing": things} if things else {}
 
     DOMAIN = "sw"
+    HOST = "sw_host.py:make"
     DESCRIPTION = "a text laboratory (ScienceWorld: rooms behind doors, containers, devices, wires, substances; a task whose answer only an experiment shows)"
     SPLITS = {"discovery": "train", "gate": "dev", "heldout": "test"}
     VERB_TEXT = VERB_TEXT

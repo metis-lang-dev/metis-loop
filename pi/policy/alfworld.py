@@ -159,6 +159,7 @@ class AlfWorld:
         return {"object": objs} if objs else {}
 
     DOMAIN = "alf"
+    HOST = "alf_host.py:make"            # a composition member's host (metis-worlds alfworld/world, its package shim)
     DESCRIPTION = "a household world (ALFWorld)"
     SPLITS = {"discovery": "train", "gate": "valid_seen", "heldout": "valid_unseen"}
     VERB_TEXT = {"go": "go to the receptacle at location L2 (R, or the one holding O)", "open": "open R", "take": "take O from R", "put": "put O in/on R"}

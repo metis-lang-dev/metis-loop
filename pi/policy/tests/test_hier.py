@@ -83,10 +83,18 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     assert d.go("refactor") == 0
     props = [e for e in d.gate.journal() if e.get("event") == "proposal"]
     verdicts = [(e["domain"], e["verdict"]) for e in props]
-    assert verdicts == [("alf", "refuse"), ("alf", "accept"), ("alf", "accept"), ("director", "accept")], verdicts
-    prune, split, conv, direct = props
-    # step 2c: the gate judges each move by its own gain (metispy 48e091b)
-    assert [e["why"][0] for e in props] == ["move: prune", "move: split", "move: conventions", "move: direct"]
+    assert verdicts == [("alf", "refuse"), ("alf", "accept"), ("alf", "accept"), ("director", "accept"),
+                        ("tree_director", "accept")], verdicts
+    prune, split, conv, direct, comp = props
+    # step 2c: the gate judges each move by its own gain (metispy 48e091b); policy-tuning-2: the compose move
+    assert [e["why"][0] for e in props] == ["move: prune", "move: split", "move: conventions", "move: direct", "move: compose"]
+    assert comp["numbers"]["interface"]["errors"] == 0 and comp["numbers"]["replay_identical"]
+    assert any(w.startswith("the interface check passes") for w in comp["why"])
+    tree = run / "catalog" / "domains"
+    assert (tree / "composition.yaml").exists() and (tree / "tick_types.llp").exists()
+    assert "gating: program" in (tree / "grasp" / "domain.yaml").read_text()
+    assert "$tick__grant(grasp, motion)" in (tree / "grasp_domain.llp").read_text()
+    assert "priority(grasp, task)." in (tree / "tree_director" / "tree_director.llp").read_text()
     assert conv["numbers"]["ambiguous"]["after"] < conv["numbers"]["ambiguous"]["before"]
     assert conv["numbers"]["vector"]["after"] <= conv["numbers"]["flat"] and direct["numbers"]["ambiguous"]["after"] == 0
     assert prune["numbers"]["likelihood"] < 0                                 # the never-firing rules carry the world model
@@ -96,7 +104,7 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     logged = [json.loads(l) for l in (run / "run.log.jsonl").read_text().splitlines() if '"proposal"' in l]
     calls = [e.get("call") for e in logged if e.get("event") == "proposal"]
     prompts = (run / "prompts.jsonl").read_text().splitlines()
-    assert calls[0] is None and calls[1] is None and calls[3] is None and json.loads(prompts[calls[2] - 1])["purpose"] == "conventions"
+    assert calls[0] is None and calls[1] is None and calls[3] is None and calls[4] is None and json.loads(prompts[calls[2] - 1])["purpose"] == "conventions"
     assert (run / "catalog" / "domains" / "director" / "director.llp").exists()
     assert d.evaluate("heldout", 2, "director") == 0
     ev = json.loads((run / "records" / "evaluate-heldout-director.json").read_text())
