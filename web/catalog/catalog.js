@@ -6,7 +6,8 @@
    — the user's one exception to
    copies-only, kept to the catalog panel. Its rows are the SDK's catalog
    index() (the loop console) or listing() (the agent console): the domains
-   first, with their display line and what each has.
+   first, with their display line and what each has; a row with `shared`
+   is METIS_HOME's (a package the catalog root lacks): a shared tag.
 
    MetisCatalog.render(box, rows, opts) fills box with the list:
      opts.tags      the `has` keys shown as tags, in order (default host notch readme)
@@ -77,6 +78,7 @@
       });
       const hd = el('div', { class: 'hd' }, el('span', { class: 'nm' }, d.name),
         o.display && d.display && d.display !== d.name ? el('span', { class: 'empty' }, d.display) : null,
+        d.shared ? el('span', { class: 'tag shared', title: "a shared package: METIS_HOME's (the catalog has none of this name)" }, 'shared') : null,
         ...parts.lead, ...tags, ...parts.head,
         parts.acts.length ? el('span', { class: 'acts' }, ...parts.acts) : null);
       const row = el('div', {
