@@ -23,8 +23,8 @@
 # The python is the workspace venv (perotheia-packages/.venv: metispy,
 # metis-loop[console] editable) unless VENV says otherwise; it has the
 # catalog's loader (pip install metis-catalog, or -e a checkout). The loop
-# SDK (./sdk, metis_loop_sdk: the one access to the catalog, the CATALOG
-# widget, the model adapters) is pip-installed editable on first start. The
+# SDK (./sdk, metis_loop_sdk: the CATALOG widget, the model adapters; the
+# catalog itself is metispy's metis.catalog) is pip-installed editable on first start. The
 # gateway's pid and log stay in this repo's .run/ (one console on the port),
 # with the catalog it serves in .run/catalog. The page's
 # shell (console/lib/shell.css + shell.js) is this repo's own copy, served at

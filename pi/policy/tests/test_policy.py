@@ -42,7 +42,7 @@ def test_the_empty_base_keeps_the_declarations_and_no_rule():
         from policy.alfworld import empty_base, rules_of
         text = empty_base()
     except SystemExit:
-        pytest.skip("the alfworld world is not installed in this python (pip install -e metis-worlds/alfworld)")
+        pytest.skip("no metis-worlds checkout beside this one")
     assert rules_of(text) == [] and "pred inrecep(object, receptacle)" in text
     assert "pred unchosen" in text and "pred placed" in text and "pred want" not in text and "pred carrying" not in text
 

@@ -101,9 +101,10 @@ def test_take_then_apply_writes_the_package_byte_for_byte(name, tmp_path):
     a, b = _tree(src / _rel(name)), _tree(dst / "domains" / name)      # apply writes a new package at domains/<name>
     carried = {f for f in a if f in b}
     assert {f: b[f] for f in carried} == {f: a[f] for f in carried}
-    # what take leaves behind is only what its docstring says it does not carry
+    # what take leaves behind is only what its docstring says it does not carry: intent/ (apply generates
+    # it again), the package's own cases/ (its hand-written tests) and documents beside its README
     left = sorted(set(a) - set(b))
-    assert all(not f.endswith((".llp", ".py", ".yaml", ".json")) or f.startswith("intent/") for f in left), left
+    assert all(not f.endswith((".llp", ".py", ".yaml", ".json")) or f.startswith(("intent/", "cases/")) for f in left), left
     # the same write again changes nothing
     assert catalog.plan(name, r=dst, **kw) == []
 

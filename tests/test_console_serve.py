@@ -155,3 +155,31 @@ def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):
     assert srv.readme() is None
     srv.open_session("p2", {"llp": "three_pigs"})
     assert "narrate" not in srv.shells["p2"].sys_prompts           # no README: the doctrine alone
+
+
+def test_a_package_resolves_from_the_root_then_metis_home(tmp_path, monkeypatch):
+    """metis-packages step 3 (the user's ruling): the console started in DIR serves DIR; a package
+    DIR lacks resolves from METIS_HOME (listed after DIR's, marked shared), as an include does."""
+    from metis import catalog
+    if not hasattr(catalog, "shared"):
+        pytest.skip("metispy without metis.catalog.shared (0.1.4)")
+    root, home = tmp_path / "root", tmp_path / "home"
+    for base, name in ((root, "lamp"), (home, "lamp"), (home, "bell")):
+        d = base / "domains" / name
+        d.mkdir(parents=True)
+        (d / "domain.yaml").write_text(f"program: {name}.llp\ndisplay: the {name}\nline: the {name}\n")
+        (d / f"{name}.llp").write_text(f"catalog {name} 1.\nlayers (dyn).\nstages (main).\n"
+                                       f"namespace {name} produce (dyn).\npred on : {name}.\n#init on 1\n")
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.setenv("METIS_HOME", str(home))
+    monkeypatch.chdir(root)
+    srv = ConsoleServer()
+    assert srv.root == root.resolve()
+    rows = [(e["name"], bool(e.get("shared"))) for e in srv.domains() if e["kind"] == "domain"]
+    assert rows == [("lamp", False), ("bell", True)]                  # a name in both is the root's
+    assert srv.resolve("lamp") == (root / "domains/lamp/lamp.llp").resolve()
+    assert srv.resolve("bell") == (home / "domains/bell/bell.llp").resolve()
+    shared = next(e for e in srv.domains() if e["name"] == "bell")
+    assert srv.resolve(shared["path"]) == (home / "domains/bell/bell.llp").resolve()
+    with pytest.raises(ValueError, match="METIS_HOME"):
+        srv.resolve("nosuch")

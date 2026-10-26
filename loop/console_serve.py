@@ -38,8 +38,17 @@ from metis.gate import Gate, Refused, public          # metispy's (metis-package
 
 def catalog_root() -> Path:
     """The catalog root, by metispy's one rule (metis.catalog.root:
-    $METIS_CATALOG, else the installed catalog's data, else the cwd)."""
+    $METIS_CATALOG, else the cwd). The installed metis-catalog's data is
+    only what a loop copies a known domain from, never the served catalog."""
     return catalog.root()
+
+
+def _shared(root):
+    """METIS_HOME's domains the root lacks (metis.catalog.shared, metispy >= 0.1.4): listed after
+    the root's, marked shared, and opened from METIS_HOME — a package resolves as an include does,
+    the root first, then METIS_HOME."""
+    f = getattr(catalog, "shared", None)
+    return f(root) if f else []
 
 
 # `new <name>`: the skeleton program (the header, #init, one commented rule
@@ -172,8 +181,12 @@ class ConsoleServer:
         """The CATALOG panel's list (the SDK's catalog.index): every catalog
         with its display line and what it has, the domains first; a domain
         carries its README's opening (readme_text) for the panel."""
-        return [{**e, "readme_text": catalog.readme_head(e["readme"], r=self.root)} if e["readme"] else e
+        rows = [{**e, "readme_text": catalog.readme_head(e["readme"], r=self.root)} if e["readme"] else e
                 for e in catalog.index(self.root)]
+        if _shared(self.root):                  # METIS_HOME's, after the root's domains, marked shared
+            n = sum(1 for e in rows if e["kind"] == "domain")
+            rows[n:n] = catalog.shared_index(self.root)
+        return rows
 
     def resolve(self, llp: str) -> Path:
         """A catalog name -> its file in the checkout: the full
@@ -188,7 +201,11 @@ class ConsoleServer:
                [n for n in names if n.split("/")[-1] == name] or \
                [n for n in names if n.endswith("/" + name)]
         if not hits:
-            raise ValueError(f"no catalog '{llp}' in {self.root}")
+            for d in _shared(self.root):        # a METIS_HOME package: by its name or its (absolute) path
+                if d.program and name in (d.name, str(Path(d.program).with_suffix(""))):
+                    return Path(d.program).resolve()
+            raise ValueError(f"no catalog '{llp}' in {self.root}" + (f" nor METIS_HOME ({catalog.home()})"
+                                                                   if hasattr(catalog, "home") else ""))
         if len(hits) > 1:
             raise ValueError(f"'{llp}' is ambiguous: {', '.join(hits)}")
         path = (self.root / (hits[0] + ".llp")).resolve()

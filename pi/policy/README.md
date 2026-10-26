@@ -14,9 +14,9 @@ run.sh --run DIR --resume --brain …                        # re-engage from th
 
 `run.sh` runs `python -m policy.driver` under the world's venv (`.worlds/alf` for ALFWorld,
 `.worlds/sw` for ScienceWorld, `.worlds/mh` for MiniHack), in a memory-capped scope. The driver
-imports from that venv, never by a path: metispy, the world's modules (the world installed editable:
-its setup.sh runs `pip install -e metis-worlds/<world>`) and the loop SDK for the brain's model
-adapters (`pip install -e metis-loop/sdk` into the same venv; run.sh says so when it is missing). `--world` picks the adapter (`policy/alfworld.py`, `policy/scienceworld.py`,
+needs metispy and the loop SDK installed there (the brain's model adapters: `pip install -e
+metis-loop/sdk` into the same venv; run.sh says so when it is missing); the world's runtime
+(metis-worlds/<world>/world) is the adapter's by path. `--world` picks the adapter (`policy/alfworld.py`, `policy/scienceworld.py`,
 `policy/minihack.py`: the contract is the class's surface — sample, open/step/snapshot/restore/act,
 actions/unadmissible, vocabulary, task_facts, `iid` and `game_dir` (a snapshot's name of the game),
 and the class's DOMAIN, DESCRIPTION, SPLITS and VERB_TEXT the driver and the prompts read; optional:

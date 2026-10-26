@@ -16,6 +16,7 @@ base before `[`), with that entry's variables bound, is a command — go* binds 
 R or O, open* R, take* O and R, put* O and R. That table is the world's, and the brain is told it.
 """
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -23,22 +24,28 @@ from pathlib import Path
 VERBS = {"go": ("go", ("R", "L2")), "open": ("open", ("R",)), "take": ("take", ("O", "R")), "put": ("put", ("O", "R"))}
 
 
-def _world():
-    """The world's modules (metis-worlds/alfworld/world): the world installed editable in this python — its
-    venv, which its setup.sh sets up (`pip install -e metis-worlds/alfworld`) — never put on a path."""
-    try:
-        import alf_host
-        import families
-        import gen_instance
-    except ImportError as e:
-        raise SystemExit("policy.alfworld: %s; install the world into this python: %s -m pip install -e <metis-worlds>/alfworld"
-                         % (e, sys.executable))
-    return alf_host, gen_instance, families
-
-
 def world_dir():
-    """metis-worlds/alfworld/world: where the installed world's modules are (its domains/ beside it)."""
-    return Path(_world()[0].__file__).resolve().parent
+    """metis-worlds/alfworld/world: $METIS_ALF_WORLD, else the sibling checkout."""
+    p = os.environ.get("METIS_ALF_WORLD")
+    if p:
+        return Path(p)
+    d = Path(__file__).resolve()
+    for _ in range(6):
+        d = d.parent
+        c = d / "metis-worlds" / "alfworld" / "world"
+        if c.is_dir():
+            return c
+    raise SystemExit("set METIS_ALF_WORLD to metis-worlds/alfworld/world")
+
+
+def _world():
+    w = str(world_dir())
+    if w not in sys.path:
+        sys.path.insert(0, w)
+    import alf_host
+    import families
+    import gen_instance
+    return alf_host, gen_instance, families
 
 
 def base_source():
