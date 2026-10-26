@@ -1,7 +1,7 @@
 """metis_loop_sdk.web — what the loop SDK keeps of its own after the catalog moved into metispy
 (metis-packages s-65778b98): the catalog widget the consoles serve (widget/, WIDGET_DIR at
-WIDGET_URL, widget_file) and the TypeScript face (ts/, TS_DIR). metis_loop_sdk.catalog re-exports
-these until r0.2; the catalog itself is `from metis import catalog`.
+WIDGET_URL, widget_file) and the TypeScript face (ts/, TS_DIR). The catalog itself is
+`from metis import catalog`.
 
     from metis_loop_sdk.web import WIDGET_DIR, WIDGET_URL, widget_file
     python -m metis_loop_sdk.web widget          # {dir, url, files} (the Go console reads it)

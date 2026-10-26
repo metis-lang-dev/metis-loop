@@ -5,10 +5,11 @@
 # what satisfies them instead: a sibling checkout before metis-catalog is
 # published), metis_loop_sdk from site-packages at pyproject's version, the
 # human loop absent, the widget's and the TypeScript face's files in the wheel
-# (the face where `catalog ts` says: the agentic loop resolves it from there),
-# the root is the cwd (an empty one: an empty catalog, its .metis/ on demand),
-# and the catalog CLI on the installed catalog: list, get, intents
-# (--skeleton: the root's tools/intents.py), fingerprint. publish.yml runs it.
+# (the face where `web ts` says: pi resolves it from there), no catalog/gate shim,
+# and metispy's catalog CLI, which the face calls, from that venv: the root is the
+# cwd (an empty one: an empty catalog, its .metis/ on demand), and on the installed
+# catalog list, get, intents (--skeleton: the root's tools/intents.py), fingerprint.
+# publish.yml runs it.
 set -euo pipefail
 DIST=$(cd "$1" && pwd)
 shift
@@ -30,24 +31,25 @@ import sys
 from pathlib import Path
 
 import metis_loop_sdk
-from metis_loop_sdk import catalog
+from metis_loop_sdk import web
 
-version, web = sys.argv[1], Path(sys.argv[2])
+version, src = sys.argv[1], Path(sys.argv[2])
 assert "site-packages" in metis_loop_sdk.__file__, metis_loop_sdk.__file__
 assert metis_loop_sdk.__version__ == version, (metis_loop_sdk.__version__, version)
 assert importlib.util.find_spec("loop") is None, "the human loop is installed with the SDK"
-for f in catalog.WIDGET_FILES:
-    assert (catalog.WIDGET_DIR / f).read_bytes() == (web / f).read_bytes(), f
+assert importlib.util.find_spec("metis_loop_sdk.catalog") is None and importlib.util.find_spec("metis_loop_sdk.gate") is None
+for f in web.WIDGET_FILES:
+    assert (web.WIDGET_DIR / f).read_bytes() == (src / f).read_bytes(), f
 
 
-def cli(*args):
-    r = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", *args, "--json"],
+def cli(*args, m="metis.catalog"):
+    r = subprocess.run([sys.executable, "-m", m, *args] + ([] if m == "metis_loop_sdk.web" else ["--json"]),
                        capture_output=True, text=True)
     assert r.returncode == 0, (args, r.stderr[-800:])
     return json.loads(r.stdout)
 
 
-ts = cli("ts")
+ts = cli("ts", m="metis_loop_sdk.web")
 assert "site-packages" in ts["dir"] and (Path(ts["dir"]) / "catalog.ts").is_file(), ts
 empty = Path.cwd().resolve() / "empty"
 empty.mkdir()

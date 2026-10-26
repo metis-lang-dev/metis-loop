@@ -43,6 +43,9 @@ case "$WORLD" in
   *) PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"; export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}" ;;
 esac
 [ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: the world's venv with metispy: .worlds/alf for alfworld, .worlds/sw for scienceworld, .worlds/mh for minihack)" >&2; exit 1; }
+# the driver imports the loop SDK (the brain's model adapters) and the world's modules from that venv: both installed
+# there, editable (the world's own setup.sh installs the world), never put on a path
+"$PY" -c "import metis_loop_sdk" 2>/dev/null || { echo "run.sh: $PY lacks the loop SDK: $PY -m pip install -e $(cd "$HERE/.." && pwd)/sdk" >&2; exit 1; }
 RUN="${RUN:-$PWD/policy-run-$WORLD-$FAMILY}"
 if [ ${#ANSWER[@]} -gt 0 ]; then
   exec "$PY" -m metis.gate --state "$RUN/state" --policy experimental answer "${ANSWER[0]}" <<<"${ANSWER[1]}"

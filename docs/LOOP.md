@@ -2,10 +2,10 @@
 
 Two loops write into a catalog: the human loop's console (metis-loop) and pi's
 agentic loop (metis-agentic-loop). They are two hosts over one policy: the loop
-SDK's `metis_loop_sdk.gate` (Python, and its TypeScript face `ts/gate.ts`, the same
-code through the gate's CLI). A rule of the loop changes there, once, and both loops
+metispy's `metis.gate` (Python, and the loop SDK's TypeScript face `ts/gate.ts`, the
+same code through the gate's CLI). A rule of the loop changes there, once, and both loops
 follow it. The catalog's mechanics under it (plan, apply, edit, take, readme, the
-skeleton) are `metis_loop_sdk.catalog`.
+skeleton) are `metis.catalog`.
 
 ## A write is a proposal the person confirms
 

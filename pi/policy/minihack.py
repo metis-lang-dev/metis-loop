@@ -14,7 +14,6 @@ its first token): move D · open D · kick D · apply D (the key, toward D) · p
 search. MiniHack has no admissible list: every action can be sent, and the world REFUSES one by
 changing nothing it perceives (a wall, nothing to pick up, no stairs here) — mh_host.act's test.
 """
-import os
 import random
 import shutil
 import sys
@@ -36,27 +35,16 @@ TAKEN_ANYWAY = ("WAIT", "SEARCH")                  # actions that change nothing
 FIGHT = {"said(hit)", "said(killed)", "said(hurt)"}
 
 
-def world_dir():
-    """metis-worlds/minihack/world: $METIS_MH_WORLD, else the sibling checkout."""
-    p = os.environ.get("METIS_MH_WORLD")
-    if p:
-        return Path(p)
-    d = Path(__file__).resolve()
-    for _ in range(6):
-        d = d.parent
-        c = d / "metis-worlds" / "minihack" / "world"
-        if c.is_dir():
-            return c
-    raise SystemExit("set METIS_MH_WORLD to metis-worlds/minihack/world")
-
-
 def _world():
-    w = str(world_dir())
-    if w not in sys.path:
-        sys.path.insert(0, w)
-    import gen_level
-    import levels
-    import mh_host
+    """The world's modules (metis-worlds/minihack/world): the world installed editable in this python — its
+    venv, which its setup.sh sets up (`pip install -e metis-worlds/minihack`) — never put on a path."""
+    try:
+        import gen_level
+        import levels
+        import mh_host
+    except ImportError as e:
+        raise SystemExit("policy.minihack: %s; install the world into this python: %s -m pip install -e <metis-worlds>/minihack"
+                         % (e, sys.executable))
     return mh_host, gen_level, levels
 
 

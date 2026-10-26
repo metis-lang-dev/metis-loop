@@ -25,16 +25,18 @@ import time
 import urllib.request
 from pathlib import Path
 
-SDK = Path(__file__).resolve().parents[2] / "sdk"          # metis-loop/sdk: metis_loop_sdk (stdlib adapters)
-if str(SDK) not in sys.path:
-    sys.path.insert(0, str(SDK))
+try:
+    import metis_loop_sdk  # noqa: F401  (the model adapters: the SDK installed in this python, never a path)
+except ImportError:
+    raise SystemExit("policy.brain: no metis_loop_sdk in %s; install the loop SDK into it: %s -m pip install -e "
+                     "<metis-loop>/sdk" % (sys.executable, sys.executable)) from None
 
 OPENROUTER = "https://openrouter.ai/api/v1"
 
 
 def sdk_python():
-    """The python whose site has claude_agent_sdk: $METIS_LOOP_SDK_PY, else the workspace's .venv
-    (the first parent with one)."""
+    """The python whose site has claude_agent_sdk and the loop SDK: $METIS_LOOP_SDK_PY, else the
+    workspace's .venv (the first parent with one)."""
     p = os.environ.get("METIS_LOOP_SDK_PY")
     if p:
         return p
@@ -137,8 +139,7 @@ class Brain:
             import subprocess
             m = self.model.split("/", 1)[1] if "/" in self.model else "claude-opus-5-5"
             r = subprocess.run([sdk_python(), "-m", "metis_loop_sdk.models", "claude-command", "--model", m, "--thinking", "0"],
-                               input=prompt, text=True, capture_output=True, timeout=900,
-                               env=dict(self.env, PYTHONPATH=str(SDK)))
+                               input=prompt, text=True, capture_output=True, timeout=900, env=self.env)
             if r.returncode != 0:
                 raise RuntimeError("claude-command: %s" % r.stderr.strip()[-400:])
             text = r.stdout

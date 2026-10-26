@@ -11,7 +11,6 @@ rule by its first token): go R · open D · take O · drop O · focus O · conne
 activate O · deactivate O · wait · look.
 """
 import json
-import os
 import random
 import shutil
 import sys
@@ -28,28 +27,17 @@ VERB_TEXT = {"go": "go to the room R (through this room's door to it)", "open": 
              "deactivate": "turn O off", "wait": "wait one tick", "look": "look around"}
 
 
-def world_dir():
-    """metis-worlds/scienceworld/world: $METIS_SW_WORLD, else the sibling checkout."""
-    p = os.environ.get("METIS_SW_WORLD")
-    if p:
-        return Path(p)
-    d = Path(__file__).resolve()
-    for _ in range(6):
-        d = d.parent
-        c = d / "metis-worlds" / "scienceworld" / "world"
-        if c.is_dir():
-            return c
-    raise SystemExit("set METIS_SW_WORLD to metis-worlds/scienceworld/world")
-
-
 def _world():
-    w = str(world_dir())
-    if w not in sys.path:
-        sys.path.insert(0, w)
-    import families
-    import gen_instance
-    import perceive
-    import sw_host
+    """The world's modules (metis-worlds/scienceworld/world): the world installed editable in this python — its
+    venv, which its setup.sh sets up (`pip install -e metis-worlds/scienceworld`) — never put on a path."""
+    try:
+        import families
+        import gen_instance
+        import perceive
+        import sw_host
+    except ImportError as e:
+        raise SystemExit("policy.scienceworld: %s; install the world into this python: %s -m pip install -e <metis-worlds>/scienceworld"
+                         % (e, sys.executable))
     return sw_host, gen_instance, families, perceive
 
 

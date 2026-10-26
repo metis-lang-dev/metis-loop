@@ -10,4 +10,4 @@ console's shell, shell.css/shell.js, stays its own copy).
 
 The loop SDK (`sdk/`, `metis_loop_sdk`) carries these bytes to its pip
 consumers: `sdk/metis_loop_sdk/widget` is a link to `web/catalog/`, and the
-wheel built from the checkout holds the files (`metis_loop_sdk.catalog.WIDGET_DIR`).
+wheel built from the checkout holds the files (`metis_loop_sdk.web.WIDGET_DIR`).

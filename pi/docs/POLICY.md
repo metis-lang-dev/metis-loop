@@ -156,7 +156,7 @@ phase's starting points when the empty start proves too slow — a fallback, rec
 
 - the architect: this policy; the hierarchy's conventions (HIERARCHY.md); the gate's
   criteria; the judgement of the journal;
-- nina (SDK `metis_loop_sdk.gate`): the experimental policy as a `Gate` option (`policy:
+- nina (`metis.gate`, then the SDK's gate): the experimental policy as a `Gate` option (`policy:
   experimental` with a gain hook the run driver fills), the `ask` kind (a disengagement
   record, no write, waits for the person's answer), the journal; the console's gate panel
   showing the question (loop-parity step 2's console verbs);

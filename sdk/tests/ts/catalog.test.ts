@@ -133,7 +133,7 @@ test("the SDK's refusals throw as CatalogError, with its words", () => {
 // loop-fixes s-855d8067: edit, since, display/line, the README's parts, the skeleton of a world with no commands
 const HAS_METISC = (() => {
 	try {
-		return !!JSON.parse(execFileSync(PY, ["-c", "import json; from metis_loop_sdk import catalog; print(json.dumps(catalog.metisc()))"], { encoding: "utf8" }));
+		return !!JSON.parse(execFileSync(PY, ["-c", "import json; from metis import catalog; print(json.dumps(catalog.metisc()))"], { encoding: "utf8" }));
 	} catch {
 		return false;
 	}

@@ -1,6 +1,6 @@
 """The third world of the policy driver: MiniHack's room family through its adapter. Needs the world's
-venv (.worlds/mh: minihack, metispy) and a metis-worlds checkout with gen_level's lifted base
-($METIS_MH_WORLD, else the sibling); skipped without them:
+venv (.worlds/mh: minihack, metispy, and metis-worlds/minihack installed editable, with gen_level's
+lifted base); skipped without them:
 
     cd metis-loop/pi && …/.worlds/mh/bin/python -m pytest policy/tests/test_minihack.py -q
 """

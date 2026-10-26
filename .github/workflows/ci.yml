@@ -111,20 +111,20 @@ jobs:
           /tmp/sdk/bin/python - "$GITHUB_WORKSPACE/metis-loop/web/catalog" <<'EOF'
           import sys
           from pathlib import Path
-          from metis_loop_sdk import catalog
+          from metis_loop_sdk import web as w
           web = Path(sys.argv[1])
-          assert "site-packages" in str(catalog.WIDGET_DIR), catalog.WIDGET_DIR
-          for f in catalog.WIDGET_FILES:
-              got = catalog.WIDGET_DIR / f
+          assert "site-packages" in str(w.WIDGET_DIR), w.WIDGET_DIR
+          for f in w.WIDGET_FILES:
+              got = w.WIDGET_DIR / f
               assert got.is_file() and not got.is_symlink(), got
               assert got.read_bytes() == (web / f).read_bytes(), f
               print("widget", f, "=", web / f, len(got.read_bytes()), "bytes")
-          for f in catalog.TS_FILES:              # the TypeScript face, its own files
-              got = catalog.TS_DIR / f
+          for f in w.TS_FILES:              # the TypeScript face, its own files
+              got = w.TS_DIR / f
               assert "site-packages" in str(got) and got.is_file(), got
               print("ts", f, len(got.read_bytes()), "bytes")
           EOF
-      - name: The wheel publish.yml uploads, smoke-installed in a fresh venv (metispy from PyPI, metis-catalog the checkout)
+      - name: The wheel publish.yml builds, smoke-installed in a fresh venv (metispy from PyPI, metis-catalog the checkout)
         run: |
           python -m pip install -q build
           python -m build --outdir /tmp/sdk-dist metis-loop/sdk

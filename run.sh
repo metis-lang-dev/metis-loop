@@ -79,7 +79,7 @@ fi
 "$PY" -c "import websockets" 2>/dev/null || { echo "installing metis-loop[console] into $VENV …"; "$VENV/bin/pip" install -q -e "$ROOT[console]"; }
 "$PY" -c "import metis_catalog" 2>/dev/null || {
   echo "the venv at $VENV lacks the catalog's loader: $VENV/bin/pip install metis-catalog (or -e a metis-catalog checkout)" >&2; exit 1; }
-if ! "$PY" -c "import metis_loop_sdk.catalog" 2>/dev/null; then   # after the loader: the SDK names it as a dependency
+if ! "$PY" -c "import metis_loop_sdk.web" 2>/dev/null; then   # the catalog widget the console serves
   echo "installing the loop SDK (pip install -e $ROOT/sdk) into $VENV …"
   "$VENV/bin/pip" install -q -e "$ROOT/sdk"
 fi

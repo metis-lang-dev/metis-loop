@@ -1,25 +1,21 @@
 name: publish
 
-# metis-loop-sdk (sdk/) to PyPI by trusted publishing (pi-release s-8e13f6a8;
-# metispy's flow): the PyPI project's pending publisher is owner
-# metis-lang-dev, repo metis-loop, this workflow (publish.yml), environment
-# `pypi` (no required reviewer: the tag is the release). No secret, no token:
-# the upload authenticates with the job's OIDC identity. The human loop
-# (metis-loop itself) is not published.
+# metis-loop-sdk (sdk/) release check. The SDK is NOT a PyPI package (the user, 2026-10-26):
+# consumers install it into a local python, editable from a checkout or by the git tag
+#   pip install "metis-loop-sdk @ git+https://github.com/metis-lang-dev/metis-loop@sdk-vX.Y.Z#subdirectory=sdk"
+# so a tag is the release and this workflow uploads nothing. The human loop (metis-loop
+# itself) is not published either.
 #
 #   a push of a tag sdk-vX.Y.Z   build sdk/, check the tag against its pyproject's
 #                                version, smoke-install the wheel with metispy from
 #                                PyPI and metis-catalog from its public checkout
-#                                (it is not on PyPI), then upload: a tag
-#                                publishes straight through
 #                                (`gh release create sdk-vX.Y.Z` pushes it)
-#   workflow_dispatch            the dry run: build, check, smoke; no upload. The
-#                                smoke's metis-catalog is the public checkout
-#                                (catalog: checkout, the default) or PyPI's
+#   workflow_dispatch            the same run on a branch. The smoke's metis-catalog
+#                                is the public checkout (catalog: checkout, the
+#                                default) or PyPI's
 #
 # A release (sdk/README.md "Releasing"): bump `version` in sdk/pyproject.toml
-# and metis_loop_sdk.__version__, commit, `gh release create sdk-vX.Y.Z`;
-# metispy at the version it needs is on PyPI first; metis-catalog is the public checkout.
+# and metis_loop_sdk.__version__, commit, `gh release create sdk-vX.Y.Z`.
 
 on:
   push:
@@ -76,21 +72,3 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
-
-  pypi:
-    needs: build
-    if: github.event_name == 'push' && github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: pypi
-      url: https://pypi.org/project/metis-loop-sdk/
-    permissions:
-      id-token: write          # trusted publishing: the OIDC token is the credential
-      contents: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1

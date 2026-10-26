@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from metis_loop_sdk import catalog
+from metis import catalog
 
 from conftest import installed_catalog
 
@@ -69,7 +69,7 @@ def test_get_is_the_loaders_and_the_cli_says_it(name):
     assert d.program == mc.get(name, CAT).program and Path(d.program).is_file()
     assert catalog.fingerprint(name, CAT) == catalog.fingerprint(name, CAT)
     assert any(e["name"] == name and e["kind"] == "domain" for e in catalog.index(CAT))
-    r = subprocess.run([sys.executable, "-m", "metis_loop_sdk.catalog", "--root", str(CAT), "get", name, "--json"],
+    r = subprocess.run([sys.executable, "-m", "metis.catalog", "--root", str(CAT), "get", name, "--json"],
                        capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
     import json
