@@ -13,4 +13,4 @@ The direction of dependency: this package imports metispy and nothing else
 of ours — never metis-loop's `loop`, `metis_agent` or the
 agentic loop (tests/test_direction.py; CI installs it alone)."""
 
-__version__ = "0.1.12"
+__version__ = "0.1.13"
