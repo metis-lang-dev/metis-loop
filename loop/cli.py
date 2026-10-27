@@ -1,7 +1,7 @@
 """metis-loop — the Loop Console backend (the web UI for the metispy
 REPL; docs/CONSOLE-WS.md).
 
-  metis-loop [--port N] [--bind H] [--mode personal|shared] [--token T]
+  metis-loop [--port N] [--bind H] [--mode personal|shared] [--token T] [--pkg NAME …]
 
 serves the console (pip install metis-loop[console]). The word
 `console-serve` is accepted and ignored for compatibility. There is

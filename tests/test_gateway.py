@@ -386,3 +386,33 @@ def test_a_gateway_started_in_an_empty_dir_serves_it(tmp_path, monkeypatch):
             assert (tmp_path / "domains/lamp/lamp.llp").is_file()
     finally:
         r.close()
+
+
+def test_pkg_names_the_packages_a_page_opens_at_the_start(tmp_path, monkeypatch):
+    """release-r02 step 1b, D5 (the architect's ruling: the loop console's --pkg as metis-agent's):
+    --pkg NAME resolves the package before any page connects, the root's domains/NAME else
+    METIS_HOME's, a miss refusing the start with both places named; the page carries the panel's
+    rows ({name, path, host}) and a page with no session opens the first."""
+    from loop import gateway
+    from metis import catalog
+    if not hasattr(catalog, "package_domains"):
+        pytest.skip("metispy without metis.catalog.package_domains (0.1.4)")
+    root, home = tmp_path / "root", tmp_path / "home"
+    for base, name in ((root, "lamp"), (home, "bell")):
+        d = base / "domains" / name
+        d.mkdir(parents=True)
+        (d / "domain.yaml").write_text(f"program: {name}.llp\ndisplay: the {name}\nline: the {name}\n")
+        (d / f"{name}.llp").write_text(f"catalog {name} 1.\nlayers (dyn).\nstages (main).\n"
+                                       f"namespace {name} produce (dyn).\npred on : {name}.\n#init on 1\n")
+    monkeypatch.delenv("METIS_CATALOG", raising=False)
+    monkeypatch.setenv("METIS_HOME", str(home))
+    monkeypatch.chdir(root)
+    rows = gateway.pkg_rows(["lamp", "bell", "lamp"])
+    assert rows == [{"name": "lamp", "path": "domains/lamp/lamp", "host": False},
+                    {"name": "bell", "path": str(home.resolve() / "domains/bell/bell"), "host": False}]
+    with pytest.raises(ValueError, match="METIS_HOME"):
+        gateway.pkg_rows(["nosuch"])
+    assert gateway.main(["--mode", "shared", "--pkg", "nosuch"]) == 2      # refused before serving
+    page = Gateway(dict(DEFAULTS, pkg=rows)).page()
+    assert '"pkg": [{"name": "lamp", "path": "domains/lamp/lamp", "host": false}' in page
+    assert "openCatalog(GW.pkg[0])" in page

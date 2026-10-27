@@ -7,7 +7,11 @@
 # empty DIR is an empty catalog (`new` writes the first domain), the gateway
 # and its REPLs run in DIR.
 #
-#   cd DIR && …/run.sh   start, over DIR (cd metis-catalog first for the catalog's own)
+#   cd DIR && …/run.sh [--pkg NAME …]
+#                        start, over DIR (cd metis-catalog first for the catalog's own);
+#                        --pkg NAME (repeatable, as metis-agent's) resolves domains/NAME at the
+#                        start — DIR's, else METIS_HOME's, a miss refuses — and a page with no
+#                        session opens the first; the panel lists and opens the rest
 #   …/run.sh stop        stop it (from anywhere)
 #   …/run.sh status      running or not, the URL, the catalog it serves
 #   …/run.sh log         follow the gateway's log
@@ -46,7 +50,18 @@ SERVED="$RUN/catalog"
 
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
 
-case "${1:-start}" in
+PKG=()
+VERB="${1:-start}"
+case "${1:-}" in --*) VERB=start ;; start) shift ;; esac
+if [ "$VERB" = start ]; then
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --pkg) [ $# -ge 2 ] || { echo "--pkg needs a NAME" >&2; exit 2; }; PKG+=(--pkg "$2"); shift 2 ;;
+      *) echo "usage: $0 [start] [--pkg NAME …] | stop | status | log" >&2; exit 2 ;;
+    esac
+  done
+fi
+case "$VERB" in
 stop)
   if running; then
     p=$(cat "$PID"); kill "$p"
@@ -63,7 +78,7 @@ status)
 log)
   exec tail -f "$LOG" ;;
 start) ;;
-*) echo "usage: $0 [start|stop|status|log]" >&2; exit 2 ;;
+*) echo "usage: $0 [start] [--pkg NAME …] | stop | status | log" >&2; exit 2 ;;
 esac
 
 [ -d "$CATALOG" ] || { echo "no directory $CATALOG (METIS_CATALOG)" >&2; exit 1; }
@@ -89,7 +104,7 @@ mkdir -p "$RUN"
 echo "$CATALOG" >"$SERVED"
 cd "$CATALOG"                     # the workspace: the gateway and its REPLs run in the catalog
 AGENT_WS="${METIS_AGENT_WS-ws://127.0.0.1:8395/ws}"; [ "$MODE" = personal ] || AGENT_WS=""
-METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${BRAIN:+--brain "$BRAIN"} ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} >"$LOG" 2>&1 &
+METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${BRAIN:+--brain "$BRAIN"} ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} ${PKG[@]+"${PKG[@]}"} >"$LOG" 2>&1 &
 echo $! >"$PID"
 
 for _ in $(seq 1 60); do

@@ -926,7 +926,7 @@ class Gateway:
 
     def page(self) -> str:
         flag = json.dumps({"ws": "/ws", "token": self.cfg.get("token") or "",
-                           "mode": self.cfg["mode"]})
+                           "mode": self.cfg["mode"], "pkg": self.cfg.get("pkg") or []})
         return ("<!doctype html><html><head><meta charset=utf-8><meta "
                 "name=viewport content=\"width=device-width,initial-scale=1\">"
                 f"<script>window.LOOP_GATEWAY={flag};"
@@ -1009,6 +1009,29 @@ class Gateway:
                     await self.close(sid, "server stopped")
 
 
+def pkg_rows(names) -> list:
+    """--pkg NAME… (metis-agent's flag; release-r02 step 1b, D5): each package's domains as the
+    CATALOG panel opens them, {name, path, host} (the index's row: the root's path, METIS_HOME's
+    absolute), NAME resolved as metispy resolves an include, the catalog root's domains/NAME
+    else METIS_HOME's (metis.catalog.package_domains); in order, each once. A page with no
+    session opens the first; the rest are the panel's. ValueError on a miss, naming both places."""
+    from metis import catalog
+    rows = [e for e in catalog.index() if e["kind"] == "domain"]
+    out = []
+    for n in names:
+        try:
+            ds = catalog.package_domains(n)
+        except (FileNotFoundError, KeyError) as e:
+            raise ValueError(f"--pkg {n}: {e.args[0] if e.args else e}") from None
+        if not ds:
+            raise ValueError(f"--pkg {n}: no domain manifest in {catalog.find_package(n)}")
+        for d in ds:
+            e = next((e for e in rows if e["name"] == d.name), None)
+            if e is not None and all(p["path"] != e["path"] for p in out):
+                out.append({"name": d.name, "path": e["path"], "host": bool(e.get("host"))})
+    return out
+
+
 def main(argv=None) -> int:
     """`metis-loop console-serve` — see the module docstring."""
     import argparse
@@ -1026,6 +1049,10 @@ def main(argv=None) -> int:
                     help="metis-agent's console wire (ws://127.0.0.1:8395/ws): "
                          "the band shows the agent's state of the open domain "
                          "(personal mode)")
+    ap.add_argument("--pkg", action="append", default=[], metavar="NAME",
+                    help="open the package domains/NAME at the start (the catalog root's, else "
+                         "METIS_HOME's): a page with no session opens it; repeatable, the panel "
+                         "lists and opens the rest")
     ap.add_argument("--mock-agent", action="store_true",
                     help="DEV ONLY: a canned chat client (never a model) "
                          "for driving the page without spending anyone's "
@@ -1059,6 +1086,11 @@ def main(argv=None) -> int:
         print(f"console-serve: no catalog directory at {root} (METIS_CATALOG)", file=sys.stderr)
         return 1
     os.chdir(root)
+    try:                        # --pkg: resolved before any page connects; a miss refuses the start
+        cfg["pkg"] = pkg_rows(ns.pkg)
+    except ValueError as e:
+        print(f"console-serve: {e}", file=sys.stderr)
+        return 2
     try:                        # the page's shell (console/lib/shell.css, shell.js)
         shell_lib.check()
     except FileNotFoundError as e:
@@ -1073,6 +1105,9 @@ def main(argv=None) -> int:
     print(f"loop console ({cfg['mode']}): http://{cfg['bind']}:"
           f"{cfg['port']}/{q}", flush=True)
     print(f"catalog: {root}", flush=True)
+    for p in cfg["pkg"]:
+        print(f"--pkg: {p['name']} ({p['path']}): a page with no session opens "
+              + ("it" if p is cfg["pkg"][0] else "the first; this one is the panel's"), flush=True)
     print(brain.describe(cfg, os.path.relpath(gw.calls_log(), root)
                          if cfg["mode"] == "personal" else None), flush=True)
     try:

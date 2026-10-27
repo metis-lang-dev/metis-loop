@@ -255,6 +255,7 @@ let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
    its flag); published as an artifact it keeps the db/sample shims.
    Both feed the same `intents`/`sess` state — the renderers are one. */
 const GW=window.LOOP_GATEWAY||null;
+let pkgOpened=false;   // --pkg NAME: a page with no session opens the first package's domain once (GW.pkg: the panel's rows)
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
 let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],domainsSeen=false,rootReadme=null,fileRecs=null,saveTok=null,pendingRec=null,recordOpen=false;
@@ -792,7 +793,9 @@ function wsConnect(){
   const proto=location.protocol==="https:"?"wss://":"ws://";
   const q=GW.token?"?token="+encodeURIComponent(GW.token):"";
   try{wsock=new WebSocket(proto+location.host+GW.ws+q)}catch(e){wsRetryLater();return}
-  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid});wsSend({ch:"repl",type:"gate",op:"asks"})};
+  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid});
+    else if(GW.pkg&&GW.pkg.length&&!pkgOpened){pkgOpened=true;openCatalog(GW.pkg[0])}
+    wsSend({ch:"repl",type:"gate",op:"asks"})};
   wsock.onclose=()=>{const was=wsUp;wsUp=false;
     if(was)banner("console backend connection lost — reconnecting…");wsRetryLater()};
   wsock.onmessage=e=>{let f;try{f=JSON.parse(e.data)}catch(x){return}wsHandle(f)}}
