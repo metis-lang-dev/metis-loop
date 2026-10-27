@@ -158,7 +158,7 @@ jobs:
           repository: metis-lang-dev/metis-catalog
           path: metis-catalog
       # the domain agent (public): the domain tools' sessions over the selected packages run it —
-      # example/seeded.ts on love_triangle and on nav, love_triangle's and nav's domain tools,
+      # example/seeded.ts on love_triangle, on nav and on the dog, love_triangle's and nav's domain tools,
       # wildfire's episodes; they skipped without it
       - name: Checkout metis-agent (public; the domain agent the domain tools run)
         uses: actions/checkout@v4
@@ -201,6 +201,6 @@ jobs:
         run: |
           export REAL_METIS="$(command -v metis)" TEST_AGENT_PY="$(command -v python)" TEST_SDK_PY="$(command -v python)" TEST_REQUIRE_METISC=1
           export TEST_REQUIRE_AGENT=1 TEST_REQUIRE_GYM=1
-          # the fixtures' catalog (love_triangle, nav): the checkout, named (the installed wheel has no ceptre/)
+          # the fixtures' catalog (love_triangle, nav, the dog): the checkout, named (the installed wheel has no ceptre/)
           export TEST_CATALOG="$GITHUB_WORKSPACE/metis-catalog"
           ./node/bin/node --experimental-strip-types --test test/extensions.test.ts
