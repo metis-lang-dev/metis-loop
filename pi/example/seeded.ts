@@ -31,6 +31,8 @@ if (!existsSync(seed)) throw new Error(`usage: seeded.ts SEED.llp|PKG_DIR DIR [N
 const pkg = statSync(seed).isDirectory();
 const name = process.argv[4] ?? basename(seed, ".llp").replace(/-/g, "_");
 const SKIP = /\/(build|records|__pycache__)(\/|$)/;
+// what of a package travels (metis.catalog take): every file but another document beside its README (a transcript)
+const travels = (f: string) => !f.endsWith(".md") || f === "README.md";
 
 // the run, as `cd DIR && loop.sh --seed SEED --name NAME` lays it out
 const cat = dir, into = `${dir}.into`;
@@ -143,16 +145,23 @@ async function main() {
 	check("the REPL serves the catalog's program", applied.includes(`The REPL now serves ${prog}`));
 	check("domain.yaml has the display and line", /^display: /m.test(readFileSync(join(cat, "domains", name, "domain.yaml"), "utf8")));
 	if (pkg) {
-		const own = files(seed);
+		const own = files(seed).filter(travels);
 		check("the package came whole, every file byte for byte", own.every((f) =>
 			existsSync(join(cat, "domains", name, f)) && readFileSync(join(cat, "domains", name, f), "utf8") === readFileSync(join(seed, f), "utf8")));
 		check("the gate showed every file of it", own.every((f) => gates[0].includes(`domains/${name}/${f} (new)`)));
 	}
 	say(`\n## 3. intents\n`);
-	const it = await call("catalog_apply", { domain: name, what: "intents" });
 	const commands = /^pred\s+cmd_\w+/m.test(text);
-	if (it.startsWith("no intent.yaml")) check("a world with no commands: no intent.yaml", !commands && !existsSync(join(cat, "domains", name, "intent.yaml")));
-	else check("intent.yaml written", it.startsWith("applied:") && existsSync(join(cat, "domains", name, "intent.yaml")));
+	if (pkg && existsSync(join(seed, "intent.yaml"))) {
+		// a package seed that brought its own intent.yaml keeps it: no draft over its grammar (prompts/seed-task.md step 3)
+		say("  the package brings its own intent.yaml: kept, no draft");
+		check("the package's own intent.yaml is kept", readFileSync(join(cat, "domains", name, "intent.yaml"), "utf8") ===
+			readFileSync(join(seed, "intent.yaml"), "utf8"));
+	} else {
+		const it = await call("catalog_apply", { domain: name, what: "intents" });
+		if (it.startsWith("no intent.yaml")) check("a world with no commands: no intent.yaml", !commands && !existsSync(join(cat, "domains", name, "intent.yaml")));
+		else check("intent.yaml written", it.startsWith("applied:") && existsSync(join(cat, "domains", name, "intent.yaml")));
+	}
 	if (!commands) say("  (no cmd_* atoms: the person gives this world no commands)");
 	say(`\n## 4. exercise\n`);
 	const opened = await call("domain_open", { domain: name });
@@ -201,7 +210,7 @@ async function main() {
 	check("taken into the target", taken.startsWith(`taken into ${into}:`));
 	check("the target's program is the seed as edited", existsSync(join(d, progName)) && readFileSync(join(d, progName), "utf8") === expected);
 	if (pkg)
-		check("the target has every other file of the package", files(seed).filter((f) => f !== progName).every((f) =>
+		check("the target has every other file of the package", files(seed).filter(travels).filter((f) => f !== progName).every((f) =>
 			existsSync(join(d, f)) && readFileSync(join(d, f), "utf8") === readFileSync(join(seed, f), "utf8")));
 	check("the target has domain.yaml and the approved README", existsSync(join(d, "domain.yaml")) && readFileSync(join(d, "README.md"), "utf8") === readme);
 	check("its bundle built", existsSync(join(d, "build", `${name}.metis`)));
