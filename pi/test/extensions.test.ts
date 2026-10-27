@@ -820,6 +820,25 @@ test("example/seeded.ts on a package (nav): served whole with its include and ho
 		assert.equal(out.checks[c], true, c);
 });
 
+// release-r02 step 2b: a package that brings its goldens, cases and intent.yaml travels whole (metispy's take) and
+// keeps its own intents (prompts/seed-task.md step 3)
+test("example/seeded.ts on a package (the dog): its own intent.yaml kept, its goldens and cases taken whole", { skip: !hasAgent && "no metis-agent" }, () => {
+	const dir = mkdtempSync(join(tmpdir(), "loop-seeded-dog-"));
+	const r = spawnSync(join(HERE, "..", "node", "bin", "node"),
+		["--experimental-strip-types", "--no-warnings", join(HERE, "..", "example", "seeded.ts"), join(CATALOG, "domains", "dog"), dir], {
+		encoding: "utf8", timeout: 240000,
+		env: { ...process.env, METIS_LOOP_METIS: process.env.REAL_METIS ?? join(PKGS, ".venv", "bin", "metis"),
+			METIS_LOOP_SDK_PY: process.env.TEST_SDK_PY ?? join(PKGS, ".venv", "bin", "python"), METIS_LOOP_AGENT_PY: AGENT_PY },
+	});
+	const out = JSON.parse(readFileSync(join(dir, ".metis", "seeded.json"), "utf8"));
+	assert.ok(out.ok, `${JSON.stringify(out.checks)}\n${r.stdout.slice(-3000)}`);
+	assert.equal(out.gates, 3);                                                // served (the package), edit, take: no intents gate
+	for (const c of ["the package came whole, every file byte for byte", "the gate showed every file of it",
+		"the package's own intent.yaml is kept", "the target has every other file of the package"])
+		assert.equal(out.checks[c], true, c);
+	assert.ok(existsSync(join(dir + ".into", "domains", "dog", "goldens", "day.jsonl")));
+});
+
 test("metis-repl: what=served on a package seed says that a display and line given are not used (rddl-worlds step 2, finding 2)", async () => {
 	const cat = env(true);
 	const run = mkdtempSync(join(tmpdir(), "loop-pkgrun-"));
