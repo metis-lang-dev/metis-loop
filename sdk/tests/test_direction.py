@@ -38,7 +38,7 @@ def test_version():
     """__version__ is pyproject's, the version the sdk-vX.Y.Z tag names (publish.yml)."""
     import tomllib
     pp = Path(__file__).resolve().parents[1] / "pyproject.toml"
-    assert metis_loop_sdk.__version__ == tomllib.loads(pp.read_text())["project"]["version"] == "0.1.14"
+    assert metis_loop_sdk.__version__ == tomllib.loads(pp.read_text())["project"]["version"] == "0.2.0"
 
 
 def test_the_web_cli():
