@@ -193,15 +193,16 @@ rewrite.py runs without `--start-card` and scores v2 itself (`--series-budget 1.
 `python -m policy.rewrite --skill policy/skills/hierarchy.md --rounds 3 --brain openrouter/deepseek/deepseek-v4-pro
 --budget 0.50 --series-budget 1.50 --max-tokens 4096 --runs policy-runs/pro` (no --start-card: rw0 is v2's card).
 
-| round | rules (alf s1, s2, sw s1, s2) | held-out alf s1 / s2 | usd | kept |
+| round | rules (alf s1, s2, sw s1; sw s2) | held-out alf s1 / s2 | usd | kept |
 |---|---|---|---|---|
-| 0 (v2) | 4, 5, 6, 1 | 0/10, 0/10 | 0.2191 | baseline |
-| 1 | 5, 3, 4, 1 | 0/10, 0/10 | 0.2115 | no: fewer rules |
-| 2 | 6, 4, 4, 1 | **1/10, 1/10** | 0.2603 | **kept** |
-| 3 | 5, 19, 1, 1 | 0/10, 0/10 | 0.2129 | no |
+| 0 (v2) | 4, 5, 6; unmeasured (6G) | 0/10, 0/10 | 0.2191 | baseline |
+| 1 | 5, 3, 4; unmeasured (6G) | 0/10, 0/10 | 0.2115 | no: fewer rules |
+| 2 | 6, 4, 4; unmeasured (6G) | **1/10, 1/10** | 0.2603 | **kept** (variance caveat) |
+| 3 | 5, 19, 1; unmeasured (6G) | 0/10, 0/10 | 0.2129 | no |
 
 **Spend:** $0.9424 (rewrite calls $0.0335).
 - These are the first held-out wins (rw2). r1 and r2 carry the same three new points, so the difference
   may be variance at two seeds.
-- ScienceWorld held-out was 0/10 throughout. sw s2 was OOM-killed at 6G in every round.
+- ScienceWorld held-out was 0/10 throughout. **sw s2 is unmeasured (6G)**: it was OOM-killed at the cap in
+  every round, after 1 rule in explore. The cap stays at 6G (the standing rule), and the cause is being found.
 - No run reached refactor.
