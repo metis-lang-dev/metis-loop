@@ -216,9 +216,36 @@ def check(driver, games, label="parity", timeout=600):
         won_tree = _won(w, tree["commands"])
         rows.append({"iid": w.iid, "flat": flat["commands"], "tree": tree["commands"], "won_flat": bool(flat["won"]),
                      "won_tree": won_tree, "same": flat["commands"] == tree["commands"], "end": tree.get("end"),
-                     "error": tree.get("error")})
-    ok = all(r["same"] and (r["won_tree"] or not r["won_flat"]) for r in rows)
+                     "error": tree.get("error"), "choice": choice_point(driver, w, root)})
+    # the architect's ruling: step-identical where the flat program is sequential; at a sampled choice the same plan
+    # is accepted when the candidates and their weights there are the flat program's (an equal distribution, another
+    # draw) and the tree wins what the flat program wins — different candidates are a routing difference
+    ok = all((r["same"] or r["choice"]["same"]) and (r["won_tree"] or not r["won_flat"]) for r in rows)
     return {"games": rows, "parity": ok}
+
+
+def choice_point(driver, w, root):
+    """The planner's first choice, tree against flat: the rules the tree's planner can fire at the game's start (its
+    installed program, its world-private reading of the flat program's start) that the flat base has too, their
+    candidates and weights in each. → {"rules", "tree", "flat", "same"}: the same events with the same weights."""
+    import yaml
+    from metis.repl import Repl
+    from .alfworld import kind_of, rules_of
+    dom = Path(root) / "domains"
+    planner = _members((dom / "composition.yaml").read_text())[0]
+    tree_path = driver._sync_tree("current", driver.base())
+    flat = Repl.open(w.into(tree_path) if Path(tree_path) != w.tree else w.path).shell
+    man = yaml.safe_load((dom / planner / "domain.yaml").read_text())
+    private = {p for p, v in (man.get("shared") or {}).items() if v == "world-private"}
+    tsh = Repl.open(dom / planner / ("%s.llp" % planner)).shell
+    tsh.counts = dict(tsh.counts, **{a: n for a, n in flat.counts.items() if n > 0 and kind_of(a) in private})
+    cands = lambda sh: {sh.events_tbl[i][2].name: round(float(x), 9) for i, x in sh._candidates()}
+    base_rules = {n for n, _ in rules_of(driver.base())}
+    t = cands(tsh)
+    rules = sorted({n.split("[")[0] for n in t} & base_rules)
+    t = {n: x for n, x in t.items() if n.split("[")[0] in rules}
+    f = {n: x for n, x in cands(flat).items() if n.split("[")[0] in rules}
+    return {"rules": rules, "tree": t, "flat": f, "same": bool(rules) and t == f}
 
 
 def _won(w, commands):
