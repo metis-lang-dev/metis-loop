@@ -216,7 +216,7 @@ def check(driver, games, label="parity", timeout=600):
         won_tree = _won(w, tree["commands"])
         rows.append({"iid": w.iid, "flat": flat["commands"], "tree": tree["commands"], "won_flat": bool(flat["won"]),
                      "won_tree": won_tree, "same": flat["commands"] == tree["commands"], "end": tree.get("end"),
-                     "error": tree.get("error"), "choice": choice_point(driver, w, root)})
+                     "error": tree.get("error"), "choice": choice_points(driver, w, root)})
     # the architect's ruling: step-identical where the flat program is sequential; at a sampled choice the same plan
     # is accepted when the candidates and their weights there are the flat program's (an equal distribution, another
     # draw) and the tree wins what the flat program wins — different candidates are a routing difference
@@ -224,29 +224,63 @@ def check(driver, games, label="parity", timeout=600):
     return {"games": rows, "parity": ok}
 
 
-def choice_point(driver, w, root):
-    """The planner's first choice, tree against flat: the rules the tree's planner can fire at the game's start (its
-    installed program, its world-private reading of the flat program's start) that the flat base has too, their
-    candidates and weights in each. → {"rules", "tree", "flat", "same"}: the same events with the same weights."""
-    import yaml
+def choice_points(driver, w, root):
+    """Every sampled choice of the planner, tree against flat: the flat program's run replayed with its seed (the run
+    `w.act` made), its state snapshotted before each firing; a CHOICE POINT is a step where the planner's rules offer
+    more than one event. At each, the tree's planner (its installed program) is given that state (the atoms it knows)
+    and its candidates are compared, rule by rule: `shared` the rules both offer (candidates and weights must be
+    equal), `tree_only` / `flat_only` the planner's candidates the other side does not offer — recorded, never
+    dropped: a flat-only candidate, or a tree-only one from a rule compose did not generate, is a routing difference.
+    → {"points": [{"step", "tree", "flat", "tree_only", "flat_only", "same"}], "same": bool}."""
+    import random
     from metis.repl import Repl
-    from .alfworld import kind_of, rules_of
+    from . import acting
+    from .alfworld import rules_of
     dom = Path(root) / "domains"
     planner = _members((dom / "composition.yaml").read_text())[0]
-    tree_path = driver._sync_tree("current", driver.base())
-    flat = Repl.open(w.into(tree_path) if Path(tree_path) != w.tree else w.path).shell
-    man = yaml.safe_load((dom / planner / "domain.yaml").read_text())
-    private = {p for p, v in (man.get("shared") or {}).items() if v == "world-private"}
     tsh = Repl.open(dom / planner / ("%s.llp" % planner)).shell
-    tsh.counts = dict(tsh.counts, **{a: n for a, n in flat.counts.items() if n > 0 and kind_of(a) in private})
-    cands = lambda sh: {sh.events_tbl[i][2].name: round(float(x), 9) for i, x in sh._candidates()}
-    base_rules = {n for n, _ in rules_of(driver.base())}
-    t = cands(tsh)
-    rules = sorted({n.split("[")[0] for n in t} & base_rules)
-    t = {n: x for n, x in t.items() if n.split("[")[0] in rules}
-    f = {n: x for n, x in cands(flat).items() if n.split("[")[0] in rules}
-    return {"rules": rules, "tree": t, "flat": f, "same": bool(rules) and t == f}
+    known = {a for _, _, ev in tsh.events_tbl for a in list(ev.consume) + list(ev.produce) + list(getattr(ev, "persist", {}) or {})}
+    ptext = (dom / ("%s_domain.llp" % planner)).read_text()
+    prules = {n for n, _ in rules_of(ptext)}
+    gen = {n for n, line in rules_of(ptext) if "@gen" in line}
+    start = dict(tsh.counts)
+    tree_path = driver._sync_tree("current", driver.base())
+    path = w.into(tree_path) if Path(tree_path) != w.tree else w.path
+    host = w._host_for(path.parent)
+    sh = Repl.open(path).shell
+    snaps, fire0 = [], sh._fire
 
+    def fire(i, how="sampled", ws=None):
+        snaps.append((dict(sh.counts), [(sh.events_tbl[j][2].name, x) for j, x in (ws if ws is not None else sh._candidates())]))
+        return fire0(i, how, ws)
+    sh._fire = fire
+    try:
+        acting.fire(w, host, sh, random.Random(driver.seed), acting.new_out(w.iid), driver.cfg["act_steps"])
+    finally:
+        host.gym.close()
+    rule = lambda n: n.split("[")[0]
+    points = []
+    for k, (counts, cands) in enumerate(snaps):
+        f = {n: round(float(x), 9) for n, x in cands if rule(n) in prules}
+        if len(f) < 2:
+            continue
+        tsh.counts = dict(start, **{a: n for a, n in counts.items() if n > 0 and a in known})
+        t = {tsh.events_tbl[i][2].name: round(float(x), 9) for i, x in tsh._candidates()}
+        points.append(dict(compare_choice(t, f, gen), step=k))
+    return {"points": points, "same": all(p["same"] for p in points)}
+
+
+def compare_choice(t, f, gen=()):
+    """One choice point: the tree's candidates T and the flat program's F ({event: weight}), rule by rule. Equal on the
+    rules both offer; a flat-only candidate, or a tree-only one from a rule not in GEN (compose's), is a difference."""
+    rule = lambda n: n.split("[")[0]
+    shared = {rule(n) for n in f} & {rule(n) for n in t}
+    ts = {n: x for n, x in t.items() if rule(n) in shared}
+    fs = {n: x for n, x in f.items() if rule(n) in shared}
+    t_only = {n: x for n, x in t.items() if rule(n) not in shared}
+    f_only = {n: x for n, x in f.items() if rule(n) not in shared}
+    same = ts == fs and not f_only and all(rule(n) in gen for n in t_only)
+    return {"tree": ts, "flat": fs, "tree_only": t_only, "flat_only": f_only, "same": same}
 
 def _won(w, commands):
     """Whether COMMANDS, sent on a fresh game, win it."""

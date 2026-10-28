@@ -108,3 +108,15 @@ def test_the_hand_compositions_score_full_marks(rel):
     card = compose.composition_card(WS / rel, metisc, Path(protocol_stub.__file__).resolve().parent)
     assert card["full_marks"] and card["interface"]["errors"] == 0, card
     assert (card["handles"] > 0) == ("alfworld" in rel)
+
+
+def test_a_choice_point_shows_what_one_side_alone_offers():
+    from policy.parity import compare_choice
+    flat = {"choose[O=a]": 1.0, "choose[O=b]": 1.0}
+    assert compare_choice(dict(flat), flat)["same"]                                   # an equal distribution
+    assert not compare_choice({"choose[O=a]": 1.0, "choose[O=b]": 2.0}, flat)["same"]  # weights differ
+    r = compare_choice({"choose[O=a]": 1.0, "choose[O=b]": 1.0}, dict(flat, **{"look[R=r1]": 1.0}))
+    assert not r["same"] and r["flat_only"] == {"look[R=r1]": 1.0}                    # recorded, not dropped
+    r = compare_choice(dict(flat, **{"wait[X=x]": 1.0}), flat)
+    assert not r["same"] and r["tree_only"] == {"wait[X=x]": 1.0}
+    assert compare_choice(dict(flat, **{"wait[X=x]": 1.0}), flat, gen={"wait"})["same"]   # compose's own rule

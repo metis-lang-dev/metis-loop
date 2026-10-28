@@ -336,7 +336,7 @@ class Driver:
              "success": round(sum(e["won"] for e in gm) / max(1, len(gm)) - sum(e["won"] for e in g0) / max(1, len(g0)), 6),
              "interface": {"errors": rep_["counts"][0], "warnings": rep_["counts"][1]},
              "vector": {"before": v0, "after": v0 + sum(len(g) for g in comp.generated.values())},   # + the tick's rules
-             "tree_parity": "pending (pi/policy/parity.py: ALFWorld, after nav-belief 2b)"}
+             "tree_parity": "pi/policy/parity.py (ALFWorld): the tree on metis-agent's Live against the flat program, not in the gate"}
         self.say("compose-numbers", errors=rep_["errors"][:12], warnings=rep_["warnings"], **n)
         return n
 
