@@ -182,6 +182,8 @@ The flash cards above stay as flash's. The user's decision on them: flash cannot
 par with the local Gemma 4). **`openrouter/deepseek/deepseek-v4-pro` is the only paid brain**, and the policy
 is retuned on it.
 
-**The v4-pro baseline is step 1's `fit-skill` card** (rules 4 / 12 / 5 / 0, held-out 0/10, $0.1619;
-v4-pro, 0.955 / 1.911 USD per M). It is not re-run: the old columns have been unchanged since. The v4-pro
-rounds 1–3 and the refactor row are read against it.
+**The v4-pro baseline is skill v2's round 0 on v4-pro** (`pi/policy-runs/pro/`, `rw0`), not step 1's
+`fit-skill` card. That card (rules 4 / 12 / 5 / 0, $0.1619) was scored on 2026-10-23 with **skill v1**
+(b7843d6's text); skill v2 (56a8db5) came on 10-26. Rounds from it would judge v2 against v1's card, and
+rewrite.py's check would not catch it: it compares the card's skill *path*, and that file now holds v2. So
+rewrite.py runs without `--start-card` and scores v2 itself (`--series-budget 1.50`, `--max-tokens 4096`).
