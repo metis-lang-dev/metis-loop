@@ -231,7 +231,7 @@ The split base as it is (its ports, read off the rules: {json.dumps(ports)}):
 {base.strip()}
 ```
 
-Rewrite the rules so each specialist has its own goal kind and result kinds, the planner turning one into the next. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note, PURPOSE)}
+Change only the tokens that make the goal kinds ambiguous ({amb}): give each goal kind one specialist that consumes it. Keep every action rule's world facts, left and right, as they are; the gate replays the records and refuses any changed command. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block: the declarations, the rules (each specialist's with its `% @NAME`), and the drop lines."""
 
