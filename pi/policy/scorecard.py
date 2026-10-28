@@ -122,6 +122,20 @@ def structural_of(d, world, a, row):
         dt = dfile.read_text()
         out["handles_derived"] = dt.count("handles(")
         out["handles_declared"] = e.get("handles_declared")
+    comp = d / "catalog" / "domains" / "composition.yaml"
+    if comp.exists():                          # the composition's counts (brief v2 §A), the hand trees' code
+        import yaml
+        from policy import compose
+        from metis.catalog import protocol_stub
+        out["composition"] = compose.composition_card(comp, os.environ.get("METISC") or "metisc",
+                                                      Path(protocol_stub.__file__).resolve().parent)
+        names = set()
+        for m in (d / "catalog" / "domains").glob("*/domain.yaml"):
+            names |= set((yaml.safe_load(m.read_text()) or {}).get("levels") or {})
+        reads = {k for g in e.get("games", []) for act in g.get("activations") or [] for k in act.get("reads") or []}
+        out["level_ports"] = {"declared": len(names), "read": len(names & reads)}      # read by a fired rule
+    st = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
+    out["compose"] = (st.get("moves") or {}).get("compose")                          # the move's verdict (not counted)
     journal = jl(d / "state" / "journal.jsonl")
     props = [x for x in journal if x.get("event") == "proposal"]
 

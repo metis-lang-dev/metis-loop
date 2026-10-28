@@ -316,7 +316,7 @@ def flow(d):
     return "{%s}" % ", ".join("%s: %s" % kv for kv in d.items())
 
 
-def compose(sp, world, root, capacity_text, start=(), holds_extra=None, display=""):
+def compose(sp, world, root, capacity_text, start=(), holds_extra=None, display="", levels=None):
     """SP written as the composition under ROOT/domains/tree/ (see the module's doc). CAPACITY_TEXT: the world's types
     and statics (capacity_of). HOLDS_EXTRA: {resource: {member: [rule names]}} added on an I4 finding. → Composition."""
     tree = Path(root) / "domains"
@@ -370,6 +370,12 @@ def compose(sp, world, root, capacity_text, start=(), holds_extra=None, display=
             "display: %s\nline: \"%s\"\nshared: %s\nstatus: {success: [%s], failure: [%s]}\n%s"
             % (d, d, d, getattr(world, "HOST", "host.py:make"), display or d, d, flow(sh), ", ".join(st["success"]),
                ", ".join(st["failure"]), "" if d == sp.planner else "gating: program\n"))
+        if (levels or {}).get(d):                 # the brain's level ports (levels_of), as it declared them
+            import yaml
+            with open(pkg / "domain.yaml", "a") as f:
+                for k in LEVEL_KEYS:
+                    if levels[d].get(k):
+                        f.write(yaml.safe_dump({k: levels[d][k]}, default_flow_style=None, sort_keys=False, width=200))
     ddir = tree / DIRECTOR
     ddir.mkdir(exist_ok=True)
     from .hier import director_roles
@@ -385,6 +391,88 @@ def compose(sp, world, root, capacity_text, start=(), holds_extra=None, display=
     comp.interfaces = ["iface/%s.llp" % family] if cross else []
     _write_composition(comp, comp.interfaces)
     return comp
+
+
+LEVEL_KEYS = ("beliefs", "levels", "evaluate")
+YAML_BLOCK = re.compile(r"```yaml\s*\n(.*?)```", re.S)
+
+
+def levels_of(answer, members, planner):
+    """The level ports a brain's answer declares (skill v2 point 14, brief v2 §B): each ```yaml block's `beliefs:` /
+    `levels:` / `evaluate:`, at its top for the planner or under a member's name. An entry of the wrong shape is
+    dropped with a finding: a belief {port, one | lone}; a level {from: {belief | evaluate: name}, at: thresholds
+    rising in (0, 1), names: one more than the thresholds}; an evaluate {reach | risk, within}.
+    → ({member: {key: {name: entry}}}, findings)."""
+    import yaml
+    out, findings = {}, []
+    for block in YAML_BLOCK.findall(answer or ""):
+        try:
+            doc = yaml.safe_load(block) or {}
+        except yaml.YAMLError as e:
+            findings.append("a yaml block does not parse: %s" % str(e).splitlines()[0])
+            continue
+        if not isinstance(doc, dict):
+            continue
+        per = {planner: {k: doc[k] for k in LEVEL_KEYS if k in doc}}
+        per.update({m: doc[m] for m in members if isinstance(doc.get(m), dict)})
+        for m, keys in per.items():
+            for k in LEVEL_KEYS:
+                for name, e in ((keys or {}).get(k) or {}).items():
+                    why = _level_entry_wrong(k, e)
+                    if why:
+                        findings.append("%s %s %s: %s" % (m, k, name, why))
+                    else:
+                        out.setdefault(m, {}).setdefault(k, {})[name] = e
+        for m in set(doc) - set(LEVEL_KEYS) - set(members):
+            findings.append("a yaml block names %s: no member of the composition" % m)
+    return out, findings
+
+
+def _level_entry_wrong(key, e):
+    if not isinstance(e, dict):
+        return "not a mapping"
+    if key == "beliefs":
+        return None if "port" in e and len({"one", "lone"} & set(e)) == 1 else "needs port and one of one / lone"
+    if key == "levels":
+        src, at, names = e.get("from"), e.get("at"), e.get("names")
+        if not (isinstance(src, dict) and len(src) == 1 and set(src) <= {"belief", "evaluate"}):
+            return "from: needs one of belief / evaluate"
+        if not (isinstance(at, list) and at and all(isinstance(t, (int, float)) and 0 < t < 1 for t in at)
+                and all(a < b for a, b in zip(at, at[1:]))):
+            return "at: thresholds rising in (0, 1)"
+        return None if isinstance(names, list) and len(names) == len(at) + 1 else "names: one more than the thresholds"
+    if key == "evaluate":
+        return None if len({"reach", "risk"} & set(e)) == 1 and isinstance(e.get("within"), int) else "needs reach or risk, and within"
+    return "unknown key"
+
+
+def composition_card(path, metisc=None, home=None):
+    """A composition's counts for the card (brief v2 §A, the structural column made concrete): members, resources,
+    the interface check's errors / warnings, the specialists that gate themselves (gating: program), whether the
+    director is the generic tree (it includes iface/director_tree_domain.llp) and how many kinds it routes (its
+    handles), the level ports declared. The same code reads the loop's product and the hand compositions."""
+    import yaml
+    path = Path(path)
+    comp = yaml.safe_load(path.read_text())
+    root = path.parent
+    members = list(comp.get("specialists") or [])
+    mans = {m: yaml.safe_load((root / m / "domain.yaml").read_text()) or {} for m in members}
+    shared = lambda m: mans[m].get("shared") or {}
+    commanders = [m for m in members if any(v == "resource" for v in shared(m).values())]
+    dman = yaml.safe_load((root / comp["direct"] / "domain.yaml").read_text()) or {}
+    dtext = (root / comp["direct"] / dman.get("program", comp["direct"] + ".llp")).read_text()
+    out = {"members": len(members), "resources": len({p for m in members for p, v in shared(m).items() if v == "resource"}),
+           "gating": "%d/%d" % (sum(1 for m in commanders if mans[m].get("gating") == "program"), len(commanders)),
+           "director_generic": 'include "iface/director_tree_domain.llp".' in dtext,
+           "handles": len(re.findall(r"^\s*handles\(", dtext, re.M)),
+           "level_ports": sum(len(mans[m].get("levels") or {}) for m in members),
+           "interface": None}
+    if metisc:
+        rep_ = interface(path, metisc, home)
+        out["interface"] = {"errors": rep_["counts"][0], "warnings": rep_["counts"][1]}
+    out["full_marks"] = bool(out["interface"] is not None and out["interface"]["errors"] == 0 and out["director_generic"]
+                             and out["gating"].split("/")[0] == out["gating"].split("/")[1])
+    return out
 
 
 def _write_composition(comp, interfaces):

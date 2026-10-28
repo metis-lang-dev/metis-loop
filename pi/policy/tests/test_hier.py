@@ -89,6 +89,8 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     # step 2c: the gate judges each move by its own gain (metispy 48e091b); policy-tuning-2: the compose move
     assert [e["why"][0] for e in props] == ["move: prune", "move: split", "move: conventions", "move: direct", "move: compose"]
     assert comp["numbers"]["interface"]["errors"] == 0 and comp["numbers"]["replay_identical"]
+    # the compose move is judged outside the run's counters: the card's old columns are the driver's before it
+    assert d.state["moves"]["compose"] == "accept" and (d.state["proposals"], d.state["accepted"]) == (4, 3)
     assert any(w.startswith("the interface check passes") for w in comp["why"])
     tree = run / "catalog" / "domains"
     assert (tree / "composition.yaml").exists() and (tree / "tick_types.llp").exists()

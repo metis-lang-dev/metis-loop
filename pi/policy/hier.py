@@ -317,7 +317,8 @@ class Hier:
         why = acting.fire(self.w, host, sh, rng, out, steps,
                           stop=lambda s: any(kind_of(a) in out_for_others for a, n in s.counts.items() if n > 0
                                              and a not in pool), guide=guide, feeds=self.feeds)
-        rows = [{"kind": kind, "produce": sorted(ev.produce)} for kind, _, ev in sh.fired_rows[k:]]
+        rows = [{"kind": kind, "produce": sorted(ev.produce), "reads": sorted(getattr(ev, "persist", {}) or {})}
+                for kind, _, ev in sh.fired_rows[k:]]
         new = {a: n for a, n in sh.counts.items() if n > 0 and kind_of(a) in self.sp.tokens}
         new.update(held)
         return new, rows, why
@@ -363,7 +364,7 @@ def run(game, sp, run_dir, base_name, steps=60, seed=1, director=None, max_activ
     activations: [{domain, goal, results}], beats?, diverged?} — the manual switch, or with `director`
     (a DirectorLoop factory) the director's rules make it; with `guide` (the recorded commands) the
     records' replay (acting.fire's guide: the run must send them, in order)."""
-    guide = list(guide) if guide is not None else None
+    guide = acting.Guide(guide) if guide is not None else None
     h = Hier(game, game, sp, run_dir, base_name)
     host = game._host_for(game.pkg)
     rng = random.Random(seed)
@@ -382,7 +383,7 @@ def run(game, sp, run_dir, base_name, steps=60, seed=1, director=None, max_activ
                 if why == "diverged":
                     out["diverged"] = True
                 skip = skip | {d} if not rows else set()          # enabled whole, nothing once narrowed: the next one
-                out["activations"].append({"domain": d, "goal": goal, "fired": len(rows),
+                out["activations"].append({"domain": d, "goal": goal, "fired": len(rows), "reads": sorted({kind_of(a) for r in rows for a in r["reads"]}),
                                            "results": sorted({a for r in rows for a in r["produce"] if kind_of(a) in sp.out.get(d, ())})})
                 handed = {kind_of(a) for a in out["activations"][-1]["results"]}
                 last = d
@@ -425,7 +426,7 @@ def run_directed(h, host, pool, rng, out, steps, make_loop, max_activations, gui
         box["pool"], rows, why = h.activate(d, host, box["pool"], rng, out, steps - out["steps"], guide)
         if why == "diverged":
             out["diverged"] = True
-        out["activations"].append({"domain": d, "goal": goal, "fired": len(rows),
+        out["activations"].append({"domain": d, "goal": goal, "fired": len(rows), "reads": sorted({kind_of(a) for r in rows for a in r["reads"]}),
                                    "results": sorted({a for r in rows for a in r["produce"] if kind_of(a) in h.sp.out.get(d, ())})})
         loop.produced(d, {"fired": rows})
         loop.step()
@@ -504,7 +505,8 @@ class DirectorSession:
             sh._fire(sh._candidates()[0][0])
             if len(sh.fired_rows) - k > 50:
                 break
-        rows = [{"kind": kind, "produce": sorted(ev.produce)} for kind, _, ev in sh.fired_rows[k:]]
+        rows = [{"kind": kind, "produce": sorted(ev.produce), "reads": sorted(getattr(ev, "persist", {}) or {})}
+                for kind, _, ev in sh.fired_rows[k:]]
         sh.counts = {a: n for a, n in sh.counts.items() if n > 0 and kind_of(a) not in OUT_KINDS}
         return [{"fired": rows}]
 

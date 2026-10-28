@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import alfworld, compose, hier, minihack, scienceworld
+from . import acting, alfworld, compose, hier, minihack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
@@ -97,6 +97,7 @@ class Driver:
             "family": family, "seed": seed, "discovery": discovery, "gate_games": gate_games, "notes": [],
             "status": "running", "cfg": self.cfg, "world": world, "skill": str(self.skill) if self.skill else None}
         self.cfg = dict(self.state.get("cfg") or self.cfg, **(cfg or {}))
+        self.level_preds()                       # a resumed run's declared level ports (recorded and replayed per step)
         if not (self.root / "domains" / DOMAIN / ("%s.llp" % DOMAIN)).exists():
             d = self.root / "domains" / DOMAIN
             d.mkdir(parents=True, exist_ok=True)
@@ -255,7 +256,7 @@ class Driver:
         cand, cur = self.predictor("candidate", text), self.current()
         base = self.base()
         r0 = self.runs_of(self.disc, base, "current")
-        rc = self.hier_runs(self.disc, text, "candidate", guides=[r["commands"] for r in r0])
+        rc = self.hier_runs(self.disc, text, "candidate", guides=[acting.Guide.of(r) for r in r0])
         gc, g0 = self.runs_of(self.held, text, "candidate"), self.runs_of(self.held, base, "current")
         held = self.heldout() + [t for e in gc + g0 for t in e["transitions"] if t["kind"] == "surprise"]
         amb = lambda t: len(hier.Split.of(t, self.World, self.start).ambiguous())
@@ -280,7 +281,7 @@ class Driver:
         sp = hier.Split.of(base, self.World, self.start)
         make, _ = hier.director_factory(sp, self.run / "hier" / "director", text=dtext)
         rm = self.hier_runs(self.disc, base, "manual")
-        rd = self.hier_runs(self.disc, base, "directed", make, guides=[r["commands"] for r in rm])
+        rd = self.hier_runs(self.disc, base, "directed", make, guides=[acting.Guide.of(r) for r in rm])
         gd, gm = self.hier_runs(self.held, base, "directed", make), self.hier_runs(self.held, base, "manual")
         amb = len(sp.ambiguous())
         n = {"move": "direct",
@@ -305,7 +306,8 @@ class Driver:
         cap = compose.capacity_of(self.disc[0].instance_text())
         extra, added = {}, []
         while True:
-            comp = compose.compose(sp, self.World, root, cap, start=self.start, holds_extra=extra, display=self.World.DESCRIPTION)
+            comp = compose.compose(sp, self.World, root, cap, start=self.start, holds_extra=extra, display=self.World.DESCRIPTION,
+                                   levels=self.state.get("levels"))
             rep_ = compose.interface(comp.path, metisc, home)
             two = [(p, ws) for p, ws in compose.two_writers(rep_) if not any(p in r for r in added)]
             if not two or len(extra) >= len(compose.SECOND):
@@ -325,7 +327,7 @@ class Driver:
         comp, rep_, _ = self._composed
         tree = comp.path.parent
         r0 = [w.act(self._sync_tree("current", base), self.cfg["act_steps"], seed=self.seed) for w in self.disc]
-        rm = self.hier_runs(self.disc, base, "compose", guides=[r["commands"] for r in r0])
+        rm = self.hier_runs(self.disc, base, "compose", guides=[acting.Guide.of(r) for r in r0])
         gm = self.hier_runs(self.held, base, "compose")
         g0 = [w.act(self._sync_tree("current", base), self.cfg["act_steps"], seed=self.seed) for w in self.held]
         v0 = self.vector_of(base, "current")
@@ -350,11 +352,31 @@ class Driver:
     # ── a proposal ──
     def propose(self, prompt, purpose, seed_game):
         """The brain's lines → the candidate base (repaired until it compiles in the seed record's
-        instance) → the gate. → the verdict ("accept" | "refuse" | "error")."""
+        instance) → the gate. → the verdict ("accept" | "refuse" | "error"). The level ports the answer's ```yaml
+        block declares (compose.levels_of) are kept with an accepted proposal, for the members' manifests."""
+        self._answer = None
+        v = self._propose(prompt, purpose, seed_game)
+        sp = hier.Split.of(self.base(), self.World, self.start)
+        if v == "accept" and self._answer and sp.is_split():
+            decl, findings = compose.levels_of(self._answer, list(sp.domains), sp.planner)
+            for m, keys in decl.items():
+                for k, entries in keys.items():
+                    self.state.setdefault("levels", {}).setdefault(m, {}).setdefault(k, {}).update(entries)
+            if decl or findings:
+                self.say("levels-declared", declared=decl, findings=findings)
+            self.level_preds()
+        return v
+
+    def level_preds(self):
+        """The level ports declared so far: recorded per step and replayed from the records (acting.LEVEL_PREDS)."""
+        acting.LEVEL_PREDS = {n for keys in (self.state.get("levels") or {}).values() for n in (keys.get("levels") or {})}
+        return acting.LEVEL_PREDS
+
+    def _propose(self, prompt, purpose, seed_game):
         if self.state["proposals"] >= self.cfg["proposals"]:
             raise Disengage("budget", "The proposals budget (%d) is spent. More proposals, another phase, or stop?" % self.cfg["proposals"],
                             options=["budget: more proposals", "phase: refactor now", "abandon"])
-        answer = self.ask(prompt, purpose)
+        answer = self._answer = self.ask(prompt, purpose)
         lines = block_of(answer)
         text, info = splice(self.base(), lines)
         if text == self.base():
@@ -393,13 +415,30 @@ class Driver:
             raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
                             "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: prompt_chars, a larger cap", "abandon"]) from None
 
-    def judge(self, kind, by="brain", info=None, cost=None, domain=None, call=None, **args):
+    def _judge_uncounted(self, kind, by, info, cost, domain, call, **args):
+        try:
+            v = self.gate.propose(kind, domain or DOMAIN, self.root, phase=self.state["phase"], cost=cost, **args)["verdict"]
+        except Exception as e:                      # noqa: BLE001 — the gate's refusal in words
+            self.say("proposal", verdict="error", why=str(e), by=by, call=call, domain=domain or DOMAIN, counted=False, **(info or {}))
+            v = {"verdict": "error"}
+        else:
+            self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, by=by, call=call,
+                     domain=domain or DOMAIN, counted=False, **(info or {}))
+        self.state.setdefault("moves", {})[self.move or kind] = v["verdict"]
+        self.save()
+        return v["verdict"]
+
+    def judge(self, kind, by="brain", info=None, cost=None, domain=None, call=None, counted=True, **args):
         """A proposal through the gate (the brain's or, at re-engagement, the person's rule or edit),
         its bookkeeping one path for both: the counters, the current tree re-synced, the
         contradiction check; a gate's refusal in words is a refused proposal, not an end.
         `call`: the brain's call whose lines are judged (its line in prompts.jsonl; None for a move or
         the person's), journaled with the proposal (nina's policy-tuning R2: the rewrite's digest).
-        → "accept" | "refuse" | "error"."""
+        `counted=False` (the compose move, policy-tuning-2): journaled and judged, but outside the run's counters —
+        the card's old columns (proposals, accepted) stay those of the driver before it; its verdict in
+        state["moves"]. → "accept" | "refuse" | "error"."""
+        if not counted:
+            return self._judge_uncounted(kind, by, info, cost, domain, call, **args)
         self.state["proposals"] += 1
         phase = self.state["phase"] if not (by == "person" and self.state["phase"] == "explore") else "exploit"
         try:
@@ -676,7 +715,7 @@ class Driver:
                 self.move = "compose"
                 comp, rep_, added = self.composition(self.run / "hier" / "compose" / "catalog", sp)
                 dtext = (comp.path.parent / compose.DIRECTOR / ("%s.llp" % compose.DIRECTOR)).read_text()
-                v = self.judge("program", domain=compose.DIRECTOR, info={"compose": {
+                v = self.judge("program", domain=compose.DIRECTOR, counted=False, info={"compose": {
                     "members": comp.members, "resources": comp.resources, "added": added,
                     "interface": rep_["counts"], "errors": rep_["errors"][:12], "warnings": rep_["warnings"]}}, text=dtext)
                 if v == "accept":                            # the accepted director's composition, beside the base
@@ -749,7 +788,8 @@ class Driver:
             out["ports"] = sp.ports()
             out["handles_declared"] = hier.director_text(sp, "director_domain.llp")[0].count("handles(") if sp.is_split() else None
             for g, e in zip(out["games"], eps):
-                g["activations"] = [{"domain": x["domain"], "fired": x.get("fired"), "results": x["results"]} for x in e.get("activations") or []]
+                g["activations"] = [{"domain": x["domain"], "fired": x.get("fired"), "results": x["results"], "reads": x.get("reads") or []}
+                                    for x in e.get("activations") or []]
             out["beats"] = [len(e.get("beats") or []) for e in eps] if mode == "director" else None
         (self.rec_dir / ("evaluate-%s%s.json" % (split, "" if mode == "flat" else "-" + mode))).write_text(json.dumps(out, indent=1))
         self.say("evaluate", split=split, mode=mode, won=out["won"], n=out["n"], commands=out["commands"], refused=out["refused"])

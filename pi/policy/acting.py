@@ -27,6 +27,27 @@ def apply_lines(counts, lines):
     return {a: n for a, n in counts.items() if n > 0}
 
 
+LEVEL_PREDS = set()      # the level ports the composition declares (manifests' `levels:`): recorded per step, replayed
+
+
+class Guide(list):
+    """The recorded commands to replay, with the level atoms each one's step read (`levels`, aligned): the replay
+    reads the records' levels, never the host's — a level is the instrument's number at that tick (brief v2 §B)."""
+    def __init__(self, commands=(), levels=None):
+        super().__init__(commands)
+        self.levels = list(levels) if levels is not None else list(getattr(commands, "levels", []) or [])
+
+    @classmethod
+    def of(cls, run):
+        """A recorded run's guide: its commands and the levels its transitions recorded."""
+        return cls(run["commands"], [t.get("levels") for t in run.get("transitions") or [] if "command" in t])
+
+
+def levels_in(counts):
+    """The level atoms in COUNTS (LEVEL_PREDS)."""
+    return {a: n for a, n in counts.items() if n > 0 and kind_of(a) in LEVEL_PREDS} if LEVEL_PREDS else {}
+
+
 def fire(w, host, sh, rng, out, steps, stop=None, guide=None, feeds=None):
     """The session's enabled rules fired one at a time (the reference sampler's tier, seeded), each
     command through the host, the world synced back after each; until quiet, the world's end, the
@@ -56,13 +77,20 @@ def fire(w, host, sh, rng, out, steps, stop=None, guide=None, feeds=None):
         if rv is not None:
             host.on_event(name, ())
         t = w._after(host, pre, name, rv, sh.events_tbl[i][2])
+        recorded = None
         if t is not None and guide is not None and guide:
             guide.pop(0)
+            levels = getattr(guide, "levels", None)
+            recorded = levels.pop(0) if levels else None
+        sh.counts = apply_lines(dict(sh.counts), w._sync(host, dict(sh.counts)))
+        if recorded is not None:                     # the replay reads the records' levels at this step, not the host's
+            sh.counts = dict({a: n for a, n in sh.counts.items() if kind_of(a) not in LEVEL_PREDS}, **recorded)
         if t is not None:
+            if LEVEL_PREDS:
+                t["levels"] = levels_in(sh.counts)
             out["transitions"].append(t)
             out["commands"].append(t["command"])
             out["refused"] += 0 if (t["admissible"] and t.get("changed", True)) else 1
-        sh.counts = apply_lines(dict(sh.counts), w._sync(host, dict(sh.counts)))
         out["stuck"] = sorted(a for a in sh.counts if kind_of(a) == "stuck")
         if host.won:
             return "won"
