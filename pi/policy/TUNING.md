@@ -4,11 +4,13 @@ The brain's weights never change; what is tuned is the SEARCH POLICY around it (
 its instructions, what it hears when refused). The experimental gate is the reward; a variant's
 CARD (`policy/scorecard.py`) is its measure: per world and seed, the loop from the EMPTY domain
 through its phases, then the base on the held-out split (flat, and through the director when the
-refactor built one). Brain: `openrouter/deepseek/deepseek-v4-pro`, `--budget 0.50` per run, the
-key's own usage the meter. The user's line: ≈ $3 a week; step 1 under a $1.00 series stop (the
+refactor built one). The brain is named on each card (a card is read only against cards of the same
+brain); `--budget 0.50` per run, the key's own usage the meter. The user's line: ≈ $3 a week; step 1 under a $1.00 series stop (the
 user's, asked directly).
 
 ## Step 1 — the card for the fit-repair driver (2026-10-23, metis-loop master 0a6fb32)
+
+**Brain:** `openrouter/deepseek/deepseek-v4-pro`, 0.955 / 1.911 USD per M (prompt / completion).
 
 Variants: `fit` (the fit-repair turn: a fits refusal comes back to the brain once with the gate's
 reason in its terms, `measure.explain`) and `fit-skill` (the same + `skills/hierarchy.md` by phase);
@@ -111,3 +113,42 @@ The runs are under `policy-runs/fit*/` (git-ignored); the crashed ones under
 ## Step 2 — the skill rewritten from the journals
 (next: `python -m policy.rewrite --start-card policy-runs/fit-skill/scorecard.json …`, under the
 series budget.)
+
+## policy-tuning-2 (s-e075f47f) round 0 — skill v2 re-baselined on the flash brain (2026-10-28, master 96fa090)
+
+**Brain:** `openrouter/deepseek/deepseek-v4.1-flash-1017` (reasoning off, 2048 out, data_collection deny),
+0.30 / 1.20 USD per M list (Amendment 3). This card, not step 1's, is the reference for rounds 1–3.
+
+Variant `r0-flash` = `fit-skill` with skill v2 (`skills/hierarchy.md`, 56a8db5); the step-1 worlds, seeds,
+discovery 2, gate games 2, held-out 10. Master 96fa090 holds 2a + 2a-ii; the old columns are unchanged.
+
+| variant | world | seed | phase reached | accepted / proposals | calls | usd | rules | usd/rule | held-out flat | end |
+|---|---|---|---|---|---|---|---|---|---|---|
+| r0-flash | alfworld | 1 | exploit | 4 / 11 | 22 | 0.0042 | 4 | 0.0010 | 0/10 | disengaged (no_progress) |
+| r0-flash | alfworld | 2 | explore | 3 / 10 | 16 | 0.0019 | 3 | 0.0006 | 0/10 | disengaged (no_progress) |
+| r0-flash | scienceworld | 1 | exploit | 3 / 13 | 38 | 0.0046 | 3 | 0.0015 | 0/10 | disengaged (no_progress) |
+| r0-flash | scienceworld | 2 | explore | 2 / 9 | 28 | 0.0029 | 2 | 0.0014 | 0/10 | disengaged (no_progress) |
+
+**Spend:** $0.0136 billed for the four runs (cost.jsonl; the series guard's meter agrees). At list prices
+the same tokens (246k prompt, 13k completion) would be $0.090: the providers OpenRouter routed to (mostly
+Wafer) billed about a sixth of list. Step 1's `fit-skill` on v4-pro: $0.1619.
+
+- **Built:** ALFWorld go, take_plain, put_plain (s1 only), open_closed; ScienceWorld close_door (s1), wait,
+  look. v4-pro's `fit-skill` built 4 / 12 / 5 / 0 rules; flash builds 4 / 3 / 3 / 2. Flash is level on
+  seed 1, behind on ALFWorld seed 2 (stalled in explore), and builds something on ScienceWorld seed 2,
+  where v4-pro built nothing.
+- **Refused:** explore mostly on "the candidate fires on its record and on no record it contradicts" (21 of
+  25 explore refusals); ALFWorld s2 four times on "the held-out likelihood not down". Exploit: all six
+  policy proposals refused on the generalization gain.
+- **The refactor move:** not reached. No run passed exploit (as on v4-pro), so the flash model neither held,
+  refused nor wrote a composition. Held-out 0/10 everywhere, as before. Structural columns: "not split";
+  level ports 0 / 0.
+- `end` is the card's status with the driver's reason; step 1's `end` column shows the reason alone
+  (those runs disengaged too).
+
+```sh
+cd metis-loop/pi    # the key: run.sh's environment / ~/.config/metis/openrouter.env
+python -m policy.card --variant r0-flash=policy/skills/hierarchy.md --worlds alfworld,scienceworld --seeds 1,2 \
+    --brain openrouter/deepseek/deepseek-v4.1-flash-1017 --budget 0.50 --series-budget 1.00 \
+    --discovery 2 --gate-games 2 --heldout 10
+```
