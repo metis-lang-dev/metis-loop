@@ -116,7 +116,9 @@ def install(driver, w, out):
     (dom / compose.DIRECTOR / "pass_host.py").write_text(PASS_HOST)
     names = [compose.DIRECTOR] + members
     agent = workspace() / "metis-agent"
+    # no member takes a person's intent (none has intent material), so Live reads the config's grammar; no turn uses it
     cfg = {"template": "gemma4", "stop_words": ["stop", "halt", "freeze", "quiet"],
+           "intent": {"grammar": str(agent / "go" / "grammar" / "e11-next.gbnf")},
            "v3": {"prompt": [str(agent / "go" / "grammar" / "v3-orchestrator.txt")], "catalog": names, "loaded": names,
                   "serve": "active", "director": compose.DIRECTOR, "n_ctx": 16384, "tick_ms": 20,
                   "journal": str(out / ".run" / "journal.jsonl")},
