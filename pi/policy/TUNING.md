@@ -267,3 +267,71 @@ refactor rows $0.0374; the level row $0.1252). No run or call was cut by a cap. 
   but writes no `beliefs:`/`levels:` block, so no thresholds and nothing declared.
 - The prompt asks for a yaml block in its belief section and for ONE llp block in its last line. The last
   line wins. Fix the answer format before the next level row.
+
+### The level rows 2e–2g (alfworld_view, v4-pro, skill r2b, seeds 1–2)
+
+| row (master) | what changed | policy asked | level declared | thresholds | read by a rule | accepted / card | held-out | usd |
+|---|---|---|---|---|---|---|---|---|
+| 2d (9096d34) | belief shown, level point in exploit | yes (s1) | no yaml | — | `$place_level(R, …)`, the object dropped | 0 / 0 | 1/10, 0/10 | 0.1183 |
+| 2e (1393805) | yaml allowed, a worked example | **no**: exploit revised first | — | — | — | 0 / 0 | 0/10, 0/10 | 0.1104 |
+| 2f (a94b930) | policy first when a belief is spread | yes | **yes** (findings none) | [0.05, 0.4] (**the example's**) | right arity; `pred`/`type` missing → no compile | 0 / 0 | 1/10, 0/10 | 0.0842 |
+| 2g (45eb5ec) | declarations generated, the repair keeps the level, thresholds `[T1, T2]` | yes | **5 of 5 answers** | **the brain's: [0.3, 0.7] ×3, [0.05, 0.12] ×2** | right arity, 2–5 rules each | 0 / 0 (3 at +0/+0, 2 at −1/−1) | 1/10, 0/10 | 0.0692 |
+
+Rounds 1–2 on alfworld_view from 2d's card ($0.2449) and the plain-alfworld check ($0.0844, no level, rightly)
+are in s-e075f47f steps/step2d-level-rounds.md.
+
+**The judgment (metis, steps/step3-judgment.md), on why 2g shows no gain:**
+1. The level never restricts. Four of the five answers give a `high`/`mid`/`low` triple of the same rule, so
+   their union goes anywhere.
+2. The thresholds were fitted to the discovery game's belief (0.50 / 0.17), while the gate games show 0.06 / 0.20:
+   at [0.3, 0.7] both gate games read `low` everywhere.
+3. A uniform prior excludes but never ranks: a level separates "may be here" from "looked, not here".
+4. The answers are navigation only, on a base that wins 0 of the 2 gate games, so no gain was measurable.
+5. The structural reward is EARNED on the v4-pro composition (replay identical, held-out up 8 → 10, interface
+   0 errors). `all_exercised` (3/5) is the column's measurement limit, not the composition's.
+
+## policy-tuning-2 — closing (2026-10-28; steps 2b–2g, step 3's judgment)
+
+**What 2b–2g established:**
+- **The brain holds the refactor move once the ask shows its form.** v4-pro's conventions answer was accepted
+  on the agreed ask with a worked example. Direct and compose followed, and the composition is interface-clean,
+  director 10/10. Flash never held the move, and the user keeps v4-pro as the only paid brain.
+- **The brain declares and reads a level once the belief is shown and the declarations are generated.** By 2g
+  it chooses its own thresholds and reads the level at the port's arity in every policy answer.
+- **Gain needs the next brief.** No level policy was accepted. The reasons are the four in the judgment, none
+  of them the brain's declaration.
+- **The rewrite rounds:**
+  - the first held-out wins came on v4-pro (round 2: ALFWorld 1/10 on each seed; variance not excluded at 2
+    seeds);
+  - the rounds on flash and on alfworld_view moved nothing;
+  - the new guards held (no keep on fewer rules; the rewrite answer uncut at 4096 tokens).
+- **Unmeasured:** ScienceWorld seed 2 under the 6G cap, every v4-pro card.
+
+**Spend ledger (OpenRouter, the user's key; the user's standing cap $7 for policy-tuning):**
+
+| part | brain | usd |
+|---|---|---|
+| round 0 + rounds 1–3 | flash | 0.0503 |
+| refactor rows (flash ×2) | flash | 0.0020 |
+| v4-pro refactor rows (control, example, example2) | v4-pro | 0.0374 |
+| v2 round 0 + rounds 1–3 | v4-pro | 0.9424 |
+| level row (r2), 2d row + rounds + plain check, 2e, 2f, 2g | v4-pro | 0.8366 |
+| **total since 2b** | | **1.8687** of 7 |
+
+No run or call was cut by a cap. Every request ran with the key from the environment, the per-run cap and cost.jsonl.
+
+**Open items for policy-tuning-3 (the judgment's four recommendations):**
+1. **The skill's level point** (r2b pt 12):
+   - a level as an EXCLUSION, one guard that excludes `low` and never a rule per level;
+   - thresholds relative to the masses across games (T1 below 1/the most candidates, about 0.05);
+   - optionally the belief section stating the range of masses the gate will see (a design choice: the gate
+     games are unseen today).
+2. **The gate's evidence for a level:**
+   - ≥ 6 gate games, or a steps-to-win gain (fewer commands to win, success and likelihood not down);
+   - ask for a level only after the base has a winning chain.
+3. **The step budget:**
+   - count sent COMMANDS (`act_steps`), with a separate cap on command-free firings per command;
+   - so a hierarchy is not charged for its routing (the pencil→shelf pair lost at 25 commands after the
+     split, won at 18 before).
+4. **`all_exercised`:** a domain counts as exercised when an activation sent a command, put out a result or
+   said `tick__done`. Today access and place can never count.
