@@ -25,6 +25,7 @@ tell the tick's rules from the brain's; a rule the brain already wrote with a ti
     comp = compose(sp, world, root, capacity_text, start=…)      → Composition (paths, members, resources)
     rep = interface(comp.path, metisc, home)                      → {"errors", "warnings", "notes", "rc", "listing"}
 """
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -499,6 +500,18 @@ def capacity_of(instance_text):
 
 # ── the interface check as a gate step ──
 RESULT = re.compile(r"^result (\d+) error\(s\), (\d+) warning\(s\), (\d+) note\(s\)")
+
+
+def metisc_path():
+    """The metisc the loop calls: $METISC, else the workspace's metis-lang/src/metisc (the first parent holding one, as
+    run.sh finds it), else `metisc` on the PATH."""
+    if os.environ.get("METISC"):
+        return os.environ["METISC"]
+    for d in Path(__file__).resolve().parents:
+        c = d / "metis-lang" / "src" / "metisc"
+        if c.is_file() and os.access(c, os.X_OK):
+            return str(c)
+    return "metisc"
 
 
 def interface(path, metisc, home, timeout=120):

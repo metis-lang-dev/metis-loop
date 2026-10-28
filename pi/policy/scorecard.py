@@ -164,7 +164,7 @@ def structural_of(d, world, a, row):
         import yaml
         from policy import compose
         from metis.catalog import protocol_stub
-        out["composition"] = compose.composition_card(comp, os.environ.get("METISC") or "metisc",
+        out["composition"] = compose.composition_card(comp, compose.metisc_path(),
                                                       Path(protocol_stub.__file__).resolve().parent)
         names = set()
         for m in (d / "catalog" / "domains").glob("*/domain.yaml"):

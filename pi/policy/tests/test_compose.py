@@ -196,3 +196,15 @@ def test_a_result_is_the_planners_only():
     facts, _ = director_roles(sp)
     assert "handles(place, todest)" in facts and "handles(place, carrying)" not in facts
     assert "handles(task, carrying)" in facts and "result(carrying)" in facts
+
+
+def test_the_card_finds_metisc_as_the_driver_does(monkeypatch, tmp_path):
+    # nina's paid run: scorecard.composition_card called a bare `metisc` (not on the PATH) and crashed after the run
+    from policy import compose
+    monkeypatch.setenv("METISC", str(tmp_path / "mine"))
+    assert compose.metisc_path() == str(tmp_path / "mine")
+    monkeypatch.delenv("METISC")
+    found = compose.metisc_path()
+    sibling = next((d / "metis-lang" / "src" / "metisc" for d in Path(compose.__file__).resolve().parents
+                    if (d / "metis-lang" / "src" / "metisc").is_file()), None)
+    assert found == (str(sibling) if sibling else "metisc")

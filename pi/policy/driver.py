@@ -301,7 +301,7 @@ class Driver:
         """SP as a tick tree under ROOT/domains/ (compose.compose) and its interface check. An I4 finding of two
         writers of a state pred adds a second resource (hands, …) gating both writers' rules that write it, and
         composes again (the architect's Q1 addition). → (Composition, the check's report, the resources added)."""
-        metisc = os.environ.get("METISC") or "metisc"
+        metisc = compose.metisc_path()
         from metis.catalog import protocol_stub
         home = Path(protocol_stub.__file__).resolve().parent              # its iface/: the protocol, the tree director
         cap = compose.capacity_of(self.disc[0].instance_text())
