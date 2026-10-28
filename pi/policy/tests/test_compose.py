@@ -152,3 +152,23 @@ def test_the_conventions_ask_names_the_gates_rule():
     assert "Change only the tokens that make the goal kinds ambiguous (want is taken by nav and grasp)" in p
     assert "Keep every action rule's world facts, left and right, as they are" in p
     assert "the gate replays the records and refuses any changed command" in p
+
+
+def test_the_conventions_example_changes_only_the_consumers_left_sides():
+    # the worked example in the ask (policy-tuning-2 2b): spliced over its own before, each consumer's rule keeps its
+    # world facts and its right side, only the goal token it takes changes; the planner's emits are new rules
+    import re
+    from policy import prompts
+    from policy.alfworld import rules_of
+    from policy.brain import splice
+    p = prompts.conventions("stage act {\n}", ({}, {}), {}, {"want": ["nav", "grasp"]})
+    assert prompts.CONVENTIONS_EXAMPLE in p and p.index("An example of the move") < p.index("Change only the tokens")
+    before, after = re.findall(r"```llp\n(.*?)```", prompts.CONVENTIONS_EXAMPLE, re.S)
+    base = "pred want(object) : alf.\nstage act {\n%s}\n" % before
+    text, info = splice(base, after.strip().splitlines())
+    old, new = dict(rules_of(base)), dict(rules_of(text))
+    assert set(new) - set(old) == {"ask_seek", "ask_get_plain"} and info["declared"] == ["seek", "get"]
+    for name in ("go_obj", "take_plain"):
+        lo, ro = old[name].split(" -o ")
+        ln, rn = new[name].split(" -o ")
+        assert rn == ro and ln.replace("seek(O)", "want(O)").replace("get(O)", "want(O)") == lo

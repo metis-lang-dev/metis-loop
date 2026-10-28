@@ -215,6 +215,32 @@ CONVENTIONS = """The hierarchy's conventions (metis-worlds docs/HIERARCHY.md):
 - the world's behaviour does not change: in every state, the same commands go out in the same order."""
 
 
+# the conventions move on its smallest case (policy-tuning-2 2b): the scripted answer the gate accepted on the
+# refactor-from-scripted source (records replayed the same, the goal kinds ambiguous 1 -> 0, compose then 0 errors)
+CONVENTIONS_EXAMPLE = """An example of the move (ALFWorld's; the shape, not the names). Before: `want(O)` is taken by nav and by grasp.
+```llp
+%% I go to where {O} is.
+go_obj [dyn] : want(O) * at(L) * $objat(O, L2) * $inrecep(O, R) * $recat(R, L2) * L <> L2 -o want(O) * at(L2).   % @nav
+%% I take {O} from {R}.
+take_plain [dyn] : want(O) * $at(L) * $recat(R, L) * inrecep(O, R) * objat(O, L) * handsfree * $notopenable(R) -o holds(O) * holding * carrying(O).   % @grasp
+```
+After: the planner keeps `want(O)` and emits one goal token per consumer, under the condition that consumer's rule needs;
+each consumer takes its own token on the left; every world fact, left and right, is as it was.
+```llp
+pred seek(object) : alf.
+pred get(object) : alf.
+%% {O} is elsewhere: I ask nav to go to it.
+ask_seek [dyn] : want(O) * $at(L) * $objat(O, L2) * L <> L2 -o seek(O).
+%% {O} is here in the open: I ask grasp to take it.
+ask_get_plain [dyn] : want(O) * $at(L) * $objat(O, L) * $inrecep(O, R) * $recat(R, L) * $notopenable(R) -o get(O).
+%% I go to where {O} is.
+go_obj [dyn] : seek(O) * at(L) * $objat(O, L2) * $inrecep(O, R) * $recat(R, L2) * L <> L2 -o want(O) * at(L2).   % @nav
+%% I take {O} from {R}.
+take_plain [dyn] : get(O) * $at(L) * $recat(R, L) * inrecep(O, R) * objat(O, L) * handsfree * $notopenable(R) -o holds(O) * holding * carrying(O).   % @grasp
+```
+A planner rule that emits a goal never spends the token it still needs after the result (here `want(O)` comes back from nav)."""
+
+
 def conventions(base, commands, ports, ambiguous, note=None):
     PURPOSE = 'conventions'
     amb = "; ".join("%s is taken by %s" % (k, " and ".join(ds)) for k, ds in sorted(ambiguous.items()))
@@ -230,6 +256,8 @@ The split base as it is (its ports, read off the rules: {json.dumps(ports)}):
 ```llp
 {base.strip()}
 ```
+
+{CONVENTIONS_EXAMPLE}
 
 Change only the tokens that make the goal kinds ambiguous ({amb}): give each goal kind one specialist that consumes it. Keep every action rule's world facts, left and right, as they are; the gate replays the records and refuses any changed command. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note, PURPOSE)}
 
