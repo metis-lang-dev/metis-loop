@@ -206,3 +206,49 @@ rewrite.py runs without `--start-card` and scores v2 itself (`--series-budget 1.
 - ScienceWorld held-out was 0/10 throughout. **sw s2 is unmeasured (6G)**: it was OOM-killed at the cap in
   every round, after 1 rule in explore. The cap stays at 6G (the standing rule), and the cause is being found.
 - No run reached refactor.
+
+### The refactor rows on v4-pro (handover at refactor from the hand-script's alfworld s1)
+
+| row | ask | conventions | replay | success / likelihood | direct, compose | held-out (flat / director) | usd |
+|---|---|---|---|---|---|---|---|
+| refactor-from-scripted-pro | fixed (gate named) | refused | diverged | −1 / +0 | not reached | 10/10 / — | 0.0111 |
+| refactor-from-scripted-pro-example | + worked example | refused | diverged | −0.5 / +0 | not reached | 10/10 / — | 0.0162 |
+| **refactor-from-scripted-pro-example2** | example + agreeing ask (15d4d25) | **accepted** | identical | +0 / +0 | **accepted; `metisc --interface` 0 errors, composition full marks** | **8/10 / 10/10** | 0.0101 |
+
+- v4-pro holds the refactor move once the ask shows the shape. Flash did not, on two asks.
+- The conventions rewrite costs the flat program 2 held-out wins, which the director recovers; the gate's 2
+  games do not see the flat drop.
+
+### The level row (alfworld_view, v4-pro, kept skill r2, seeds 1–2)
+
+No level was declared (0 / 0). Held-out 1/10 (s1), 0/10 (s2); $0.1252. On this driver a level can be
+declared only in refactor: the level point sits under the skill's `## refactor`, shown by phase, and no
+run reached it. The exploit prompt shows no belief. A design call before this row means anything.
+
+## policy-tuning-2 step 2b — closing (2026-10-28)
+
+**Brain:** `deepseek/deepseek-v4-pro` (the user: flash is not a substitute). **Spend for 2b: $1.1573**: flash
+$0.0634 (round 0, rounds 1–3, two refactor rows); v4-pro $1.0939 (v2 round 0 + rounds 1–3 $0.9424; three
+refactor rows $0.0374; the level row $0.1252). No run or call was cut by a cap. The user's standing cap is $7.
+
+**What 2b established:**
+1. **The refactor move holds on v4-pro** (example2): conventions accepted, then direct and compose by the
+   driver, with the interface clean and the director 10/10 held-out. This is the first composition a paid
+   brain produced in policy-tuning. The ask, not the brain size alone, was the blocker: both brains rewrote
+   the action layer until the ask showed the move's shape.
+2. **The rewrite rounds give the first held-out wins** (v4-pro round 2: ALFWorld 1/10 on each seed). The
+   kept skill is `policy-runs/pro/rewrite/skills/r2.md`. With r1 and r2 near-identical and at 2 seeds,
+   variance is not excluded.
+3. **From the empty domain, no paid run reaches refactor.** Exploit refuses the brains' policies (wrong
+   guards, unbound variables, type confusion). The skill's lessons did not move these at 2 seeds. So the
+   structural columns and the level ports stay unmeasured from scratch; the handover rows measure them.
+4. **Flash** (`deepseek-v4.1-flash-1017`) is about 12× cheaper per card and about on par with the local
+   Gemma 4 (the user). It built rules at seed 1, never held the refactor move, and its rewrites moved nothing.
+
+**Open items for step 3 (opus's structural judgement) and the architect:**
+- scienceworld s2 is unmeasured (6G) on every v4-pro card: the cap stays, and metis finds the growing process.
+- The level point is reachable only in refactor; the exploit prompt shows no belief (the level row).
+- The flat held-out drop after conventions (10 → 8) is invisible to the 2-game gate.
+- Harness fixes already in or pending: the tiebreak guard and the rewrite `--max-tokens` (in, de60c4d); the
+  scorecard's bare `metisc` in composition_card (pending, metis); a no-source handover as a row state (in).
+- More seeds before round 2's wins are read as the skill's.
