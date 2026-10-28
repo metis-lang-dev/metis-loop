@@ -142,3 +142,13 @@ def test_the_view_world_counts_what_a_command_revealed_as_before():
     rec = AlfViewWorld._seen_before(AlfViewWorld.__new__(AlfViewWorld), {"before": before, "after": after, "added": sorted(set(after) - set(before))})
     assert "inrecep(candle2,toilet1)" in rec["before"] and "inrecep(candle2,toilet1)" not in rec["added"]
     assert "inrecep(mug1,toilet1)" in rec["added"]
+
+
+def test_the_conventions_ask_names_the_gates_rule():
+    # policy-tuning-2 2b: flash read "rewrite the rules" as a redesign of the action layer (the replay refused it);
+    # the ask now names what the gate keeps, as the flat refactoring's does ("Every command … must stay the same")
+    from policy import prompts
+    p = prompts.conventions("stage act {\n}", ({}, {}), {}, {"want": ["nav", "grasp"]})
+    assert "Change only the tokens that make the goal kinds ambiguous (want is taken by nav and grasp)" in p
+    assert "Keep every action rule's world facts, left and right, as they are" in p
+    assert "the gate replays the records and refuses any changed command" in p
