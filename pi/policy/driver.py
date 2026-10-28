@@ -553,7 +553,8 @@ class Driver:
             self.seed_record = rec
             sims = [r for r in self.transitions() if r["action"]["verb"] == rec["action"]["verb"]
                     and (r["game"], r["t"]) != (rec["game"], rec["t"])][-2:]
-            verdict = self.propose(prompts.explore(self.base(), (self.commands, self.verbs), rec, sims, w.instance_text(), self.note()),
+            verdict = self.propose(prompts.explore(self.base(), (self.commands, self.verbs), rec, sims, w.instance_text(), self.note(),
+                                                   belief=self.belief_of(w)),
                                    "explore", rec["game"])
             unexplained = 0 if verdict == "accept" else unexplained + 1
             if unexplained >= self.cfg["explore_k"]:
@@ -640,20 +641,31 @@ class Driver:
                     key = sur["rule"].split("[")[0]
                     line = next((l for n, l in rules_of(self.base()) if n == key), "")
                     self.seed_record = sur
-                    v = self.propose(prompts.revise(self.base(), (self.commands, self.verbs), sur, line, w.instance_text(), self.note()), "revise", w.iid)
+                    v = self.propose(prompts.revise(self.base(), (self.commands, self.verbs), sur, line, w.instance_text(), self.note(),
+                                                    belief=ep.get("belief") or ()), "revise", w.iid)
                     if v != "accept":
                         refused_at[key] = refused_at.get(key, 0) + 1
                         if refused_at[key] >= 2:
                             self.probe(w, ep, sur)
                 else:
                     self.propose(prompts.policy(self.base(), (self.commands, self.verbs), self.World.task_facts(w.instance_text()), ep,
-                                                w.instance_text(), self.note()), "policy", w.iid)
+                                                w.instance_text(), self.note(), belief=ep.get("belief") or ()), "policy", w.iid)
                 if self.should_refactor():
                     return "refactor"
             if all_won:
                 self.say("exploit-ends", why="every discovery game won")
                 return "refactor" if self.should_refactor(force=True) else None
         return None
+
+    def belief_of(self, w):
+        """The host's belief where a fact is unobserved, for the prompt (a world without a map: none)."""
+        f = getattr(w, "belief_lines", None)
+        if f is None or getattr(w, "host", None) is None:
+            return []
+        try:
+            return f()
+        except Exception:                               # noqa: BLE001 — the belief is the prompt's aid, never the run's stop
+            return []
 
     def probe(self, w, ep, sur):
         """Snapshot at the surprise's state, each admissible command once from it, restore: the

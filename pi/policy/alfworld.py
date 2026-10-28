@@ -315,12 +315,19 @@ class AlfWorld:
         out = acting.new_out(self.iid)
         if getattr(host, "lmap", None) is not None:      # the map's host: the program starts on what it sees, its levels
             r.shell.counts = acting.apply_lines(dict(r.shell.counts), host.sync(dict(r.shell.counts)))
+        out["belief"] = self.belief_lines(host)          # what the brain plans from: the belief at the episode's start
         try:
             acting.fire(self, host, r.shell, random.Random(seed), out, steps)
             out["won"] = bool(host.won)
         finally:
             host.gym.close()
         return out
+
+    def belief_lines(self, host=None):
+        """The host's belief where a fact is unobserved (alfview.MapHost.belief_lines); none for a host that reads every
+        fact (alf_host's own, or the map's plain mode once every target is seen)."""
+        host = host or self.host
+        return host.belief_lines() if hasattr(host, "belief_lines") else []
 
     # ── the acting loop's world parts (acting.py) ──
     def _host_for(self, pkg):

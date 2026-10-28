@@ -118,7 +118,19 @@ def fit_repair(lines, why):
             "Fix exactly that and answer with ONE ```llp block of the corrected lines (the same rule name replaces the rule)." % (why, "\n".join(lines)))
 
 
-def explore(base, commands, rec, similar, instance_text, note=None):
+def belief_block(lines):
+    """The host's belief where a fact is unobserved (policy-tuning-2 2c; spec 16 §B): one line per pred and thing, from
+    the port the LevelHook reads. Empty where every fact is observed (plain ALFWorld): no section."""
+    if not lines:
+        return ""
+    return ("\n\nThe host's BELIEF where a fact is unobserved (the semantic map's, through the port a level reads):\n"
+            + "\n".join("- " + l for l in lines)
+            + "\nWhere a choice depends on such a fact and its belief is spread, a level pays (the skill's level point): "
+              "declare it in ONE ```yaml block beside the ```llp one (`beliefs:` / `levels:`), and let a rule read the "
+              "level atom. Where it is peaked, keep the plain fact.")
+
+
+def explore(base, commands, rec, similar, instance_text, note=None, belief=()):
     PURPOSE = 'explore'
     sims = "".join("\n- another record of the same action:\n" + _record(r, instance_text) for r in similar[:2])
     return f"""You are building the rules of {WORLD['description']} from what the world does. The program has no rule yet that explains this TRANSITION; write the rule(s) that do.
@@ -133,14 +145,14 @@ The base as it is (its declarations and its rules so far):
 ```
 
 The transition to explain:
-{_record(rec, instance_text)}{sims}
+{_record(rec, instance_text)}{sims}{belief_block(belief)}
 
 Write the rule for this action, LIFTED (variables, not the things' names): its left side the facts before that the action needs (consume what changes, read with $ what stays), its right side what is true after — so that, fired on the facts before, it gives exactly the facts after. It must not fire where the world would answer differently. Reuse a rule name only to REPLACE that rule (its new text in full).{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block of only the new lines (pred declarations if any, then the rule with its %% line)."""
 
 
-def revise(base, commands, sur, rule_line, instance_text, note=None):
+def revise(base, commands, sur, rule_line, instance_text, note=None, belief=()):
     PURPOSE = 'revise'
     return f"""You are maintaining the rules of {WORLD['description']}. A rule fired and the world did not do what it said: a SURPRISE. Revise the rule so it fires only where the world agrees.
 
@@ -157,14 +169,14 @@ The rule that fired: {sur['rule']}
   its text: {rule_line}
   the command it sent: {sur['command']} — the world {'refused it' if not sur.get('admissible') else 'took it but nothing changed'}
   the facts before: {', '.join(sur['before'])}
-  the world's text: {sur.get('text', '')[:300]}
+  the world's text: {sur.get('text', '')[:300]}{belief_block(belief)}
 
 Give the rule's new text in full under its own name (a missing precondition, read with $ or consumed and produced again), or `drop NAME` if no rule of that name can be right here.{instruction(note, PURPOSE)}
 
 Answer with ONE ```llp block of only the changed lines."""
 
 
-def policy(base, commands, task_facts, episode, instance_text, note=None):
+def policy(base, commands, task_facts, episode, instance_text, note=None, belief=()):
     PURPOSE = 'policy'
     steps = "\n".join("  %s → %s%s" % (t.get("rule"), t.get("command"), "" if t.get("admissible") and t.get("changed", True) else "  (refused)")
                       for t in episode["transitions"][-12:]) or "  (no command was sent)"
@@ -181,7 +193,7 @@ The base as it is:
 
 The task (this game's facts): {', '.join(task_facts)}; {WORLD['task_text']}
 The last episode was NOT won ({episode['steps']} rule firings, {len(episode['commands'])} commands); its last steps:
-{steps}
+{steps}{belief_block(belief)}
 
 Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: {WORLD['plan_text']}{instruction(note, PURPOSE)}
 

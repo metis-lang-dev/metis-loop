@@ -208,3 +208,21 @@ def test_the_card_finds_metisc_as_the_driver_does(monkeypatch, tmp_path):
     sibling = next((d / "metis-lang" / "src" / "metisc" for d in Path(compose.__file__).resolve().parents
                     if (d / "metis-lang" / "src" / "metisc").is_file()), None)
     assert found == (str(sibling) if sibling else "metisc")
+
+
+def test_the_exploit_prompt_shows_the_belief_and_r2b_brings_the_level_point_there():
+    # policy-tuning-2 2c (the user: "belief before refactoring"): the exploit prompt shows the host's belief where a fact
+    # is unobserved, and the skill's level point is exploit's, not refactor's
+    from policy import prompts
+    assert prompts.belief_block([]) == ""                                         # plain ALFWorld: every fact observed
+    ep = {"transitions": [], "steps": 3, "commands": []}
+    line = "inrecep(O, R) via where(O, R): candle2 — 18 places, max 0.06, spread"
+    p = prompts.policy("stage act {\n}", ({}, {}), ["target(candle2)"], ep, "", belief=[line])
+    assert "The host's BELIEF" in p and line in p and "```yaml" in p and "WHAT TO DO NEXT" in p
+    assert "BELIEF" not in prompts.policy("stage act {\n}", ({}, {}), ["target(candle2)"], ep, "")
+    prompts.set_skill((HERE.parent / "skills" / "r2b.md").read_text())
+    try:
+        assert "declare a LEVEL" in prompts.SKILL["exploit"] and "declare a LEVEL" not in prompts.SKILL["refactor"]
+        assert "TICK TREE" in prompts.SKILL["refactor"]
+    finally:
+        prompts.set_skill("")

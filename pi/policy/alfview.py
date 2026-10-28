@@ -44,6 +44,7 @@ def host_class(alf_host):
             targets = [f[7:-1] for f in facts if f.startswith("target(")]
             dests = [f[5:-1] for f in facts if f.startswith("dest(")]
             self.objects, self.receptacles = _types(inst, "object"), _types(inst, "receptacle")
+            self.targets = targets
             mp = os.path.join(package_dir, ".loopmap.json")
             for f in (mp, mp + ".journal.jsonl"):         # a host starts on the world as it starts: no earlier host's map
                 if os.path.exists(f):
@@ -124,6 +125,25 @@ def host_class(alf_host):
                     p = bel.get(rec, 0.0) / z if z > 0 else 0.0
                     tbl[(o, rec)] = repr(float(Fraction(int(p * 10 ** 9), 10 ** 9)))
             return tbl
+
+        def belief_lines(self, peaked_at=0.5):
+            """The host's belief where a fact is UNOBSERVED (policy-tuning-2 2c), through the port the LevelHook reads:
+            per task target not seen yet, the places where(O, R) gives mass, the largest mass, spread or peaked. A seen
+            target's place is a fact (where = 1.0 there): no line. → ["inrecep(O, R) via where(O, R): candle2 — 18
+            places, max 0.06, spread"]."""
+            seen = self.lmap.load()["things"]
+            tbl, out = self.where(), []
+            for o in self.targets:
+                if (seen.get(o) or {}).get("in"):
+                    continue
+                ps = [float(tbl.get((o, r), 0.0)) for r in self.receptacles]
+                ps = [x for x in ps if x > 0]
+                if not ps:
+                    continue
+                m = max(ps)
+                out.append("inrecep(O, R) via where(O, R): %s — %d place%s, max %.2f, %s"
+                           % (o, len(ps), "" if len(ps) == 1 else "s", m, "peaked" if m > peaked_at else "spread"))
+            return out
 
         def _levels(self):
             if self.hook is None:
