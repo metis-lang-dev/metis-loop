@@ -142,8 +142,10 @@ go_look [dyn] : $want(O) * $place_level(high, O, R) * $recat(R, L) * at(L0) * L0
 ```
 ```yaml
 beliefs: {inrecep: {port: where, lone: R}}
-levels: {place_level: {from: {belief: where}, at: [0.05, 0.4], names: [low, mid, high]}}
-```"""
+levels: {place_level: {from: {belief: where}, at: [T1, T2], names: [low, mid, high]}}
+```
+T1 < T2 are yours to choose, as numbers, from the masses shown above: a place whose mass is under T1 reads low, over T2
+high, between them mid."""
 
 
 def answer_tail(belief):
@@ -227,10 +229,12 @@ HINTS = [("expected [, got ':'", "A rule's head is `NAME [dyn] :` — the LAYER 
           "variables: `go [dyn] : at(L1) * $recat(R, L2) * L1 <> L2 -o at(L2).`")]
 
 
-def repair(lines, words):
+def repair(lines, words, levels_yaml=None):
     hint = "".join("\n" + h for k, h in HINTS if k in words)
-    return ("Your lines did not compile in the world's instance:\n%s%s\n\nYour lines:\n```llp\n%s\n```\n\n"
-            "Answer with ONE ```llp block of the corrected lines." % (words[:2000], hint, "\n".join(lines)))
+    keep = ("\n\nYour level stays: its ```yaml block is kept as it is, and its `type level`, port and pred are generated "
+            "from it, so keep the rules that read the level atom.\n```yaml\n%s\n```" % levels_yaml) if levels_yaml else ""
+    return ("Your lines did not compile in the world's instance:\n%s%s\n\nYour lines:\n```llp\n%s\n```%s\n\n"
+            "Answer with ONE ```llp block of the corrected lines." % (words[:2000], hint, "\n".join(lines), keep))
 
 
 def task_facts(instance_text):
