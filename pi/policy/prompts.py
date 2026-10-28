@@ -206,10 +206,12 @@ def task_facts(instance_text):
 
 CONVENTIONS = """The hierarchy's conventions (metis-worlds docs/HIERARCHY.md):
 - a SPECIALIST does one kind of thing in the world; its rules are marked with a trailing `% @NAME`;
-- it is woken by ONE goal kind of its own: a token the planner produces and no other specialist takes
-  (goto(R) for going, open(R) for opening, take(O) for taking, put(O, R) for putting — your names);
-- every outcome is a RESULT token the planner takes (reached(R), accessible(R), taken(O), placed …), and a dead
-  end is a refusal result (not_here(R), shut(R) …): a specialist never leaves the planner without an answer;
+- it is woken by ONE goal kind of its own: a token the planner produces and no other specialist takes. Where
+  two specialists take one token, the planner keeps that token and emits one goal token per consumer (seek(O) for
+  the one that goes to it, get(O) for the one that takes it — your names); the goal kinds are the consumers' new
+  tokens, not one per command, and a token only one specialist takes stays as it is;
+- a specialist answers the planner with what its rule already produces (want(O) back from nav, carrying(O) from
+  grasp): its rules keep their names and their world facts, left and right; only the goal token it takes changes;
 - the PLANNER (rules with no `% @` mark) sends no command: its rules' names never begin with a verb; it reads the
   world's facts with $ and turns the task and the results into the next goal;
 - the world's behaviour does not change: in every state, the same commands go out in the same order."""
@@ -259,9 +261,9 @@ The split base as it is (its ports, read off the rules: {json.dumps(ports)}):
 
 {CONVENTIONS_EXAMPLE}
 
-Change only the tokens that make the goal kinds ambiguous ({amb}): give each goal kind one specialist that consumes it. Keep every action rule's world facts, left and right, as they are; the gate replays the records and refuses any changed command. Declare the new tokens; `drop NAME` every rule you replace under another name.{instruction(note, PURPOSE)}
+Change only the tokens that make the goal kinds ambiguous ({amb}): give each goal kind one specialist that consumes it. Keep every action rule's world facts, left and right, as they are; the gate replays the records and refuses any changed command. Declare the new tokens and give each changed rule in full under its own name; an action rule is never dropped or renamed (`drop NAME` only for a planner rule you replace).{instruction(note, PURPOSE)}
 
-Answer with ONE ```llp block: the declarations, the rules (each specialist's with its `% @NAME`), and the drop lines."""
+Answer with ONE ```llp block: the declarations, the changed rules (each specialist's with its `% @NAME`), and a `drop` line only for a planner rule you replace."""
 
 
 def probe(reading, acts, miss, note=None):

@@ -172,3 +172,27 @@ def test_the_conventions_example_changes_only_the_consumers_left_sides():
         lo, ro = old[name].split(" -o ")
         ln, rn = new[name].split(" -o ")
         assert rn == ro and ln.replace("seek(O)", "want(O)").replace("get(O)", "want(O)") == lo
+
+
+def test_the_conventions_ask_agrees_with_its_example():
+    # nina's v4-pro row with the example: the ask still said "one goal kind per command (goto/open/take/put)" and
+    # "drop every rule you replace", and the brain rewrote 11 action rules; the ask now says what the example shows
+    from policy import prompts
+    p = " ".join(prompts.conventions("stage act {\n}", ({}, {}), {}, {"want": ["nav", "grasp"]}).split())
+    assert "goto(R) for going" not in p and "drop NAME` every rule you replace" not in p
+    assert "the goal kinds are the consumers' new tokens, not one per command" in p
+    assert "an action rule is never dropped or renamed" in p
+    assert "the gate replays the records and refuses any changed command" in p          # the gate's rule, still named
+
+
+def test_a_result_is_the_planners_only():
+    # policy-tuning-2 DIRECT: place's put_* read the planner's carrying(O) beside its goal todest(R); a handles(place,
+    # carrying) made the director route grasp's result to place, and the planner never turned it into the next goal
+    from types import SimpleNamespace
+    from policy.hier import director_roles
+    sp = SimpleNamespace(specialists=["nav", "grasp", "place"], planner="task", finished={"placed"}, ends=set(),
+                         goal={"task": {"want", "carrying"}, "nav": {"seek", "togo"}, "grasp": {"get"}, "place": {"todest", "carrying"}},
+                         out={"task": {"seek", "get", "togo", "todest"}, "nav": {"want"}, "grasp": {"carrying"}, "place": set()})
+    facts, _ = director_roles(sp)
+    assert "handles(place, todest)" in facts and "handles(place, carrying)" not in facts
+    assert "handles(task, carrying)" in facts and "result(carrying)" in facts

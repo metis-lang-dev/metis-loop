@@ -315,8 +315,10 @@ class Hier:
         k = len(sh.fired_rows)
         out_for_others = self.sp.out.get(d, set())
         why = acting.fire(self.w, host, sh, rng, out, steps,
-                          stop=lambda s: any(kind_of(a) in out_for_others for a, n in s.counts.items() if n > 0
-                                             and a not in pool), guide=guide, feeds=self.feeds)
+                          # a result out stops it, a second copy of one held too: the planner's deliver re-emits togo(R)
+                          # beside the carrying(O) it keeps, and woken again on that token fired until the steps ran out
+                          stop=lambda s: any(kind_of(a) in out_for_others for a, n in s.counts.items() if n > pool.get(a, 0)),
+                          guide=guide, feeds=self.feeds)
         rows = [{"kind": kind, "produce": sorted(ev.produce), "reads": sorted(getattr(ev, "persist", {}) or {})}
                 for kind, _, ev in sh.fired_rows[k:]]
         new = {a: n for a, n in sh.counts.items() if n > 0 and kind_of(a) in self.sp.tokens}
@@ -425,7 +427,10 @@ def run_directed(h, host, pool, rng, out, steps, make_loop, max_activations, gui
         goal = sorted(a for a, k in box["pool"].items() if k > 0 and kind_of(a) in h.sp.goal.get(d, ()))
         box["pool"], rows, why = h.activate(d, host, box["pool"], rng, out, steps - out["steps"], guide)
         if why == "diverged":
-            out["diverged"] = True
+            # a member the director woke on a token it holds (a second togo(R) the planner's deliver left) whose
+            # commands are not the recorded next one yields here; a replay that truly leaves the records ends
+            # with other commands, which replays() compares
+            out["yielded"] = out.get("yielded", 0) + 1
         out["activations"].append({"domain": d, "goal": goal, "fired": len(rows), "reads": sorted({kind_of(a) for r in rows for a in r["reads"]}),
                                    "results": sorted({a for r in rows for a in r["produce"] if kind_of(a) in h.sp.out.get(d, ())})})
         loop.produced(d, {"fired": rows})
@@ -444,11 +449,13 @@ def director_roles(sp):
     specs = sp.specialists
     facts = ["specialist(%s)" % d for d in specs] + ["planner(%s)" % sp.planner]
     handled = set()
+    results = sorted(set().union(*(sp.out[d] for d in specs)) if specs else set())
     for d in specs:
-        for k in sorted(sp.goal[d]):
+        # a result goes back to the planner, never on to a specialist that also reads it (place's put_* consume grasp's
+        # carrying(O) beside its goal todest(R)): routed to place, the planner never turned it into the next goal
+        for k in sorted(sp.goal[d] - set(results)):
             facts.append("handles(%s, %s)" % (d, k))
             handled.add(k)
-    results = sorted(set().union(*(sp.out[d] for d in specs)) if specs else set())
     for k in results:
         facts.append("handles(%s, %s)" % (sp.planner, k))
         handled.add(k)
