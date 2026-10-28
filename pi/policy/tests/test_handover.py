@@ -38,3 +38,15 @@ def test_a_source_that_did_not_end_done_is_refused(tmp_path):
     src = _src(tmp_path / "src", status="disengaged", accepted=4)
     with pytest.raises(SystemExit, match="did not end done"):
         handover(src, tmp_path / "run")
+
+
+def test_a_card_row_without_a_source_says_so(tmp_path):
+    # nina's s2: the scripted source disengaged, and the row read "crashed (rc 1)"
+    from argparse import Namespace
+    from policy.scorecard import score_one
+    _src(tmp_path / "src" / "alfworld-s2", status="disengaged", accepted=4)
+    a = Namespace(brain="script:/dev/null", discovery=2, gate_games=2, budget=None, skill=None, set=[], max_tokens=None,
+                  from_runs=str(tmp_path / "src"), heldout=10, timeout=60)
+    for seed, why in ((2, "ended disengaged"), (3, "no run at")):
+        row = score_one("refactor-from-scripted", "alfworld", seed, a, tmp_path / "runs")
+        assert row["status"] == "no source" and why in row["why"] and row["usd"] == 0.0

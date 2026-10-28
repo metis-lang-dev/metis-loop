@@ -34,6 +34,17 @@ def run(cmd, timeout):
     return r.returncode, r.stdout[-4000:], r.stderr[-2000:], round(time.time() - t0, 1)
 
 
+def source_missing(src):
+    """Why SRC cannot be handed over (driver --from-run), or None: the run must have ended done with an accepted policy."""
+    p = src / "state" / "run.json"
+    if not p.exists():
+        return "no run at %s" % src
+    st = json.loads(p.read_text())
+    if st.get("status") != "done" or not st.get("accepted"):
+        return "the source ended %s with %s accepted" % (st.get("status"), st.get("accepted"))
+    return None
+
+
 def score_one(variant, world, seed, a, runs):
     d = runs / variant / ("%s-s%d" % (world, seed))
     d.mkdir(parents=True, exist_ok=True)
@@ -47,9 +58,13 @@ def score_one(variant, world, seed, a, runs):
         args += ["--set", kv]
     if getattr(a, "max_tokens", None):
         args += ["--max-tokens", str(a.max_tokens)]
-    if getattr(a, "from_runs", None):
-        args += ["--from-run", str(Path(a.from_runs).resolve() / ("%s-s%d" % (world, seed)))]
     row = {"variant": variant, "world": world, "seed": seed, "brain": a.brain}
+    if getattr(a, "from_runs", None):
+        src = Path(a.from_runs).resolve() / ("%s-s%d" % (world, seed))
+        why = source_missing(src)
+        if why:                    # no accepted state to hand over: a row state, never a crash (and no brain call)
+            return dict(row, status="no source", why=why, proposals=0, accepted=0, calls=0, usd=0.0)
+        args += ["--from-run", str(src)]
     rc, out, err, secs = run([str(RUN_SH), "--run", str(d)] + args, a.timeout)
     row.update({"rc": rc, "seconds": secs})
     state = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
