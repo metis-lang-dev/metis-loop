@@ -252,3 +252,18 @@ refactor rows $0.0374; the level row $0.1252). No run or call was cut by a cap. 
 - Harness fixes already in or pending: the tiebreak guard and the rewrite `--max-tokens` (in, de60c4d); the
   scorecard's bare `metisc` in composition_card (pending, metis); a no-source handover as a row state (in).
 - More seeds before round 2's wins are read as the skill's.
+
+## policy-tuning-2 step 2d — the belief before refactor (2026-10-28, master 9096d34, v4-pro)
+
+| card | world | skill | rules (s1 + s2) | held-out | level declared / read | usd |
+|---|---|---|---|---|---|---|
+| level-view-r2b | alfworld_view | r2b | 6 + 3 | 1/10, 0/10 | 0 / 0 (s1 wrote `_level` rules, no yaml) | 0.1183 |
+| rw1 | alfworld_view | r2b → r1 | 6 + 3 | 1/10, 0/10 | 0 / 0 | 0.1199 (not kept) |
+| rw2 | alfworld_view | r2b → r2 | 6 + 3 | 1/10, 0/10 | 0 / 0 | 0.1062 (kept on usd/rule) |
+| plain-r2d | alfworld | rw2's r2 | 4 + 3 | 0/10, 0/10 | 0 / 0 (no belief shown: right) | 0.0844 |
+
+**Spend:** $0.4476 (rewrite calls $0.0188); since 2b, $1.6049.
+- With the belief shown, v4-pro reaches for a level by itself (rules reading `$place_level(R, high|mid|low)`),
+  but writes no `beliefs:`/`levels:` block, so no thresholds and nothing declared.
+- The prompt asks for a yaml block in its belief section and for ONE llp block in its last line. The last
+  line wins. Fix the answer format before the next level row.
