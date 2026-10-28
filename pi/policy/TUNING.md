@@ -228,7 +228,7 @@ run reached it. The exploit prompt shows no belief. A design call before this ro
 ## policy-tuning-2 step 2b — closing (2026-10-28)
 
 **Brain:** `deepseek/deepseek-v4-pro` (the user: flash is not a substitute). **Spend for 2b: $1.1573**: flash
-$0.0634 (round 0, rounds 1–3, two refactor rows); v4-pro $1.0939 (v2 round 0 + rounds 1–3 $0.9424; three
+$0.0523 (round 0, rounds 1–3, two refactor rows); v4-pro $1.1050 (v2 round 0 + rounds 1–3 $0.9424; three
 refactor rows $0.0374; the level row $0.1252). No run or call was cut by a cap. The user's standing cap is $7.
 
 **What 2b established:**
