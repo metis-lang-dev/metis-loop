@@ -49,7 +49,8 @@ WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "alfworld_view": (alfworl
           "minihack": (minihack.MiniHack, minihack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
-            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3, "fit_repairs": 1}
+            "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3, "fit_repairs": 1,
+            "ground_budget": 1000000}
 
 
 class Disengage(Exception):
@@ -99,6 +100,10 @@ class Driver:
             "status": "running", "cfg": self.cfg, "world": world, "skill": str(self.skill) if self.skill else None}
         self.cfg = dict(self.state.get("cfg") or self.cfg, **(cfg or {}))
         self.level_preds()                       # a resumed run's declared level ports (recorded and replayed per step)
+        # the grounder's budget (metispy METIS_GROUND_BUDGET): a candidate whose variables range over whole types is
+        # refused with its words, the brain's to repair, not materialised until the 6G scope kills the run (sw-s2:
+        # take over connected(T1, T2), 167^2 terms x things x places, every round of every series)
+        os.environ.setdefault("METIS_GROUND_BUDGET", str(self.cfg.get("ground_budget", DEFAULTS["ground_budget"])))
         if not (self.root / "domains" / DOMAIN / ("%s.llp" % DOMAIN)).exists():
             d = self.root / "domains" / DOMAIN
             d.mkdir(parents=True, exist_ok=True)
