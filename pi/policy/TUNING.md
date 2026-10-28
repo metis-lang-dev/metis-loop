@@ -187,3 +187,21 @@ is retuned on it.
 (b7843d6's text); skill v2 (56a8db5) came on 10-26. Rounds from it would judge v2 against v1's card, and
 rewrite.py's check would not catch it: it compares the card's skill *path*, and that file now holds v2. So
 rewrite.py runs without `--start-card` and scores v2 itself (`--series-budget 1.50`, `--max-tokens 4096`).
+
+### v4-pro: skill v2 round 0 + rounds 1–3 (2026-10-28, master de60c4d)
+
+`python -m policy.rewrite --skill policy/skills/hierarchy.md --rounds 3 --brain openrouter/deepseek/deepseek-v4-pro
+--budget 0.50 --series-budget 1.50 --max-tokens 4096 --runs policy-runs/pro` (no --start-card: rw0 is v2's card).
+
+| round | rules (alf s1, s2, sw s1, s2) | held-out alf s1 / s2 | usd | kept |
+|---|---|---|---|---|
+| 0 (v2) | 4, 5, 6, 1 | 0/10, 0/10 | 0.2191 | baseline |
+| 1 | 5, 3, 4, 1 | 0/10, 0/10 | 0.2115 | no: fewer rules |
+| 2 | 6, 4, 4, 1 | **1/10, 1/10** | 0.2603 | **kept** |
+| 3 | 5, 19, 1, 1 | 0/10, 0/10 | 0.2129 | no |
+
+**Spend:** $0.9424 (rewrite calls $0.0335).
+- These are the first held-out wins (rw2). r1 and r2 carry the same three new points, so the difference
+  may be variance at two seeds.
+- ScienceWorld held-out was 0/10 throughout. sw s2 was OOM-killed at 6G in every round.
+- No run reached refactor.
