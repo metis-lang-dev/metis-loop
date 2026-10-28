@@ -175,3 +175,13 @@ with the same worlds, seeds and caps.
 - The refactor-from-scripted row (handover at refactor from the hand-script's alfworld s1, $0.00099): flash's
   conventions answer was refused (the replay diverged; it rewrote the action layer), so compose was not
   reached (s-e075f47f steps/step2b-refactor-row.md).
+
+## policy-tuning-2: back to v4-pro (the user, 2026-10-28; Amendment 4)
+
+The flash cards above stay as flash's. The user's decision on them: flash cannot replace v4-pro (about on
+par with the local Gemma 4). **`openrouter/deepseek/deepseek-v4-pro` is the only paid brain**, and the policy
+is retuned on it.
+
+**The v4-pro baseline is step 1's `fit-skill` card** (rules 4 / 12 / 5 / 0, held-out 0/10, $0.1619;
+v4-pro, 0.955 / 1.911 USD per M). It is not re-run: the old columns have been unchanged since. The v4-pro
+rounds 1–3 and the refactor row are read against it.
