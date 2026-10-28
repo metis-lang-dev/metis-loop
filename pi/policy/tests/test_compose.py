@@ -239,3 +239,12 @@ def test_the_answer_line_allows_the_yaml_and_the_example_keeps_the_ports_arity()
     assert p.rstrip().endswith("if you declare a level, ONE ```yaml block with its `beliefs:` and `levels:`.")
     assert "pred place_level(level, object, receptacle)" in p and "$place_level(high, O, R)" in p
     assert "yaml" not in prompts.policy("stage act {\n}", ({}, {}), ["target(candle1)"], ep, "").splitlines()[-1]
+
+
+def test_a_spread_belief_makes_the_policy_the_first_ask():
+    # policy-tuning-2 2f (ruled): with a spread belief shown, exploit's first ask is the policy's (only a policy rule can
+    # read a level); a peaked or empty belief keeps the surprise revisions first
+    from policy.driver import policy_first
+    assert policy_first(["inrecep(O, R) via where(O, R): candle1 — 2 places, max 0.50, spread"])
+    assert not policy_first(["inrecep(O, R) via where(O, R): candle1 — 1 place, max 1.00, peaked"])
+    assert not policy_first([]) and not policy_first(None)

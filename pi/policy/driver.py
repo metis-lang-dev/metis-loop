@@ -78,6 +78,11 @@ def jl_read(path):
     return [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
 
 
+def policy_first(belief):
+    """Exploit asks for the policy first when the episode's belief section shows a spread belief (2f)."""
+    return any(l.rstrip().endswith("spread") for l in (belief or ()))
+
+
 class Driver:
     def __init__(self, run, brain, family="pick_and_place_simple", discovery=2, gate_games=2, seed=1, cfg=None, out=print, world="alfworld", skill=None):
         from metis import gate
@@ -637,6 +642,12 @@ class Driver:
                 # the probe there (data, not another guess: nina's R2); then that rule's failures are the policy's
                 sur = next((t for t in ep["transitions"] if t["kind"] == "surprise"
                             and refused_at.get(t["rule"].split("[")[0], 0) < 2), None)
+                # policy-tuning-2 2f (ruled): where the host shows a SPREAD belief (a task target unseen), exploit's first
+                # ask is the policy's, before the surprise revisions: only a policy rule can read a level
+                if policy_first(ep.get("belief")) and not self.state.get("policy_first"):
+                    self.state["policy_first"] = "belief"
+                    self.say("policy-first", why="belief", game=w.iid, belief=ep.get("belief"))
+                    sur = None
                 if sur is not None:
                     key = sur["rule"].split("[")[0]
                     line = next((l for n, l in rules_of(self.base()) if n == key), "")

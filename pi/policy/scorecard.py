@@ -71,6 +71,8 @@ def score_one(variant, world, seed, a, runs):
     row.update({"phase": state.get("phase"), "status": state.get("status"), "proposals": state.get("proposals"), "accepted": state.get("accepted")})
     if state.get("handover"):
         row["handover"] = state["handover"]
+    if state.get("policy_first"):
+        row["policy_first"] = state["policy_first"]      # 2f: exploit asked the policy first (a spread belief shown)
     if rc != 0 and row["status"] in (None, "running"):
         # the driver never wrote its end (opus's step 1 review N2: the OOM run's row said "running"): a
         # signal's kill (the memory scope's OOM: SIGKILL, 137 through the shell) or a crash, said so
