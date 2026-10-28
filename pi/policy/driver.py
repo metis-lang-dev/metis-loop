@@ -3,6 +3,7 @@
     python -m policy.driver --run DIR --world alfworld --family pick_and_place_simple \\
         --phase explore|exploit|refactor --brain openrouter/<model>|claude|script:<file> --budget USD
     python -m policy.driver --run DIR --resume          # re-engage after the person answered the ask
+    python -m policy.driver --run DIR --from-run SRC …  # start at the refactor phase from SRC's accepted state
 
 The loop's catalog is RUN/catalog: one domain, `alf`, the lifted BASE every game's instance includes
 (the world's generator writes the instances). It starts EMPTY (the generator's declarations, no rule).
@@ -888,6 +889,32 @@ class Driver:
         return self.go(phase)
 
 
+HANDED = ("family", "seed", "discovery", "gate_games", "world")
+
+
+def handover(src, run, skill=None):
+    """policy-tuning-2 step 2b's row refactor-from-scripted: RUN starts at the refactor phase from SRC's accepted state (a
+    run that passed exploit, the scripted brain's): its base, records and level ports. The counters, the meter, the
+    journal and the refactoring's marks are RUN's own (the brain's proposals alone counted); the hand-over in the state."""
+    src, run = Path(src).resolve(), Path(run).resolve()
+    st = json.loads((src / "state" / "run.json").read_text())
+    if (run / "state" / "run.json").exists():
+        raise SystemExit("--from-run: %s has a run already" % run)
+    if st.get("status") != "done" or not st.get("accepted"):
+        raise SystemExit("--from-run: %s did not end done with an accepted policy (%s, %s accepted)" % (src, st.get("status"), st.get("accepted")))
+    for sub in ("catalog", "records"):
+        shutil.copytree(src / sub, run / sub, dirs_exist_ok=True)
+    for ev in (run / "records").glob("evaluate-*.json"):     # the source's numbers: the new run measures its own
+        ev.unlink()
+    state = {k: st[k] for k in HANDED + ("cfg", "levels", "notes") if k in st}
+    state.update(phase="refactor", proposals=0, accepted=0, refused_run=0, accepts_since_refactor=0, status="running",
+                 skill=str(Path(skill).resolve()) if skill else None,
+                 handover={"from": str(src), "phase": st.get("phase"), "accepted": st.get("accepted"), "proposals": st.get("proposals")})
+    (run / "state").mkdir(parents=True, exist_ok=True)
+    (run / "state" / "run.json").write_text(json.dumps(state, indent=1))
+    return st
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="policy.driver", description=__doc__.split("\n")[0])
     ap.add_argument("--run", required=True)
@@ -902,6 +929,7 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--set", action="append", default=[], help="KEY=N: a budget of DEFAULTS (explore_steps, proposals, …)")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--from-run", metavar="SRC", help="start at the refactor phase from SRC's accepted state (a run ended done)")
     ap.add_argument("--evaluate", metavar="SPLIT", help="act the base as it is on --n games of SPLIT (heldout, or the world's own name): no brain")
     ap.add_argument("--n", type=int, default=10)
     ap.add_argument("--skill", metavar="FILE", help="a skill the brain follows: its text in every prompt (policy-tuning)")
@@ -913,6 +941,13 @@ def main(argv=None):
     unknown = set(cfg) - set(DEFAULTS)
     if unknown:
         ap.error("--set: unknown %s (one of %s)" % (", ".join(sorted(unknown)), ", ".join(DEFAULTS)))
+    if a.from_run:
+        src = handover(a.from_run, a.run, a.skill)
+        mine = {"family": a.family, "seed": a.seed, "discovery": a.discovery, "gate_games": a.gate_games, "world": a.world}
+        wrong = {k: (src.get(k), mine[k]) for k in HANDED if src.get(k, mine[k]) != mine[k]}
+        if wrong:
+            shutil.rmtree(Path(a.run) / "state")
+            ap.error("--from-run: the source's %s differ from this run's" % wrong)
     brain = Brain(a.brain, a.run, spend=a.budget, max_tokens=a.max_tokens)
     d = Driver(a.run, brain, a.family, a.discovery, a.gate_games, a.seed, cfg, world=a.world, skill=a.skill)
     if a.evaluate:

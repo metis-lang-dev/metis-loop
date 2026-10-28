@@ -45,11 +45,17 @@ def score_one(variant, world, seed, a, runs):
         args += ["--skill", str(Path(a.skill).resolve())]
     for kv in a.set:
         args += ["--set", kv]
+    if getattr(a, "max_tokens", None):
+        args += ["--max-tokens", str(a.max_tokens)]
+    if getattr(a, "from_runs", None):
+        args += ["--from-run", str(Path(a.from_runs).resolve() / ("%s-s%d" % (world, seed)))]
     row = {"variant": variant, "world": world, "seed": seed, "brain": a.brain}
     rc, out, err, secs = run([str(RUN_SH), "--run", str(d)] + args, a.timeout)
     row.update({"rc": rc, "seconds": secs})
     state = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
     row.update({"phase": state.get("phase"), "status": state.get("status"), "proposals": state.get("proposals"), "accepted": state.get("accepted")})
+    if state.get("handover"):
+        row["handover"] = state["handover"]
     if rc != 0 and row["status"] in (None, "running"):
         # the driver never wrote its end (opus's step 1 review N2: the OOM run's row said "running"): a
         # signal's kill (the memory scope's OOM: SIGKILL, 137 through the shell) or a crash, said so
@@ -180,6 +186,8 @@ def add_arguments(ap):
     ap.add_argument("--set", action="append", default=[])
     ap.add_argument("--runs", default=str(HERE.parent / "policy-runs"))
     ap.add_argument("--timeout", type=int, default=3600)
+    ap.add_argument("--max-tokens", type=int, default=None, help="the per-request cap on the answer (the driver's default 2048)")
+    ap.add_argument("--from-runs", metavar="DIR", help="each run starts at the refactor phase from DIR/<world>-s<seed> (a scored variant)")
 
 
 def score_variant(a, variant, skill, runs, guard=None):
