@@ -94,7 +94,12 @@ def test_the_built_base_becomes_the_directed_hierarchy(tmp_path):
     assert (tree / "composition.yaml").exists() and (tree / "tick_types.llp").exists()
     assert "gating: program" in (tree / "grasp" / "domain.yaml").read_text()
     assert "$tick__grant(grasp, motion)" in (tree / "grasp_domain.llp").read_text()
-    assert "priority(grasp, task)." in (tree / "tree_director" / "tree_director.llp").read_text()
+    td = (tree / "tree_director" / "tree_director.llp").read_text()
+    # the split's sub-goals and results cross between members: the tree director routes them (the routing base in
+    # metispy's iface, the role facts from the ports), as the hand ALFWorld tree
+    assert 'include "iface/director_domain.llp".' in td and "planner(task)." in td and "handles(grasp, grab)." in td
+    # the planner takes a result once its world copy shows the result's effect (no re-plan on a latched reading)
+    assert "near(O) * $at(L2_w) * $objat(O, L2_w) -o tofetch(O)" in (tree / "task_domain.llp").read_text()
     assert conv["numbers"]["ambiguous"]["after"] < conv["numbers"]["ambiguous"]["before"]
     assert conv["numbers"]["vector"]["after"] <= conv["numbers"]["flat"] and direct["numbers"]["ambiguous"]["after"] == 0
     assert prune["numbers"]["likelihood"] < 0                                 # the never-firing rules carry the world model
