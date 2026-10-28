@@ -156,7 +156,7 @@ def usd_per_rule(card):
 
 def better(cand, kept):
     """The candidate's card is better: no world's held-out wins lower and the sum higher; or the wins
-    equal and, when both cards' guards hold, more domains exercised; or then a lower usd/rule."""
+    equal and, when both cards' guards hold, more domains exercised; or then, no fewer rules built, a lower usd/rule."""
     wc, wk = won(cand), won(kept)
     if any(wc.get(w, 0) < wk.get(w, 0) for w in wk):
         return False, "fewer held-out wins on %s" % ", ".join(w for w in wk if wc.get(w, 0) < wk.get(w, 0))
@@ -165,8 +165,17 @@ def better(cand, kept):
     sc, sk = structural(cand), structural(kept)
     if sc is not None and sk is not None and sc != sk:
         return sc > sk, "domains exercised %d vs %d" % (sc, sk)
+    rc, rk = cand.get("rules") or 0, kept.get("rules") or 0
+    if rc < rk:                    # a cheaper rule is no gain when fewer were built (nina's round 1: 9 kept over 12)
+        return False, "fewer rules built (%d < %d)" % (rc, rk)
     uc, uk = usd_per_rule(cand), usd_per_rule(kept)
     return uc < uk, "usd/rule %.4f vs %.4f" % (uc, uk)
+
+
+
+def rewrite_brain(a, run_dir):
+    """The round's rewrite call: the runs' --max-tokens too (nina's round 3: a skill cut at 2048 left a stray fence)."""
+    return Brain(a.brain, run_dir, spend=a.budget, max_tokens=getattr(a, "max_tokens", None) or 2048)
 
 
 def summary(card):
@@ -254,7 +263,7 @@ def main(argv=None):
             old = Path(kept["skill"]).read_text()
             series.check("round %d's rewrite call" % k)
             try:
-                text = Brain(a.brain, out / "calls" / ("r%d" % k), spend=a.budget).ask(prompt(old, digest(kept, runs)), "rewrite")
+                text = rewrite_brain(a, out / "calls" / ("r%d" % k)).ask(prompt(old, digest(kept, runs)), "rewrite")
             except Budget as e:                               # the call's own cap
                 raise SeriesStop("round %d's rewrite call: %s" % (k, e)) from None
             new = md_block(text)

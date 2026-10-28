@@ -130,3 +130,19 @@ def test_a_killed_run_is_said_so(tmp_path, monkeypatch):
     monkeypatch.setattr(scorecard, "run", lambda cmd, timeout: (next(rcs), "", "", 1.0))
     a = SimpleNamespace(brain="script:/dev/null", discovery=2, gate_games=2, budget=None, skill=None, set=[], heldout=2, timeout=10)
     assert scorecard.score_one("v", "alfworld", 1, a, tmp_path)["status"] == "killed"
+
+
+def test_the_cost_tiebreak_never_keeps_fewer_rules():
+    # nina's round 1: kept on usd/rule 0.0009 vs 0.0011 while it built 9 rules against 12
+    kept = card("k", [row("alfworld", "5/10")], usd=0.0132, rules=12)
+    assert rewrite.better(card("c", [row("alfworld", "5/10")], usd=0.0081, rules=9), kept) == (False, "fewer rules built (9 < 12)")
+    ok, why = rewrite.better(card("c", [row("alfworld", "5/10")], usd=0.0100, rules=12), kept)
+    assert ok and why.startswith("usd/rule")
+
+
+def test_the_rewrite_call_takes_the_runs_max_tokens(tmp_path):
+    # nina's round 3: the rewrite was cut at 2048 and left a stray fence
+    from argparse import Namespace
+    a = Namespace(brain="script:/dev/null", budget=None, max_tokens=4096)
+    assert rewrite.rewrite_brain(a, tmp_path / "r1").max_tokens == 4096
+    assert rewrite.rewrite_brain(Namespace(brain="script:/dev/null", budget=None, max_tokens=None), tmp_path / "r2").max_tokens == 2048
