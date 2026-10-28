@@ -152,3 +152,26 @@ python -m policy.card --variant r0-flash=policy/skills/hierarchy.md --worlds alf
     --brain openrouter/deepseek/deepseek-v4.1-flash-1017 --budget 0.50 --series-budget 1.00 \
     --discovery 2 --gate-games 2 --heldout 10
 ```
+
+### Rounds 1–3 (2026-10-28, master 356f48b), the same brain
+
+`python -m policy.rewrite --skill policy/skills/hierarchy.md --rounds 3 --start-card policy-runs/r0-flash/scorecard.json`
+with the same worlds, seeds and caps.
+
+| round | rules (alf s1, s2, sw s1, s2) | held-out | usd (runs) | usd/rule | kept |
+|---|---|---|---|---|---|
+| 0 | 4, 3, 3, 2 | 0/10 ×4 | 0.0136 | 0.0011 | — |
+| 1 | 4, 3, 0, 2 | 0/10 ×4 | 0.0079 | 0.0009 | kept (usd/rule) |
+| 2 | 4, 3, 5, 2 | 0/10 ×4 | 0.0123 | 0.0009 | not kept (tie) |
+| 3 | 4, 3, 3, 2 | 0/10 ×4 | 0.0124 | 0.0010 | not kept |
+
+**Spend:** $0.0367 for the series (three rewrite calls: $0.0040).
+- The rewrites added the round-0 lessons: over-fit statics, unbound variables, the world's types, the
+  fit-repair as the spec, and token rules that fire. The cards did not move: exploit refusals on the gain
+  went 6 → 6 / 8 / 7, compile type confusions 7 → 5 / 9 / 8, and no policy compiled.
+- Round 1 was kept on usd/rule while it built fewer rules. With held-out 0 everywhere, the tiebreak
+  rewards a cheap empty run.
+- Round 3's rewrite was cut at 2048 tokens: a stray fence, and the last point truncated.
+- The refactor-from-scripted row (handover at refactor from the hand-script's alfworld s1, $0.00099): flash's
+  conventions answer was refused (the replay diverged; it rewrote the action layer), so compose was not
+  reached (s-e075f47f steps/step2b-refactor-row.md).
