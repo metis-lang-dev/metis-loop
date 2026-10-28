@@ -226,3 +226,16 @@ def test_the_exploit_prompt_shows_the_belief_and_r2b_brings_the_level_point_ther
         assert "TICK TREE" in prompts.SKILL["refactor"]
     finally:
         prompts.set_skill("")
+
+
+def test_the_answer_line_allows_the_yaml_and_the_example_keeps_the_ports_arity():
+    # policy-tuning-2 2e (nina): the closing line said "ONE ```llp block" and won over the belief section's yaml; and the
+    # brain wrote place_level(R, L), the object dropped. The last line now allows the yaml when a belief is shown, and
+    # the worked example's level takes every argument of where(O, R)
+    from policy import prompts
+    ep = {"transitions": [], "steps": 3, "commands": []}
+    line = "inrecep(O, R) via where(O, R): candle1 — 2 places, max 0.50, spread"
+    p = prompts.policy("stage act {\n}", ({}, {}), ["target(candle1)"], ep, "", belief=[line])
+    assert p.rstrip().endswith("if you declare a level, ONE ```yaml block with its `beliefs:` and `levels:`.")
+    assert "pred place_level(level, object, receptacle)" in p and "$place_level(high, O, R)" in p
+    assert "yaml" not in prompts.policy("stage act {\n}", ({}, {}), ["target(candle1)"], ep, "").splitlines()[-1]

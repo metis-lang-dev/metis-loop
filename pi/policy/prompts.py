@@ -127,7 +127,28 @@ def belief_block(lines):
             + "\n".join("- " + l for l in lines)
             + "\nWhere a choice depends on such a fact and its belief is spread, a level pays (the skill's level point): "
               "declare it in ONE ```yaml block beside the ```llp one (`beliefs:` / `levels:`), and let a rule read the "
-              "level atom. Where it is peaked, keep the plain fact.")
+              "level atom. Where it is peaked, keep the plain fact.\n" + LEVEL_EXAMPLE)
+
+
+# the level's worked example (policy-tuning-2 2e, nina's finding: the brain wrote place_level(R, L), the object
+# dropped): the level pred takes the level FIRST and then every argument of the port it quantises — where(O, R)
+LEVEL_EXAMPLE = """For example, a level over where(O, R) is a level over the object AND the receptacle:
+```llp
+type level {low mid high}.
+pred place_level(level, object, receptacle) : alf.
+weight where(O, R) reads {inrecep(O, R)}.
+%% {O} may well be in {R}: I go and look.
+go_look [dyn] : $want(O) * $place_level(high, O, R) * $recat(R, L) * at(L0) * L0 <> L -o at(L).
+```
+```yaml
+beliefs: {inrecep: {port: where, lone: R}}
+levels: {place_level: {from: {belief: where}, at: [0.05, 0.4], names: [low, mid, high]}}
+```"""
+
+
+def answer_tail(belief):
+    """The answer line's clause for a declared level: the last line of a prompt is the one the brain follows."""
+    return ", and, if you declare a level, ONE ```yaml block with its `beliefs:` and `levels:`" if belief else ""
 
 
 def explore(base, commands, rec, similar, instance_text, note=None, belief=()):
@@ -149,7 +170,7 @@ The transition to explain:
 
 Write the rule for this action, LIFTED (variables, not the things' names): its left side the facts before that the action needs (consume what changes, read with $ what stays), its right side what is true after — so that, fired on the facts before, it gives exactly the facts after. It must not fire where the world would answer differently. Reuse a rule name only to REPLACE that rule (its new text in full).{instruction(note, PURPOSE)}
 
-Answer with ONE ```llp block of only the new lines (pred declarations if any, then the rule with its %% line)."""
+Answer with ONE ```llp block of only the new lines (pred declarations if any, then the rule with its %% line){answer_tail(belief)}."""
 
 
 def revise(base, commands, sur, rule_line, instance_text, note=None, belief=()):
@@ -173,7 +194,7 @@ The rule that fired: {sur['rule']}
 
 Give the rule's new text in full under its own name (a missing precondition, read with $ or consumed and produced again), or `drop NAME` if no rule of that name can be right here.{instruction(note, PURPOSE)}
 
-Answer with ONE ```llp block of only the changed lines."""
+Answer with ONE ```llp block of only the changed lines{answer_tail(belief)}."""
 
 
 def policy(base, commands, task_facts, episode, instance_text, note=None, belief=()):
@@ -197,7 +218,7 @@ The last episode was NOT won ({episode['steps']} rule firings, {len(episode['com
 
 Add or replace rules (keep every action rule's world behaviour: its facts before and after) so the program pursues the task: {WORLD['plan_text']}{instruction(note, PURPOSE)}
 
-Answer with ONE ```llp block of only the new or replaced lines."""
+Answer with ONE ```llp block of only the new or replaced lines{answer_tail(belief)}."""
 
 
 # the compiler's words in the brain's terms, where they mislead (policy-tuning step 1: "expected [, got ':'" was read
