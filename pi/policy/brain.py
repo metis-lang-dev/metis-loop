@@ -171,11 +171,12 @@ def block_of(text):
 
 def splice(base, lines):
     """The base with the answer's lines in it: `pred …` declarations before the first stage (a
-    name already declared is left), each rule (with the `%%` lines above it) into the stage
+    name already declared is left) — and a level port's `type NAME {…}.` and `weight PORT(…) reads {…}.`
+    (brief v2 §B, a name already declared left), each rule (with the `%%` lines above it) into the stage
     block — replacing the rule of the same name, else added at its end; `drop NAME` removes a
     rule. → (text, {added, replaced, dropped, declared})."""
     out = base.splitlines()
-    declared = {l.split()[1].split("(")[0].rstrip(":").strip() for l in out if l.strip().startswith(("pred ", "bwd "))}
+    declared = {l.split()[1].split("(")[0].rstrip(":").strip() for l in out if l.strip().startswith(("pred ", "bwd ", "type ", "weight "))}
     preds, rules, drops, doc = [], [], [], []
     for l in lines:
         s = l.strip()
@@ -183,8 +184,8 @@ def splice(base, lines):
             continue
         if s.startswith("%%"):
             doc.append("  " + s)
-        elif s.startswith(("pred ", "bwd ")):
-            if s.split()[1].split("(")[0].rstrip(":").strip() not in declared:
+        elif s.startswith(("pred ", "bwd ", "type ", "weight ")) and s.endswith("."):
+            if s.split()[1].split("(")[0].split("{")[0].rstrip(":").strip() not in declared:
                 preds.append(s)
         elif s.startswith("drop "):
             drops.append(s.split()[1])

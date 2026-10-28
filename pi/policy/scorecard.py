@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RUN_SH = HERE.parent / "run.sh"
-FAMILY = {"alfworld": "pick_and_place_simple", "scienceworld": "conductivity", "minihack": "room_quiet"}
+FAMILY = {"alfworld": "pick_and_place_simple", "alfworld_view": "pick_and_place_simple", "scienceworld": "conductivity", "minihack": "room_quiet"}
 
 
 def jl(path):
@@ -82,6 +82,21 @@ def score_one(variant, world, seed, a, runs):
     return row
 
 
+def level_ports_of(d):
+    """The level ports the run declared (its accepted proposals' `levels:`) and how many of them a fired rule read: a
+    rule in the records' transitions whose line in the base reads the level atom (`$NAME(`)."""
+    st = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
+    names = {n for keys in (st.get("levels") or {}).values() for n in (keys.get("levels") or {})}
+    if not names:
+        return {"declared": 0, "read": 0}
+    from policy.alfworld import rules_of
+    base = d / "catalog" / "domains" / "alf" / "alf.llp"
+    lines = dict(rules_of(base.read_text())) if base.exists() else {}
+    fired = {str(t.get("rule", "")).split("[")[0] for t in jl(d / "records" / "transitions.jsonl")}
+    read = {n for n in names for r in fired if "$%s(" % n in lines.get(r, "")}
+    return {"declared": len(names), "read": len(read), "rules": sorted(r for r in fired if any("$%s(" % n in lines.get(r, "") for n in names))}
+
+
 def structural_of(d, world, a, row):
     """The structural column (step 3): the hierarchy the refactor built — its domains, those exercised on
     the discovery games (an activation with a result; the planner by any activation), the director's
@@ -100,6 +115,7 @@ def structural_of(d, world, a, row):
     text = llp.read_text()
     marks = {m.group(1) for m in (hier.ANNOT.search(l) for l in text.splitlines()) if m}
     out = {"domains": None, "exercised": None, "active": None, "handles_derived": None, "handles_declared": None, "miss_rate": None, "guards": None}
+    out["level_ports"] = level_ports_of(d)
     if not marks:
         return dict(out, why="not split")
     rc, _, err, _ = run([str(RUN_SH), "--run", str(d), "--world", world, "--family", FAMILY[world], "--evaluate", "discovery",
@@ -133,7 +149,8 @@ def structural_of(d, world, a, row):
         for m in (d / "catalog" / "domains").glob("*/domain.yaml"):
             names |= set((yaml.safe_load(m.read_text()) or {}).get("levels") or {})
         reads = {k for g in e.get("games", []) for act in g.get("activations") or [] for k in act.get("reads") or []}
-        out["level_ports"] = {"declared": len(names), "read": len(names & reads)}      # read by a fired rule
+        if names:                                           # the members' manifests (a split): read by a fired rule
+            out["level_ports"] = {"declared": len(names), "read": len(names & reads)}
     st = json.loads((d / "state" / "run.json").read_text()) if (d / "state" / "run.json").exists() else {}
     out["compose"] = (st.get("moves") or {}).get("compose")                          # the move's verdict (not counted)
     journal = jl(d / "state" / "journal.jsonl")

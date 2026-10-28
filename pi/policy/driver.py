@@ -44,7 +44,7 @@ from . import acting, alfworld, compose, hier, minihack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
-WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base),
+WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "alfworld_view": (alfworld.AlfViewWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base),
           "minihack": (minihack.MiniHack, minihack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
@@ -354,22 +354,41 @@ class Driver:
         """The brain's lines → the candidate base (repaired until it compiles in the seed record's
         instance) → the gate. → the verdict ("accept" | "refuse" | "error"). The level ports the answer's ```yaml
         block declares (compose.levels_of) are kept with an accepted proposal, for the members' manifests."""
-        self._answer = None
-        v = self._propose(prompt, purpose, seed_game)
-        sp = hier.Split.of(self.base(), self.World, self.start)
-        if v == "accept" and self._answer and sp.is_split():
-            decl, findings = compose.levels_of(self._answer, list(sp.domains), sp.planner)
-            for m, keys in decl.items():
-                for k, entries in keys.items():
-                    self.state.setdefault("levels", {}).setdefault(m, {}).setdefault(k, {}).update(entries)
-            if decl or findings:
-                self.say("levels-declared", declared=decl, findings=findings)
-            self.level_preds()
-        return v
+        self._answer, self._cand_levels = None, {}
+        try:
+            return self._propose(prompt, purpose, seed_game)
+        finally:
+            self._cand_levels = {}
+            self.level_preds()                              # a refused candidate's ports are gone again
 
-    def level_preds(self):
-        """The level ports declared so far: recorded per step and replayed from the records (acting.LEVEL_PREDS)."""
-        acting.LEVEL_PREDS = {n for keys in (self.state.get("levels") or {}).values() for n in (keys.get("levels") or {})}
+    def keep_levels(self):
+        """An accepted candidate's level ports join the run's (judge's accept, before anything after it can raise)."""
+        for m, keys in (getattr(self, "_cand_levels", None) or {}).items():
+            for k, entries in keys.items():
+                self.state.setdefault("levels", {}).setdefault(m, {}).setdefault(k, {}).update(entries)
+
+    def candidate_levels(self, answer):
+        """The level ports ANSWER's ```yaml block declares (the flat program's own, or a split's members'), in force
+        while the candidate is judged — its rules that read a level are exercised by the gate's runs."""
+        sp = hier.Split.of(self.base(), self.World, self.start)
+        members, planner = (list(sp.domains), sp.planner) if sp.is_split() else ([DOMAIN], DOMAIN)
+        decl, findings = compose.levels_of(answer, members, planner)
+        if decl or findings:
+            self.say("levels-declared", declared=decl, findings=findings)
+        self._cand_levels = decl
+        self.level_preds(decl)
+
+    def level_preds(self, extra=None):
+        """The level ports declared so far (and EXTRA's, a candidate's): recorded per step and replayed from the
+        records (acting.LEVEL_PREDS); the world's host carries the instrument for them (alfview.DECLARED, ALFWorld)."""
+        from . import alfview
+        merged = {}
+        for src in (self.state.get("levels") or {}, extra or {}):
+            for keys in src.values():
+                for k in ("beliefs", "levels"):
+                    merged.setdefault(k, {}).update(keys.get(k) or {})
+        acting.LEVEL_PREDS = set(merged.get("levels") or {})
+        alfview.DECLARED = merged
         return acting.LEVEL_PREDS
 
     def _propose(self, prompt, purpose, seed_game):
@@ -377,6 +396,7 @@ class Driver:
             raise Disengage("budget", "The proposals budget (%d) is spent. More proposals, another phase, or stop?" % self.cfg["proposals"],
                             options=["budget: more proposals", "phase: refactor now", "abandon"])
         answer = self._answer = self.ask(prompt, purpose)
+        self.candidate_levels(answer)
         lines = block_of(answer)
         text, info = splice(self.base(), lines)
         if text == self.base():
@@ -452,6 +472,7 @@ class Driver:
         self.say("proposal", verdict=v["verdict"], numbers=v["numbers"], why=v["why"], cost=cost, by=by, call=call,
                  domain=domain or DOMAIN, **(info or {}))
         if v["verdict"] == "accept":
+            self.keep_levels()
             self.state["accepted"] += 1
             self.state["accepts_since_refactor"] += 1
             self.state["refused_run"] = 0

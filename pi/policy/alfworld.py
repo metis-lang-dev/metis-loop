@@ -159,6 +159,7 @@ class AlfWorld:
         return {"object": objs} if objs else {}
 
     DOMAIN = "alf"
+    VIEW = False                         # the world "alfworld_view" (AlfViewWorld): the robot sees only what stands before it
     HOST = "alf_host.py:make"            # a composition member's host (metis-worlds alfworld/world, its package shim)
     DESCRIPTION = "a household world (ALFWorld)"
     SPLITS = {"discovery": "train", "gate": "valid_seen", "heldout": "valid_unseen"}
@@ -206,7 +207,7 @@ class AlfWorld:
     # ── the game ──
     def open(self):
         if self.host is None:
-            self.host = self.alf_host.AlfHost(str(self.pkg), max_steps=self.max_steps)
+            self.host = self._host_for(self.pkg)
             self.from_name = {v: k for k, v in self.host.to_name.items()}
             self.loc_of = {r: l for l, rs in self.host.recat.items() for r in rs}
         return self
@@ -312,6 +313,8 @@ class AlfWorld:
         host = self._host_for(path.parent)
         r = Repl.open(path)
         out = acting.new_out(self.iid)
+        if getattr(host, "lmap", None) is not None:      # the map's host: the program starts on what it sees, its levels
+            r.shell.counts = acting.apply_lines(dict(r.shell.counts), host.sync(dict(r.shell.counts)))
         try:
             acting.fire(self, host, r.shell, random.Random(seed), out, steps)
             out["won"] = bool(host.won)
@@ -321,6 +324,10 @@ class AlfWorld:
 
     # ── the acting loop's world parts (acting.py) ──
     def _host_for(self, pkg):
+        """The game's host: alf_host's own, or (VIEW, or a level port declared: alfview.DECLARED) the loop's map host."""
+        from . import alfview
+        if self.VIEW or alfview.DECLARED.get("levels"):
+            return alfview.host_class(self.alf_host)(str(pkg), view=self.VIEW, max_steps=self.max_steps)
         return self.alf_host.AlfHost(str(pkg), max_steps=self.max_steps)
 
     def _rule_verb(self, name):
@@ -363,3 +370,36 @@ class AlfWorld:
                 "before": pre["before"], "after": sorted(a for a, n in host.reading().items() if n > 0),
                 "said": sorted(ev.produce), "consumed": sorted(ev.consume),
                 "text": (host.obs or "").strip()[:400], "won": host.won}
+
+
+class AlfViewWorld(AlfWorld):
+    """ALFWorld seen from where the robot stands (the world "alfworld_view", opt-in; policy-tuning-2 2a-ii): a thing's
+    place is read once seen, the semantic map believes the rest, the program's level port reads that belief."""
+    VIEW = True
+    DESCRIPTION = "a household world (ALFWorld) seen from where the robot stands"
+    LOCATED = ("inrecep(", "objat(")
+
+    @classmethod
+    def revealed(cls, before, after):
+        """The located facts a command REVEALED: in the reading after it, not before, of a thing the robot did not hold
+        (a put places what it held: that is an effect). They were there; the robot saw them: perception, not a change."""
+        held = {a[6:-1] for a in before if a.startswith("holds(")}
+        return sorted(a for a in after if a.startswith(cls.LOCATED) and a not in before and a[a.index("(") + 1:].split(",")[0] not in held)
+
+    def _seen_before(self, rec):
+        """A transition record with what the command revealed moved into its `before` (the records the gate fits)."""
+        if rec is None:
+            return rec
+        shown = self.revealed(rec["before"], rec["after"])
+        if shown:
+            rec["before"] = sorted(set(rec["before"]) | set(shown))
+            rec["revealed"] = shown
+            if "added" in rec:
+                rec["added"] = sorted(set(rec["added"]) - set(shown))
+        return rec
+
+    def step(self, command, phase="explore"):
+        return self._seen_before(super().step(command, phase))
+
+    def _after(self, host, pre, name, rv, ev):
+        return self._seen_before(super()._after(host, pre, name, rv, ev))

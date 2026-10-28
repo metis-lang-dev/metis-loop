@@ -120,3 +120,25 @@ def test_a_choice_point_shows_what_one_side_alone_offers():
     r = compare_choice(dict(flat, **{"wait[X=x]": 1.0}), flat)
     assert not r["same"] and r["tree_only"] == {"wait[X=x]": 1.0}
     assert compare_choice(dict(flat, **{"wait[X=x]": 1.0}), flat, gen={"wait"})["same"]   # compose's own rule
+
+
+def test_splice_keeps_a_level_ports_type_and_weight():
+    from policy.brain import splice
+    base = "catalog alf 1.\npred want(object) : alf.\nstage act {\n}\n"
+    text, info = splice(base, ["type level {low mid high}.", "pred place_level(level, object, receptacle) : alf.",
+                               "weight where(O, R) reads {inrecep(O, R)}.", "pred want(object) : alf.",
+                               "%% I go and look.", "go_look [dyn] : want(O) * $place_level(mid, O, R) -o want(O)."])
+    assert "type level {low mid high}." in text and "weight where(O, R) reads {inrecep(O, R)}." in text
+    assert text.count("pred want(object)") == 1 and info["declared"] == ["level", "place_level", "where"]
+    assert text.index("type level") < text.index("stage act")
+
+
+def test_the_view_world_counts_what_a_command_revealed_as_before():
+    from policy.alfworld import AlfViewWorld
+    before = ["at(loc1)", "holds(mug1)"]
+    after = ["at(loc3)", "inrecep(candle2,toilet1)", "objat(candle2,loc3)", "inrecep(mug1,toilet1)", "holds(x9)"]
+    # the candle was there (seen on arrival); the mug was held: putting it is an effect, not a sighting
+    assert AlfViewWorld.revealed(before, after) == ["inrecep(candle2,toilet1)", "objat(candle2,loc3)"]
+    rec = AlfViewWorld._seen_before(AlfViewWorld.__new__(AlfViewWorld), {"before": before, "after": after, "added": sorted(set(after) - set(before))})
+    assert "inrecep(candle2,toilet1)" in rec["before"] and "inrecep(candle2,toilet1)" not in rec["added"]
+    assert "inrecep(mug1,toilet1)" in rec["added"]
