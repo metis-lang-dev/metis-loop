@@ -37,8 +37,9 @@ class Predictor:
     def session(self, iid):
         if iid not in self.sessions:
             from metis.repl import Repl
+            from . import acting
             try:
-                r = Repl.open(self.games[iid].into(self.tree))
+                r = Repl.open(self.games[iid].into(self.tree), manifest=acting.LEVELS)   # the levels in force
                 start = dict(r.shell.counts)
                 self.sessions[iid] = (r, {a: n for a, n in start.items() if kind_of(a) not in self.dynamic})
             except Exception as e:                    # noqa: BLE001 — the candidate does not compile: its words

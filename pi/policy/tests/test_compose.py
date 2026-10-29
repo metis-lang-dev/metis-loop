@@ -250,29 +250,28 @@ def test_a_spread_belief_makes_the_policy_the_first_ask():
     assert not policy_first([]) and not policy_first(None)
 
 
-def test_a_levels_block_generates_the_declarations_it_determines_and_the_repair_keeps_it():
-    # policy-tuning-2 2g (nina's 2f row: the first brain-declared level; its rules read place_level(high, O, R), but the
-    # llp lacked `type level` and the pred, so it did not compile and both repairs dropped the level)
-    from policy.driver import GEN_DECL, generated_level_decls, yaml_block
+def test_a_levels_block_is_declared_by_the_toolchain_and_the_repair_keeps_it(tmp_path):
+    # policy-tuning-2 2g found the llp lacked `type level` and the pred its rules read; the driver generated them. Now
+    # the toolchain does (metis-lang spec/16 amendment 1): the candidate is the brain's lines alone, and a session
+    # opened with the levels in force (acting.LEVELS) compiles it, the declarations metispy's
+    from metis.repl import Repl
+    from policy.driver import yaml_block
     from policy.brain import splice
     from policy import prompts
-    base = ("catalog alf 1.\npred inrecep(object, receptacle) : alf.\npred want(object) : alf.\n"
-            "pred at(location) : alf.\nbwd recat(receptacle, location).\nstage act {\n}\n")
+    base = ("catalog alf 1.\nlayers (dyn).\nstages (act).\nnamespace alf produce (dyn).\ntype object {o1}.\n"
+            "type receptacle {r1 r2}.\ntype location {l1 l2}.\npred inrecep(object, receptacle) : alf.\n"
+            "pred want(object) : alf.\npred at(location) : alf.\nbwd recat(receptacle, location).\nrecat(r1, l1).\n"
+            "recat(r2, l2).\nstage act {\n}\n#init want(o1) 1\n#init at(l1) 1\n")
     lv = {"levels": {"place_level": {"from": {"belief": "where"}, "at": [0.05, 0.4], "names": ["low", "mid", "high"]}},
           "beliefs": {"inrecep": {"port": "where", "lone": "R"}}}
     rule = "go_look [dyn] : $want(O) * $place_level(high, O, R) * $recat(R, L) * at(L0) * L0 <> L -o at(L)."
-    gen = generated_level_decls(base, lv, "alf")
-    # the port's variables: the yaml's lone: R must name one of them (with A0, A1 the hook's levels failed)
-    assert gen == ["type level {low mid high}.", "weight where(O, R) reads {inrecep(O, R)}.",
-                   "pred place_level(level, object, receptacle) : alf."]
-    assert "weight where(X, Y) reads {inrecep(X, Y)}." in generated_level_decls(
-        base + "  r [dyn] : $place_level(high, X, Y) -o ().\n", dict(lv, beliefs={"inrecep": {"port": "where", "lone": "Y"}}), "alf")
-    from policy.driver import mark_generated
-    text, _ = splice(base, gen + ["%% I go and look.", rule])
-    text = mark_generated(text, gen)
-    assert "pred place_level(level, object, receptacle) : alf.   " + GEN_DECL in text
-    assert "pred place_level(level, object, receptacle) : alf." in text and "type level {low mid high}." in text
-    assert generated_level_decls(text, lv, "alf") == []                     # declared: nothing more to generate
+    text, _ = splice(base, ["%% I go and look.", rule])
+    assert "type level" not in text and "pred place_level" not in text                 # the driver adds nothing
+    (tmp_path / "alf.llp").write_text(text)
+    assert Repl.open(tmp_path / "alf.llp", manifest=lv).state()["stage"] == "act"
+    with pytest.raises(Exception, match="place_level"):
+        Repl.open(tmp_path / "alf.llp")                                                # without its levels: no program
+    assert "write none of them" in prompts.LEVEL_EXAMPLE and "type level {" not in prompts.LEVEL_EXAMPLE
     answer = "```llp\n" + rule + "\n```\n```yaml\nlevels: {place_level: {at: [0.1, 0.5]}}\n```"
     yml = yaml_block(answer)
     assert yml == "levels: {place_level: {at: [0.1, 0.5]}}"

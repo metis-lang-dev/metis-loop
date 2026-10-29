@@ -78,59 +78,6 @@ def jl_read(path):
     return [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
 
 
-GEN_DECL = "% generated from the levels: block (policy-tuning-2 2g)"
-
-
-def generated_level_decls(text, levels, ns):
-    """The declarations a ```yaml levels: block fully determines and TEXT lacks (2g: nina's 2f row declared a level
-    right and its rules read place_level(high, O, R), but the llp lacked `type level` and the pred, and did not
-    compile): for a level read from a belief port, `type level {names}`, the port `weight PORT(..) reads {PRED(..)}`
-    and `pred NAME(level, <PRED's argument types>)`, each marked generated. LEVELS: one member's {"levels", "beliefs"}."""
-    import re
-    out = []
-    beliefs = (levels or {}).get("beliefs") or {}
-    for name, spec in ((levels or {}).get("levels") or {}).items():
-        port = ((spec or {}).get("from") or {}).get("belief")
-        if not port:
-            continue                                   # an evaluate level: its query names no pred to declare
-        pred = next((b for b, bs in beliefs.items() if (bs or {}).get("port") == port), None)
-        sig = re.search(r"^\s*pred\s+%s\(([^)]*)\)" % re.escape(pred or "\0"), text, re.M) if pred else None
-        if sig is None:
-            continue                                   # the belief's pred undeclared: nothing determines the arity
-        types = [t.strip() for t in sig.group(1).split(",") if t.strip()]
-        names = (spec or {}).get("names") or ["low", "mid", "high"]
-        if not re.search(r"^\s*type\s+level\s*\{", text, re.M):
-            out.append("type level {%s}." % " ".join(names))
-        # the port's variables as the brain's level-reading rule names them ($place_level(high, O, R) -> O, R): the
-        # belief's `lone:` names one of them, and a port without it cannot resolve the group (the hook's levels fail)
-        use = re.search(r"\$%s\(\s*\w+\s*,([^)]*)\)" % re.escape(name), text)
-        vs = [v.strip() for v in use.group(1).split(",")] if use else []
-        if len(vs) != len(types) or not all(v[:1].isupper() for v in vs):
-            vs = []
-            for t in types:                            # else the types' initials, made distinct
-                v = t[:1].upper() or "X"
-                while v in vs:
-                    v += "2"
-                vs.append(v)
-        lone = (beliefs.get(pred) or {}).get("lone") or (beliefs.get(pred) or {}).get("one")
-        if lone and lone not in vs and vs:
-            vs[-1] = lone
-        vars_ = ", ".join(vs)
-        if not re.search(r"^\s*weight\s+%s\(" % re.escape(port), text, re.M):
-            out.append("weight %s(%s) reads {%s(%s)}." % (port, vars_, pred, vars_))
-        if not re.search(r"^\s*pred\s+%s\(" % re.escape(name), text, re.M):
-            out.append("pred %s(level, %s) : %s." % (name, ", ".join(types), ns))
-    return out
-
-
-def mark_generated(text, gen):
-    """TEXT with each generated declaration marked (splice takes a declaration only when it ends with its period)."""
-    out = []
-    for line in text.split("\n"):
-        out.append(line + "   " + GEN_DECL if line.strip() in gen else line)
-    return "\n".join(out)
-
-
 def yaml_block(answer):
     """The answer's ```yaml block, verbatim (or None)."""
     import re
@@ -433,16 +380,10 @@ class Driver:
             self.level_preds()                              # a refused candidate's ports are gone again
 
     def splice_levels(self, lines):
-        """The candidate: the brain's lines spliced over the base, and the declarations its levels: block determines
-        (generated_level_decls) where the lines lack them."""
-        text, info = splice(self.base(), lines)
-        gen = generated_level_decls(text, (getattr(self, "_cand_levels", None) or {}).get(DOMAIN), DOMAIN)
-        if gen:
-            text, info = splice(self.base(), gen + list(lines))
-            text = mark_generated(text, gen)
-            info = dict(info, generated=gen)
-            self.say("levels-generated", lines=gen)
-        return text, info
+        """The candidate: the brain's lines spliced over the base. The declarations its levels: block determines are
+        the toolchain's (metis-lang spec/16 amendment 1): a session opens the candidate with the levels in force
+        (acting.LEVELS, level_preds) and metispy generates them, as metisc does at build."""
+        return splice(self.base(), lines)
 
     def keep_levels(self):
         """An accepted candidate's level ports join the run's (judge's accept, before anything after it can raise)."""
@@ -471,6 +412,7 @@ class Driver:
                 for k in ("beliefs", "levels"):
                     merged.setdefault(k, {}).update(keys.get(k) or {})
         acting.LEVEL_PREDS = set(merged.get("levels") or {})
+        acting.LEVELS = merged if merged.get("levels") else None
         alfview.DECLARED = merged
         return acting.LEVEL_PREDS
 

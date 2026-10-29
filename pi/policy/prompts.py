@@ -132,11 +132,10 @@ def belief_block(lines):
 
 # the level's worked example (policy-tuning-2 2e, nina's finding: the brain wrote place_level(R, L), the object
 # dropped): the level pred takes the level FIRST and then every argument of the port it quantises — where(O, R)
-LEVEL_EXAMPLE = """For example, a level over where(O, R) is a level over the object AND the receptacle:
+LEVEL_EXAMPLE = """For example, a level over where(O, R) is a level over the object AND the receptacle: the rule reads the
+level atom, level first and then every argument of the port it quantises, and the yaml declares the level (the toolchain
+declares `type level`, the port and `pred place_level(level, object, receptacle)` from it: write none of them):
 ```llp
-type level {low mid high}.
-pred place_level(level, object, receptacle) : alf.
-weight where(O, R) reads {inrecep(O, R)}.
 %% {O} may well be in {R}: I go and look.
 go_look [dyn] : $want(O) * $place_level(high, O, R) * $recat(R, L) * at(L0) * L0 <> L -o at(L).
 ```

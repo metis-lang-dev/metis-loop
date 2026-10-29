@@ -311,7 +311,7 @@ class AlfWorld:
         from . import acting
         path = self.into(tree) if Path(tree) != self.tree else self.path
         host = self._host_for(path.parent)
-        r = Repl.open(path)
+        r = Repl.open(path, manifest=acting.LEVELS)       # the levels in force: their declarations the toolchain's
         out = acting.new_out(self.iid)
         if getattr(host, "lmap", None) is not None:      # the map's host: the program starts on what it sees, its levels
             r.shell.counts = acting.apply_lines(dict(r.shell.counts), host.sync(dict(r.shell.counts)))

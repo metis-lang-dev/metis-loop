@@ -28,6 +28,9 @@ def apply_lines(counts, lines):
 
 
 LEVEL_PREDS = set()      # the level ports the composition declares (manifests' `levels:`): recorded per step, replayed
+LEVELS = None            # the levels in force as a manifest ({beliefs, levels}: the run's and a judged candidate's): a
+                         # session opens the program with it, the toolchain generating their declarations (metis-lang
+                         # spec/16 amendment 1)
 
 
 class Guide(list):
