@@ -46,10 +46,10 @@ def test_down_on_the_stairs_and_off_them_are_two_states():
 
 def test_a_rule_may_need_a_monster_and_is_not_judged_on_one():
     """The ruling on step 0's Q2: monster and hp stay in the vocabulary, a rule's needs read them; only the compare leaves them out."""
-    vocabulary = {"agent_at", "monster", "hp", "door", "holds", "obj"}
-    assert {"monster", "hp"} <= vocabulary and {"monster", "hp"} <= set(nethack.UNCOMPARED)
+    vocabulary = {"agent_at", "monster", "door", "holds", "obj"}
+    assert "monster" in set(nethack.UNCOMPARED)
     p = measure.Predictor(None, {}, vocabulary, nethack.COMMANDS, nethack.COMMANDS, nethack.UNCOMPARED)
-    assert p._cmp(["agent_at(c1_1)", "monster(newt,c2_2)", "hp(n3)"]) == {"agent_at(c1_1)"}
+    assert p._cmp(["agent_at(c1_1)", "monster(newt,c2_2)"]) == {"agent_at(c1_1)"}
 
 
 def test_the_same_command_with_the_world_moving_is_no_missing_fact():
@@ -96,6 +96,27 @@ def test_the_stairs_and_what_lies_under_the_hero_stay_read():
     h.atoms = {"agent_at(c5_5)"}
     h.carry({"obj(apple,c5_5)"}, {"events": ["said(picked)"]})
     assert "obj(apple,c5_5)" not in h.atoms
+
+
+@GAME
+def test_the_clock_and_the_body_are_out_of_the_base_the_prompts_and_the_sessions(tmp_path):
+    """The paid run's memory: a premise on the turn multiplied the grounding by 41. The hit points still mark the world's step."""
+    base = nethack.empty_base()
+    assert not any(("pred %s(" % k) in base for k in ("turn", "hunger", "hp", "hpmax"))
+    tree = tmp_path / "trees" / "current"
+    (tree / "base").mkdir(parents=True)
+    (tree / "base" / "nh.llp").write_text(base)
+    w = nethack.NetHack((1, "dlvl1"), tree)
+    try:
+        w.reset()
+        recs = [w.step("cmd_move(w)") for _ in range(4)]
+        assert not any(a.startswith(("turn(", "hp(", "hunger(", "hpmax(")) for r in recs for a in r["before"] + r["after"])
+        assert not any(k in w.instance_text() for k in ("#init turn(", "#init hp("))
+        assert w.host.hp_now()
+        from metis.repl import Repl
+        assert Repl.open(w.into(tree))
+    finally:
+        w.close()
 
 
 # nina's review of step 2 (reviews/step2-review-cases.py): the cases that pinned each defect, now saying what is right
@@ -247,6 +268,82 @@ def test_the_game_fights_refuses_and_goes_back_to_a_checkpoint(tmp_path):
         w.restore(snap)
         assert w.reading() == here and w.divergences == 0 and len(w.commands) == len(snap["commands"])
         assert w.step("cmd_search")["admissible"]
+    finally:
+        w.close()
+
+
+def test_the_scene_family_is_scenes_to_learn_from_and_plain_games_to_judge():
+    games = nethack.NetHack.sample("discovery", nethack.SCENES, 5)
+    assert [g[1] for g in games[:4]] == list(nethack.scenes()) and all(g[0] == nethack.scenes()[g[1]]["seed"] for g in games[:4])
+    assert games[4] == (1, "dlvl1") and "pile" not in nethack.scenes()
+    assert nethack.NetHack.sample("gate", nethack.SCENES, 2) == [(1001, "dlvl1"), (1002, "dlvl1")]
+    assert nethack.NetHack.sample("discovery", "dlvl1", 2) == [(1, "dlvl1"), (2, "dlvl1")]
+
+
+@GAME
+def test_the_scenes_put_the_door_and_the_stairs_before_the_hero(tmp_path):
+    tree = tmp_path / "trees" / "current"
+    tree.mkdir(parents=True)
+    for name in ("door_a", "door_b", "stairs", "thing"):
+        scene = nethack.scenes()[name]
+        w = nethack.NetHack((scene["seed"], name), tree)
+        try:
+            for _ in range(2):                       # from the scene, and again after a reset
+                w.reset()
+                assert set(scene["expect"]) <= set(w.reading())
+                for _ in range(8):                   # a door can resist: the world's dice, then it opens
+                    r = w.step(scene["next"])
+                    if r["admissible"]:
+                        break
+                    assert r["world_moved"], r["text"]
+                assert r["admissible"], r["text"]
+                if name == "stairs":                 # where it lands is the world's: nothing here changed by the command
+                    assert r["added"] == [] and r["judged"] == sorted(r["before"]) and r["world_moved"] and r["dlvl"] == 2
+            assert name != "stairs" or w.won
+        finally:
+            w.close()
+
+
+@GAME
+def test_a_scene_begins_with_what_it_is_for_then_every_action(tmp_path):
+    tree = tmp_path / "trees" / "current"
+    tree.mkdir(parents=True)
+    scene = nethack.scenes()["door_a"]
+    w = nethack.NetHack((scene["seed"], "door_a"), tree)
+    try:
+        w.reset()
+        for _ in range(nethack.TRIES):
+            assert [a["command"] for a in w.actions()] == [scene["next"]]
+            if w.step(scene["next"])["admissible"]:
+                break
+        assert len(w.actions()) == 37
+        w.step("cmd_down")   # a refusal after the scene's command: the walk stays free (the paid run's bug)
+        assert len(w.actions()) == 37
+        # nina's: a probe restores by commands alone, a re-engagement in a new world by the host's part: past the start, every action
+        snap = w.snapshot()
+        w.restore({k: v for k, v in snap.items() if k != "host"})
+        assert len(w.actions()) == 37
+        w.scene_left = nethack.TRIES
+        w.restore(snap)
+        assert len(w.actions()) == 37
+        w.restore({"commands": []})
+        assert [a["command"] for a in w.actions()] == [scene["next"]]
+    finally:
+        w.close()
+
+
+@GAME
+def test_a_gold_pickup_is_taken(tmp_path):
+    """Seed 4's hero starts near gold: "$ - 2 gold pieces." is said(picked) and the pack read."""
+    tree = tmp_path / "trees" / "current"
+    tree.mkdir(parents=True)
+    w = nethack.NetHack((4, "dlvl1"), tree)
+    try:
+        w.reset()
+        for c in ['cmd_move(w)', 'cmd_move(sw)']:
+            w.step(c)
+        got = w.step("cmd_pickup")
+        assert got["text"].startswith("$ - ") and got["admissible"] and "holds(gold_piece)" in got["added"]
     finally:
         w.close()
 

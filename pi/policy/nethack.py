@@ -5,6 +5,11 @@ A game is (seed, scene); discovery is `dlvl1` at seeds 1..n, the gate other seed
 stairs down on this level; won is the dungeon level going up in the perception, death ends it with won False. The game's first
 checkpoint is made once, per game, and every host of the game starts from it (a host's gym child has its own player name).
 
+The family `dlvl1_scenes`: a random walk of 150 steps rarely leaves the first room, so an empty base would see no door opened and no stairs
+taken. Its discovery games start where those are (nethack_scenes.json: a seed and the commands that lead there, from a directed walk, each
+checked on arrival), and a scene's walk begins with what it is there for (`actions`), up to TRIES times, for a door can resist. Plain doors and
+single things only: a locked door or a pile would be a refused record against the very rule. Its gate and held-out games are plain starts.
+
 The INSTANCE declares the whole screen, known before any level is seen: 79 x 21 cells with their `next` facts. Its thing, beast and trap
 types are the names SEEN so far in this run, kept in checkpoints/names.json, and it is rewritten when a name is new (the architect's
 fallback: the whole tile list grounds 5M events, 61 s to open and 5.7 s a tick; seen names 8 s and 0.14 s). A name new to a session
@@ -26,12 +31,17 @@ from .minihack import COMMANDS, DIRS, FIGHT, TAKEN_ANYWAY, VERB_TEXT, MiniHack, 
 
 COLS, ROWS = 79, 21
 # may be needed by a rule, not judged on producing: the terrain is seen, a monster and the hit points are the world's
-UNCOMPARED = ("floor", "wall", "corridor", "stairs_down", "stairs_up", "unknown", "monster", "trap", "hp")
-OUTSIDE = {"turn", "hunger", "hpmax", "peaceful", "bystander"}       # read, in no rule's way: the clock and the slow states
+UNCOMPARED = ("floor", "wall", "corridor", "stairs_down", "stairs_up", "unknown", "monster", "trap")
+# never predicted and no use to a rule, and a premise on one multiplies the grounding by its values (the paid run's 6 GB: `$turn(T)`):
+# out of the base, the prompts and the sessions; the adapter still reads the hit points for world_moved
+OUTSIDE = {"turn", "hunger", "hpmax", "hp", "peaceful", "bystander"}
 THE_WORLDS = ("monster", "hp")                                       # one of these changed: the world moved
 UNDERFOOT = ("obj", "stairs_down", "stairs_up", "door", "trap")      # the hero is drawn over them: what it stands on stays read
 UNDER_AT = {"door": 0, "obj": 1, "stairs_down": 0, "stairs_up": 0, "trap": 1}       # which argument of a placed thing is its cell
-DICE = FIGHT | {"said(door_stuck)", "said(whamm)", "said(stopped)", "said(asked)"}   # the same command in the same own state can go either way
+HURT = "hp_changed"                                                  # the hit points are no atom of a record: the step's events carry it
+DICE = FIGHT | {"said(door_stuck)", "said(whamm)", "said(stopped)", "said(asked)", HURT}   # the same command in the same own state can go either way
+SCENES = "dlvl1_scenes"
+TRIES = 8
 UNNAMED = "unnamed"                                                  # a carried thing the tile list has no name for
 
 
@@ -43,6 +53,10 @@ def world_mod():
     import nh_host
     import nh_tty
     return nh_host, nh_gym, nh_tty, gen_level
+
+
+def scenes():
+    return json.loads((Path(__file__).parent / "nethack_scenes.json").read_text())
 
 
 def unidentified(tile):
@@ -66,7 +80,8 @@ def empty_base(name="nh"):
     base = gen_level.base_source(name)
     base = base.replace("over MiniHack's room family (world/gen_level.py base_source)", "over the real game (policy/nethack.py)")
     base = base.replace("types (cell thing beast).", "types (cell thing beast trapkind).")
-    return base.replace("pred trap(said_kind, cell) : mh.", "pred trap(trapkind, cell) : mh.")
+    base = base.replace("pred trap(said_kind, cell) : mh.", "pred trap(trapkind, cell) : mh.")
+    return "\n".join(l for l in base.splitlines() if not re.match(r"pred (%s)\(" % "|".join(OUTSIDE), l)) + "\n"
 
 
 TYPES = {"obj": "thing", "holds": "thing", "monster": "beast", "trap": "trapkind"}
@@ -157,6 +172,17 @@ def own_record(before, after, events=()):
             "judged": sorted((b - was) | now), "world_moved": bool(moved)}
 
 
+def said(host, hp):
+    """The step's events, and the hit points' change as one of them."""
+    return list(host.events) + ([HURT] if host.hp_now() != hp else [])
+
+
+def own_of(before, after, events, dlvl, now):
+    """own_record, but a new level is a new map: where the hero lands is the world's, so the step is judged as changing nothing here."""
+    own = own_record(before, before if dlvl != now else after, events)
+    return dict(own, world_moved=True) if dlvl != now else own
+
+
 def host_class():
     nh_host, _, _, gen_level = world_mod()
     thing_names, beasts, traps = names()
@@ -190,7 +216,8 @@ def host_class():
         """One game, no page: no map (the program speaks the screen's cells), the game's end and the level's end are the episode's."""
 
         def _take(self, out, fresh=True):
-            was, at = set(getattr(self, "atoms", ())), getattr(self, "dlvl", None)
+            # a game that has just started, or a scene: what the hero stands on there is not drawn
+            was, at = set(getattr(self, "atoms", ())) or set(self.level.get("under", ())), getattr(self, "dlvl", None)
             super()._take(out, fresh)
             died, self.done = getattr(self, "over", False), False
             if out.get("dlvl") is not None:
@@ -221,11 +248,14 @@ def host_class():
                 self.atoms, self.dlvl = set(snap["sign"]), None
             super().restore(snap)
 
+        def hp_now(self):
+            return next((a for a in self.atoms if kind_of(a) == "hp"), None)
+
         def note(self, *a, **k):
             pass                                     # the page's journal (nh_host.surprise); the driver keeps the loop's records
 
         def reading(self):
-            out = {spoken(a): 1 for a in self.atoms}
+            out = {spoken(a): 1 for a in self.atoms if kind_of(a) not in OUTSIDE}
             names_seen(self.level.get("names"), out)
             return out
 
@@ -233,7 +263,7 @@ def host_class():
             before = set(self.reading())
             out = super().act(atom)
             after = set(self.reading())
-            own = own_record(before, after, self.events)
+            own = own_record(before, after)
             sent = out.get("action") or [None]
             out["acted"] = (set(own["own_before"]) != set(own["own_after"]) or self.done or sent[0] in TAKEN_ANYWAY
                             or bool(set(self.events) & FIGHT)) if out.get("action") else False
@@ -261,7 +291,7 @@ class NetHack(MiniHack):
         self.game_dir = "%s@%d" % (self.game[1], self.game[0])
         self.pkg = self.tree / self.iid
         self.path = self.pkg / ("%s.llp" % self.iid)
-        self.max_steps, self.host, self.commands = max_steps, None, []
+        self.max_steps, self.host, self.commands, self.scene_left = max_steps, None, [], TRIES
         self.names = str(self.tree.resolve().parent.parent / "checkpoints" / "names.json")
         if not self.path.exists():
             self.generate()
@@ -270,7 +300,12 @@ class NetHack(MiniHack):
     def sample(cls, split, family, n, seed=1):
         """(seed, scene): dlvl1 first; the other scenes when a run's numbers ask for them (brief §3.2)."""
         family = "dlvl1" if family in (None, "pick_and_place_simple") else family
-        at = {"discovery": seed, "gate": 1000 + seed, "heldout": 2000 + seed}[cls.SPLITS.get(split, split)]
+        split = cls.SPLITS.get(split, split)
+        if family == SCENES:
+            if split == "discovery":
+                return [(s["seed"], name) for name, s in list(scenes().items())[:n]] + [(seed + i, "dlvl1") for i in range(max(0, n - len(scenes())))]
+            family = "dlvl1"
+        at = {"discovery": seed, "gate": 1000 + seed, "heldout": 2000 + seed}[split]
         return [(at + i, family) for i in range(n)]
 
     @classmethod
@@ -294,6 +329,9 @@ class NetHack(MiniHack):
             "seed": self.game[0], "max_steps": 10 ** 9, "names": self.names, "replay": {"seed": self.game[0], "checkpoints": str(checkpoints)}}))
         host = host_class()(str(self.pkg))
         try:
+            scene = scenes().get(self.game[1])
+            if scene:
+                self.into_scene(host, scene, checkpoints)
             start = sorted(host.reading())
         finally:
             host.gym.close()
@@ -306,6 +344,22 @@ class NetHack(MiniHack):
         lines += ["#init %s 1" % a for a in start] + ["#steps 20", "#seeds 1"]
         self.path.write_text("\n".join(lines) + "\n")
         (self.pkg / "intent.yaml").write_text(gen_level.CARD)
+
+    def into_scene(self, host, scene, checkpoints):
+        """The game walked to its scene, checked, and saved as its start; what lies under the hero kept in level.json."""
+        if self.game[0] != scene["seed"]:
+            raise ValueError("%s: scene %s is seed %d's" % (self.iid, self.game[1], scene["seed"]))
+        for c in scene["commands"]:
+            host.act(c)
+        here = set(host.atoms)
+        missing = [a for a in scene["expect"] if a not in set(host.reading())]
+        if missing:
+            raise RuntimeError("%s: the walk did not reach its scene: no %s (the commands were recorded on another day? the clock is not in the seed yet)" % (self.iid, missing))
+        host.gym.call("save", name="start")
+        at = hero_of(here)
+        level = json.loads((self.pkg / "level.json").read_text())
+        level["under"] = sorted(a for a in here if placed(a) == at)
+        (self.pkg / "level.json").write_text(json.dumps(level))
 
     def refresh(self, path):
         """The instance at PATH with the run's names as they are now."""
@@ -339,12 +393,19 @@ class NetHack(MiniHack):
         self.host.first_dlvl, self.host.atoms = None, set()
         self.host.dlvl = None
         self.host._take(self.host.gym.call("load", name="start"))
-        self.commands, self.host.actions, self.host.t = [], [], 0
+        self.commands, self.host.actions, self.host.t, self.scene_left = [], [], 0, TRIES
 
     def close(self):
         if self.host is not None:
             self.host.gym.close()
             self.host = None
+
+    def actions(self):
+        """A scene's walk first takes what the scene is for; then every action, as MiniHack's."""
+        scene = scenes().get(self.game[1])
+        if scene and self.scene_left:
+            return [self.action_of(scene["next"])]
+        return super().actions()
 
     def unadmissible(self, rng, k=2):
         """k actions the perception says the world refuses now, over the cells seen: a move into a wall, an open with no door
@@ -366,16 +427,17 @@ class NetHack(MiniHack):
         return cands[:k]
 
     def step(self, command, phase="explore"):
-        before = self.reading()
+        before, dlvl, hp = self.reading(), self.host.dlvl, self.host.hp_now()
         act = self.action_of(command) or {"verb": None, "args": {}, "command": command}
         acted = self._send(command)
         self.commands.append(command)
+        self.scene_left = 0 if acted else max(0, self.scene_left - 1)
         after = self.reading()
         b, a = set(before), set(after)
         return dict({"kind": "transition", "phase": phase, "game": self.iid, "t": len(self.commands),
                      "before": before, "action": {"verb": act["verb"], "args": act["args"]}, "command": command,
                      "admissible": acted, "changed": acted, "after": after, "added": sorted(a - b), "removed": sorted(b - a),
-                     "text": (self.host.message or "").strip()[:400], "won": self.won, "dlvl": self.host.dlvl}, **own_record(before, after, self.host.events))
+                     "text": (self.host.message or "").strip()[:400], "won": self.won, "dlvl": self.host.dlvl}, **own_of(before, after, said(self.host, hp), dlvl, self.host.dlvl))
 
     def snapshot(self):
         snap = {"game": self.iid, "game_dir": self.game_dir, "seed": self.game[0], "scene": self.game[1], "commands": list(self.commands)}
@@ -389,11 +451,12 @@ class NetHack(MiniHack):
             self.open()
             self.host.restore(snap["host"])
             self.commands = list(snap["commands"])
-            return
-        self.reset()
-        for c in snap["commands"]:
-            self._send(c)
-            self.commands.append(c)
+        else:
+            self.reset()
+            for c in snap["commands"]:
+                self._send(c)
+                self.commands.append(c)
+        self.scene_left = 0 if snap["commands"] else TRIES      # a scene's first command is for its start only
 
     @property
     def divergences(self):
@@ -413,14 +476,14 @@ class NetHack(MiniHack):
         return [line for line in lines if told(line)]
 
     def _before(self, host):
-        return {"before": sorted(a for a, n in host.reading().items() if n > 0), "k": len(host.actions)}
+        return {"before": sorted(a for a, n in host.reading().items() if n > 0), "k": len(host.actions), "dlvl": host.dlvl, "hp": host.hp_now()}
 
     def _after(self, host, pre, name, rv, ev):
         if len(host.actions) <= pre["k"]:
             return None
         sent = host.actions[pre["k"]:]
         after = sorted(a for a, n in host.reading().items() if n > 0)
-        own = own_record(pre["before"], after, host.events)
+        own = own_of(pre["before"], after, said(host, pre["hp"]), pre["dlvl"], host.dlvl)
         taken = set(own["own_before"]) != set(own["own_after"]) or host.done or sent[0] in TAKEN_ANYWAY or bool(set(host.events) & FIGHT)
         verb, bnd = rv
         args = {k2: bnd[k2] for k2 in COMMANDS[verb][1:] if k2 in bnd}
