@@ -143,6 +143,18 @@ run.sh --world minihack --family room_quiet --brain claude/claude-opus-5-5 --set
 - **The prompts** show the `next` facts from the agent's cell (`statics_for`), not every fact
   naming the direction.
 
+## The real game (`policy/nethack.py`, nethack-loop s-6c5c0097)
+
+The real NetHack, headless, from metis-worlds `minihack/` built with its seed line (`METIS_MH_WORLD` on that build). A game is (seed, scene); a checkpoint is a saved game, and a snapshot is the checkpoint + the keys since (`nh_gym`'s save, load, replay).
+
+```sh
+METIS_MH_WORLD=…/minihack/world run.sh --world nethack --family dlvl1 --brain … --discovery 4 --gate-games 2 --set explore_steps=150 --budget 1
+```
+
+- **The instance** declares the whole screen (79 x 21 cells, their `next` facts) and the thing, beast and trap names seen so far in the run (`checkpoints/names.json`), rewritten when one is new.
+- **A record** keeps the whole reading in `before` and `after`. It is judged on `judged`: the before with only the hero's own facts moved on, so a monster, the hit points and terrain seen on the way are read, never predicted. `own_before`/`own_after` are what the out-of-vocabulary check compares, and it ignores a record with `world_moved`.
+- **An episode** is won when the dungeon level goes up; death ends it, not won.
+
 ## The refactoring moves (step 2b, `hier.py`)
 
 `refactor()`, in order. Each move is a proposal judged in the refactor phase.

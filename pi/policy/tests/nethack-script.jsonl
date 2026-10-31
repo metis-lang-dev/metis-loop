@@ -1,0 +1,10 @@
+{"when": "the action: wait ", "keep": true, "text": "```llp\n%% I wait.\nwait [dyn] : agent_at(C) -o agent_at(C).\n```"}
+{"when": "the action: search ", "keep": true, "text": "```llp\n%% I search.\nsearch [dyn] : agent_at(C) -o agent_at(C).\n```"}
+{"when": "the action: move ", "keep": true, "text": "```llp\n%% I step {D}.\nmove [dyn] : agent_at(C) * $next(C, D, C2) * floor(C2) -o agent_at(C2) * floor(C2).\n```"}
+{"when": "the action: open ", "keep": true, "text": "```llp\n%% I open the door {D}.\nopen [dyn] : $agent_at(C) * $next(C, D, C2) * door(C2, closed) -o door(C2, open).\n```"}
+{"when": "the action: kick ", "keep": true, "text": "```llp\n%% I kick the door {D}.\nkick [dyn] : $agent_at(C) * $next(C, D, C2) * door(C2, closed) -o door(C2, open).\n```"}
+{"when": "the action: pickup ", "keep": true, "text": "```llp\n%% I pick {O} up.\npickup [dyn] : $agent_at(C) * obj(O, C) -o holds(O).\n```"}
+{"when": "the action: eat ", "keep": true, "text": "```llp\n%% I eat {O}.\neat [dyn] : holds(O) * $agent_at(C) -o agent_at(C).\n```"}
+{"when": "the action: down ", "keep": true, "text": "```llp\n%% I go down.\ndown [dyn] : agent_at(C) * $stairs_down(C) -o agent_at(C).\n```"}
+{"when": "the action: apply ", "keep": true, "text": "```llp\n%% I unlock the door {D}.\napply [dyn] : $agent_at(C) * $next(C, D, C2) * door(C2, closed) -o door(C2, closed).\n```"}
+{"when": "teaches the rules the most", "keep": true, "text": "1"}

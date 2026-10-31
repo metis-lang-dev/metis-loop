@@ -99,16 +99,18 @@ class Predictor:
         evs = self.events(rec, names)
         if refused(rec):
             return not evs
-        want = self._cmp(rec["after"])
+        want = self._cmp(rec.get("judged", rec["after"]))     # judged: a world that moves beside the command (the adapter's)
         return any(after == want for _, after in evs)
 
     def contradicted(self, rec, names):
         """The events of the named rules that fire on the record and say another after (on a
         refused record: any of them)."""
+        if rec.get("world_moved"):      # the same records the out-of-vocabulary check leaves out: a world that moved judges no rule
+            return []
         evs = self.events(rec, names)
         if refused(rec):
             return [n for n, _ in evs]
-        want = self._cmp(rec["after"])
+        want = self._cmp(rec.get("judged", rec["after"]))
         return [n for n, after in evs if after != want]
 
 
@@ -146,7 +148,7 @@ def explain(p, cand_text, cur_text, record, records):
     words = p.compiles(record["game"]) if hasattr(p, "compiles") else None
     if words:                                 # no event can bind in a program that does not compile: say the compiler's words
         return "the lines do not compile in the world's instance (%s): fix the rule's text first" % words.strip().splitlines()[-1][:300]
-    before, after = set(record["before"]), p._cmp(record["after"])            # the facts an after is judged on (Predictor._cmp)
+    before, after = set(record["before"]), p._cmp(record.get("judged", record["after"]))   # the facts an after is judged on (Predictor._cmp)
     evs = p.events(record, names)
     verb = record["action"]["verb"]
     if not evs:

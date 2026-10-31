@@ -40,6 +40,7 @@ done
 case "$WORLD" in
   scienceworld) PY="${METIS_POLICY_PY:-$PKGS/.worlds/sw/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=conductivity && ARGS+=(--family conductivity) ;;
   minihack) PY="${METIS_POLICY_PY:-$PKGS/.worlds/mh/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=room && ARGS+=(--family room) ;;
+  nethack) PY="${METIS_POLICY_PY:-$PKGS/.worlds/mh/bin/python}"; [ "$FAMILY" = pick_and_place_simple ] && FAMILY=dlvl1 && ARGS+=(--family dlvl1) ;;   # the real game, headless: METIS_MH_WORLD on a seeded build
   *) PY="${METIS_POLICY_PY:-$PKGS/.worlds/alf/bin/python}"; export ALFWORLD_DATA="${ALFWORLD_DATA:-$PKGS/.worlds/alfworld-data}" ;;
 esac
 [ -x "$PY" ] || { echo "run.sh: no python at $PY (METIS_POLICY_PY: the world's venv with metispy: .worlds/alf for alfworld, .worlds/sw for scienceworld, .worlds/mh for minihack)" >&2; exit 1; }

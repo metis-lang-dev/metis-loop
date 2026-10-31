@@ -41,12 +41,12 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import acting, alfworld, compose, hier, minihack, scienceworld
+from . import acting, alfworld, compose, hier, minihack, nethack, scienceworld
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
 WORLDS = {"alfworld": (AlfWorld, alfworld.empty_base), "alfworld_view": (alfworld.AlfViewWorld, alfworld.empty_base), "scienceworld": (scienceworld.ScienceWorld, scienceworld.empty_base),
-          "minihack": (minihack.MiniHack, minihack.empty_base)}
+          "minihack": (minihack.MiniHack, minihack.empty_base), "nethack": (nethack.NetHack, nethack.empty_base)}
 DOMAIN = "alf"                      # the world's; set per run (Driver.world)
 DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episodes": 6, "act_steps": 60,
             "proposals": 30, "no_progress": 4, "refactor_rules": 14, "refactor_k": 8, "repairs": 2, "probe_after": 3, "fit_repairs": 1,
@@ -628,12 +628,17 @@ class Driver:
     def check_vocabulary(self, rec):
         """out_of_vocabulary: the same before-facts and command, another after (the host does not read
         a fact the world has, or the world is not deterministic there)."""
+        # own_before/own_after, where the adapter writes them (a world that moves on its own): a surprise is on what the command
+        # touched, and a record where the world moved beside it is no evidence of a missing fact (the architect's ruling, nethack-loop)
+        facts = lambda r: (r.get("own_before", r["before"]), r.get("own_after", r["after"]))
         for r in self.transitions():
-            if r["game"] == rec["game"] and r["command"] == rec["command"] and r["before"] == rec["before"] and r["after"] != rec["after"]:
+            if r.get("world_moved") or rec.get("world_moved"):
+                continue
+            if r["game"] == rec["game"] and r["command"] == rec["command"] and facts(r)[0] == facts(rec)[0] and facts(r)[1] != facts(rec)[1]:
                 raise Disengage("out_of_vocabulary", "The same command in the same observed state gave two outcomes (%s): the world has a "
                                 "fact the host does not read. Which fact, or skip this command?" % rec["command"],
                                 options=["note: the missing fact", "phase: skip this state", "abandon"],
-                                tried=[r["t"], rec["t"]], believes=[rec["added"], r["added"]])
+                                tried=[r["t"], rec["t"]], believes=[rec.get("added"), r.get("added")])
 
     # ── exploit ──
     def exploit(self):
