@@ -41,6 +41,12 @@ refactor_rules, refactor_k, repairs).
 | `cost.jsonl`, `prompts.jsonl` | one line per brain call (its cost, the key's usage before it); what the brain was given and said |
 | `run.log.jsonl` | the run's events (proposals, episodes, probes, phase ends, the disengagement) |
 
+## A hand-written amendment (`propose.sh`)
+
+`propose.sh --pack FILE --member M --trace TRACE --root ROOT --config CONFIG --run DIR` takes a hand-written pack in place of the model's draft and gives it the same judgement, on a
+trace, with no world and no agent run: the gate cascade, the goldens and the cases, the fired diff on the composition's replay; then the ruling, in `RUN/ruling.md`, printed. The verdict is the
+gate's; `--brain` writes the words and the comments on the rule's text, and cannot move it. See `policy/propose.py` and POLICY.md's refinement on a trace.
+
 ## The phases (POLICY.md, as built)
 
 - **explore.** The discovery games (train) are walked: a verb first, then an untried command

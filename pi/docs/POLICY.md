@@ -187,3 +187,12 @@ consumers' goldens too (spec/18 §5). The certificate says which of its two line
 proposal) and closed-loop (`record --check` once on an accepted candidate where a stand-in exists). What the driver's own
 records lack for this (a total order, the base that judged each record, checkpoints on disk, every out port) is
 trace-replay's step 1.
+
+**A hand-written amendment** (`pi/propose.sh`, the user: "Pi loop should be able to validate hand written amendments to code and give ruling"). The pack takes the place of the model's draft
+and gets the same judgement, then a ruling: refused with the named reason (a repeated rule, the link, a moved `ei_key`, the golden, the case at its tick and member) or accepted with the fired
+diff named. The verdict is the gate's, mechanically; the model writes the ruling's words and its comments on the rule's text from that evidence, and cannot move it; a person reviews after. Its
+open-loop line is always there, its closed-loop line only when `--closed-loop` ran.
+
+**A case and the composition are two checks.** A case runs one member alone on its recorded takes, in the package's harness: it is a golden, and it survives a protocol change as far as its
+takes do. The composition's replay regenerates the takes; a case that names its `member` and tick `at` is held there too. A case's `expect.out` matches RULE names, with globs (`yield_*`,
+`{not: accel*}`): the law is written in rules, and a host's rendered command is the world's accounting (rulecheck), not a case's.

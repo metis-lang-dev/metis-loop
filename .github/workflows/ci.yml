@@ -76,7 +76,7 @@ jobs:
         working-directory: metis-loop/pi
         run: |
           python -c "import metis.trace" 2>/dev/null || { echo "metispy has no metis.trace yet"; exit 0; }
-          python -m pytest -q policy/tests/test_trace.py
+          python -m pytest -q policy/tests/test_trace.py policy/tests/test_propose.py
 
   # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,
   # metis-catalog and metis-loop-sdk and nothing of the human loop — the
