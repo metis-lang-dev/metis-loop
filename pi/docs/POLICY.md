@@ -166,16 +166,24 @@ phase's starting points when the empty start proves too slow — a fallback, rec
   tools (lift / split / direct over the catalog SDK), the disengagement record and the
   re-engagement from a snapshot, the run script with the cost log.
 
-## Refinement on a trace, per package (trace-replay s-c111ff41; the architect, 2026-11-01)
+## Refinement on a trace: the whole bundle replayed, the fix in one package (trace-replay s-c111ff41; the architect, 2026-11-01)
 
-The user's rule after the NetHack runs: the loop never reruns the agent or a bundle with many domains to refine one
-of them. A deployment's run is deterministic given the inputs each member applied (spec 17 am.7), so the trace is the
-surprise's witness. `run.sh --world X --replay TRACE` refines ONE package on a trace: explore's seeds are the trace's
-unpredicted records; proposals are judged by `fits` and the held-out likelihood over the trace's records; exploit's
-probes, which need a world, are replaced by the fired diff over the trace (exact up to the candidate's first differing
-output, open-loop after it); the gate gains the package's GOLDEN RERUN after `fits` and before the likelihood: every
-case of the package, the surprise case among them, on the image; a candidate that breaks a golden is refused. The
-surprise itself is a failing case of the package (`cases/surprise-<id>.yaml`, the stub's YAML with `expect.after`),
-written from the trace at a tick; once passed it is committed as a golden. A family package (the road family in the
-catalog) is gated by its consumers' goldens too (spec/18 §5). What the driver's own records lack for this (a total
-order, the base that judged each record, checkpoints on disk) is trace-replay's step 1.
+The user's rule after the NetHack runs, corrected the same day: the loop never reruns the agent, the world or the model
+to refine a package, but it replays the WHOLE bundle. A deployment's run is deterministic given the inputs each member
+applied (spec 17 am.7), so the trace is the surprise's witness; the composition replay runs every member and the
+generated director on the image, through the real py Live with a trace host in place of the hosts (the agent's own relay
+code carries the takes; a person's intents are recorded port inputs, so the LLM is out), and must first give 0
+divergences against the record with no candidate. `run.sh --world X --replay TRACE` then refines ONE package: explore's
+seeds are the trace's unpredicted records; proposals are judged by `fits`, the held-out likelihood over the trace's
+records and the fired diff over the composition replay (exact up to the candidate's first differing output on any out
+port, open-loop after it; the first enabled tick named; several seeds); exploit's probes, which need a world, are a
+finding. Before any candidate, the surprise is located: what is missing or stale, and whether a member's rule or a
+director's take left it so; the second is a protocol finding for a person. The gate gains the package's GOLDEN RERUN
+after `fits` and before the likelihood: every case of the package on the image, a refusal naming the golden (a person
+may overrule); a candidate that breaks a golden is refused. The surprise is a failing case of the package
+(`cases/surprise-<id>.yaml`, the stub's YAML with `expect.after`, never `expect.fired`), written from the trace at a
+tick; once passed it is committed as a golden. A family package (the road family in the catalog) is gated by its
+consumers' goldens too (spec/18 §5). The certificate says which of its two lines a fix has passed: open-loop (every
+proposal) and closed-loop (`record --check` once on an accepted candidate where a stand-in exists). What the driver's own
+records lack for this (a total order, the base that judged each record, checkpoints on disk, every out port) is
+trace-replay's step 1.

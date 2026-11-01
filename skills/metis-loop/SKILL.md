@@ -124,37 +124,57 @@ also their window into the loop.
 Never bypass a gate, never edit the harness to make a candidate
 pass, never write catalog files for an unapproved candidate.
 
-## Refinement on a trace: ONE package, no world rerun (trace-replay s-c111ff41, 2026-11-01)
+## Refinement on a trace: the whole bundle replayed, the fix in one package (trace-replay s-c111ff41, 2026-11-01)
 
 The run is deterministic given what each member applied (spec 17 am.7): the TRACE is the
 witness. When a deployment surprises (a failed card, the road's accounting, a watch's
-record, the user naming a tick), refine like this, and never by rerunning the agent or the
-bundle with its many domains:
+record, the user naming a tick), refine like this, and never by rerunning the agent, the
+world or the model:
 
 1. **Take the trace, not the world.** The run's `.run/trace/` segment and its checkpoint
-   (each session's counts, stage, RNG; the world's reference) up to the surprise. The pi
-   driver writes its own (`clock: firing`).
-2. **The surprise is a failing CASE of the package**: `metis.trace case --at k` writes
-   `cases/surprise-<id>.yaml` in the package named (the stub's YAML with `expect.after`:
+   (each session's counts, stage, RNG; the world's reference) up to the surprise. Every
+   take is stamped with its origin: the director's grants, gens and relays are REGENERATED
+   in the replay; a person's intent and a world line are kept as inputs. The pi driver
+   writes its own trace (`clock: firing`).
+2. **Replay the WHOLE BUNDLE, LLM out.** Every member of the composition and its
+   generated director run on the image from the trace: the real py Live with its hosts
+   replaced by a trace host (`metis_agent.trace`), so the agent's own relay code carries
+   the takes (never a copy of it). The task member's intents are recorded port inputs, so
+   no model is called. First, the replay with NO candidate must give 0 divergences
+   against the record, fired rows and commands alike; the per-member replay
+   (`metis.trace`, metispy) is the determinism check of each member. A divergence there
+   is a toolchain or writer finding.
+3. **Locate before you fix: "not this package's" is its own check,** on the baseline
+   before any candidate: at the surprise, what is missing or stale, and did a member's
+   rule leave it so, or a take from the director? The second is a protocol finding for a
+   person, never a rule for the loop. (A divergence first seen in the director's rows
+   DURING a candidate's replay is the candidate's effect, not the bug's place.)
+4. **The surprise is a failing CASE of the package located**: `metis.trace case --at k`
+   writes `cases/surprise-<id>.yaml` in that package (the stub's YAML with `expect.after`:
    what the world did; `rng`/`stage` at the window's start). It fails in the package's
-   harness until a rule makes it pass.
-3. **Replay the model alone**: `metis.trace replay` feeds the trace into the package's
-   instance on the image; no host, no world, no model call. 0 divergences up to the
-   surprise is the precondition; a divergence earlier is a toolchain or writer finding.
-4. **Fix in the package named, and only there.** A candidate rule is judged by `fits`
-   and the fired diff over the trace (exact up to its first differing output, open-loop
-   after it: say so).
-5. **Rerun the package's GOLDENS as the acceptance**: every case, the surprise case
-   among them; a fix that breaks a golden is refused like a contradiction. A passed
-   surprise case is committed as a golden: the loop grows the package's cases.
-6. **A family package has two consumers** (the road family in the catalog: the road
-   world and the wheelchair): the gate runs the family's goldens and every consumer's,
-   on their images (spec/18 §5). A rule good for one consumer that breaks the other
-   is refused at the source.
+   harness until a rule makes it pass, and it asserts `after`, not `fired`, so it
+   survives a protocol change. Old traces do not replay across a protocol change.
+5. **The FIX lands in one package and only there** (the receipt: one member's key moved,
+   its interface key holds, the neighbours' checks untouched). A candidate is judged on
+   the composition replay: exact up to its first differing OUTPUT (every out port, not
+   only commands: `tick__want`, `tick__released`, the commands) and open-loop after it,
+   since the later copies are of a world that obeyed the old command; the fired diff says
+   so and names the first tick the candidate was enabled; run it on several seeds.
+   `METIS_GROUND_BUDGET` is checked before a session opens.
+6. **Rerun the package's GOLDENS as the acceptance**: every case, the surprise case among
+   them; a refusal NAMES the golden and a person may overrule it (a golden is a question,
+   not a verdict). A passed surprise case is committed as a golden. The certificate has two
+   lines: open-loop (the case and the goldens on the image, every proposal) and closed-loop
+   (`record --check` once on an accepted candidate where a stand-in exists).
+7. **A family package has two consumers** (the road family in the catalog: the road world
+   and the wheelchair): the gate runs the family's goldens and every consumer's, on their
+   images (spec/18 §5). A rule good for one consumer that breaks the other is refused at
+   the source.
 
 Derivation, never override: a consumer changes prices (ports), vocabulary (abstract
 types), adds its own rules (packs), switches a family rule off (a token) or leaves a
-unit out; it never rewrites a family rule (spec/18).
+unit out; it never rewrites a family rule, and the loop never proposes `hiding`
+(spec/18).
 
 ## Live work: run console-serve (docs/CONSOLE-WS.md)
 
