@@ -28,6 +28,9 @@ How to read the rules. A rule is `premises -o effects`; `$x` reads x and keeps i
 host acts by its name, so `... * now -o ().` is not empty: it spends this period's `now` and gives that command. Rules enabled together in a stage are chosen by the sampler, not by their order; a stage
 runs before the next, so a safety rule that fires pre-empts the progress rules by consuming `now`.
 
+The words. A "golden" is a committed case of a package (under `goldens`); a "case" is the surprise's (under `cases`). A family's other users are "consumers". The rows at and after `open_loop_after` are the candidate's
+rules differing on RECORDED inputs: never "the world's response", for no world answered them; say so if you speak of them.
+
 Say only what the evidence and the text show. Mark a guess as a guess. No preamble.
 
 The verdict: {verdict}
@@ -44,6 +47,9 @@ The evidence (JSON):
 
 The rules it runs beside:
 {beside}
+
+The declarations of what the pack's rules read (a premise's meaning is here: judge it against these, and say when one is not declared where it was looked for):
+{declared}
 """
 
 
@@ -65,6 +71,27 @@ def beside_text(e, unit_texts):
     for text in unit_texts.values():
         rules.update(T.rules_of(text))
     return "\n".join("%s" % rules[n] for n in sorted(names) if n in rules) or "(none enabled beside it)"
+
+
+def declarations(pack, unit_texts):
+    """The `pred`, `bwd` and `type` lines, with their comments, of what the pack's rules read and make; the names found nowhere are said."""
+    import re
+    from metis import trace as T
+    names = set()
+    for st in T.rules_of(pack).values():
+        names |= set(re.findall(r"\$?\b([a-z_][A-Za-z0-9_]*)\b\s*(?:\(|\*|-o|\.|$)", st.split(":", 1)[1]))
+    names -= {"o"}
+    out, found = [], set()
+    for text in list(unit_texts.values()) + [pack]:
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            m = re.match(r"\s*(?:pred|bwd)\s+([A-Za-z_][A-Za-z0-9_]*)", line)
+            if m and m.group(1) in names and m.group(1) not in found:
+                found.add(m.group(1))
+                above = lines[i - 1].strip() if i and lines[i - 1].strip().startswith("%") else ""
+                out.append((above + "\n" if above else "") + line.strip())
+    missing = sorted(names - found)
+    return "\n".join(out + (["Not declared in the units read: %s." % ", ".join(missing)] if missing else [])) or "(none)"
 
 
 def certificate(e, closed):
@@ -111,6 +138,8 @@ def document(e, comments, closed, spent):
         out += ["## The goldens", ("**No golden ran**: nothing here holds the candidate to the package's cases." if not total else
                                    "%d cases (%s), none broken, on seeds 1 to 3." % (total, ", ".join("%s %d" % kv for kv in sorted(ran.items()))) if e["goldens"]["ok"]
                                    else "%d of %d cases refused: named above." % (len({(x["file"], x.get("member")) for x in e["goldens"]["failed"]}), total))]
+        if e["goldens"].get("skipped"):
+            out.append("Skipped, not this consumer's: %s." % "; ".join("%s of %s (%s)" % (x["file"], x["member"], x["why"]) for x in e["goldens"]["skipped"]))
         if e["goldens"].get("already_failing"):
             out.append("Already failing on the program as it is, so not counted: %s." % "; ".join(e["goldens"]["already_failing"]))
         out.append("")
@@ -122,7 +151,7 @@ def document(e, comments, closed, spent):
 
 def rule(e, pack, unit_texts, brain):
     prompt = RULING.format(verdict=e["verdict"], reasons="\n".join("- %s" % r for r in e["reasons"]) or "- none: every check held", pack=pack.strip(),
-                           evidence=json.dumps(brief(e), indent=1, default=str), beside=beside_text(e, unit_texts))
+                           evidence=json.dumps(brief(e), indent=1, default=str), beside=beside_text(e, unit_texts), declared=declarations(pack, unit_texts))
     return brain.ask(prompt, "ruling")
 
 

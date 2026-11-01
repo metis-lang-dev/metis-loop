@@ -194,6 +194,10 @@ diff named. The verdict is the gate's, mechanically; the model writes the ruling
 open-loop line is always there, its closed-loop line only when `--closed-loop` ran (on the tree you give it, after you apply the pack; running it on the judgement's copy is not built yet). A pack
 aimed at a family's unit under METIS_HOME is judged on a copy of the family, and `--consumer` names its other consumers: each must still link and keep its goldens (spec/18 §5).
 
+**A family's case is keyed to the unit it exercises.** No case says for whom: one whose expected rule (`expect.fired`, an `expect.out` kind) is not in a consumer's program, or that lists `units` the program does
+not include (a case asserting only `expect.after` carries them), is not that consumer's: skipped by name and listed, never counted as failing. A package's own case naming a rule it lacks is a real failure, and the skip is
+read on the program as it is, so a candidate that drops a rule is not excused by it.
+
 **A case and the composition are two checks.** A case runs one member alone on its recorded takes, in the package's harness: it is a golden, and it survives a protocol change as far as its
 takes do. The composition's replay regenerates the takes; a case that names its `member` and tick `at` is held there too. A case's `expect.out` matches RULE names, with globs (`yield_*`,
 `{not: accel*}`): the law is written in rules, and a host's rendered command is the world's accounting (rulecheck), not a case's.

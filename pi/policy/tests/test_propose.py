@@ -40,6 +40,39 @@ def test_no_golden_ran_is_said_not_passed_over():
     assert "**No golden ran**" in P.document(dict(ACCEPTED, goldens={"ok": True, "failed": [], "ran": {"planner": 0}}), None, None, 0)
 
 
+def test_a_skipped_family_case_is_listed_not_counted():
+    g = {"ok": True, "failed": [], "ran": {"planner": 9}, "skipped": [{"file": "lead_lanes_free.yaml", "member": "planner", "why": "it expects change, which this program does not have"}]}
+    t = P.document(dict(ACCEPTED, goldens=g), None, None, 0)
+    assert "9 cases (planner 9), none broken" in t and "Skipped, not this consumer's: lead_lanes_free.yaml of planner (it expects change" in t
+
+
+UNIT = """
+% the zone ahead comes too late to stop for at this pace
+pred late(zclass) : planner.
+pred soft(resp) : planner.      % a soft response
+pred other : planner.
+"""
+LATE = "stage safety {\n  %% Late.\n  brake_late [dyn] : $busy * $late(nextzone) * $soft(R) * now -o ().\n}"
+
+
+def test_the_ruling_reads_the_declarations_of_what_the_rule_reads():
+    d = P.declarations(LATE, {"u.llp": UNIT})
+    assert "% the zone ahead comes too late to stop for at this pace\npred late(zclass) : planner." in d
+    assert "pred soft(resp) : planner.      % a soft response" in d and "pred other" not in d
+    assert "Not declared in the units read: busy, now." in d
+
+
+def test_the_prompt_says_the_words_and_what_the_rows_after_are():
+    class Asked:
+        def ask(self, prompt, purpose):
+            self.prompt = prompt
+            return "words"
+    b = Asked()
+    P.rule(ACCEPTED, LATE, {"u.llp": UNIT}, b)
+    assert "pred late(zclass)" in b.prompt and "RECORDED inputs" in b.prompt and 'never "the world\'s response"' in b.prompt
+    assert 'A "golden" is a committed case' in b.prompt and '"consumers"' in b.prompt
+
+
 def test_the_closed_loop_line_only_when_it_ran():
     assert "record --check` passed" in P.document(ACCEPTED, None, {"cmd": "record --check", "code": 0}, 0)
     assert "failed, exit 3" in P.document(ACCEPTED, None, {"cmd": "x", "code": 3}, 0)
