@@ -71,6 +71,10 @@ jobs:
         env: {METIS_LOOP_REQUIRE_NODE: '1', METIS_LOOP_REQUIRE_METISC: '1', METIS_LOOP_REQUIRE_GYM: '1',
               METISC: '${{ github.workspace }}/metis-lang/src/metisc'}
         run: pytest -q tests/ sdk/tests/
+      - name: The driver's trace (pi/policy/tests/test_trace.py; skipped until metispy has metis.trace)
+        if: ${{ !cancelled() }}
+        working-directory: metis-loop/pi
+        run: python -m pytest -q policy/tests/test_trace.py
 
   # The SDK alone (brief/repo-alignment.md §2): a fresh venv with metispy,
   # metis-catalog and metis-loop-sdk and nothing of the human loop — the
