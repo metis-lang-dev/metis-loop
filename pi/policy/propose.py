@@ -45,7 +45,7 @@ The rules it runs beside:
 
 def brief(e, rows=12):
     """The evidence, as the model and a person read it: the diff's first rows, no paths."""
-    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {})}
+    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {})}
     r = e.get("receipt") or {}
     keep["receipt"] = {k: r.get(k) for k in ("moved", "ei_holds", "errors") if r.get(k) is not None}
     if e.get("rows"):
@@ -131,7 +131,8 @@ def main(argv=None):
     ap.add_argument("--config", required=True, help="the run's service config, without its trace")
     ap.add_argument("--run", required=True, help="where the ruling goes")
     ap.add_argument("--composition", help="the composition's directory under the root (for the receipt, and an image's run)")
-    ap.add_argument("--unit", help="the file the pack amends (default the member's program)")
+    ap.add_argument("--unit", help="the file the pack amends (default the member's program); under METIS_HOME: the family's, judged on a copy of it")
+    ap.add_argument("--consumer", action="append", default=[], metavar="NAME=ROOT[:COMPOSITION]", help="the family's other consumer: it must still link and keep its goldens (spec/18 §5)")
     ap.add_argument("--case", action="append", default=[], help="a surprise's case (metis.trace case)")
     ap.add_argument("--brain", help="the model that writes the ruling's words: openrouter/<model> (the key from the environment only), script:FILE; none: the evidence alone")
     ap.add_argument("--budget", type=float, default=None, help="a paid brain's spend cap (USD)")
@@ -153,7 +154,12 @@ def main(argv=None):
         if c["v3"].get("image") and a.composition:
             c["v3"]["image"] = str(Path(root) / a.composition)
         return c
-    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit)
+    consumers = []
+    for c in a.consumer:
+        name, _, rest = c.partition("=")
+        where, _, comp = rest.partition(":")
+        consumers.append((name, where, comp or None))
+    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers)
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":
@@ -162,7 +168,7 @@ def main(argv=None):
     if a.brain:
         from .brain import Brain
         brain = Brain(a.brain, run, spend=a.budget, max_tokens=a.max_tokens)
-        target = Path(a.root) / e["unit"]
+        target = Path(a.unit) if a.unit else Path(a.root) / e["unit"]
         comments = rule(e, pack, AT._closure(target, target.read_text(), ()), brain)
         spent = brain.spent()
     text = document(e, comments, closed, spent)
