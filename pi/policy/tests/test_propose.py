@@ -73,6 +73,19 @@ def test_the_prompt_says_the_words_and_what_the_rows_after_are():
     assert 'A "golden" is a committed case' in b.prompt and '"consumers"' in b.prompt
 
 
+def test_not_judged_is_no_verdict_and_says_where_it_stopped():
+    e = dict(ACCEPTED, verdict="not judged", reasons=["the judgement passed its budget of 280 s in: the goldens on the candidate"], times=[{"stage": "the baseline's replay", "seconds": 110.0}, {"stage": "the goldens on the candidate"}])
+    t = P.document(e, None, None, 0)
+    assert t.startswith("# Ruling: not judged") and "## Why it is not judged" in t and "budget of 280 s in: the goldens on the candidate" in t
+    assert "the baseline's replay 110.0 s" in t
+
+
+def test_a_value_is_read_beside_its_type():
+    unit = "type prio {ego obj same}.\npred zprio(zone, prio) : planner.    % who has the way\ntype zone {z1}.\n"
+    d = P.declarations("stage safety {\n  %% Y.\n  yield_it [dyn] : $zprio(nextzone, P) * now -o ().\n}", {"u.llp": unit})
+    assert "pred zprio(zone, prio) : planner.    % who has the way" in d and "type prio {ego obj same}." in d and "type zone {z1}." in d
+
+
 def test_the_closed_loop_line_only_when_it_ran():
     assert "record --check` passed" in P.document(ACCEPTED, None, {"cmd": "record --check", "code": 0}, 0)
     assert "failed, exit 3" in P.document(ACCEPTED, None, {"cmd": "x", "code": 3}, 0)
@@ -89,3 +102,27 @@ def test_the_prompt_gives_the_verdict_and_the_evidence_not_the_paths():
     assert b.purpose == "ruling" and "The verdict: accepted" in b.prompt and "first_enabled" in b.prompt and "accel [dyn] : a -o b." in b.prompt
     assert '"rows_total": 30' in b.prompt and "competition" in b.prompt
     assert json.loads(json.dumps(P.brief(ACCEPTED)))["receipt"] == {"moved": ["planner"], "ei_holds": True}
+
+
+def test_loop_sh_does_not_read_a_stdin_nobody_closes(tmp_path):
+    """No terminal: the loop must not sit on a pipe left open (a foreground run under a tool's shell hung so)."""
+    import os
+    import stat
+    import subprocess
+    import threading
+    stub = tmp_path / "stub-pi"
+    stub.write_text("#!/bin/sh\ncat\necho read-to-the-end\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    env = dict(os.environ, METIS_LOOP_PI=str(stub), METIS_LOOP_SDK_PY=sys.executable, MODEL="ollama/stand-in", FORMALIZE_MODEL="stand-in")
+    p = subprocess.Popen(["bash", str(HERE.parent.parent / "loop.sh")], cwd=tmp_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    timer = threading.Timer(60, p.kill)      # stdin stays open all the while: only the loop's own redirect lets this end
+    timer.start()
+    try:
+        out = p.stdout.read()
+    finally:
+        timer.cancel()
+        p.stdin.close()
+        p.wait()
+    assert p.returncode != -9, "loop.sh sat on the open stdin"
+    if "read-to-the-end" not in out:
+        pytest.skip("loop.sh stopped before pi here: %s" % out[-200:])

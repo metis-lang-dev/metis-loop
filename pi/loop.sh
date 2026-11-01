@@ -45,6 +45,7 @@
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
 set -euo pipefail
+[ -t 0 ] || exec </dev/null           # no terminal: pi must not sit reading a stdin nobody will close
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PKGS="$(cd "$HERE/../.." && pwd)"                      # the workspace: its .venv, metis-agent (defaults only)
 AGENT="${METIS_AGENT:-$PKGS/metis-agent}"           # the domain agent's checkout

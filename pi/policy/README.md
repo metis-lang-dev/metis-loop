@@ -44,6 +44,8 @@ refactor_rules, refactor_k, repairs).
 ## A hand-written amendment (`propose.sh`)
 
 `propose.sh --pack FILE --member M --trace TRACE --root ROOT --config CONFIG --run DIR` takes a hand-written pack in place of the model's draft and gives it the same judgement, on a
+
+Three more of its options. `--time-budget S` (1800) bounds the whole judgement and `--golden-budget S` (120) one golden's run: past either the ruling says "not judged" and where, exit 2, and no model is called. It is neither accepted nor refused. `--move-golden FILE` (repeatable) replaces the case of that name on the copy, for an amendment that moves a golden on purpose: it is then held to the new text, and the ruling lists it for a person to read. The root is the composition's, not the cwd's.
 trace, with no world and no agent run: the gate cascade, the goldens and the cases, the fired diff on the composition's replay; then the ruling, in `RUN/ruling.md`, printed. The verdict is the
 gate's; `--brain` writes the words and the comments on the rule's text, and cannot move it. See `policy/propose.py` and POLICY.md's refinement on a trace.
 

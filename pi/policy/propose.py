@@ -6,7 +6,7 @@
 The pack takes the place of the model's draft and gets the same judgement (metis_agent.trace.judge): the gate cascade (a repeated rule, the link, the I-checks, the receipt: whose
 key moved, ei_key), every member's goldens and the surprises' cases, the fired diff on the composition's replay of the trace (the takes regenerated, no world, no model). The
 verdict is the gate's, mechanically. The model then writes the ruling's words from that evidence, and its comments on the rule's text (premises, stage, competition with a rule
-already there), and cannot move the verdict; a person reviews after. Written to RUN/ruling.md and RUN/evidence.json, and printed. Exit 0 accepted, 1 refused."""
+already there), and cannot move the verdict; a person reviews after. Written to RUN/ruling.md and RUN/evidence.json, and printed. Exit 0 accepted, 1 refused, 2 not judged: past its time budget, which is no verdict at all."""
 import argparse
 import copy
 import json
@@ -55,7 +55,7 @@ The declarations of what the pack's rules read (a premise's meaning is here: jud
 
 def brief(e, rows=12):
     """The evidence, as the model and a person read it: the diff's first rows, no paths."""
-    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {})}
+    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "moved", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {})}
     r = e.get("receipt") or {}
     keep["receipt"] = {k: r.get(k) for k in ("moved", "ei_holds", "errors") if r.get(k) is not None}
     if e.get("rows"):
@@ -74,14 +74,15 @@ def beside_text(e, unit_texts):
 
 
 def declarations(pack, unit_texts):
-    """The `pred`, `bwd` and `type` lines, with their comments, of what the pack's rules read and make; the names found nowhere are said."""
+    """The `pred`, `bwd` lines, with their comments, of what the pack's rules read and make, and the `type` lines of their arguments: a value is not a type, and the type says which values there are;
+    the names found nowhere are said."""
     import re
     from metis import trace as T
     names = set()
     for st in T.rules_of(pack).values():
         names |= set(re.findall(r"\$?\b([a-z_][A-Za-z0-9_]*)\b\s*(?:\(|\*|-o|\.|$)", st.split(":", 1)[1]))
     names -= {"o"}
-    out, found = [], set()
+    out, found, wanted, typed = [], set(), set(), set()
     for text in list(unit_texts.values()) + [pack]:
         lines = text.splitlines()
         for i, line in enumerate(lines):
@@ -90,6 +91,14 @@ def declarations(pack, unit_texts):
                 found.add(m.group(1))
                 above = lines[i - 1].strip() if i and lines[i - 1].strip().startswith("%") else ""
                 out.append((above + "\n" if above else "") + line.strip())
+                args = re.match(r"\s*(?:pred|bwd)\s+[A-Za-z_]\w*\(([^)]*)\)", line)
+                wanted |= {x.strip() for x in args.group(1).split(",")} if args else set()
+    for text in list(unit_texts.values()) + [pack]:
+        for line in text.splitlines():
+            m = re.match(r"\s*type\s+([A-Za-z_]\w*)\s*\{", line)
+            if m and m.group(1) in wanted and m.group(1) not in typed:
+                typed.add(m.group(1))
+                out.append(line.strip())
     missing = sorted(names - found)
     return "\n".join(out + (["Not declared in the units read: %s." % ", ".join(missing)] if missing else [])) or "(none)"
 
@@ -108,7 +117,9 @@ def document(e, comments, closed, spent):
     out = ["# Ruling: %s" % e["verdict"], ""]
     out += ["**%s**, %s; the program unit %s." % (e.get("member"), ", ".join(e.get("rules") or ()) or "no rule", e.get("unit")), ""]
     if e["reasons"]:
-        out += ["## Why it is refused"] + ["- %s" % r for r in e["reasons"]] + [""]
+        out += ["## Why it is %s" % e["verdict"]] + ["- %s" % r for r in e["reasons"]] + [""]
+    if e.get("times"):
+        out += ["The judgement's time: %s." % ", ".join("%s %s s" % (x["stage"], x.get("seconds", "?")) for x in e["times"]), ""]
     r = e.get("receipt") or {}
     if r.get("moved") is not None:
         ei = "" if r.get("ei_holds") is None else (", ei_key holds" if r["ei_holds"] else ", **ei_key moved**")
@@ -138,6 +149,8 @@ def document(e, comments, closed, spent):
         out += ["## The goldens", ("**No golden ran**: nothing here holds the candidate to the package's cases." if not total else
                                    "%d cases (%s), none broken, on seeds 1 to 3." % (total, ", ".join("%s %d" % kv for kv in sorted(ran.items()))) if e["goldens"]["ok"]
                                    else "%d of %d cases refused: named above." % (len({(x["file"], x.get("member")) for x in e["goldens"]["failed"]}), total))]
+        if e.get("moved"):
+            out.append("**Moved with the amendment, held in their new text:** %s. A person reads these." % ", ".join(e["moved"]))
         if e["goldens"].get("skipped"):
             out.append("Skipped, not this consumer's: %s." % "; ".join("%s of %s (%s)" % (x["file"], x["member"], x["why"]) for x in e["goldens"]["skipped"]))
         if e["goldens"].get("already_failing"):
@@ -165,11 +178,14 @@ def main(argv=None):
     ap.add_argument("--run", required=True, help="where the ruling goes")
     ap.add_argument("--composition", help="the composition's directory under the root (for the receipt, and an image's run)")
     ap.add_argument("--unit", help="the file the pack amends (default the member's program); under METIS_HOME: the family's, judged on a copy of it")
+    ap.add_argument("--move-golden", action="append", default=[], metavar="FILE", help="a golden the amendment moves with it: FILE replaces the case of its name, on the copy; the ruling lists it, for a person to read")
     ap.add_argument("--consumer", action="append", default=[], metavar="NAME=ROOT[:COMPOSITION]", help="the family's other consumer: it must still link and keep its goldens (spec/18 §5)")
     ap.add_argument("--case", action="append", default=[], help="a surprise's case (metis.trace case)")
     ap.add_argument("--brain", help="the model that writes the ruling's words: openrouter/<model> (the key from the environment only), script:FILE; none: the evidence alone")
     ap.add_argument("--budget", type=float, default=None, help="a paid brain's spend cap (USD)")
     ap.add_argument("--max-tokens", type=int, default=1024)
+    ap.add_argument("--time-budget", type=float, default=1800, help="seconds for the whole judgement; past it the ruling says not judged, and which stage (default 1800)")
+    ap.add_argument("--golden-budget", type=float, default=120, help="seconds for one run of one golden (default 120)")
     ap.add_argument("--closed-loop", help="a command run once on an accepted pack, on the real tree after you apply it: its result is the certificate's second line")
     a = ap.parse_args(argv)
     if a.brain and a.brain.startswith("openrouter/") and a.budget is None:
@@ -192,13 +208,13 @@ def main(argv=None):
         name, _, rest = c.partition("=")
         where, _, comp = rest.partition(":")
         consumers.append((name, where, comp or None))
-    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers)
+    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers, budget=a.time_budget, golden_budget=a.golden_budget, moved=a.move_golden)
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":
         closed = {"cmd": a.closed_loop, "code": subprocess.run(a.closed_loop, shell=True).returncode}
     comments, spent = None, 0.0
-    if a.brain:
+    if a.brain and e["verdict"] != "not judged":      # no evidence, no ruling's words: nothing is spent on it
         from .brain import Brain
         brain = Brain(a.brain, run, spend=a.budget, max_tokens=a.max_tokens)
         target = Path(a.unit) if a.unit else Path(a.root) / e["unit"]
@@ -210,7 +226,7 @@ def main(argv=None):
     text = document(e, comments, closed, spent)
     (run / "ruling.md").write_text(text)
     print(text)
-    return 0 if e["verdict"] == "accepted" else 1
+    return {"accepted": 0, "refused": 1}.get(e["verdict"], 2)
 
 
 if __name__ == "__main__":
