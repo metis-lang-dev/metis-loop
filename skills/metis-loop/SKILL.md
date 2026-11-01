@@ -124,6 +124,38 @@ also their window into the loop.
 Never bypass a gate, never edit the harness to make a candidate
 pass, never write catalog files for an unapproved candidate.
 
+## Refinement on a trace: ONE package, no world rerun (trace-replay s-c111ff41, 2026-11-01)
+
+The run is deterministic given what each member applied (spec 17 am.7): the TRACE is the
+witness. When a deployment surprises (a failed card, the road's accounting, a watch's
+record, the user naming a tick), refine like this, and never by rerunning the agent or the
+bundle with its many domains:
+
+1. **Take the trace, not the world.** The run's `.run/trace/` segment and its checkpoint
+   (each session's counts, stage, RNG; the world's reference) up to the surprise. The pi
+   driver writes its own (`clock: firing`).
+2. **The surprise is a failing CASE of the package**: `metis.trace case --at k` writes
+   `cases/surprise-<id>.yaml` in the package named (the stub's YAML with `expect.after`:
+   what the world did; `rng`/`stage` at the window's start). It fails in the package's
+   harness until a rule makes it pass.
+3. **Replay the model alone**: `metis.trace replay` feeds the trace into the package's
+   instance on the image; no host, no world, no model call. 0 divergences up to the
+   surprise is the precondition; a divergence earlier is a toolchain or writer finding.
+4. **Fix in the package named, and only there.** A candidate rule is judged by `fits`
+   and the fired diff over the trace (exact up to its first differing output, open-loop
+   after it: say so).
+5. **Rerun the package's GOLDENS as the acceptance**: every case, the surprise case
+   among them; a fix that breaks a golden is refused like a contradiction. A passed
+   surprise case is committed as a golden: the loop grows the package's cases.
+6. **A family package has two consumers** (the road family in the catalog: the road
+   world and the wheelchair): the gate runs the family's goldens and every consumer's,
+   on their images (spec/18 §5). A rule good for one consumer that breaks the other
+   is refused at the source.
+
+Derivation, never override: a consumer changes prices (ports), vocabulary (abstract
+types), adds its own rules (packs), switches a family rule off (a token) or leaves a
+unit out; it never rewrites a family rule (spec/18).
+
 ## Live work: run console-serve (docs/CONSOLE-WS.md)
 
 For live work, start the standing backend and work in its page —

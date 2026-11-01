@@ -165,3 +165,17 @@ phase's starting points when the empty start proves too slow — a fallback, rec
   `formalize`/`revise` with the record as the seed, the probe, the refactoring moves as
   tools (lift / split / direct over the catalog SDK), the disengagement record and the
   re-engagement from a snapshot, the run script with the cost log.
+
+## Refinement on a trace, per package (trace-replay s-c111ff41; the architect, 2026-11-01)
+
+The user's rule after the NetHack runs: the loop never reruns the agent or a bundle with many domains to refine one
+of them. A deployment's run is deterministic given the inputs each member applied (spec 17 am.7), so the trace is the
+surprise's witness. `run.sh --world X --replay TRACE` refines ONE package on a trace: explore's seeds are the trace's
+unpredicted records; proposals are judged by `fits` and the held-out likelihood over the trace's records; exploit's
+probes, which need a world, are replaced by the fired diff over the trace (exact up to the candidate's first differing
+output, open-loop after it); the gate gains the package's GOLDEN RERUN after `fits` and before the likelihood: every
+case of the package, the surprise case among them, on the image; a candidate that breaks a golden is refused. The
+surprise itself is a failing case of the package (`cases/surprise-<id>.yaml`, the stub's YAML with `expect.after`),
+written from the trace at a tick; once passed it is committed as a golden. A family package (the road family in the
+catalog) is gated by its consumers' goldens too (spec/18 §5). What the driver's own records lack for this (a total
+order, the base that judged each record, checkpoints on disk) is trace-replay's step 1.
