@@ -16,7 +16,17 @@ from .alfworld import kind_of
 
 
 def new_out(iid):
-    return {"game": iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": []}
+    return {"game": iid, "commands": [], "refused": 0, "won": False, "steps": 0, "stuck": [], "transitions": [], "firings": []}
+
+
+def lines_between(was, now):
+    """The do-lines that take the counts WAS to NOW: what a firing's trace says the world gave (tracing.py)."""
+    out = []
+    for a in sorted(set(was) | set(now)):
+        d = now.get(a, 0) - was.get(a, 0)
+        if d:
+            out.append("%s%s%s" % ("+" if d > 0 else "-", a, " %d" % abs(d) if abs(d) != 1 else ""))
+    return out
 
 
 def apply_lines(counts, lines):
@@ -59,7 +69,11 @@ def fire(w, host, sh, rng, out, steps, stop=None, guide=None, feeds=None):
     guide: the recorded commands to replay (a list, consumed as they are sent): among the enabled
     events, one that sends the next recorded command first, else one that sends none (bookkeeping) —
     `feeds(ev, command)` (the hierarchy) prefers one that gives the next command's domain its goal —
-    else none matches and the replay has diverged ("diverged")."""
+    else none matches and the replay has diverged ("diverged").
+
+    out["firings"]: {name, lines, command?} per firing, out["start"] the session where the first began: a read of the loop, for the
+    run's trace (tracing.py); nothing here decides by them."""
+    out.setdefault("start", {"stage": sh.stage, "counts": {a: n for a, n in sh.counts.items() if n > 0}})
     for _ in range(steps):
         ws = sh._candidates()
         if not ws:
@@ -85,9 +99,11 @@ def fire(w, host, sh, rng, out, steps, stop=None, guide=None, feeds=None):
             guide.pop(0)
             levels = getattr(guide, "levels", None)
             recorded = levels.pop(0) if levels else None
+        fired = dict(sh.counts)
         sh.counts = apply_lines(dict(sh.counts), w._sync(host, dict(sh.counts)))
         if recorded is not None:                     # the replay reads the records' levels at this step, not the host's
             sh.counts = dict({a: n for a, n in sh.counts.items() if kind_of(a) not in LEVEL_PREDS}, **recorded)
+        out["firings"].append(dict({"name": name, "lines": lines_between(fired, sh.counts)}, **({"command": t["command"]} if t is not None else {})))
         if t is not None:
             if LEVEL_PREDS:
                 t["levels"] = levels_in(sh.counts)

@@ -37,6 +37,7 @@ refactor_rules, refactor_k, repairs).
 | `records/heldout.jsonl` | the gate split's walk, the likelihood's records; never shown to the brain |
 | `state/gate.json`, `state/journal.jsonl` | the gate's plans, asks and answers; every judged proposal with its numbers and verdict |
 | `state/run.json`, `state/snapshot-N.json` | the driver's counters and phase; the snapshot a disengagement leaves |
+| `trace/` | the run in one order (`tracing.py`, `metis.trace`, clock: firing): a witness per record, an acting episode's start and its `{name, lines}` per firing, the base each was judged on (`trace/bases/`), the world's checkpoints |
 | `cost.jsonl`, `prompts.jsonl` | one line per brain call (its cost, the key's usage before it); what the brain was given and said |
 | `run.log.jsonl` | the run's events (proposals, episodes, probes, phase ends, the disengagement) |
 

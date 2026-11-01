@@ -41,7 +41,7 @@ import time
 from pathlib import Path
 
 from . import measure, prompts
-from . import acting, alfworld, compose, hier, minihack, nethack, scienceworld
+from . import acting, alfworld, compose, hier, minihack, nethack, scienceworld, tracing
 from .alfworld import AlfWorld, rules_of
 from .brain import Brain, Budget, PromptCap, block_of, splice
 
@@ -132,6 +132,7 @@ class Driver:
         self.pred = None
         self.seed_record = None
         self.where = None                     # the world's snapshot where the loop last acted (N1: the disengagement keeps it)
+        self.trace = tracing.RunTrace(self.run, world, family, seed)   # what the run did, in order: a read, it decides nothing
         self._trans = None
         self.move = None                      # the refactoring move being judged (step 2c: the gate's per-move criteria)
         self.brain.keep(self.state)           # nina's R1: a resumed run keeps the first start's meter and its cap
@@ -147,6 +148,7 @@ class Driver:
 
     def record(self, rec, surprise=False):
         jl_append(self.rec_dir / ("surprises.jsonl" if surprise else "transitions.jsonl"), rec)
+        self.trace.witness(rec, "surprises" if surprise else "transitions", self.base(), self.where, at_surprise=surprise)
         if not surprise:
             self.transitions().append(rec)
 
@@ -189,12 +191,16 @@ class Driver:
                     if not acts or w.done:
                         break
                     for c in w.unadmissible(rng):          # the refusals, from the same state
-                        jl_append(p, dict(w.step(c), phase="heldout"))
-                    jl_append(p, dict(w.step(by_verb(rng, acts)["command"]), phase="heldout"))
+                        self.held_record(p, dict(w.step(c), phase="heldout"))
+                    self.held_record(p, dict(w.step(by_verb(rng, acts)["command"]), phase="heldout"))
                 w.close()
         return jl_read(p)
 
     # ── the gate's numbers ──
+    def held_record(self, p, rec):
+        jl_append(p, rec)
+        self.trace.witness(rec, "heldout", self.base())
+
     def gain(self, plan, phase):
         if plan.get("domain") == compose.DIRECTOR:
             return self.gain_compose()
@@ -649,6 +655,7 @@ class Driver:
             for w in self.disc:
                 episodes += 1
                 ep = w.act(self.run / "trees" / "current", self.cfg["act_steps"], seed=self.seed + episodes)
+                self.trace.episode(ep, w.iid, self.seed + episodes, self.base(), {"game": w.iid, "game_dir": w.game_dir, "commands": []})
                 for t in ep["transitions"]:
                     self.record(t, surprise=t["kind"] == "surprise")
                 self.where = {"game": w.iid, "game_dir": w.game_dir, "commands": list(ep["commands"])}
