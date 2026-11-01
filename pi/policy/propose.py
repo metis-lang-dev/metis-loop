@@ -24,6 +24,10 @@ Write, in plain words and short:
    its stage (is it among the rules it should be, before the ones it must pre-empt), and its competition with a rule already there (which rule is enabled with it, which fires, what that does).
 3. What this trace cannot show: it is open-loop past the first differing output: the later ticks are of a world that obeyed the old command.
 
+How to read the rules. A rule is `premises -o effects`; `$x` reads x and keeps it, a bare atom is consumed. A rule whose name is of a command's kind is a command: firing it IS the effect, the
+host acts by its name, so `... * now -o ().` is not empty: it spends this period's `now` and gives that command. Rules enabled together in a stage are chosen by the sampler, not by their order; a stage
+runs before the next, so a safety rule that fires pre-empts the progress rules by consuming `now`.
+
 Say only what the evidence and the text show. Mark a guess as a guess. No preamble.
 
 The verdict: {verdict}
@@ -169,7 +173,10 @@ def main(argv=None):
         from .brain import Brain
         brain = Brain(a.brain, run, spend=a.budget, max_tokens=a.max_tokens)
         target = Path(a.unit) if a.unit else Path(a.root) / e["unit"]
-        comments = rule(e, pack, AT._closure(target, target.read_text(), ()), brain)
+        try:
+            comments = rule(e, pack, AT._closure(target, target.read_text(), ()), brain)
+        except Exception as x:  # noqa: BLE001 — the verdict is the gate's: a model that fails loses the words, never the ruling
+            comments = "(the model failed: %s: %s)" % (type(x).__name__, str(x)[:200])
         spent = brain.spent()
     text = document(e, comments, closed, spent)
     (run / "ruling.md").write_text(text)
