@@ -11,6 +11,20 @@ description: >
 
 # The loop, driven by this session
 
+## The pattern catalog (read it when a situation recurs)
+
+`patterns/README.md` beside this file is the catalog of metis LANGUAGE AND
+LOOP USAGE PATTERNS, Gang-of-Four style: 39 named patterns in seven
+categories (the projection and the class layer; rule shape; protocol;
+composition and derivation; cases and goldens; loop moves; under the
+readings), each with intent, problem, shape, a real example with its file,
+consequences, the anti-pattern it replaces, and `Loop:` how to recognize
+and apply it from a surprise, a trace, a refusal or a comment. Open the
+category you are in before writing a rule or a pack; start at `6-loop.md`
+for the moves and `1-projection.md` for a class that lies. The same text is
+under metis-loop `pi/policy/skills/patterns/` for the pi agent.
+
+
 You are the FORMALIZER seat of the metis loop (SPEC.md §1). The
 gates are the authority, never you: every candidate you write goes
 through `gate` and only the harness verdict counts. The text is the
