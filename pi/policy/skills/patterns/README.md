@@ -4,7 +4,7 @@ A catalog of metis LANGUAGE AND LOOP USAGE PATTERNS, Gang-of-Four style, beside 
 
 ## How to use it
 
-The Claude Code seat and the pi seat have file tools: open the category you are in when a situation recurs (`6-loop.md` for the moves, `1-projection.md` for a class that lies); never load the whole catalog into a prompt (72 KB). A driver brain without file tools gets at most the anti-pattern list below, written for it.
+`CHECKS.md` reads every pattern as a tool check (what a diagnostic, a REPL verb or a trace instrument already verifies, what a linter could, what stays a person's) and proposes the linter and the closure declarations. The Claude Code seat and the pi seat have file tools: open the category you are in when a situation recurs (`6-loop.md` for the moves, `1-projection.md` for a class that lies); never load the whole catalog into a prompt (72 KB). A driver brain without file tools gets at most the anti-pattern list below, written for it.
 
 ## How to read a pattern
 
