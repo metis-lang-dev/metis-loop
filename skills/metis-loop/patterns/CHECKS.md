@@ -210,10 +210,12 @@ quote:
 | L4 | existed | `protocol_stub --check` |
 | L6/L11 trace half: T3 `families` | BUILT | `python -m metis.trace families` |
 | T1 `blame`, T2 `count`, T4 `holds`, T5 `diff`, T6 `outcomes`, T8 `fired` | BUILT | `python -m metis.trace …` |
+| T7 `reads-absent` in the ruling; the pack verb running `lint` on the amended unit and quoting its rows; `accepted (inert)` (open 6); a diff line per moved golden (open 5); the driver refusing a drafted `hiding` (open 1) | BUILT 2026-11-03 | metis-agent `judge` eb60572, metis-loop `propose.py`/`driver.py` 939b5c5 |
+| `blame`: a rule of the stub's generated block is the protocol's (open 10) | BUILT 2026-11-03 | metispy e2eed31 |
+| the `ground-budget` hint (open 11); I13 `iface-gen-unseeded`, the `#init tick__gen` L-check (open 2); the catalog-less test skips; the parse-then-compile audit | BUILT 2026-11-03 | metis-lang 5ae0648, metispy 9752621 (spec/15 §3 I13) |
+| the road family declaring `family target (…)` and `invariant mode (…) : 1` in the responder, the planner and the signals | BUILT 2026-11-03, catalog-first then both consumers | metis-catalog 97538fb; worlds 005ef61 (image v-218cb989c298); the chair (image v-749f6a5392ba, goldens' header lines only) |
 | L7 `belief-in-safety`, L8 `enter-equals-hold`, L9 `name-not-a-command`, L12 `expect-no-owner` | OPEN: each needs a manifest line first | a subject through the pi loop |
-| T7 `reads-absent` in the ruling, T9 `run doctor`, T10 `truth`, `sort` lifted off the road runner | OPEN | opus / pascal |
-| the pack verb running `lint` on the composed candidate and quoting its rows | OPEN | `pi/propose.sh` |
-| the road family declaring `family target (…)` and the responder `invariant mode (idle busy away) : 1.` | OPEN: catalog-first, then both consumers' pins (the text moves the image) | metis-catalog |
+| T9 `run doctor`, T10 `truth`, `sort` lifted off the road runner | OPEN: the world runner's (pascal) | metis-worlds road |
 
 First real finding of the linter, on the shipped programs: the three road members are clean; the kitchen has a twin body (`fetch_onion` and `fetch_dish` share the premise `hand_free`: one choice site), a hold with no consumer (`served`, a status the manifest does not list) and an unproduced `pot_space` (the host's, unlisted). The kitchen's manifest is the fix, not its rules.
 
