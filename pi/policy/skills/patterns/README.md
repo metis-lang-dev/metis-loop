@@ -113,7 +113,7 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 9. `blame` has no verb: `metis.trace`'s CLI has replay and case only (opus's review): a `metis.trace blame` CLI (later, opus); until then the patterns say the Python call.
 10. A rule inside the stub's generated block reads to `blame` as a member's rule (metis): count it as a protocol finding (later, opus).
 11. The `ground-budget` hint says 'a fact the state holds' where only a `bwd` guard binds at grounding (metis): reword in both toolchains (later, metis).
-12. A second rule of one name across stage blocks or through an include is accepted by both toolchains, against spec/18 §4 (metis): a fix subject, an error in both resolves, after checking no shipped package relies on it (metis).
+12. A second rule of one name across stage blocks or through an include was accepted by both toolchains, against spec/18 §4 (metis): FIXED by dup-rule-names s-dfb61f45 (`rule-duplicate` in both resolves; the sweep of every shipped program found 0 duplicates).
 
 ## Credits
 
