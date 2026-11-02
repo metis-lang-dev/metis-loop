@@ -53,6 +53,11 @@ DEFAULTS = {"explore_steps": 40, "explore_k": 6, "explore_w": 30, "exploit_episo
             "ground_budget": 1000000}
 
 
+def hides(text):
+    """The (unit, name) pairs TEXT hides from its includes: `include "unit" hiding (a b).`"""
+    return {(m.group(1), n) for m in re.finditer(r'^\s*include\s+"([^"]+)"\s+hiding\s*\(([^)]*)\)', text, re.M) for n in m.group(2).split()}
+
+
 class Disengage(Exception):
     def __init__(self, reason, question, options=(), tried=(), believes=()):
         super().__init__(question)
@@ -422,6 +427,9 @@ class Driver:
         alfview.DECLARED = merged
         return acting.LEVEL_PREDS
 
+    def _hides(self, text):
+        return hides(text)
+
     def _propose(self, prompt, purpose, seed_game):
         if self.state["proposals"] >= self.cfg["proposals"]:
             raise Disengage("budget", "The proposals budget (%d) is spent. More proposals, another phase, or stop?" % self.cfg["proposals"],
@@ -434,6 +442,10 @@ class Driver:
         if text == self.base():
             self.say("proposal", verdict="none", why="the brain proposed no change", purpose=purpose, call=self.called())
             return "none"
+        if hides(text) - hides(self.base()):
+            # patterns open item 1 (Leavable unit): the loop never proposes `hiding`; a person's pack may
+            self.say("proposal", verdict="refuse", why="the candidate hides a rule of an included unit (`include ... hiding`): the loop names the block for a person, it never hides", purpose=purpose, call=self.called())
+            return "refuse"
         for _ in range(self.cfg["repairs"]):
             words = self.predictor("candidate", text).compiles(seed_game)
             if not words:

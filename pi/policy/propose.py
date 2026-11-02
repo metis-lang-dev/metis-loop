@@ -55,7 +55,7 @@ The declarations of what the pack's rules read (a premise's meaning is here: jud
 
 def brief(e, rows=12):
     """The evidence, as the model and a person read it: the diff's first rows, no paths."""
-    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "moved", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {})}
+    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "moved", "moved_diff", "lint", "reads_absent", "inert", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {}, False)}
     r = e.get("receipt") or {}
     keep["receipt"] = {k: r.get(k) for k in ("moved", "ei_holds", "errors") if r.get(k) is not None}
     if e.get("rows"):
@@ -114,7 +114,9 @@ def certificate(e, closed):
 
 
 def document(e, comments, closed, spent):
-    out = ["# Ruling: %s" % e["verdict"], ""]
+    out = ["# Ruling: %s%s" % (e["verdict"], " (inert)" if e.get("inert") else ""), ""]
+    if e.get("inert"):
+        out += ["**Inert:** no candidate rule was enabled on this trace, so this acceptance says nothing of the rule's effect: find a world or a seed where it fires (Search the seeds for a firing).", ""]
     out += ["**%s**, %s; the program unit %s." % (e.get("member"), ", ".join(e.get("rules") or ()) or "no rule", e.get("unit")), ""]
     if e["reasons"]:
         out += ["## Why it is %s" % e["verdict"]] + ["- %s" % r for r in e["reasons"]] + [""]
@@ -151,11 +153,17 @@ def document(e, comments, closed, spent):
                                    else "%d of %d cases refused: named above." % (len({(x["file"], x.get("member")) for x in e["goldens"]["failed"]}), total))]
         if e.get("moved"):
             out.append("**Moved with the amendment, held in their new text:** %s. A person reads these." % ", ".join(e["moved"]))
+            for d in e.get("moved_diff") or ():
+                out.append("- %s: %s." % (d["file"], "a rename only (%s)" % ", ".join(d["keys"]) if d.get("rename_only") else "more than a rename: %s changed" % ", ".join(d["keys"]) if d.get("keys") else d.get("error") or "identical to the case it replaces"))
         if e["goldens"].get("skipped"):
             out.append("Skipped, not this consumer's: %s." % "; ".join("%s of %s (%s)" % (x["file"], x["member"], x["why"]) for x in e["goldens"]["skipped"]))
         if e["goldens"].get("already_failing"):
             out.append("Already failing on the program as it is, so not counted: %s." % "; ".join(e["goldens"]["already_failing"]))
         out.append("")
+    if e.get("reads_absent"):
+        out += ["## Readings the trace never carries", "The candidate reads %s, and no tick of this trace holds any of them: on this trace the rule is judged as never enabled (Class before reader: a class lands before its reader, on a trace that carries it)." % ", ".join("`%s`" % p for p in e["reads_absent"]), ""]
+    if e.get("lint") is not None:
+        out += ["## Lint"] + (["```", *e["lint"], "```"] if e["lint"] else ["no lint finding on the amended unit."]) + [""]
     out += ["## The certificate"] + certificate(e, closed) + [""]
     out += ["## The model's words"] + ([comments.strip()] if comments else ["(no model was asked: the verdict and the evidence above stand alone)"]) + [""]
     out += ["A person reviews this. Spend: %.4f USD." % spent, ""]
