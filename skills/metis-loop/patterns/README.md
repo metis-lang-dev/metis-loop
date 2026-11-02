@@ -30,7 +30,7 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 | `5-cases.md` | Cases and goldens | Goldens move by name; Bounds with owners; Search the seeds for a firing |
 | `6-loop.md` | Loop moves | Propose, comment, review; Replay, never rerun; Blame first; Not this package's; Read the diff in order; Two-line certificate; Key receipt; Read the refusal; Mechanical verdict, model's words; What the comment gets wrong; Own facts judged |
 | `7-world.md` | Under the readings: the world and the plant | Check the world first; Sim race in the log; Measure the plant; Ramp out of the dead zone; Shield on the motion |
-| `8-road.md` | The road (pascal) | pending: filed when pascal's contribution lands |
+| `8-road.md` | The road | Log the pair; Fact against truth; Control off; Sort before rule; A norm with its domain; Begin hard, hold firm; A member for the fast concern; Nobody's pair; The name is the command |
 
 ## Index by intent
 
@@ -75,6 +75,15 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 - **Measure the plant** (`7-world.md`, george): learn what the base does with a command, open loop, before tuning anything or reasoning about rules above it.
 - **Ramp out of the dead zone** (`7-world.md`, george): never let a controller approach a command from below when the base does not answer below a threshold.
 - **Shield on the motion** (`7-world.md`, george): a floor below the policy must judge what is commanded, or it will make deadlocks it cannot leave. **Open: stated as the problem; the first fix tried, a smaller region, did not work.**
+- **Log the pair** (`8-road.md`, pascal): make a held command answerable from the log: who it answers, as believed and as it is.
+- **Fact against truth** (`8-road.md`, pascal): test a class on the truth before trusting a rule or a release that reads it.
+- **Control off** (`8-road.md`, pascal): before removing a wrong thing, measure what depends on it.
+- **Sort before rule** (`8-road.md`, pascal): decide whose a violation is before anyone writes a rule for it.
+- **A norm with its domain** (`8-road.md`, pascal): state where a norm applies before counting against it.
+- **Begin hard, hold firm** (`8-road.md`, pascal): a test that decides to start an act must not also be the test that continues it.
+- **A member for the fast concern** (`8-road.md`, pascal): give a concern with its own clock its own member, not a stage in a slower one.
+- **Nobody's pair** (`8-road.md`, pascal): treat a pair the projection calls `not_relevant` as a claim to check, not as safety.
+- **The name is the command** (`8-road.md`, pascal): remember that a rule's name acts in the host, when naming or renaming one.
 
 ## Anti-patterns, and the pattern that replaces each
 
@@ -98,6 +107,8 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 - A row after `open_loop_after` read as the world's response; 'accepted on two seeds' with nothing fired → Read the diff in order; Two-line certificate.
 - Confined by intent (no receipt); silencing a refusal; the model's 'agree' taken as the review → Key receipt; Read the refusal; Mechanical verdict.
 - The whole reading judged; repairing on another after than the gate's → Own facts judged.
+- Arguing a cause from the program text when one log line would settle it; a rule per count; a count nobody opened → Log the pair; Sort before rule; A norm with its domain.
+- A yield that stops being made; a class added to stop another rule firing; a planner rule for a car the projection cannot see as a pair; a rule named for its doc, not its act; crediting an improvement to the last change without a control → Begin hard, hold firm; A member for the fast concern; Nobody's pair; The name is the command; Control off.
 - The card on an empty world; tuning a rule against a race; retrying until it passes; tuning against the error message; a timer that kicks the robot → Check the world first; Sim race in the log; Measure the plant; Ramp out of the dead zone.
 
 ## Open items from the contributions, ruled (architect, 2026-11-02)
@@ -109,12 +120,13 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 5. `--move-golden` does not check the move is only a rename (opus): a diff line per moved golden in the ruling (later, opus).
 6. 'accepted' with 'no candidate rule was enabled' reads as more than it is (opus): the printed verdict becomes `accepted (inert)` when nothing was enabled; the certificate line stays (later, opus).
 7. ALFWorld's room change and the kitchen's seed search as patterns (opus): written, A room is data and Search the seeds for a firing.
-8. The road's patterns (pascal): `8-road.md` when filed.
+8. The road's patterns (pascal): filed, `8-road.md`, nine patterns and the instances of what the pi agent got wrong.
 9. `blame` has no verb: `metis.trace`'s CLI has replay and case only (opus's review): a `metis.trace blame` CLI (later, opus); until then the patterns say the Python call.
 10. A rule inside the stub's generated block reads to `blame` as a member's rule (metis): count it as a protocol finding (later, opus).
 11. The `ground-budget` hint says 'a fact the state holds' where only a `bwd` guard binds at grounding (metis): reword in both toolchains (later, metis).
 12. A second rule of one name across stage blocks or through an include was accepted by both toolchains, against spec/18 §4 (metis): FIXED by dup-rule-names s-dfb61f45 (`rule-duplicate` in both resolves; the sweep of every shipped program found 0 duplicates).
+13. pascal's three gaps (loop.sh with stdin open sits for 900 s; propose.sh from another cwd refused as a verdict on 'domain task twice'; a judgement past 280 s): all three closed by trace-9 (loop.sh reads no stdin off a TTY; the baseline runs in the composition's root; --golden-budget/--time-budget say 'not judged').
 
 ## Credits
 
-opus (13), nina (10), metis (10), george (5), the architect (3): 41 patterns; combined and categorized by the architect; reviewed by opus (loop fit, 19 items folded in) and metis (language, 16 items folded in); the user gates.
+opus (13), nina (10), metis (10), pascal (9), george (5), the architect (3): 50 patterns; combined and categorized by the architect; reviewed by opus (loop fit, 19 items folded in) and metis (language, 16 items folded in); the user gates.
