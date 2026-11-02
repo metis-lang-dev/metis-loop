@@ -31,7 +31,7 @@ Loop: on any surprise with a trace, this comes first: `pi/propose.sh` runs the b
 
 Intent: find out whose fault a wrong atom is before writing any rule.
 Problem: a surprise invites a new rule in the member where it showed. Often the member read a false world and no rule could cure it.
-Shape: `metis.trace.blame(path, member, k, atoms, program)`: who last moved each missing or stale atom: the member's rule, the world's reading, a take from the director. Verdict: this package's, or not. Check it with a control on the same trace where the answer is known.
+Shape: `metis.trace.blame(path, member, k, atoms, program)` (a stale atom is asked as `atom 0`): who last moved each missing or stale atom: the member's rule, the world's reading, a take from the director. Verdict: this package's, or not. Check it with a control on the same trace where the answer is known.
 Example: metispy `metis/trace.py`, `blame`. Town01-2's 37: all "not this package's", the world's reading. Controls: `idle` after `drive` at k 0 is this package's; `tick__grant` after a revoke at k 608 is a take.
 Consequences: blame clears a package; it doesn't explain the surprise. The 37 were then split by hand into 16 not yet seen, 20 false settled, 1 latency. **"Not this package's" still has no owner**: nothing routes it onward.
 Related: Replay, never rerun; Measure the class first. Anti-pattern: a planner rule added to cover a false reading; a faked class.
@@ -42,7 +42,7 @@ Loop: first step on a surprise. There's no verb for it yet: `metis.trace` has `r
 
 Intent: name the verdict that sends a surprise away from a rule: to the host, to a sensor's limit, or to a protocol finding.
 Problem: a surprise shows in one member, so a rule is proposed there; but the missing or stale atom came from the world's reading or from a director's take (a grant, a generation, a relay), and no rule of that member can cure it.
-Shape: `metis.trace.blame(path, member, k, atoms, program)` on the BASELINE, before any candidate (a Python call; a `metis.trace blame` CLI is opus's later): for each missing or stale atom at the tick, who last moved it (`whose`: the member's rule, the world's reading, a take from the director, nothing). Three outcomes, not two: (a) the member's rule: this package's, the loop may propose; (b) the world's reading, and the reading was FALSE against the log's truth: a host class lie, the host's to fix; (c) the world's reading, and it was TRUE: nothing lied, the world was beyond the sensor or the other's duty: a perception limit or a law for the unseen, a person's; a take from the director is a protocol finding, a person's. Controls on the same trace keep the verdict honest (an atom known to be a rule's, one known to be a take).
+Shape: `metis.trace.blame(path, member, k, atoms, program)` on the BASELINE, before any candidate (a Python call; a `metis.trace blame` CLI is opus's later): for each missing or stale atom at the tick, who last moved it (`whose`: the member's rule, the world's reading, a take from the director, nothing). Three outcomes, not two: (a) the member's rule: this package's, the loop may propose; (b) the world's reading, and the reading was FALSE against the log's truth: a host class lie, the host's to fix; (c) the world's reading, and it was TRUE: nothing lied, the world was beyond the sensor or the other's duty: a perception limit or a law for the unseen, a person's; a take from the director is a protocol finding, a person's. Controls on the same trace keep the verdict honest (an atom known to be a rule's, one known to be a take). A rule inside the stub's generated block reads to blame as a member's rule; count it as a protocol finding (Stub-owned echo), carried.
 Example: metispy `metis/trace.py`, `blame`. Town01 seed 2 at metis-worlds 4107fac: all 37 were the world's reading; the split after it: 20 a false settled release (b), 16 unseen (c), 1 the latency RSS allows; at later heads that seed reads 0 violations and 34 "unseen, the other's duty". The release-race stale token was a take.
 Consequences: blame clears a package, it does not explain the surprise; the split into (b) and (c) needs the log's truth beside the belief. The verdict has no owner beyond the note on the subject.
 Related: Blame first; Generation guard; Exclusive family, single reason; Duty-scoped class with a way on. Anti-pattern: the compensating rule (a member re-asking around a stale revoke); a planner rule over a false reading; a rule for what a sensor cannot see.
@@ -79,7 +79,7 @@ Shape: compare before and after: which members' keys moved, and whether the move
 Example: metis-agent `py/metis_agent/trace.py`, `fired_diff`: `receipt: {moved, interface, ei_holds, errors}`; printed by metis-loop `pi/policy/propose.py`.
 Consequences: the I-checks read EI(S), not rules, so a held `ei_key` means they don't change for the neighbours. It says nothing about behaviour: a neighbour can still fire differently, and that is the fired diff's job.
 Related: Read the refusal. **Anti-pattern: Confined by intent:** claiming it without the receipt.
-Loop: the ruling quotes the receipt. `ei_key` moved means a new direction or status: stop and ask.
+Loop: the ruling quotes the receipt. `ei_key` moved means the member's external interface moved (a direction, a status, a type, a resource, an interface package): stop and ask.
 
 ### Read the refusal
 *(from metis)*
@@ -90,14 +90,14 @@ Shape: the code says what to do. A few (`metisc --diag-registry` lists the 54 di
 | code | means | do |
 |---|---|---|
 | `doc-missing` | a rule without `%%` | write the sentence; narration reads it |
-| `rule-name-collision` | one short name, several rules | rename: traces read short names |
+| `rule-name-collision` | one short name, several rules (a WARNING in the loop phase, not a refusal) | rename: traces read short names |
 | I2 | an `in` only produced, or an `out` never produced | fix the direction or the rule |
 | I4 | a rule consumes its `out` without producing it | read it with `$` |
 | I5 | a gating program has no rule reading `tick__grant` | gate the acting rules |
 | I10 | a shared pred with no interface owner | Interface package |
-| L16 | a world input produced by no member, or consumed | restore the producer |
-| `ground-budget` | a rule grounds past the budget | Bind before ground |
-Example: `corpus/diag/`, `corpus/goldens/diag_goldens.txt` hold each rendered refusal with its hint.
+| L16 | a world input produced by no member, or consumed | restore the producer, or don't consume the world's input |
+| `ground-budget` | a rule grounds past the budget (not in the 54-row registry; `state-budget` there is a different note) | Bind before ground |
+Example: `corpus/diag/`, `corpus/goldens/diag_goldens.txt` hold each rendered compile refusal with its hint; `corpus/iface/i*` and `corpus/goldens/iface/` the I and L ones.
 Consequences: warnings don't stop the link. `in-unread` and "a report nobody sends" are normal in a small composition, so read them; don't chase them to zero.
 Related: everything above. **Anti-pattern: Silencing:** renaming or deleting until the code goes away, with the behaviour gone too.
 Loop: quote the code and the rule in the ruling. Change what the refusal names (a golden moved by name, a variable rebound, a direction fixed), or stop; the same rule in other words is the anti-pattern. 'The gate' here is the compiler, the link and the verb's judge; the driver's own gate is `pi/policy/measure.py` (Own facts judged).
@@ -125,7 +125,7 @@ Shape: check these against the program before taking any of them:
 - **"Never fires, so leave it out":** when the ruling asks for the law. Whether a rule exists is the ruling's; firing is a world's.
 - **Scope drafted to the wrong premise:** the first U draft guarded on `zbusy`, which is false exactly when nobody is visible.
 - **Inert by evidence:** a new rule of a command's kind missing from `out` made the model call `brake_late` inert. That one was our bug: `replay_composition` now adds such rules (trace.py, `commands +=`). A wrong comment can be a wrong prompt.
-What it got right: the order in the stage, no timeout on a hidden view, and that T and C were sound. Reviewing `at_target` with `keep_no` state by state was useful.
+What it got right: the stage placement (a safety-stage rule, not progress), no timeout on a hidden view, and that T and C were sound. Reviewing `at_target` with `keep_no` state by state was useful.
 Example: `steps/item2-comment.md` on s-357becc7, overruled on four points, all upheld.
 Consequences: one call costs 0.003 USD and needs a person's hour to check. Worth it for the conflicts it names; never for scope or a command's meaning.
 Related: Mechanical verdict.

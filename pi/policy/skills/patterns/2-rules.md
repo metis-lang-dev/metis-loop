@@ -35,9 +35,9 @@ Loop: check `danger` first: a stand with a dangerous pair held across many ticks
 
 Intent: say a probabilistic alternative as one choice, and know what a weight does.
 Problem: two rules with one body and different heads; or a fired diff shows a change at a tick where the new rule never fired.
-Shape: `-o ( h1 @w a | h2 @w b ).` expands to clauses `name-1 … name-k` sharing the body. In a step, the sampler sums the weights of the stage's enabled clauses and draws once; links are considered only when no clause is enabled.
+Shape: `-o ( h1 @w a | h2 @w b ).` expands to clauses `name-1 … name-k` sharing the body. In a step, the sampler sums, over the stage's enabled clauses, weight × the number of ways each clause's tokens can be chosen (metispy `metis/kernel/weight.py`, `choice_weight`), and draws once; links are considered only when no clause is enabled.
 Example: metis-catalog `domains/wildfire/wildfire.llp`: `catch [dyn] : … -o (burning(X, Y) @w pign(K) | not_burning(X, Y) @w ~pign(K)).`; a low price: `keep_lead … @w 0.01` in `domains/road/planner_domain.llp`. Sampler: metispy `metis/kernel/refsample.py`, `run_trace`.
-Consequences: **a clause merely enabled, not chosen, moves the total, and can add a draw to the stream.** So everything after its first enabled tick can differ with no fault in its logic. A weight only ranks rules enabled together: it can't prefer across steps.
+Consequences: **a clause merely enabled, not chosen, moves the total, and can add a draw to the stream.** So everything after its first enabled tick can differ with no fault in its logic. A weight only ranks rules enabled together: it can't prefer across steps. Two tokens double a rule's chance with no change to its `@w`, and a share is relative to everything enabled in the stage, so `@w a | @w b` is a distribution only when nothing else is enabled.
 Related: Key receipt. **Anti-pattern: Twin bodies**; and **Weight as priority:** a tiny weight is a price, not a guarantee.
 Loop: read `first_enabled` beside `first_fired_diff`, and run the case on several seeds before blaming the rule.
 
@@ -46,8 +46,8 @@ Loop: read `first_enabled` beside `first_fired_diff`, and run the case on severa
 
 Intent: keep a rule's cost to what the state can hold.
 Problem: a session takes seconds to open and hundreds of MB, or a run is killed: pascal measured 248,254 events, 220 MB, from rules using `$turn(T)`.
-Shape: every variable is bound on the left by a fact the state holds or by a `bwd` guard. A variable read alone multiplies by its type's size. Set `METIS_GROUND_BUDGET`, and it refuses before a session opens, in both toolchains.
-Example: metis-lang `corpus/budget/budget.llp`: `take [dyn] : $here(R) * connected(T1, T2) -o holds.` gives 2 × 40 × 40 events, and `budget.refused`: "take grounds more than 1000 events over its variables (R: room 2, T1: term 40, T2: term 40); bind them on the left with a fact the state holds, or drop the atom that reads them alone".
+Shape: every variable is bound on the left by a `bwd` guard, whose facts are known at grounding. A state pred's variable ranges over its whole type, whatever `#init` holds. A variable read alone multiplies by its type's size. Set `METIS_GROUND_BUDGET`, and it refuses before a session opens, in both toolchains.
+Example: metis-lang `corpus/budget/budget.llp`: `take [dyn] : $here(R) * connected(T1, T2) -o holds.` gives 2 × 40 × 40 events, and `budget.refused`: "take grounds more than 1000 events over its variables (R: room 2, T1: term 40, T2: term 40); bind them on the left with a fact the state holds, or drop the atom that reads them alone" (read 'a fact the state holds' as a static fact, `bwd`: the hint's wording is a small fix for later).
 Consequences: the ground is a type product: one new constant multiplies every rule over that type, across all consumers of a family. Memory is per session, and a candidate adds one.
 Related: Derivation ladder (hiding exists for rules that must not ground). **Anti-pattern: Clock in the rule:** a turn or time variable in a rule's premises, which grounds the rule once per value.
 Loop: a refused candidate's refusal names the variables: rebind, don't raise the budget.

@@ -17,8 +17,8 @@ Shape: try in this order, and stop at the first that works (spec/18 §0):
 5. A gating token: a premise the consumer issues or withholds.
 6. Hiding, or leaving out a unit.
 Example: metis-catalog `domains/nav/nav_domain.llp`: `types (cell).` and `weight go(C1,C2) reads {}.`; `domains/plant/extensions/visitor.llp`: `extends plant.`
-Consequences: each rung is certified by the image: port values in the plan, include keys and hidden sets in the lock. The lower the rung, the fewer goldens move. A pack may only add: `pack-redeclares` and `pack-adds-stage` refuse the rest.
-Related: Leavable unit. **Anti-pattern: Reopened rule.** A second rule of one name in a stage is a parse error, and the user ruled against override.
+Consequences: each rung is certified by the image: port values in the plan, include keys and hidden sets in the lock. The earlier the rung, the fewer goldens move. A pack may only add: `pack-redeclares` and `pack-adds-stage` refuse the rest.
+Related: Leavable unit. **Anti-pattern: Reopened rule.** A second rule of one name in one stage block is a parse error, and the user ruled against override. **Across blocks or through an include nothing refuses it today:** both rules stay live under one name, so it adds rather than overrides; `hiding-shadow` only covers a hidden name (a fix subject is open: an error in both toolchains' resolve).
 Loop: the surprise differs only by a threshold or a price: that is a finding for a person (no verb moves a port value, and a reweight through a pack is unproven), not a new rule. A family's rules are final to a consumer; the family itself changes catalog-first, under every consumer's goldens, and a learned rule is a family rule.
 
 ### Leavable unit
@@ -37,7 +37,7 @@ Loop: never proposes hiding (the architect's ruling); it names the block for a p
 
 Intent: give every pred that crosses members one owner.
 Problem: two members need the same pred, and each declares its own.
-Shape: a declarations-only file, listed under the composition's `protocol:` or `interfaces:`, and included by each member that shares the pred. The member's `domain.yaml` says the direction under `shared:`.
+Shape: a declarations-only file, listed under the composition's `protocol:` or `interfaces:`, and included by each member that shares the pred. The member's `domain.yaml` says the direction under `shared:`. A `world-private` pred is not shared and needs no package; a declared `in` does, even with one member.
 Example: metis-lang `iface/protocol_domain.llp`; `corpus/iface/alfworld/domains/hier/composition.yaml` has `interfaces:`.
 Consequences: I10 refuses a shared pred the member declares itself, a pred declared by two packages, and a package with rules or facts. The package's key enters each member's EI(S), so editing it moves every sharer's `ei_key`.
 Related: Key receipt. **Anti-pattern: Private twin:** a pred of the same name in two members, shared by luck.
@@ -50,7 +50,7 @@ Intent: place an included rule in a stage on purpose.
 Problem: a unit is split out, and the bundle moves though no rule changed; or a new stage has no effect.
 Shape: a second `stage s { … }` block merges with the first, in order, so a block's place relative to the `include` decides rule order. `layers` and `stages` are adopted from an include only if the includer omits them, and the first `stages` line met wins.
 Example: metis-catalog `domains/road/change.llp`: "The rule's block comes BEFORE the include, so it stays the progress stage's first rule", which is what keeps the car's bundle byte-identical. Spec 00 §4.
-Consequences: a stage in a line that isn't the first is silently absent from the set, unless a rule uses it (`stage-unknown`). A pack can't add a stage (`pack-adds-stage`). A stage all of whose rules are hidden stays, empty and legal.
+Consequences: a stage in a line that isn't the first is silently absent from the set, unless a rule uses it (`stage-unknown`). A pack can't add a stage (`pack-adds-stage`). A stage all of whose rules are hidden stays, empty and legal. Order moves the wire's bytes, hence the bundle and the image hash; the program key and the sampled rows do not move (`metisc`, by canonical event order). **Rule order never arbitrates:** weights and stages do.
 Related: Leavable unit. **Anti-pattern: Second stages line:** adding a stage to a copy that isn't included first.
 Loop: an accepted pack's rules go into existing stages; a new stage is a person's change.
 

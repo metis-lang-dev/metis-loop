@@ -35,7 +35,7 @@ Shape: steps on the command topic with no planner: linear, reverse, turn in plac
 Example: `tools/sim/plant_test.py`; `docs/MOTION.md` §7: about 0.8 x commanded speed; no reverse beyond -0.15 m/s; 0.5 m/s2; yaw at 0.05 rad/s none, at 0.158 about 0.01, at 0.5 0.24. The stock file assumed 2.5 m/s2 and 3.2 rad/s2. FollowPath went 0 of 8 to 8 of 8 on the tracker. Why this base has the dead zone is not established (the URDF's wheel friction is likely).
 Consequences: a cap is an upper bound, not a setpoint, so what the policy commands is not what the chair does: `ros_base.setpoint` inverts the table. The numbers belong to this base in this simulator and must be remeasured for the chair.
 Related: Ramp out of the dead zone. Anti-pattern: tuning against the error message.
-Loop: evidence: realised motion disagrees with the command in a trace. A rule author should read realised readings (`moved`, `blocked`), and never treat a commanded speed as a fact about the chair.
+Loop: evidence: realised motion disagrees with the command in a trace. A rule author should read realised readings (`moving(Z)`, `blocked(Z)`, and the record's `moved`), and never treat a commanded speed as a fact about the chair.
 
 ### Ramp out of the dead zone
 *(from george)*
@@ -46,7 +46,7 @@ Shape: find the small repeated value in the trace and explain it. Here 0.05 rad/
 Example: `tools/sim/make-params.py`: `max_angular_accel` 20, with the smoother at 1.05 rad/s2. In the stuck leg the wheels turned 0.000 rad; the pose did not cause it. A trace of a stall: `steps/followup/evidence/stall.csv`.
 Consequences: the limit in the controller's file is no longer the base's; the comment must say why. The same deadlock takes other forms: a behaviour that holds until motion starts, while motion waits on the behaviour.
 Related: Measure the plant, Shield on the motion. Anti-pattern: a timer that kicks the robot.
-Loop: evidence: `blocked` on with a non-zero command at a constant small value. Say which layer produced that exact number before proposing a rule about being blocked.
+Loop: evidence: `blocked(Z)` on with a non-zero command at a constant small value. Say which layer produced that exact number before proposing a rule about being blocked.
 
 ### Shield on the motion
 *(from george)*

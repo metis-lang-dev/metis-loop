@@ -79,8 +79,8 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 ## Anti-patterns, and the pattern that replaces each
 
 - The faked class (a wish sets `lead_slow`, a pace sets `keep_no`) → Exclusive family, single reason.
-- Absent means no (a class's absence read as its opposite; `zbusy` as 'nobody') → Complementary readings; Duty-scoped class.
-- The self-clearing hold; debounce in the rules; a counter token → Steady reading; Bounded yield.
+- Absent means no (a class's absence read as its opposite; `zbusy` as 'nobody'); the negated premise → Complementary readings; Duty-scoped class.
+- The self-clearing hold; debounce in the rules; a counter token; the timer in the rule → Steady reading; Bounded yield.
 - The optimistic default (an unknown deadline read as plenty); numbers in a premise → Time to spare.
 - Trusting the forecast (a rule relaxing on a belief) → Intent-blind safety.
 - A class trusted because its docstring is right → Measure the class first.
@@ -93,12 +93,12 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 - The goal-held commitment → Committed action.
 - The reopened rule (override); hide and replace (rename evasion); the private twin pred; a second stages line → Derivation ladder; Leavable unit; Interface package; Stage block merge.
 - Geometry in the rules (a concrete cell or zone id); a controller with opinions; perception over the wire; a rule naming a room; a restart to change data → Commands as constraints; Split equals unsplit; A room is data.
-- Goldens edited in a separate commit; a golden as truth; a provisional row unmarked; 'accepted' on a seed where the rule never fired → Goldens move by name; Bounds with owners; Search the seeds for a firing.
+- Goldens edited in a separate commit; a golden as truth; a provisional row unmarked; a golden for the live run first; 'accepted' on a seed where the rule never fired → Goldens move by name; Bounds with owners; Search the seeds for a firing.
 - The ad hoc rule; a rule tested by rerunning the agent; the same rule in other words after a refusal → Propose, comment, review; Replay, never rerun; Read the refusal.
 - A row after `open_loop_after` read as the world's response; 'accepted on two seeds' with nothing fired → Read the diff in order; Two-line certificate.
 - Confined by intent (no receipt); silencing a refusal; the model's 'agree' taken as the review → Key receipt; Read the refusal; Mechanical verdict.
 - The whole reading judged; repairing on another after than the gate's → Own facts judged.
-- The card on an empty world; tuning a rule against a race; tuning against the error message; a timer that kicks the robot → Check the world first; Sim race in the log; Measure the plant; Ramp out of the dead zone.
+- The card on an empty world; tuning a rule against a race; retrying until it passes; tuning against the error message; a timer that kicks the robot → Check the world first; Sim race in the log; Measure the plant; Ramp out of the dead zone.
 
 ## Open items from the contributions, ruled (architect, 2026-11-02)
 
@@ -111,7 +111,10 @@ Loop: how the pi agent recognizes the situation and applies the pattern.
 7. ALFWorld's room change and the kitchen's seed search as patterns (opus): written, A room is data and Search the seeds for a firing.
 8. The road's patterns (pascal): `8-road.md` when filed.
 9. `blame` has no verb: `metis.trace`'s CLI has replay and case only (opus's review): a `metis.trace blame` CLI (later, opus); until then the patterns say the Python call.
+10. A rule inside the stub's generated block reads to `blame` as a member's rule (metis): count it as a protocol finding (later, opus).
+11. The `ground-budget` hint says 'a fact the state holds' where only a `bwd` guard binds at grounding (metis): reword in both toolchains (later, metis).
+12. A second rule of one name across stage blocks or through an include is accepted by both toolchains, against spec/18 §4 (metis): a fix subject, an error in both resolves, after checking no shipped package relies on it (metis).
 
 ## Credits
 
-opus (13), nina (10), metis (10), george (5), the architect (3): 41 patterns; combined and categorized by the architect; reviewed by opus (loop fit, 19 items folded in) and metis (language); the user gates.
+opus (13), nina (10), metis (10), george (5), the architect (3): 41 patterns; combined and categorized by the architect; reviewed by opus (loop fit, 19 items folded in) and metis (language, 16 items folded in); the user gates.

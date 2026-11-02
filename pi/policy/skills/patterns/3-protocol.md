@@ -26,7 +26,7 @@ Shape: the report carries the generation it answers. The arbitration compares it
 `release_on_report [dyn] : tick__released(D, R, G) * $gen(R, G, K) * holder(D, R) …`
 `release_old [dyn] : tick__released(D, R, G) * $gen(R, G2, K) * G <> G2 -o ().`
 Example: metis-lang `iface/director_tree_domain.llp:100,175`; scenes in `corpus/release/`; the bug's trace in release-race `steps/step2-traces.txt`.
-Consequences: `stages (act settle)` must change in every copy of `director_domain.llp`. Generations wrap at 4 (`type tick__gen {g0 g1 g2 g3}`); no collision is by reasoning, not a test. Rules have no negation, so "not holding" can't be read by a member: only the director knows, which is why the comparison is there.
+Consequences: a new stage must go in every copy of `director_domain.llp`, because the first `stages` line wins (Stage block merge). Only a routing (woken) grant is fully protected: `gen(R, G, K)` records `asked` or `woken`, and `release_crossed` ends an ASKED grant on an older release; a stale release with a ticket is `unwant`. Generations wrap at 4 (`type tick__gen {g0 g1 g2 g3}`); no collision is by reasoning, not a test. Rules have no negation, so "not holding" can't be read by a member: only the director knows, which is why the comparison is there.
 Related: Stub-owned echo. **Anti-pattern: Runtime drop:** stamping or filtering tokens in the host (`NhHost.tick`'s drop); and **Compensating rule:** a member re-asking around a stale revoke.
 Loop: a missing or stale token that came from the director is the verdict "not this package's". Don't add a rule around it.
 
