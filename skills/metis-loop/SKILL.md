@@ -14,10 +14,10 @@ description: >
 ## The pattern catalog (read it when a situation recurs)
 
 `patterns/README.md` beside this file is the catalog of metis LANGUAGE AND
-LOOP USAGE PATTERNS, Gang-of-Four style: 39 named patterns in seven
+LOOP USAGE PATTERNS, Gang-of-Four style: 50 named patterns in eight
 categories (the projection and the class layer; rule shape; protocol;
 composition and derivation; cases and goldens; loop moves; under the
-readings), each with intent, problem, shape, a real example with its file,
+readings; the road), each with intent, problem, shape, a real example with its file,
 consequences, the anti-pattern it replaces, and `Loop:` how to recognize
 and apply it from a surprise, a trace, a refusal or a comment. Open the
 category you are in before writing a rule or a pack; start at `6-loop.md`
@@ -25,6 +25,29 @@ for the moves and `1-projection.md` for a class that lies. Open one file at
 a time, never the whole catalog (72 KB) into a prompt. The same text is under
 metis-loop `pi/policy/skills/patterns/` for the pi seat, which also opens it
 on demand; a driver brain gets at most the README's anti-pattern list.
+
+**The patterns as checks** (`patterns/CHECKS.md`): many are a verb, and a
+rule author runs them before a person reads the rule. `lint` in the shell
+(`python -m metis.lint FILE --manifest domain.yaml` outside it) prints the
+shape findings over a program that compiles, never gating: a state atom
+produced and consumed by no rule (`state-dead-end`: a hold with no way
+on), one read and made by nothing (`state-unproduced`), two rules with
+the same premises and different heads (`rules-twin-body`: one choice site),
+a report consumed without its generation (`report-ungated`), a `stages`
+line stated twice (`stages-twice`), and an `#init` that breaks an
+invariant's sum (`invariant-init`). Two declarations close a set of
+propositions (spec/00 §5a): `family NAME (p q r).` for a HOST-published
+exclusive family, which the rules only read (the compiler refuses a
+writer, `family-produced`; `python -m metis.trace families` proves
+exactly-one on a trace), and `invariant NAME (p q r) : N.` for the
+member's OWN sum, which every rule must keep: `invariant-broken` names
+the rule and its delta, so the sum holds in every reachable state as a
+theorem of the net, not an observation. The trace verbs beside `replay`
+and `case`: `blame`, `count` (a class by other atoms), `families`,
+`holds` (an atom past N ticks), `diff` (two runs' first differing tick),
+`outcomes` (how commitments ended), `fired` (on how many seeds a rule
+fires). A lint or a trace row is quoted in the ruling; it never replaces
+the person's review.
 
 
 You are the FORMALIZER seat of the metis loop (SPEC.md §1). The

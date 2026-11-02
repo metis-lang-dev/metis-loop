@@ -24,7 +24,7 @@ Shape: compare one good and one bad launch log for the same line. Look for a sho
 Example: `hunav_gazebo_wrapper/src/HuNavPlugin.cpp` `InitializeAgents`: `result.wait_for(200ms)`, else `Failed to call service get_agents`, and nothing retries. 2 of 5 step 4 runs. Not in any of the 23 earlier runs counted; why not is unknown. Also of this family: `ros2 lifecycle set` failing silently and leaving the collision monitor inactive, so `/cmd_vel` has no publisher and the robot never moves (bringup rule: loop until `active`, write the state). `ros2 param dump` hanging a runner for an hour.
 Consequences: bringup gets a check and a state file per dependency. A fix in a vendored sim is a local patch to carry (`install-hunav.sh`).
 Related: Check the world first. Anti-pattern: tuning a rule against a race; retrying until it passes.
-Loop: evidence: same command and pins, different fired rows at the same tick. Verb: diff the logs before blame. Refuse to mint a case from it until the world's start fact agrees across runs.
+Loop: evidence: same command and pins, different fired rows at the same tick. Verb: `python -m metis.trace diff A B` prints the first tick where two runs' fired rows differ, before blame. Refuse to mint a case from it until the world's start fact agrees across runs.
 
 ### Measure the plant
 *(from george)*

@@ -15,7 +15,7 @@ The manifest carries `tick__gen` in and `tick__released` out. The instance carri
 Example: metis-catalog `domains/road/responder_domain.llp:73`, `domains/road/responder/`.
 Consequences: release-race changed 0 hand-written member rules. But **a base's `#init` is not its instance's,** and nothing checks a missing seed: the member keeps its release until its first grant. A manifest without the new ports fails at the stub. `#init` order is in the trace. Generated rules appear in `fired` rows and goldens.
 Related: Generation guard. **Anti-pattern: Hand-written echo:** editing inside the generated block; the next refresh erases it.
-Loop: never proposes inside BEGIN/END. A surprise that needs a change there goes to a person as a protocol finding.
+Loop: never proposes inside BEGIN/END. A surprise that needs a change there goes to a person as a protocol finding. `python -m metis.catalog.protocol_stub FILE --member M --check` says whether the block is as the stub writes it.
 
 ### Generation guard
 *(from metis)*
@@ -28,7 +28,7 @@ Shape: the report carries the generation it answers. The arbitration compares it
 Example: metis-lang `iface/director_tree_domain.llp:100,175`; scenes in `corpus/release/`; the bug's trace in release-race `steps/step2-traces.txt`.
 Consequences: a new stage must go in every copy of `director_domain.llp`, because the first `stages` line wins (Stage block merge). Only a routing (woken) grant is fully protected: `gen(R, G, K)` records `asked` or `woken`, and `release_crossed` ends an ASKED grant on an older release; a stale release with a ticket is `unwant`. Generations wrap at 4 (`type tick__gen {g0 g1 g2 g3}`); no collision is by reasoning, not a test. Rules have no negation, so "not holding" can't be read by a member: only the director knows, which is why the comparison is there.
 Related: Stub-owned echo. **Anti-pattern: Runtime drop:** stamping or filtering tokens in the host (`NhHost.tick`'s drop); and **Compensating rule:** a member re-asking around a stale revoke.
-Loop: a missing or stale token that came from the director is the verdict "not this package's". Don't add a rule around it.
+Loop: a missing or stale token that came from the director is the verdict "not this package's". Don't add a rule around it. The lint `report-ungated` names a hand-written rule that consumes a report without reading `$tick__gen` for its generation.
 
 ### Committed action
 *(from nina)*
@@ -44,5 +44,5 @@ cleared_stopped [dyn] : on_crossing * $idle * $zone_kind(here, sidewalk) -o unco
 Example: `domains/wc_domain.llp`; spec/15 amendment 9; scene S6b, the veto mid-crossing. `world/motion.py` `_stop`: a committed crossing completes "to the first cell past it".
 Consequences: the director's revoke comes on `tick__yield`. A person's stop still beats nothing that is safe to beat: only the responder's preemption stops a committed crossing, and that's the principled form of the veto ruling. Socket loss mid-crossing stops the chair in the lane: the architect's ruling, for the user to overturn, and it's a known hole in the shape.
 Related: Bounded yield. Before the edge the member hands back instead: `wait_way` releases the controls short of the edge so nav can yield or detour, `wait_crossing` holds at it. **Anti-pattern: Goal-held commitment.**
-Loop: a stop leaves a transient unsafe state in the trace. Look at which token holds the action. Moving a token out of the goal is a change for a person: it moves the image and the goldens.
+Loop: a stop leaves a transient unsafe state in the trace. Look at which token holds the action. Moving a token out of the goal is a change for a person: it moves the image and the goldens. State the commitment as an `invariant` over the goal, the action and the done tokens (spec/00 §5a): the compiler then names the rule that would leave the chair in the road (`invariant-broken`).
 

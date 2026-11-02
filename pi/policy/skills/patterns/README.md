@@ -4,7 +4,7 @@ A catalog of metis LANGUAGE AND LOOP USAGE PATTERNS, Gang-of-Four style, beside 
 
 ## How to use it
 
-`CHECKS.md` reads every pattern as a tool check (what a diagnostic, a REPL verb or a trace instrument already verifies, what a linter could, what stays a person's) and proposes the linter and the closure declarations. The Claude Code seat and the pi seat have file tools: open the category you are in when a situation recurs (`6-loop.md` for the moves, `1-projection.md` for a class that lies); never load the whole catalog into a prompt (72 KB). A driver brain without file tools gets at most the anti-pattern list below, written for it.
+Many patterns are now a verb: `lint` in the shell (`python -m metis.lint FILE --manifest domain.yaml`), the `family` and `invariant` declarations (spec/00 §5a), and `python -m metis.trace blame|count|families|holds|diff|outcomes|fired`; a pattern's Loop line names its verb. `CHECKS.md` reads every pattern as a tool check (what a diagnostic, a REPL verb or a trace instrument already verifies, what a linter could, what stays a person's) and proposes the linter and the closure declarations. The Claude Code seat and the pi seat have file tools: open the category you are in when a situation recurs (`6-loop.md` for the moves, `1-projection.md` for a class that lies); never load the whole catalog into a prompt (72 KB). A driver brain without file tools gets at most the anti-pattern list below, written for it.
 
 ## How to read a pattern
 

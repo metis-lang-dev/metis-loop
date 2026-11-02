@@ -17,7 +17,7 @@ detour [dyn] : holding * $tick__grant(nav, controls) * $waited * $group_in(Z) * 
 Example: `domains/nav_domain.llp` above. `world/motion.py` `_wait`: `waited` after `WAIT` ticks; a held walker then publishes `blocked_by(role)`, and `group_in(Z)` is deleted when a route without Z doesn't reach the goal. Scenes S7 (a detour) and S8 (the only way: held, cause named, on when the person goes). `to_blocked_still` covers the mover stopped with nobody to name.
 Consequences: `blocked(Z)` is read from realised motion, not the plan: a plan can promise 3 m for 20 ticks while the chair sits still (measured on S4). "Holding with no reading is a bug" then becomes testable, and the freeze card counts it. On the plant bench this found a real one: a route's diagonal through a closed corner (world/motion.py `_round_corners`, branch).
 Related: Complementary readings, Commands as constraints. **Anti-pattern: A yield that cannot be made:** offering a detour with no route. **Anti-pattern: Timer in the rule.**
-Loop: a run's end with the chair still and no cause in the facts is a host gap, not a rule to write. With a cause and no release: propose the release rule, and the case is the tick from the trace.
+Loop: a run's end with the chair still and no cause in the facts is a host gap, not a rule to write. With a cause and no release: propose the release rule, and the case is the tick from the trace. Static: the lint `state-dead-end` names a hold no rule ends; on a trace, `python -m metis.trace holds TRACE ATOM --max N` lists every window held past N ticks and which rules fired inside it.
 
 ### The standing resolution
 *(from architect)*
@@ -39,7 +39,7 @@ Shape: `-o ( h1 @w a | h2 @w b ).` expands to clauses `name-1 … name-k` sharin
 Example: metis-catalog `domains/wildfire/wildfire.llp`: `catch [dyn] : … -o (burning(X, Y) @w pign(K) | not_burning(X, Y) @w ~pign(K)).`; a low price: `keep_lead … @w 0.01` in `domains/road/planner_domain.llp`. Sampler: metispy `metis/kernel/refsample.py`, `run_trace`.
 Consequences: **a clause merely enabled, not chosen, moves the total, and can add a draw to the stream.** So everything after its first enabled tick can differ with no fault in its logic. A weight only ranks rules enabled together: it can't prefer across steps. Two tokens double a rule's chance with no change to its `@w`, and a share is relative to everything enabled in the stage, so `@w a | @w b` is a distribution only when nothing else is enabled.
 Related: Key receipt. **Anti-pattern: Twin bodies**; and **Weight as priority:** a tiny weight is a price, not a guarantee.
-Loop: read `first_enabled` beside `first_fired_diff`, and run the case on several seeds before blaming the rule.
+Loop: read `first_enabled` beside `first_fired_diff`, and run the case on several seeds before blaming the rule. The lint `rules-twin-body` names two rules of one stage with the same premises and different heads: write them as one choice site.
 
 ### Bind before ground
 *(from metis)*

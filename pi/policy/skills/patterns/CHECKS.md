@@ -1,6 +1,6 @@
 # The patterns as checks: what a tool already verifies, what a linter could, what stays a person's
 
-DRAFT (architect, 2026-11-02; the user's ask: "correlate pattern with repl tools and maybe suggest some new
+BUILT 2026-11-02 (the user's word: "implement those tasks and amend skills"); the status of each item is in §6. Origin (architect, 2026-11-02; the user's ask: "correlate pattern with repl tools and maybe suggest some new
 commands, f.ex. formal verification on type propositions closure, a kind of linter for code").
 
 Every pattern in the catalog is read here for the question: **can a tool recognize the situation, or verify the
@@ -14,7 +14,7 @@ shape, without a person?** Four answers:
   `metis.trace` verb.
 - **D, a person's or a world's**: needs a world, a control run, or a decision about the host. Stays a pattern.
 
-Of the 50: A 22, B 12, C 10, D 6. Several patterns have two faces (a static half and a trace half) and are
+Of the 50: A 23, B 11, C 10, D 6 (as sorted before the build; §6 says what is now A). Several patterns have two faces (a static half and a trace half) and are
 counted at their stronger one.
 
 ## 1. The table
@@ -33,7 +33,7 @@ counted at their stronger one.
 | The standing resolution | 2 | C | `rulecheck --sort` (pascal, road only) | T4 on `dangerous` + both speeds 0 |
 | Choice site | 2 | A+B | ⊕ expansion, `weight-port-undeclared`, `weight-arg-not-var` | L3 `rules-twin-body` |
 | Bind before ground | 2 | A | `state-budget`, `rhs-var-unbound`, `reads-var-unbound`, METIS_GROUND_BUDGET | hint reword (open 11) |
-| Stub-owned echo | 3 | B | the BEGIN/END marks, trusted | L4 `stub-edited` |
+| Stub-owned echo | 3 | A | `python -m metis.catalog.protocol_stub FILE --member M --check` | — (L4 was this verb) |
 | Generation guard | 3 | B | by construction in the stub; hand-written rules unchecked | L5 `report-ungated` |
 | Committed action | 3 | B | — | L11 `invariant` over the goal and the action tokens |
 | Derivation ladder | 4 | A | `hiding-unknown`, `hiding-shadow`, `extends-no-base`, `pack-redeclares`, `rule-duplicate`, `pack-adds-stage`, `pack-claims-base-namespace` | open 1 (no `hiding` in a model's draft) |
@@ -108,9 +108,8 @@ is the session-time version.
 whose heads differ, not written as one ⊕ rule: "twin bodies", the sampler sums them as two weights with no
 declared ratio.
 
-**L4 `stub-edited`** (Stub-owned echo). The text between the protocol stub's BEGIN and END marks differs from
-what `metis.catalog.protocol_stub` would write for this manifest. Mechanical: regenerate into memory, compare.
-Also answers open item 10's static half: a rule inside the block is the stub's.
+**L4** (Stub-owned echo) exists: `python -m metis.catalog.protocol_stub FILE --member M --check` (exit 1 when the
+block is not as the stub writes it). No new code.
 
 **L5 `report-ungated`** (Generation guard). A rule that consumes a report pred carrying a generation
 (`tick__released(D, R, G)` and any pred the interface package marks `nature: report`) without reading
@@ -168,8 +167,9 @@ over the goal and the action tokens: `invariant goal + acting + done = 1` says t
 chair in the road without the rules saying so, and L11 names the rule that would.
 
 Both declarations go in the program (the family in the interface package that owns the preds, the invariant
-in the member), both toolchains, with a spec/00 §2 grammar line each; the canonical key (spec/03) includes
-them, so a changed invariant moves the key, as it should.
+in the member), both toolchains, with a spec/00 §2 grammar line each. They are NOT in the canonical key
+(spec/03): an invariant is a proof obligation on the rules, not a change of the measure, so declaring one in a
+shipped program moves no key, no golden and no image hash of the consumers (the file's text moves the image).
 
 What is NOT provable this way, and stays a trace instrument: liveness (a hold is eventually released: T4
 bounds it with N ticks), and the host's exclusivity (T3). What stays a person's: whether a class is the right
@@ -200,7 +200,24 @@ quote:
   `not_relevant` for a body that was hit (Fact against truth, Nobody's pair). Road only, from `rulecheck`.
 - **`sort`**: pascal's five-class sort lifted from the road runner into `metis.trace`, so the chair gets it.
 
-## 6. Order, and who
+## 6. Status (2026-11-02, built by the architect at the user's word)
+
+| item | state | where |
+|---|---|---|
+| `family`, `invariant` + their five compile codes | BUILT, both toolchains | spec/00 §5a, spec/08 amendment; metispy `metis/lang/{ast,parser,compiler}.py`; metisc `src/{ast,parser,compile}.ml`; fixture `corpus/diag/diag_closure.llp` |
+| `invariant-init` (the init half) | BUILT | `metis.lint.invariant_init`, the shell's `lint`, `metisc --lint` |
+| L1 `state-dead-end`, L2 `state-unproduced`, L3 `rules-twin-body`, L5 `report-ungated`, L10 `stages-twice` | BUILT (phase `lint`, warnings) | `python -m metis.lint FILE [--manifest] [--strict]`, the shell's `lint`, `metisc --lint` |
+| L4 | existed | `protocol_stub --check` |
+| L6/L11 trace half: T3 `families` | BUILT | `python -m metis.trace families` |
+| T1 `blame`, T2 `count`, T4 `holds`, T5 `diff`, T6 `outcomes`, T8 `fired` | BUILT | `python -m metis.trace …` |
+| L7 `belief-in-safety`, L8 `enter-equals-hold`, L9 `name-not-a-command`, L12 `expect-no-owner` | OPEN: each needs a manifest line first | a subject through the pi loop |
+| T7 `reads-absent` in the ruling, T9 `run doctor`, T10 `truth`, `sort` lifted off the road runner | OPEN | opus / pascal |
+| the pack verb running `lint` on the composed candidate and quoting its rows | OPEN | `pi/propose.sh` |
+| the road family declaring `family target (…)` and the responder `invariant mode (idle busy away) : 1.` | OPEN: catalog-first, then both consumers' pins (the text moves the image) | metis-catalog |
+
+First real finding of the linter, on the shipped programs: the three road members are clean; the kitchen has a twin body (`fetch_onion` and `fetch_dish` share the premise `hand_free`: one choice site), a hold with no consumer (`served`, a status the manifest does not list) and an unproduced `pot_space` (the host's, unlisted). The kitchen's manifest is the fix, not its rules.
+
+## 7. Order, and who (as proposed)
 
 1. **L11 `invariant` + L6 `family`** (metis, both toolchains, spec/00 grammar + spec/08 codes; the architect
    writes the spec amendment first): the user's ask, and the one with a theorem behind it. Test subject: the

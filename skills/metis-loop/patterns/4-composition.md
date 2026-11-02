@@ -52,7 +52,7 @@ Shape: a second `stage s { … }` block merges with the first, in order, so a bl
 Example: metis-catalog `domains/road/change.llp`: "The rule's block comes BEFORE the include, so it stays the progress stage's first rule", which is what keeps the car's bundle byte-identical. Spec 00 §4.
 Consequences: a stage in a line that isn't the first is silently absent from the set, unless a rule uses it (`stage-unknown`). A pack can't add a stage (`pack-adds-stage`). A stage all of whose rules are hidden stays, empty and legal. Order moves the wire's bytes, hence the bundle and the image hash; the program key and the sampled rows do not move (`metisc`, by canonical event order). **Rule order never arbitrates:** weights and stages do.
 Related: Leavable unit. **Anti-pattern: Second stages line:** adding a stage to a copy that isn't included first.
-Loop: an accepted pack's rules go into existing stages; a new stage is a person's change.
+Loop: an accepted pack's rules go into existing stages; a new stage is a person's change. The lint `stages-twice` names an included unit whose `stages` or `layers` line the includer states differently: the first wins silently.
 
 ### Commands as constraints
 *(from nina)*

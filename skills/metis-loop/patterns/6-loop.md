@@ -35,7 +35,7 @@ Shape: `metis.trace.blame(path, member, k, atoms, program)` (a stale atom is ask
 Example: metispy `metis/trace.py`, `blame`. Town01-2's 37: all "not this package's", the world's reading. Controls: `idle` after `drive` at k 0 is this package's; `tick__grant` after a revoke at k 608 is a take.
 Consequences: blame clears a package; it doesn't explain the surprise. The 37 were then split by hand into 16 not yet seen, 20 false settled, 1 latency. **"Not this package's" still has no owner**: nothing routes it onward.
 Related: Replay, never rerun; Measure the class first. Anti-pattern: a planner rule added to cover a false reading; a faked class.
-Loop: first step on a surprise. There's no verb for it yet: `metis.trace` has `replay` and `case` only, so call `metis.trace.blame(trace, member, k, atoms, program)` from Python. "Not this package's" means no pack for this member: report the atom and `whose`, for a person to take to the host or the world.
+Loop: first step on a surprise: `python -m metis.trace blame TRACE --member M --k K --atoms a,b`. "Not this package's" means no pack for this member: report the atom and `whose`, for a person to take to the host or the world.
 
 ### Not this package's
 *(from architect)*

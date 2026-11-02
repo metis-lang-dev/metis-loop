@@ -35,7 +35,7 @@ Shape: switch the suspect off with no code change and rerun the runs it touches.
 Example: `ROAD_OBSERVED=0` in metis-worlds `road/world/sumo_perceive.py`. Seed 2 no longer arrives: 1574 ticks standing in a junction, 989 violations. Its arrival, which had been credited to the junction roles, rested on the false release.
 Consequences: it can show that two faults must land together: the hole and the stand went in as one series. After the fix, the same control must come out identical, and it did, which shows nothing leans on the fact any more.
 Related: Fact against truth; Two-line certificate (a closed-loop line, not a replay). Anti-pattern: crediting an improvement to the last change without a control.
-Loop: not in the loop's verbs: a control needs a world. Ask for it when a fix removes something that fired on the way to a good outcome: the fired diff's `first_enabled` of a removed rule, or a release, is the sign. Reported as one row per run, before and after.
+Loop: with a trace, the control is spec/10's `whatif K do(...) run N` in the shell, a counterfactual on the recorded prefix with no world; only without one does a control need a run. Ask for it when a fix removes something that fired on the way to a good outcome: the fired diff's `first_enabled` of a removed rule, or a release, is the sign. Reported as one row per run, before and after.
 
 ### Sort before rule
 *(from pascal)*
@@ -57,7 +57,7 @@ Shape: every checker norm carries its premise (here `v > 0`). A row outside it i
 Example: metis-worlds `road/world/sumo_host.py`, `account`, now as `road_world.py` already was; `rulecheck.violations`. 2236 of 2251 gone.
 Consequences: counts drop sharply, so say so where they are reported, with the old number beside it. Two checkers in one repo can disagree for months: compare them.
 Related: Sort before rule. Anti-pattern: the checker reading geometry as law; a count nobody opened.
-Loop: suspicion should rise with the count. Ask for the distribution over speed, command and pair before any proposal: one row of `a`, `v`, `cmd` would have shown it.
+Loop: suspicion should rise with the count. `python -m metis.trace count TRACE VIOLATION --by speed_class --by cmd --by pair` gives the distribution before any proposal: one row of `a`, `v`, `cmd` would have shown it.
 
 ### Begin hard, hold firm
 *(from pascal)*

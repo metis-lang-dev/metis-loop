@@ -38,5 +38,5 @@ Shape: record the same run on several seeds, and keep only those where the rule 
 Example: metis-agent `py/tests/test_trace.py`, `test_a_candidate_that_withholds_a_report_moves_the_director_too`: `for seed in range(1, 9)`, because "which of the two enabled rules fires is the sampler's: the seeds where the candidate's does are the ones that show it". metis-catalog `domains/kitchen_pot/cook_a/cases/whole_order.yaml`, pinned `rng: "1"`.
 Consequences: each seed is a run, so this costs time, and the kept seeds are a selection, not a rate. A case with `rng` runs once, whatever the seeds asked.
 Related: Two-line certificate; Choice site; Goldens move by name. Anti-pattern: "accepted" on a seed where the rule never fired; a rule made to win by raising its weight so the test shows it.
-Loop: the certificate says no rule was enabled, or the diff shows enabled and never fired: ask for more seeds before changing the rule. Report how many seeds showed it.
+Loop: the certificate says no rule was enabled, or the diff shows enabled and never fired: `python -m metis.trace fired TRACE RULE --seeds N --program P --member M` says on how many seeds it fires before you change the rule. Report how many seeds showed it.
 
