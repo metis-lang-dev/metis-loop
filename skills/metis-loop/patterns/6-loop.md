@@ -2,18 +2,18 @@
 
 From a surprise to an accepted rule: replay, blame, the diff read in order, the certificate, the receipt, the refusal, the comment checked.
 
-Part of the metis pattern catalog (`patterns/README.md`): the template, the other categories, the anti-pattern index. Each pattern names its source so you can open it; `Loop:` says how the pi agent recognizes and applies it.
+Part of the metis pattern catalog (`patterns/README.md`): the template, the other categories, the anti-pattern index. Each pattern names its source so you can open it; `Loop:` says how the pi agent recognizes and applies it. Credits carry the author; the text speaks of the runs, never of 'me'.
 
 ### Propose, comment, review
 *(from architect)*
 
-Intent: no rule enters a domain by hand; every candidate passes the loop's comment and a person's review before it is written.
-Problem: a rule written straight into a domain carries its author's assumption into the law, and nobody but the author has read it; the road's first proposals had a faked class, a stop the car could not make and a rule reading a type as a value.
-Shape: (1) the proposer writes the candidate as a pack beside the evidence (a trace, a sort row, a log); (2) the loop comments: `pi/propose.sh --pack FILE --member M --trace T [--consumer NAME=ROOT]` gives the mechanical verdict and the model's words; (3) the architect reviews the comment against the program and rules, in a note on the subject; (4) only then the patch, through the pin chain (catalog first). The user's rule (2026-11-01): "no ad hoc rules: every new rule is proposed to the pi loop for comment, then reviewed."
-Example: road-agent s-357becc7, `steps/road-rules-proposal.md` → `steps/road-loop-comments.md` → the architect's rulings and amendments → the lights, the target family, the unseen law. Round 1 cost 0.08 USD and changed the design in three places.
-Consequences: a round costs a few cents and a person's hour; the comment is checked, never trusted (What the comment gets wrong). A pack the verb refuses is not reworded and resent (Read the refusal).
-Related: Mechanical verdict, model's words; Two-line certificate. Anti-pattern: the ad hoc rule; the rule "tested" by rerunning the agent.
-Loop: the loop is the commenter, never the author of record: it names conflicts, premises and competition, and says "I cannot verify" where the evidence stops.
+Intent: no rule enters a domain unreviewed: every candidate, a person's or the loop's, passes a mechanical verdict and a person's review before it is written.
+Problem: a rule written straight into a domain carries its author's assumption into the law and nobody else has read it; the road's first proposals had a faked class, a stop the car could not make and a type read as a value.
+Shape: (1) the proposer writes the candidate as a pack beside the evidence (a trace, a sort row, a log); (2) the loop is asked: a comment round (the brain on the proposal's text, no trace) and, where a trace exists, the verb `pi/propose.sh --pack FILE --member M --trace T [--consumer NAME=ROOT]`, whose verdict is mechanical and whose words come only with `--brain` and `--budget`; either order is real; (3) a person reviews the comment and the verdict against the program and rules, in a note on the subject; (4) only then the patch, through the pin chain, catalog first. The user's rule (2026-11-01): "no ad hoc rules: every new rule is proposed to the pi loop for comment, then reviewed."
+Example: road-agent s-357becc7, `steps/road-rules-proposal.md` → `steps/road-loop-comments.md` → the rulings and amendments → the lights, the target family, the unseen law. Round 1 cost 0.08 USD and changed the design in three places.
+Consequences: a round costs a few cents and a person's hour; the comment is checked, never trusted (What the comment gets wrong). A refusal is answered by changing what it names, or by stopping; the same rule in other words is the anti-pattern (Read the refusal).
+Related: Mechanical verdict, model's words; Two-line certificate; Goldens move by name. Anti-pattern: the ad hoc rule; the rule "tested" by rerunning the agent.
+Loop: on a person's pack the loop comments; in a formalize run it drafts; either way the verdict is mechanical and a person reviews. As commenter it names conflicts, premises and competition, and says "I cannot verify" where the evidence stops.
 
 ### Replay, never rerun
 *(from opus)*
@@ -24,7 +24,7 @@ Shape: run with a trace (`road_tree.py --trace DIR`, `world.record --trace DIR`)
 Example: metis-agent `py/metis_agent/trace.py`, `replay_composition`. Town01 seed 1: 2500 ticks, 12 of 12 checkpoints, 0 divergences, about 106 s here, replayed on another host than it was recorded on.
 Consequences: refused by design where a world steps inside a host or a weight port exists (ALFWorld, MiniHack through Live). A replay's watches are blind: a real stall on a surprise shows as a divergence. A person's intent has been exercised only as recorded atoms.
 Related: Read the diff in order; Blame first. Anti-pattern: a rule "tested" by rerunning the agent and seeing it arrive.
-Loop: on any surprise with a trace, this comes first. If the baseline diverges, stop: the record or the program moved, and no verdict can be trusted.
+Loop: on any surprise with a trace, this comes first: `pi/propose.sh` runs the baseline before anything else, and `python -m metis.trace replay` does one member alone. If the baseline diverges, stop: the record or the program moved, and no verdict can be trusted.
 
 ### Blame first
 *(from opus)*
@@ -35,18 +35,18 @@ Shape: `metis.trace.blame(path, member, k, atoms, program)`: who last moved each
 Example: metispy `metis/trace.py`, `blame`. Town01-2's 37: all "not this package's", the world's reading. Controls: `idle` after `drive` at k 0 is this package's; `tick__grant` after a revoke at k 608 is a take.
 Consequences: blame clears a package; it doesn't explain the surprise. The 37 were then split by hand into 16 not yet seen, 20 false settled, 1 latency. **"Not this package's" still has no owner**: nothing routes it onward.
 Related: Replay, never rerun; Measure the class first. Anti-pattern: a planner rule added to cover a false reading; a faked class.
-Loop: first step on a surprise. "Not this package's" means no pack for this member: go to the host or the world.
+Loop: first step on a surprise. There's no verb for it yet: `metis.trace` has `replay` and `case` only, so call `metis.trace.blame(trace, member, k, atoms, program)` from Python. "Not this package's" means no pack for this member: report the atom and `whose`, for a person to take to the host or the world.
 
 ### Not this package's
 *(from architect)*
 
-Intent: name the verdict that sends a surprise to a person instead of to a rule.
+Intent: name the verdict that sends a surprise away from a rule: to the host, to a sensor's limit, or to a protocol finding.
 Problem: a surprise shows in one member, so a rule is proposed there; but the missing or stale atom came from the world's reading or from a director's take (a grant, a generation, a relay), and no rule of that member can cure it.
-Shape: `metis.trace.blame` on the BASELINE, before any candidate: for each missing or stale atom at the tick, who last moved it (`whose`: the member's rule, the world's reading, a take from the director, nothing). A world reading or a take → "not this package's": no pack for this member; the finding goes to the host (a class lie, a sensor), or to a person as a protocol finding. A member's rule → "this package's": the loop may propose. Controls on the same trace keep the verdict honest (an atom known to be a rule's, one known to be a take).
-Example: metispy `metis/trace.py`, `blame`; Town01 seed 2's 37 were all the world's reading (the false settled release), then split by hand into 20 host lie, 16 unseen, 1 latency; the release-race stale token was a take.
-Consequences: blame clears a package, it does not explain the surprise; the split after it is a person's. The verdict has no owner yet beyond the note on the subject (metis's gap 3).
-Related: Blame first; Generation guard; Exclusive family, single reason. Anti-pattern: the compensating rule (a member re-asking around a stale revoke); a planner rule over a false reading.
-Loop: run blame before writing anything; when it says not this package's, write no pack and say which host class or take is at fault.
+Shape: `metis.trace.blame(path, member, k, atoms, program)` on the BASELINE, before any candidate (a Python call; a `metis.trace blame` CLI is opus's later): for each missing or stale atom at the tick, who last moved it (`whose`: the member's rule, the world's reading, a take from the director, nothing). Three outcomes, not two: (a) the member's rule: this package's, the loop may propose; (b) the world's reading, and the reading was FALSE against the log's truth: a host class lie, the host's to fix; (c) the world's reading, and it was TRUE: nothing lied, the world was beyond the sensor or the other's duty: a perception limit or a law for the unseen, a person's; a take from the director is a protocol finding, a person's. Controls on the same trace keep the verdict honest (an atom known to be a rule's, one known to be a take).
+Example: metispy `metis/trace.py`, `blame`. Town01 seed 2 at metis-worlds 4107fac: all 37 were the world's reading; the split after it: 20 a false settled release (b), 16 unseen (c), 1 the latency RSS allows; at later heads that seed reads 0 violations and 34 "unseen, the other's duty". The release-race stale token was a take.
+Consequences: blame clears a package, it does not explain the surprise; the split into (b) and (c) needs the log's truth beside the belief. The verdict has no owner beyond the note on the subject.
+Related: Blame first; Generation guard; Exclusive family, single reason; Duty-scoped class with a way on. Anti-pattern: the compensating rule (a member re-asking around a stale revoke); a planner rule over a false reading; a rule for what a sensor cannot see.
+Loop: call blame before writing anything; when it says not this package's, write no pack and report the atom, whose it was, and whether the reading was true against the truth rows.
 
 ### Read the diff in order
 *(from opus)*
@@ -73,20 +73,20 @@ Loop: read this before the verdict's word. "No candidate rule was enabled" means
 ### Key receipt
 *(from metis)*
 
-**Intent:** check, not assert, that an edit stayed in one package.
-**Problem:** a fix is called confined, but nothing shows that the neighbours' contract held.
-**Shape:** compare before and after: which members' keys moved, and whether the moved member's `ei_key` held. EI(S) is its interface packages and their keys, its directions, abstract types, status atoms and requested resources (spec/15).
-**Example:** metis-agent `py/metis_agent/trace.py`, `fired_diff`: `receipt: {moved, interface, ei_holds, errors}`; printed by metis-loop `pi/policy/propose.py`.
-**Consequences:** the I-checks read EI(S), not rules, so a held `ei_key` means they don't change for the neighbours. It says nothing about behaviour: a neighbour can still fire differently, and that is the fired diff's job.
-**Related:** Read the refusal. **Anti-pattern: Confined by intent:** claiming it without the receipt.
-**Loop:** the ruling quotes the receipt. `ei_key` moved means a new direction or status: stop and ask.
+Intent: check, not assert, that an edit stayed in one package.
+Problem: a fix is called confined, but nothing shows that the neighbours' contract held.
+Shape: compare before and after: which members' keys moved, and whether the moved member's `ei_key` held. EI(S) is its interface packages and their keys, its directions, abstract types, status atoms and requested resources (spec/15).
+Example: metis-agent `py/metis_agent/trace.py`, `fired_diff`: `receipt: {moved, interface, ei_holds, errors}`; printed by metis-loop `pi/policy/propose.py`.
+Consequences: the I-checks read EI(S), not rules, so a held `ei_key` means they don't change for the neighbours. It says nothing about behaviour: a neighbour can still fire differently, and that is the fired diff's job.
+Related: Read the refusal. **Anti-pattern: Confined by intent:** claiming it without the receipt.
+Loop: the ruling quotes the receipt. `ei_key` moved means a new direction or status: stop and ask.
 
 ### Read the refusal
 *(from metis)*
 
-**Intent:** treat a refusal as the next step's instructions.
-**Problem:** a candidate is refused, and the author guesses, or works around it.
-**Shape:** the code says what to do. A few (`metisc --diag-registry` lists the 54 diagnostics; I-checks in `src/iface.ml`, L-checks in `src/link.ml`):
+Intent: treat a refusal as the next step's instructions.
+Problem: a candidate is refused, and the author guesses, or works around it.
+Shape: the code says what to do. A few (`metisc --diag-registry` lists the 54 diagnostics; I-checks in `src/iface.ml`, L-checks in `src/link.ml`):
 | code | means | do |
 |---|---|---|
 | `doc-missing` | a rule without `%%` | write the sentence; narration reads it |
@@ -97,10 +97,10 @@ Loop: read this before the verdict's word. "No candidate rule was enabled" means
 | I10 | a shared pred with no interface owner | Interface package |
 | L16 | a world input produced by no member, or consumed | restore the producer |
 | `ground-budget` | a rule grounds past the budget | Bind before ground |
-**Example:** `corpus/diag/`, `corpus/goldens/diag_goldens.txt` hold each rendered refusal with its hint.
-**Consequences:** warnings don't stop the link. `in-unread` and "a report nobody sends" are normal in a small composition, so read them; don't chase them to zero.
-**Related:** everything above. **Anti-pattern: Silencing:** renaming or deleting until the code goes away, with the behaviour gone too.
-**Loop:** quote the code and the rule in the ruling. A gate refusal ends the proposal; don't re-propose it reworded.
+Example: `corpus/diag/`, `corpus/goldens/diag_goldens.txt` hold each rendered refusal with its hint.
+Consequences: warnings don't stop the link. `in-unread` and "a report nobody sends" are normal in a small composition, so read them; don't chase them to zero.
+Related: everything above. **Anti-pattern: Silencing:** renaming or deleting until the code goes away, with the behaviour gone too.
+Loop: quote the code and the rule in the ruling. Change what the refusal names (a golden moved by name, a variable rebound, a direction fixed), or stop; the same rule in other words is the anti-pattern. 'The gate' here is the compiler, the link and the verb's judge; the driver's own gate is `pi/policy/measure.py` (Own facts judged).
 
 ### Mechanical verdict, model's words
 *(from opus)*
@@ -134,17 +134,17 @@ Loop: when the agent is the commenter: name the command's real preconditions, an
 ### Own facts judged
 *(from nina)*
 
-**Intent:** judge a learned rule on what its own command touched, on a world that moves by itself.
-**Problem:** every monster step looks like a surprise; the out-of-vocabulary check disengages on every fight; a correct `move` is contradicted by a door first seen beside the hero.
-**Shape:** the record keeps the whole reading. Beside it the adapter writes `own_before`, `own_after`, `judged`, `world_moved`. `judged` is the before with only the hero's own facts moved on. `own_before` comes from the before's cell alone, so one before has one. A thing first seen is the world's, not the command's. Chance and the world's own moves set `world_moved`, and such a record judges no rule.
-**Example:** metis-loop `pi/policy/nethack.py` `own_record`, `DICE`; `pi/policy/measure.py` `rec.get("judged", rec["after"])` at all three sites, including the repair text (`explain`); `if rec.get("world_moved"): return []` in `contradicted`. No world is named in the driver.
-**Consequences:** the check weakens, by a number that gets reported (23 of 349 records in the rehearsal). **A hidden fact is not chance:** a locked door reads `door(c,closed)` and still contradicts every later `open` rule, as does a pile for `pickup`. Order then decides what the gate accepts. Likelihood still counts `world_moved` records. The subject was closed by the user before a report, so whether this shape learns is **not shown**: the paid run's own numbers weren't filed.
-**Related:** Bounds with owners. **Anti-pattern: The whole reading judged.** **Anti-pattern: Repairing on another after than the gate's:** the prompt told the brain to produce what the gate wouldn't judge.
-**Loop:** the gate refuses a good rule on a record with a stated chance or a monster: check the record's flags first. The same principle must hold at every site that reads an after; grep for them.
+Intent: judge a learned rule on what its own command touched, on a world that moves by itself.
+Problem: every monster step looks like a surprise; the out-of-vocabulary check disengages on every fight; a correct `move` is contradicted by a door first seen beside the hero.
+Shape: the record keeps the whole reading. Beside it the adapter writes `own_before`, `own_after`, `judged`, `world_moved`. `judged` is the before with only the hero's own facts moved on. `own_before` comes from the before's cell alone, so one before has one. A thing first seen is the world's, not the command's. Chance and the world's own moves set `world_moved`, and such a record judges no rule.
+Example: metis-loop `pi/policy/nethack.py` `own_record`, `DICE`; `pi/policy/measure.py` `rec.get("judged", rec["after"])` at all three sites, including the repair text (`explain`); `if rec.get("world_moved"): return []` in `contradicted`. No world is named in the driver.
+Consequences: the check weakens, by a number that gets reported (23 of 349 records in the rehearsal). **A hidden fact is not chance:** a locked door reads `door(c,closed)` and still contradicts every later `open` rule, as does a pile for `pickup`. Order then decides what the gate accepts. Likelihood still counts `world_moved` records. The subject was closed by the user before a report, so whether this shape learns is **not shown**: the paid run's own numbers weren't filed.
+Related: Bounds with owners. **Anti-pattern: The whole reading judged.** **Anti-pattern: Repairing on another after than the gate's:** the prompt told the brain to produce what the gate wouldn't judge.
+Loop: the driver's gate (`pi/policy/measure.py`, not the verb's judge) refuses a good rule on a record with a stated chance or a monster: check the record's flags first. The same principle must hold at every site that reads an after; grep for them.
 
 ## Shorter, from driving the loop *(nina)*
 
 - **Rehearse what you will pay for, at its real shape, with the script brain.** The rehearsal showed 0 taken `open` in 349 records, so a random walk would never have seen a door. The rehearsal's family wasn't the paid family, though: the architect reported that the scene family's own bugs (a counter gone to -1, truthy, and a session memory blow-up) only showed in the paid run. So a change after the rehearsal needs its own.
 - **Read the diff of what will spend, even if it's only setup.** The one-record probe bug was found by reading the setup patch, and cost 0.05 USD where it would have spent the run.
-- **Check a suspicion in one small case before you assert it.** My gold-message claim was from memory, and I said so; pascal's one directed pickup confirmed it.
+- **Check a suspicion in one small case before you assert it.** A claim from memory was marked as such; one directed pickup confirmed it.
 - **A review case that pins a defect should fail when the defect is fixed.** Written that way, the cases showed which fixes took, and pascal turned them into tests saying what is right.
