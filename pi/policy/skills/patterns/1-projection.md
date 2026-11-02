@@ -39,7 +39,7 @@ Shape: two guards, both in the host, none in the rules. **Hysteresis:** a wider 
 Example: `world/motion.py`: `WALKER_CLOSE = 3.0` to enter, `WALKER_GONE = 5.0` to leave, `self.held`. `tools/bridge/ros_base.py` `people` (branch wc-motion-4): a person under 0.1 m/s reads 0.0. Measured live: HuNav's standing agents read 0.01 to 0.09 m/s, and to RSS's unstructured pair any speed is a mover, so a person shuffling 1.4 m away answered `brake` on 232 of 240 ticks where standing would answer `drive_away`.
 Consequences: the thresholds are stated parameters, in the record's header. A steady class can be steady and wrong: `walker_close` has no lateral limit, and in door2 the person nearest the line was over 1.5 m off it on 59 of 184 held ticks. It held the chair on 88 of the 189 ticks it stood still. **That threshold is untuned; do not copy it.**
 Related: Complementary readings, Bounded yield. **Anti-pattern: Debounce in the rules:** a counter token in a domain to smooth a number, the timer in disguise. **Anti-pattern: The checker reading noise as law.**
-Loop: the trace's fired rows show the same rule pair firing alternately, or one reason held for the whole run while the numbers in the log hover. Look at the reading's number before the rule; a threshold change is a reweight, not a new rule.
+Loop: the trace's fired rows show the same rule pair firing alternately, or one reason held for the whole run while the numbers in the log hover. Look at the reading's number before the rule; a threshold change is the host's, a finding for a person, not a new rule.
 
 ### Time to spare
 *(from nina)*
