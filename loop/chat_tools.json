@@ -1,0 +1,240 @@
+{
+ "format": "metis-loop-chat/1",
+ "note": "In the REPL (not the chat): `do +atom` / `do -atom` is the person's intervention; a bare `+atom` line is refused (`do` is the verb).",
+ "tools": [
+  {
+   "name": "status",
+   "verb": "status",
+   "description": "the workspace: bundle (name, image, BUILT/STALE), locks, the pi child, spend, open surprises",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {},
+    "required": []
+   }
+  },
+  {
+   "name": "surprises",
+   "verb": "surprises",
+   "description": "the surprise records by status",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "status": {
+      "type": "STRING",
+      "description": "open | taken | ruled (default: all)",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "take",
+   "verb": "take",
+   "description": "starts the pi loop if it is not running and says \"take the next surprise\" to it (pi's words follow)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "id": {
+      "type": "STRING",
+      "description": "a surprise id (default: the next open one)",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "replay",
+   "verb": "replay",
+   "description": "the Tick table of a window: fired rules and made atoms per k (default: the last surprise's)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "run": {
+      "type": "STRING",
+      "description": "a trace (default: the last surprise's)",
+      "positional": 0
+     },
+     "window": {
+      "type": "STRING",
+      "description": "K0..K1 or K (default: the surprise's window)",
+      "positional": 1
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "why",
+   "verb": "why",
+   "description": "metis.trace blame: who last moved ATOM at K (default: the last surprise's tick)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "atom": {
+      "type": "STRING",
+      "description": "an atom (`atom 0`: it should not hold)",
+      "positional": 0
+     },
+     "at": {
+      "type": "INTEGER",
+      "description": "the tick (`at K` in the chat)",
+      "flag": "--at"
+     }
+    },
+    "required": [
+     "atom"
+    ]
+   }
+  },
+  {
+   "name": "diff",
+   "verb": "diff",
+   "description": "the ruling's fired diff and the goldens it moved (default: the last ruling)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "id": {
+      "type": "STRING",
+      "description": "a surprise id",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "ruling",
+   "verb": "ruling",
+   "description": "the ruling card (default: the last ruling)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "id": {
+      "type": "STRING",
+      "description": "a surprise id",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "mark",
+   "verb": "mark",
+   "description": "a surprise draft from the open session's trace (or RUN's): the SURPRISES dialog, filled in",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "words": {
+      "type": "STRING",
+      "description": "[RUN] [K | K0..K1] WORDS",
+      "positional": 0
+     }
+    },
+    "required": [
+     "words"
+    ]
+   }
+  },
+  {
+   "name": "drop",
+   "verb": "drop",
+   "description": "the open session's last tick as a surprise with these words",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "words": {
+      "type": "STRING",
+      "description": "the words",
+      "positional": 0
+     }
+    },
+    "required": [
+     "words"
+    ]
+   }
+  },
+  {
+   "name": "rebuild",
+   "verb": "rebuild",
+   "description": "make (or metisc build .) of the bundle, where its composition is",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {},
+    "required": []
+   }
+  },
+  {
+   "name": "reload",
+   "verb": "reload",
+   "description": "the open session re-opened from the rebuilt catalog (epoch + 1)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {},
+    "required": []
+   }
+  },
+  {
+   "name": "lint",
+   "verb": "lint",
+   "description": "metis.lint of a member with its manifest (default: every member of the bundle)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "member": {
+      "type": "STRING",
+      "description": "a member (a package of the catalog)",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
+   "name": "budget",
+   "verb": "budget",
+   "description": "the budget of the next pi start, in USD",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "usd": {
+      "type": "NUMBER",
+      "description": "USD, above 0",
+      "positional": 0
+     }
+    },
+    "required": [
+     "usd"
+    ]
+   }
+  },
+  {
+   "name": "stop",
+   "verb": "stop",
+   "description": "stops the pi child",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {},
+    "required": []
+   }
+  },
+  {
+   "name": "help",
+   "verb": "help",
+   "description": "this table",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "command": {
+      "type": "STRING",
+      "description": "one command",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  }
+ ]
+}

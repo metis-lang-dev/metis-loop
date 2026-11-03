@@ -26,7 +26,10 @@ the REPL session's trace writer (§3: `open` with `trace: true`).
                  {ch:"loop", type:"start", mode:"rpc", model, budget?, req}
                                                                     -> the pi loop as this backend's child (refused while a pi loop holds
                                                                        the workspace); {type:"child", state, pid}
-                 {ch:"loop", type:"stop" | "say" (text) | "confirm" | "refuse" (token), req}
+                 {ch:"loop", type:"stop" | "say" (text, session?) | "confirm" | "refuse" (token), req}
+                                                                    a say whose text starts with "/" is the backend's (loop/chat.py,
+                                                                    loop/chat_tools.json: no model, 0 USD) -> {type:"say", command,
+                                                                    text, ruling?, draft?, child?}; anything else goes to pi
     gw -> page   {ch:"bundle", type:"stale", bundle}                the watch flipped (stale or fresh)
                  {ch:"loop", type:"gate", plan, token}              the child's confirm request: answered by confirm/refuse
                  {ch:"loop", type:"pi", event}                      the child's words, tool calls and results (journalled, who: pi)
@@ -170,6 +173,7 @@ class WorkspaceChannels:
         self.seen = None              # journal rows pushed so far
         self.stale = None             # the bundle's last stale flag
         self._cache = {}
+        self.budget_next = None       # /budget USD: the next start's, when the start names none
 
     # -- the socket's side -------------------------------------------------
 
@@ -373,9 +377,14 @@ class WorkspaceChannels:
             text = str(msg.get("text") or "").strip()
             if not text:
                 raise ValueError("say: the person's text")
+            if text.startswith("/"):                     # the backend's command (CHAT.md §2), never a model turn
+                return await self.command(page, text, msg)
             await self._rpc().say(text)
             await self._run(lambda: self.ws.journal("backend", "say", chars=len(text)))
             return {"ok": True}
+        if typ == "commands":                           # the chat's completion: the table as committed
+            from . import chat
+            return {"commands": [{"name": t["name"], "description": t["description"]} for t in chat.tools()["tools"]]}
         if typ in ("confirm", "refuse"):
             rpc, tok = self._rpc(), str(msg.get("token") or "")
             if tok not in self.child["gates"]:
@@ -383,7 +392,86 @@ class WorkspaceChannels:
             self.child["gates"].pop(tok)
             await rpc.answer(tok, typ == "confirm")
             return {"token": tok}
-        raise ValueError(f"loop: state | events | start | stop | say | confirm | refuse, not {typ!r}")
+        raise ValueError(f"loop: state | events | start | stop | say | commands | confirm | refuse, not {typ!r}")
+
+    # -- the chat's /commands (loop-chat s-f6c32d0c step 2, docs/CHAT.md §2; the grammar and table: loop/chat.py) --
+
+    def session_of(self, page, msg):
+        """The page's REPL session a command acts on: msg's `session` when it is this page's, else None."""
+        s = self.gw.sessions.get(str(msg.get("session") or ""))
+        return s if s is not None and page in s.subs else None
+
+    async def command(self, page, text, msg):
+        from . import chat
+        name, a = chat.parse(text)
+        out = {"command": name}
+        s = self.session_of(page, msg)
+        if name == "help":
+            out["text"] = chat.help_text(a.command)
+        elif name == "status":
+            out["text"] = await self._run(chat.status_text, self.ws, self.child_state(), self.budget_next)
+            out["child"] = self.child_state()
+        elif name == "surprises":
+            out["text"] = await self._run(chat.surprises_text, self.ws, a.status)
+        elif name == "replay":
+            run, win = a.run, chat.window(a.window) if a.window else None
+            if run is not None and win is None and chat.window(run) is not None and a.window is None:
+                run, win = None, chat.window(run)         # /replay 412..430: the window of the last surprise's trace
+            out.update(await self._run(chat.replay, self.ws, run, win))
+        elif name == "why":
+            out.update(await self._run(chat.why, self.ws, a.atom, a.at))
+        elif name == "diff":
+            out.update(await self._run(chat.diff, self.ws, a.id))
+        elif name == "ruling":
+            sr, r = await self._run(chat.ruling_of, self.ws, a.id)
+            out.update(text=chat.ruling_line(sr, r), ruling=sr["id"])
+        elif name == "mark":
+            sess = None
+            if s is not None and s.trace is not None:
+                sess = {"session": s.sid, "k": s.trace.last_k()}
+            draft = await self._run(chat.mark, self.ws, a.words, sess)
+            out.update(draft=draft, text="a surprise draft in SURPRISES: check the member and the tick, then drop it")
+        elif name == "drop":
+            if s is None:
+                raise ValueError("/drop: no open session on this page (open one, or /mark RUN K WORDS)")
+            r = await self._surprise(page, "drop", {"session": s.sid, "words": " ".join(a.words)})
+            out.update(text=f"dropped {r['id']}: the pi loop takes it from .metis/surprises/", id=r["id"])
+        elif name == "rebuild":
+            out.update(await self._run(chat.rebuild, self.ws, _scope()))
+        elif name == "reload":
+            if s is None:
+                raise ValueError("/reload: no open session on this page")
+            await self._bundle(page, "reload", {"session": s.sid})
+            out["text"] = f"reloaded {s.sid}: the session is on the files as they are now (epoch + 1)"
+        elif name == "lint":
+            rows = []
+            for m, prog, mf in await self._run(chat.lint_targets, self.ws, a.member):
+                args = {"file": prog, **({"manifest": mf} if mf else {})}
+                r = await self._run(self.verb, "lint", args)
+                rows.append(f"{m}: " + ((r["out"] + r["err"]).strip() or f"exit {r['code']}"))
+            out["text"] = "\n".join(rows)
+        elif name == "budget":
+            if not (a.usd > 0):
+                raise ValueError("/budget USD: a number of USD above 0")
+            self.budget_next = a.usd
+            out["text"] = f"the next pi start has a budget of {a.usd} USD" + (
+                " (the running child keeps its own: /stop, then start again)" if self.child and self.child["state"] == "running" else "")
+        elif name == "stop":
+            if not self.child or self.child["state"] == "exited":
+                raise ValueError("/stop: no pi loop runs from this backend")
+            await self.child["rpc"].stop()
+            out.update(text="the pi loop is stopping", child=self.child_state())
+        elif name == "take":
+            started = ""
+            if not self.child or self.child["state"] != "running":
+                await self.start({"mode": "rpc"})
+                started = f"started the pi loop (budget {self.child['budget'] or 'loop.sh default'}); "
+            words = f"take surprise {a.id}" if a.id else "take the next surprise"
+            await self.child["rpc"].say(words)
+            await self._run(lambda: self.ws.journal("backend", "say", chars=len(words), command="take"))
+            out.update(text=f"{started}said to pi: {words}", child=self.child_state())
+        await self._run(lambda: self.ws.journal("backend", "command", command=name))
+        return out
 
     def _rpc(self):
         if not self.child or self.child["state"] != "running":
@@ -417,6 +505,8 @@ class WorkspaceChannels:
                 raise ValueError("the rpc client (loop/pi_rpc.py) is not on this checkout yet") from None
             self.pi_factory = PiRpc
         budget = msg.get("budget")
+        if budget is None:
+            budget = self.budget_next                    # /budget USD
         if budget is not None and (isinstance(budget, bool) or not isinstance(budget, (int, float)) or budget <= 0):
             raise ValueError(f"budget {budget!r}: USD, a number above 0 (or none: loop.sh's default)")
         env = dict(os.environ, METIS_CATALOG=str(self.ws.root))

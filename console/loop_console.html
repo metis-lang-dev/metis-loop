@@ -681,7 +681,8 @@ function mountWorkspace(){
   const W={};
   if(wsOn("bundle"))W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
   if(wsOn("rulings"))W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
-  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid});
+  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,
+    onMark:d=>{if(!W.surprises)return;dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
   if(wsOn("surprises"))W.surprises=MetisSurprises.mount($("#w-surprises"),wsIO,{session:()=>sid,
     onRuling:id=>{if(W.chat){dockUI.set("chat",{shown:true,open:true});W.chat.ruling(id)}
       else if(W.rulings){dockUI.set("rulings",{shown:true,open:true});W.rulings.show(id)}}});

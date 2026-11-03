@@ -14,7 +14,9 @@
      c.tail()           the journal (the "journal" chip)
      c.ruling(id)       the ruling of surprise ID as a card in the chat
 
-   Lines starting with "/" go to the pi loop as they are in this step; the backend answers them from loop-chat step 2.
+   A line starting with "/" is the backend's command (loop-chat step 2, CHAT.md §2: loop/chat_tools.json, 0 USD): it never
+   starts pi; its answer shows as a block, a ruling as its card, a /mark draft in SURPRISES (opts.onMark). The input
+   completes the commands on "/" (the table, `loop commands`). opts.onMark(draft): the host's SURPRISES dialog.
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
   'use strict';
@@ -47,7 +49,7 @@
   function mount(box, io, opts) {
     const o = opts || {};
     const s = { state: null, bundle: undefined, chat: [], journal: [], budget: null, over: null, spent: 0, note: '',
-      tab: 'chat', options: false, model: '', budgetIn: '', ruled: new Set() };
+      tab: 'chat', options: false, model: '', budgetIn: '', ruled: new Set(), commands: [] };
     box.classList.add('mw', 'mw-loop', 'mw-chatw');
     const child = () => s.state && s.state.child;
     const running = () => { const c = child(); return !!(c && c.state === 'running'); };
@@ -150,7 +152,8 @@
           : el('div', { class: 'empty' }, held ? `the pi loop of pid ${held.pid} (${held.mode || '?'}) holds this workspace: its journal shows here, its words in its terminal`
             : running() ? 'say what to do: "take the next surprise"' : 'say what to do — "take the next surprise" starts the pi loop first')),
         el('form', { class: 'mw-row', onsubmit: e => { e.preventDefault(); say(e.target); } },
-          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace' : 'to the pi loop', disabled: !!held, 'aria-label': 'to the pi loop', autocomplete: 'off' }),
+          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace' : 'to the pi loop, or /help', disabled: !!held, 'aria-label': 'to the pi loop', autocomplete: 'off', list: 'mw-cmds' }),
+          el('datalist', { id: 'mw-cmds' }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description))),
           el('button', { class: 'btn', type: 'submit', disabled: !!held }, 'say')));
     }
     function journalBox() {
@@ -236,10 +239,22 @@
       try { await io.ask('loop', 'stop'); } catch (e) { s.note = e.message; }
       refresh();
     }
+    async function command(text) {
+      try {
+        const sid = o.session ? o.session() : null;
+        const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
+        if (r.text) push('cmd', '/' + (r.command || ''), r.text);
+        if (r.ruling) await ruling(r.ruling);
+        if (r.draft && o.onMark) o.onMark(r.draft);
+        if (r.child !== undefined || ['take', 'stop', 'budget', 'rebuild', 'reload'].includes(r.command)) await refresh();
+      } catch (e) { push('err', 'error', e.message); }
+      render();
+    }
     async function sendLine(text) {
       if (!text) return;
       push('me', 'you', text);
       render();
+      if (text.startsWith('/')) return command(text);       // the backend's, never a model turn
       if (!running()) {
         if (elsewhere()) { push('err', 'error', 'another pi loop holds this workspace'); render(); return; }
         if (!(await start())) return;
@@ -296,9 +311,13 @@
       else if (b && !b.stale && was && was.stale) pushCard({ card: () => builtCard(b) });
       render();
     });
+    async function commands() {
+      try { s.commands = (await io.ask('loop', 'commands')).commands || []; render(); } catch (e) { /* an older backend: no completion */ }
+    }
     render();
     refresh();
     tail();
+    commands();
     return { refresh, tail, ruling, say: sendLine };
   }
   window.MetisLoop = { mount };

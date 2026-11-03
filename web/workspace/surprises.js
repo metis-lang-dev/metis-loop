@@ -73,7 +73,7 @@
           'atoms', el('input', { name: 'atoms', placeholder: '+brake_late, -accel', value: '' })),
         el('label', { title: 'what was seen, in a line (the reading the record carries)' }, 'reading',
           el('input', { name: 'reading', placeholder: 'what happened', value: d.reading || (d.fired && d.fired.length ? 'fired: ' + d.fired.join(' ') : '') })),
-        el('label', { class: 'mw-wide' }, 'words', el('textarea', { name: 'words', rows: 3, placeholder: 'what should have happened, and why: the pi loop reads this first' })),
+        el('label', { class: 'mw-wide' }, 'words', el('textarea', { name: 'words', rows: 3, placeholder: 'what should have happened, and why: the pi loop reads this first' }, d.words || '')),
         el('div', { class: 'mw-acts' },
           el('button', { class: 'btn', type: 'submit' }, 'drop to the loop'),
           el('button', { class: 'btn', type: 'button', onclick: () => { draft = null; render(); } }, 'cancel')));

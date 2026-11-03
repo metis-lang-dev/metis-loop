@@ -45,9 +45,13 @@ trace verbs, no model turn. The pi loop need not be running for them. Each is on
 | `/stop` | stops the pi child | the child's exit |
 | `/help` | the table above, from the declarations | |
 
-The verbs come from ONE declaration table (the trace verbs are already `metis/trace_tools.json`; the
-workspace ones join it as `metis/chat_tools.json`, generated from the backend's argparse the same way). A
-command the table does not declare is answered "no such command; /help". The chat offers completion on `/`.
+The verbs come from ONE declaration table (the trace verbs are already metispy's `metis/trace_tools.json`;
+the chat's are metis-loop's `loop/chat_tools.json`, generated from the backend's argparse the same way:
+`loop/chat.py` `parser()`, `python tools/gen_chat_tools.py [--check]`, a test that the file equals the argparse;
+loop-chat step 2). A command the table does not declare is answered "no such command; /help". The chat offers
+completion on `/` (the `loop commands` frame: the table). A `/` line never starts pi and costs nothing; `/take` is the
+one command that starts it (and says "take the next surprise" to it). `/help` also says the REPL's intervention:
+`do +atom` (a bare `+atom` line is refused).
 
 **Anything else: the pi loop's, a model turn, paid within the session budget.** The text goes to the child
 as `say`; without a child the chat starts one first (the default model, the `/budget` or loop.sh's 1 USD)
