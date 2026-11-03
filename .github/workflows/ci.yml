@@ -130,11 +130,13 @@ jobs:
               assert "site-packages" in str(got) and got.is_file(), got
               print("ts", f, len(got.read_bytes()), "bytes")
           EOF
-      - name: The wheel publish.yml builds, smoke-installed in a fresh venv (metispy from PyPI, metis-catalog the checkout)
+      - name: The wheel publish.yml builds, smoke-installed in a fresh venv (metispy and metis-catalog the checkouts)
+        # the SDK wheel's test, not a PyPI-compatibility gate: metis-catalog master needs metispy's manifest keys
+        # (safety/belief/commands, checks-open) until the next metispy release, so the metispy checkout goes in beside it
         run: |
           python -m pip install -q build
           python -m build --outdir /tmp/sdk-dist metis-loop/sdk
-          bash metis-loop/sdk/tools/smoke_wheel.sh /tmp/sdk-dist metis-catalog
+          bash metis-loop/sdk/tools/smoke_wheel.sh /tmp/sdk-dist metispy metis-catalog
       - name: SDK suite (from outside the checkout, so the installed package is what runs)
         working-directory: /tmp
         # the fixtures: the metis-catalog checkout, named (the root is the cwd, cwd-root
