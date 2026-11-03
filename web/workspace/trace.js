@@ -37,7 +37,7 @@
   }
   function mount(box, io, opts) {
     const o = opts || {};
-    const s = { runs: [], run: null, trace: null, member: null, k: null, tick: null, tools: null, tool: null, out: null, note: '', mark0: null };
+    const s = { runs: [], run: null, trace: null, marks: [], member: null, k: null, tick: null, tools: null, tool: null, out: null, note: '', mark0: null };
     box.classList.add('mw', 'mw-trace');
     const val = (id) => box.querySelector(`[data-f="${id}"]`);
 
@@ -67,6 +67,17 @@
         el('button', { class: 'btn', title: 'start a window here; the next mark closes it', onclick: () => { s.mark0 = s.k; render(); } },
           s.mark0 === null ? 'from here' : `from ${s.mark0}`),
         el('button', { class: 'btn mw-mark', title: 'draft a surprise at this tick (or the window from the marked tick)', onclick: mark }, 'mark here'));
+    }
+    function marksRow() {
+      if (!s.trace || !s.marks.length) return null;
+      return el('div', { class: 'mw-row mw-marks' }, el('span', { class: 'mw-sub' }, 'MARKS'),
+        s.marks.map(m => el('span', { class: 'mw-mark-chip' },
+          el('button', { class: 'chip', title: 'go to the mark\'s start', onclick: () => go(m.k0) }, `${m.mark}: k ${m.k0}..${m.k1 ?? '…'}`),
+          el('button', {
+            class: 'btn mw-mark', disabled: m.k1 === null || m.k1 === undefined,
+            title: m.k1 === null || m.k1 === undefined ? 'the mark is not ended yet' : 'draft a surprise over the mark\'s window (kept past the ring when dropped)',
+            onclick: () => o.onMark && o.onMark({ run: s.run, member: s.member, k: m.k1, window: [m.k0, m.k1], mark: m.mark, fired: [] }),
+          }, 'mark here'))));
     }
     function table() {
       const t = s.tick;
@@ -102,7 +113,7 @@
     }
     function render(fresh) {
       const kept = fresh ? null : snap(box);
-      box.replaceChildren(header(), nav() || '', table(), verbs() || '', s.note ? el('div', { class: 'empty' }, s.note) : '');
+      box.replaceChildren(header(), nav() || '', marksRow() || '', table(), verbs() || '', s.note ? el('div', { class: 'empty' }, s.note) : '');
       if (kept) unsnap(box, kept);
     }
     async function refresh() {
@@ -114,10 +125,12 @@
       render();
     }
     async function open(run) {
-      s.run = run || null; s.trace = s.tick = null; s.mark0 = null;
+      s.run = run || null; s.trace = s.tick = null; s.mark0 = null; s.marks = [];
       if (!run) return render();
       try {
-        s.trace = (await io.ask('trace', 'open', { run })).trace;
+        const got = await io.ask('trace', 'open', { run });
+        s.trace = got.trace;
+        s.marks = got.marks || [];
         const ms = Object.keys(s.trace.header.members || {}).sort();
         if (!ms.includes(s.member)) s.member = ms[0];
         s.note = '';

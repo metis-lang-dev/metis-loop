@@ -54,13 +54,14 @@
         el('span', { class: 'mono' }, r.id), el('b', {}, r.member), el('span', { class: 'empty' }, where(r)),
         r.words ? el('div', { class: 'mw-words' }, r.words) : null,
         r.trace_note ? el('div', { class: 'warn' }, r.trace_note) : null,
+        r.config ? el('div', { class: 'empty mono' }, 'config ' + r.config) : null,
         r.taken ? el('div', { class: 'empty' }, `taken by pid ${r.taken.pid} at ${r.taken.ts}`) : null,
         ruled && o.onRuling ? el('button', { class: 'btn', onclick: () => o.onRuling(r.id) }, 'the ruling') : null);
     }
     function dialog() {
       if (!draft) return null;
       const d = draft;
-      const from = d.session ? `the session ${d.session}` : `the trace ${d.run}, member ${d.member}`;
+      const from = d.session ? `the session ${d.session}` : `the trace ${d.run}${d.mark !== undefined && d.mark !== null ? ', mark ' + d.mark : ''}, member ${d.member}`;
       return el('form', { class: 'mw-form mw-drop', onsubmit: e => { e.preventDefault(); drop(e.target); } },
         el('div', { class: 'mw-sub' }, 'DROP A SURPRISE — from ' + from),
         d.session ? null : el('label', {}, 'member', el('input', { name: 'member', value: d.member || '' })),
@@ -101,7 +102,10 @@
       const num = k => { const v = String(f.get(k) || '').trim(); return v === '' ? null : parseInt(v, 10); };
       const msg = {};
       if (draft.session) msg.session = draft.session;
-      else { msg.run = draft.run; msg.member = String(f.get('member') || draft.member || ''); }
+      else {
+        msg.run = draft.run; msg.member = String(f.get('member') || draft.member || '');
+        if (draft.mark !== undefined && draft.mark !== null) msg.mark = draft.mark;   // the kept window is named for the mark
+      }
       const k = num('k'), w0 = num('w0'), w1 = num('w1');
       if (k !== null) msg.k = k;
       if (w0 !== null && w1 !== null) msg.window = [w0, w1];

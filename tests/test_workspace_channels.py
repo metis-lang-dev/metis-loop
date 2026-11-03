@@ -92,12 +92,16 @@ def test_a_surprise_dropped_from_a_session_and_from_a_trace(gw, tmp_path):
         assert ask(ws, "surprise", "drop", session=sid)["type"] == "error"          # no reading, no atoms
         got = ask(ws, "surprise", "drop", session=sid, reading={"saw": "the wolf waits"}, words="it should blow")
         a = got["id"]
-        b = ask(ws, "surprise", "drop", run=sid, member="three_pigs", window=[1, 2], atoms=["+houses_down"])["id"]
+        b = ask(ws, "surprise", "drop", run=sid, member="three_pigs", window=[0, 1], atoms=["+houses_down"])["id"]
         ws_ = W.workspace(tmp_path)
         recs = {r["id"]: r for r in ws_.surprises()}
         assert recs[a]["trace"] == "traces/" + sid and recs[a]["k"] == 1 and recs[a]["status"] == "open"
         assert recs[a]["member"] == "three_pigs" and recs[a]["words"] == "it should blow"
-        assert recs[b]["window"] == [1, 2] and recs[b]["who"] == "backend"
+        assert recs[b]["window"] == [0, 1] and recs[b]["who"] == "backend"
+        if hasattr(W.Workspace, "keep_window"):            # step 5: a window is kept as its own trace first
+            assert recs[b]["trace"] == "traces/%s-w0-1" % sid
+        else:
+            assert recs[b]["trace"] == "traces/" + sid
         assert [r["id"] for r in ask(ws, "surprise", "list")["surprises"]] == [a, b]
         ws_.rule(a, "# ruling\n\naccepted", "accepted", pack="stage main { }")
         g = ask(ws, "surprise", "get", id=a)
@@ -313,3 +317,36 @@ def test_a_ruling_is_read_with_its_pack(gw, tmp_path):
         g = ask(ws, "surprise", "get", id=sid)
         assert g["pack"] == "stage main { }\n" and g["md"] == "# ruling"
         assert g["surprise"]["ruling"]["firings"]["count"] == 49 and g["surprise"]["ruling"]["first_enabled"]["k"] == 2
+
+
+@pytest.mark.skipif(not hasattr(W.Workspace, "keep_window"), reason="metispy before keep_window (loop-workspace step 5)")
+def test_a_marked_window_is_kept_and_dropped_with_its_config(gw, tmp_path):
+    """Step 5 (WORKSPACE.md §6.1 items 2-4): TRACE's open carries the run's marks (the world's marks.jsonl in the trace's k);
+    a drop from a window keeps it as its own trace first (traces/<run>-mark-N), carries the run's config.yaml, and a second
+    drop of the same mark takes the copy that is there."""
+    d = tmp_path / ".metis" / "traces" / "page"
+    s = T.Segments(d, every=3)
+    for k in range(10):
+        if s.due(k):
+            s.open_segment(k, {"members": {"planner": {}}}, {"sessions": {}})
+        s.line({"k": k, "members": {}})
+    s.close()
+    (d / "marks.jsonl").write_text('{"mark": 1, "edge": "start", "at_tick": 3, "at_k": 4}\n'
+                                   '{"mark": 1, "edge": "stop", "at_tick": 6, "at_k": 7}\n')
+    (d / "config.yaml").write_text("trace: {}\n")
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        op = ask(ws, "trace", "open", run="page")
+        assert [(m["mark"], m["k0"], m["k1"]) for m in op["marks"]] == [(1, 4, 7)]
+        got = ask(ws, "surprise", "drop", run="page", member="planner", window=[4, 7], mark=1, reading="accel at a late zone", words="too late")
+        assert got["type"] == "drop", got
+        a = got["id"]
+        b = ask(ws, "surprise", "drop", run="page", member="planner", window=[4, 7], mark=1, atoms=["+brake_late"])["id"]
+        c = ask(ws, "surprise", "drop", run="page", member="planner", k=5, atoms=["+x"])["id"]
+    w = W.workspace(tmp_path)
+    ra, rb, rc = (w.surprise(i) for i in (a, b, c))
+    assert ra["trace"] == rb["trace"] == "traces/page-mark-1" and ra["window"] == [4, 7] and ra["mark"] == 1
+    assert ra["config"] == ".metis/traces/page-mark-1/config.yaml"
+    assert sorted(p.name for p in (tmp_path / ".metis/traces/page-mark-1").glob("seg-*.jsonl")) == ["seg-3.jsonl", "seg-6.jsonl"]
+    assert rc["trace"] == "traces/page" and rc["config"] == ".metis/traces/page/config.yaml"     # one tick: no copy
+    assert [r["kind"] for r in w.events()].count("keep") == 1

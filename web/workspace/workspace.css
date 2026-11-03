@@ -44,3 +44,5 @@
 .mw-journal{font-family:var(--mono);font-size:11px}
 .mw-jrow.who-pi b{color:var(--purple)}.mw-jrow.who-backend b{color:var(--cyan)}.mw-jrow.who-judge b{color:var(--yellow)}
 .mw-budget{font-family:var(--mono)}
+.mw-marks{border-top:1px solid var(--line);padding-top:4px}
+.mw-mark-chip{display:inline-flex;gap:2px}

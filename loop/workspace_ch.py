@@ -3,7 +3,8 @@
 the REPL session's trace writer (§3: `open` with `trace: true`).
 
     page -> gw   {ch:"trace", type:"list", req}                     -> {type:"list", traces}
-                 {ch:"trace", type:"open", run, req}                -> {type:"open", trace: {run, path, k0, k1, checkpoints, header}}
+                 {ch:"trace", type:"open", run, req}                -> {type:"open", trace: {run, path, k0, k1, checkpoints, header},
+                                                                       marks: [{mark, k0, k1, start, stop}]}: the run's marks
                  {ch:"trace", type:"tick", run, member, k, program?, req}
                                                                     -> {type:"tick", k, counts, fired, made, exact}: metis.trace.timeline
                  {ch:"trace", type:"tools", req}                    -> {type:"tools", tools}: metis/trace_tools.json as committed
@@ -11,8 +12,10 @@ the REPL session's trace writer (§3: `open` with `trace: true`).
                  {ch:"surprise", type:"list", status?, req}         -> {type:"list", surprises}
                  {ch:"surprise", type:"drop", session, k?, window?, atoms?, reading?, words?, req}
                                                                     from a REPL session: its member, its trace when it writes one
-                 {ch:"surprise", type:"drop", run, member, k?, window?, atoms?, reading?, words?, req}
-                                                                    from a trace: the run's window
+                 {ch:"surprise", type:"drop", run, member, k?, window?, mark?, atoms?, reading?, words?, config?, req}
+                                                                    from a trace: a window is first kept as its own trace
+                                                                    (traces/<run>-mark-N | -w<k0>-<k1>), the run's config.yaml
+                                                                    carried
                                                                     -> {type:"dropped", id}, and to every page {type:"dropped", id}
                  {ch:"surprise", type:"get", id, req}               -> {type:"get", surprise, md?, pack?}: the record, its ruling's
                                                                        document and pack
@@ -203,7 +206,8 @@ class WorkspaceChannels:
         if typ == "list":
             return {"traces": await self._run(self.ws.traces)}
         if typ == "open":
-            return {"trace": await self._run(self.ws.trace, str(msg.get("run") or ""))}
+            run = str(msg.get("run") or "")
+            return {"trace": await self._run(self.ws.trace, run), "marks": await self._run(self.marks_of, run)}
         if typ == "tick":
             return await self._run(self.tick, str(msg.get("run") or ""), str(msg.get("member") or ""),
                                    msg.get("k"), msg.get("program"))
@@ -212,6 +216,11 @@ class WorkspaceChannels:
         if typ == "verb":
             return await self._run(self.verb, str(msg.get("name") or ""), msg.get("args") or {})
         raise ValueError(f"trace: list | open | tick | tools | verb, not {typ!r}")
+
+    def marks_of(self, run):
+        """The run's marks as windows (metis.catalog.workspace marks: the world's marks.jsonl in the trace's k); none on a
+        metispy before them."""
+        return self.ws.marks(run) if hasattr(self.ws, "marks") else []
 
     def tick(self, run, member, k, program=None):
         """The Tick table at K: metis.trace.timeline of MEMBER (cached per trace and program, by the segments'
@@ -281,7 +290,8 @@ class WorkspaceChannels:
         or from a trace (run and member named). The person's reading or atoms, and words, as given. No `config`: a
         REPL session has no service config, and for a trace the judge falls back to the bundle's (pack_propose:
         the argument, the surprise's, then ws.bundle().config, the architect's order)."""
-        rec = {k: msg[k] for k in ("reading", "atoms", "words", "window", "k", "k0") if msg.get(k) not in (None, "", [])}
+        rec = {k: msg[k] for k in ("reading", "atoms", "words", "window", "k", "k0", "config", "mark")
+               if msg.get(k) not in (None, "", [])}
         if msg.get("session"):
             s = self.gw.sessions.get(str(msg["session"]))
             if s is None:
@@ -302,11 +312,28 @@ class WorkspaceChannels:
             if not msg.get("member"):
                 raise ValueError("a drop from a trace names its member")
             rec["trace"], rec["member"] = "traces/" + run, str(msg["member"])
+            w = rec.get("window")
+            if w and hasattr(self.ws, "keep_window"):    # a window outlives the writer's ring (WORKSPACE.md §6.1 item 4)
+                rec["trace"] = self.kept(run, w, msg.get("mark"))
+            cfg = self.ws.state / rec["trace"] / "config.yaml"
+            if not rec.get("config") and cfg.is_file():   # the run's own config: the judge replays the run as it was played
+                rec["config"] = str(cfg.relative_to(self.ws.root))
         else:
             raise ValueError("a drop names its session or its run")
         if not rec.get("reading") and not rec.get("atoms"):
             raise ValueError("a surprise carries a reading or atoms: what was seen, or what should have held")
         return rec
+
+    def kept(self, run, w, mark=None):
+        """The window kept as its own trace, before the surprise points at it: traces/<run>-mark-<N> for a mark, else
+        traces/<run>-w<k0>-<k1>; the copy already there for the same window is taken as it is."""
+        if not (isinstance(w, list) and len(w) == 2 and all(isinstance(x, int) for x in w)):
+            raise ValueError("window %r: [k_start, k_end]" % (w,))
+        name = ("mark-%s" % mark) if mark not in (None, "") else "w%d-%d" % (w[0], w[1])
+        got = self.ws.path("trace", run=W._check_run("%s-%s" % (run, name)))
+        if got.is_dir():
+            return "traces/" + got.name
+        return self.ws.keep_window(run, w[0], w[1], name)
 
     # -- bundle --------------------------------------------------------------
 
