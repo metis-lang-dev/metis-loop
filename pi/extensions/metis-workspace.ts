@@ -324,7 +324,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(`metis-workspace: ${e.message}`, "error");
 		}
 	});
-	pi.on("session_shutdown", () => {
+	const unlockSession = () => {
 		if (!locked) return;
 		try {
 			ws.unlock("pi", process.pid, root());
@@ -332,5 +332,44 @@ export default function (pi: ExtensionAPI) {
 			// the workspace gone with the session: nothing to release
 		}
 		locked = false;
+	};
+	pi.on("session_shutdown", unlockSession);
+
+	// ---- the budget: the session's spend on a paid model (loop.sh --budget / METIS_LOOP_BUDGET) -------
+	// The cost is observed here (pi's usage on each assistant message, the provider's prices): each paid
+	// message is a cost.jsonl row (who: pi); the per-request cap stays in agent/models.json and the SDK's
+	// command face. Past the budget the session REFUSES (the architect's rule): no further model turn (the
+	// person's input is handled here, a tool call is blocked and ends the batch, the running turn is
+	// aborted), a `budget` journal row with the spend, and the lock released. pi is not killed.
+	const budget = Number(process.env.METIS_LOOP_BUDGET || 0) || 0;
+	let spent = 0;
+	let over = false;
+	const refusal = () => `the session's budget is spent: ${spent.toFixed(4)} of ${budget} USD (loop.sh --budget); no further model turns`;
+	pi.on("message_end", async (e: any, ctx: any) => {
+		const m = e.message;
+		const cost = Number(m?.role === "assistant" ? m?.usage?.cost?.total : 0) || 0;
+		if (cost <= 0) return;
+		const r = root();
+		let before = 0;
+		try {
+			before = ws.cost(r).total;
+		} catch {
+			// no workspace state yet: the first row starts it
+		}
+		spent += cost;
+		appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ts: new Date().toISOString(), who: "pi", model: m.model ?? process.env.MODEL ?? null, cost, usage_before: before, session_spent: spent }) + "\n");
+		if (budget > 0 && spent >= budget && !over) {
+			over = true;
+			ws.journal("pi", "budget", { spent, budget }, r);
+			ctx?.ui?.notify?.(`metis-workspace: ${refusal()}`, "error");
+			unlockSession();
+			ctx?.abort?.();
+		}
 	});
+	pi.on("input", async (_e: any, ctx: any) => {
+		if (!over) return { action: "continue" };
+		ctx?.ui?.notify?.(`metis-workspace: ${refusal()}`, "error");
+		return { action: "handled" };
+	});
+	pi.on("tool_call", async () => (over ? { block: true, reason: refusal(), terminate: true } : undefined));
 }

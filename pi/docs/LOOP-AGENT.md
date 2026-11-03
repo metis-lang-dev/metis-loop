@@ -28,8 +28,10 @@ and the worked example.
 - **Host: pi** (`@earendil-works/pi-coding-agent`, pinned in this repository).
   - Built-in tools, context files, skills, prompt templates and MCP are all off.
   - The system prompt is the loop's own (`prompts/loop-system.md`).
-- **Model:** the one `MODEL` names; there is no default (version 1 was Ollama with a
-  Gemma 4 E4B GGUF; it went with loop-workspace, WORKSPACE.md §5.3).
+- **Model:** `MODEL`, by default `openrouter/deepseek/deepseek-v4-pro` (the user, 2026-11-03; version 1
+  was Ollama with a Gemma 4 E4B GGUF, which went with loop-workspace, WORKSPACE.md §5.3). A paid model runs
+  with a session budget (`loop.sh --budget USD`, default 1.00): past it the workspace extension refuses
+  further model turns, journals `budget` and releases the lock.
   - A key only from the environment (`OPENROUTER_API_KEY`), never in a file here.
   - pi's Claude OAuth is never used.
   - The `claude -p` route for pi is postponed with pi as the principal loop

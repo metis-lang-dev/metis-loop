@@ -27,7 +27,9 @@ function fakePi() {
 	return {
 		tools,
 		emit: async (ev: string, e: any, c: any) => {
-			for (const h of on.get(ev) ?? []) await h(e, c);
+			let r;
+			for (const h of on.get(ev) ?? []) r = (await h(e, c)) ?? r;
+			return r;
 		},
 		api: {
 			registerTool: (t: any) => tools.set(t.name, t),
@@ -252,4 +254,67 @@ test("loop.sh: one pi loop per workspace: a live holder refuses a second start, 
 		holder.kill();
 	}
 	assert.ok(existsSync(join(r, ".metis")));
+});
+
+test("metis-workspace: past the session's budget the loop refuses further model turns, journals it and releases the lock", async () => {
+	const { r } = scratch();
+	process.env.METIS_LOOP_BUDGET = "0.05";
+	try {
+		const p = fakePi();
+		workspace(p.api);
+		let aborted = 0;
+		const c = { ...ctx, abort: () => aborted++ };
+		await p.emit("session_start", {}, c);
+		const msg = (cost: number) => ({ message: { role: "assistant", model: "deepseek/deepseek-v4-pro", usage: { cost: { total: cost } } } });
+		await p.emit("message_end", { message: { role: "user" } }, c);                     // no cost: no row
+		await p.emit("message_end", msg(0.03), c);
+		assert.equal(ws.cost(r).total, 0.03);
+		assert.equal((await p.emit("input", { text: "go on" }, c)).action, "continue");
+		assert.equal(await p.emit("tool_call", { toolName: "journal", input: {} }, c), undefined);
+		assert.equal(ws.loops(r).pi!.pid, process.pid);
+		notes.length = 0;
+		await p.emit("message_end", msg(0.03), c);                                          // 0.06 >= 0.05: over
+		assert.equal(aborted, 1);
+		assert.equal(ws.loops(r).pi, null);                                                 // the lock released, pi not killed
+		assert.match(notes.join("\n"), /budget is spent: 0\.0600 of 0\.05 USD/);
+		const b = ws.events(0, r).filter((x) => x.kind === "budget");
+		assert.equal(b.length, 1);
+		assert.equal(b[0].budget, 0.05);
+		assert.equal((await p.emit("input", { text: "go on" }, c)).action, "handled");     // the person's turn reaches no model
+		const t = await p.emit("tool_call", { toolName: "surprise_next", input: {} }, c);
+		assert.equal(t.block, true);
+		assert.equal(t.terminate, true);
+		const rows = readFileSync(ws.path("cost", {}, r), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+		assert.deepEqual(rows.map((x) => [x.who, x.cost]), [["pi", 0.03], ["pi", 0.03]]);
+		assert.equal(rows[1].usage_before, 0.03);
+		await p.emit("message_end", msg(0.03), c);                                          // a late message is still logged, not re-journaled
+		assert.equal(ws.events(0, r).filter((x) => x.kind === "budget").length, 1);
+		await p.emit("session_shutdown", {}, {});
+	} finally {
+		delete process.env.METIS_LOOP_BUDGET;
+	}
+});
+
+test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without one is refused; the first line says both", () => {
+	const { r } = scratch();
+	const e: Record<string, string | undefined> = { ...process.env, METIS_LOOP_PI: join(HERE, "stub", "pi"), METIS_CONFIG: "", METIS_LOOP_SDK_PY: PY, METIS_LOOP_TAKE_INTO: "",
+		METIS_LOOP_LLP: "", OPENROUTER_API_KEY: "sk-or-v1-" + "0".repeat(64) };       // a fake key: the stub pi calls nothing
+	delete e.MODEL;
+	delete e.METIS_LOOP_BUDGET;
+	const run = (args: string[], extra: Record<string, string> = {}) => spawnSync(join(HERE, "..", "loop.sh"), args, { encoding: "utf8", cwd: r, env: { ...e, ...extra } as any });
+	const a = run([]);
+	assert.equal(a.status, 0, a.stderr);
+	const out = JSON.parse(a.stdout);
+	assert.equal(out.args[out.args.indexOf("--model") + 1], "openrouter/deepseek/deepseek-v4-pro");
+	assert.equal(out.env.METIS_LOOP_BUDGET, "1.00");
+	assert.equal(a.stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
+	assert.match(readFileSync(out.env.METIS_CONFIG, "utf8"), /openai-command --base-url https:\/\/openrouter.ai\/api\/v1 --model deepseek\/deepseek-v4-pro/);  // formalize follows it
+	assert.equal(JSON.parse(run(["--budget", "0.3"]).stdout).env.METIS_LOOP_BUDGET, "0.3");
+	assert.equal(JSON.parse(run([], { METIS_LOOP_BUDGET: "2" }).stdout).env.METIS_LOOP_BUDGET, "2");
+	const empty = run([], { METIS_LOOP_BUDGET: "" });
+	assert.equal(empty.status, 1);
+	assert.match(empty.stderr, /is paid: give --budget USD/);
+	assert.match(run(["--budget", "lots"]).stderr, /a positive number of USD/);
+	const free = run([], { MODEL: "stub/script" });
+	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
 });

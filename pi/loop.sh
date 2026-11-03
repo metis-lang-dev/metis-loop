@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # loop.sh — the agentic loop (docs/LOOP-AGENT.md): pi with the three
-# metis extensions over a catalog (the workspace's: docs/WORKSPACE.md §5), on the model the person names (MODEL: no default).
+# metis extensions over a catalog (the workspace's: docs/WORKSPACE.md §5), on MODEL (default deepseek v4 pro, the user's choice).
 #
 # A loop starts in a directory, and that directory is the catalog and the workspace
 # (cwd-root s-ddac2cbf), as `cd DIR && claude` makes DIR the project: DIR's domain
@@ -30,9 +30,12 @@
 #                                        never a commit); none named: catalog_take refuses
 #   METIS_CATALOG=DIR loop.sh …          the same, started elsewhere
 #
-#   MODEL=<pi provider>/<id>, REQUIRED (no default: no model runs that the person did not
-#         name), e.g. openrouter/deepseek/deepseek-v4-pro (its key from the environment
-#         only: OPENROUTER_API_KEY; agent/models.json caps and routes it)
+#   MODEL=<pi provider>/<id>, default openrouter/deepseek/deepseek-v4-pro (the user, 2026-11-03:
+#         "use deepseek v4 pro"; its key from the environment only: OPENROUTER_API_KEY;
+#         agent/models.json caps and routes it)
+#   --budget USD (or METIS_LOOP_BUDGET=USD): the session's spend cap on a paid model (openrouter/*),
+#         default 1.00; past it the workspace extension refuses further model turns, journals
+#         `budget` and releases the lock (no kill). A paid MODEL with an empty budget is refused.
 #   FORMALIZE_MODEL=the model the kernel's formalize drafts with: openrouter/<id> (the loop
 #         SDK's OpenAI-compatible command face, reasoning off, 2048 tokens, data_collection
 #         deny; its calls and their cost in $METIS_LOOP_RECORDS/formalize-calls.jsonl), or
@@ -65,6 +68,7 @@ while [ $# -gt 0 ]; do
     --name) NAME="$2"; shift 2 ;;
     --episodes) EPISODES="$2"; shift 2 ;;
     --into) INTO="$2"; shift 2 ;;
+    --budget) METIS_LOOP_BUDGET="$2"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -134,7 +138,18 @@ TOOLS="$("$SDK_PY" -m metis.catalog installed --json | field tools)"
 export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
-: "${MODEL:?loop.sh: MODEL=<provider>/<id> is required (no default), e.g. MODEL=openrouter/deepseek/deepseek-v4-pro}"
+MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
+# a paid model runs with a budget (1 USD by default: a session of v4 pro at 2048 tokens a request spends
+# cents a turn, so 1 USD bounds a runaway session well inside a paid round's limit); empty: refused
+case "$MODEL" in
+  openrouter/*)
+    METIS_LOOP_BUDGET="${METIS_LOOP_BUDGET-1.00}"
+    [ -n "$METIS_LOOP_BUDGET" ] || { echo "loop.sh: MODEL=$MODEL is paid: give --budget USD (or METIS_LOOP_BUDGET)" >&2; exit 1; }
+    awk -v b="$METIS_LOOP_BUDGET" 'BEGIN { exit !(b + 0 > 0) }' || { echo "loop.sh: --budget $METIS_LOOP_BUDGET: a positive number of USD" >&2; exit 1; } ;;
+  *) METIS_LOOP_BUDGET="${METIS_LOOP_BUDGET-}" ;;
+esac
+export METIS_LOOP_BUDGET
+echo "loop.sh: MODEL=$MODEL budget=${METIS_LOOP_BUDGET:-none} USD" >&2   # the first line (stderr: stdout is pi's, the rpc protocol in rpc mode)
 case "$MODEL" in
   openrouter/*) FORMALIZE_MODEL="${FORMALIZE_MODEL:-$MODEL}" ;;
 esac
