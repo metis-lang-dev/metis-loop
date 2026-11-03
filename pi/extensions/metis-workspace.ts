@@ -42,6 +42,20 @@ import * as catalog from "./sdk/catalog.ts";
 import * as ws from "./sdk/workspace.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const LOOP_REPO = resolve(HERE, "..", "..");             // metis-loop: its loop/chat.py and loop/chat_tools.json
+const CHAT_READ = new Set(["status", "surprises", "replay", "why", "diff", "ruling"]);   // loop/chat.py READ
+
+/** A chat command's line from its declaration and the model's arguments: "/" + name, the positionals in their order
+ *  (quoted when they hold a space), then the flags ("/why speed --at 41"). */
+export function chatLine(t: any, params: Record<string, unknown>): string {
+	const props = Object.entries((t.parameters && t.parameters.properties) || {}) as [string, any][];
+	const q = (v: unknown) => { const x = String(v); return /[\s"']/.test(x) ? JSON.stringify(x) : x; };
+	const pos = props.filter(([, d]) => d.positional !== undefined).sort((a, b) => a[1].positional - b[1].positional);
+	const words = [`/${t.name}`];
+	for (const [k] of pos) if (params[k] !== undefined && params[k] !== null && params[k] !== "") words.push(q(params[k]));
+	for (const [k, d] of props) if (d.flag && params[k] !== undefined && params[k] !== null && params[k] !== "") words.push(d.flag, q(params[k]));
+	return words.join(" ");
+}
 const TRACE_ARGS = new Set(["trace", "trace_a", "trace_b"]);
 
 /** The declaration table's schema (OBJECT/STRING…, positional/flag) as a JSON schema pi can show the model. */
@@ -263,6 +277,31 @@ export default function (pi: ExtensionAPI) {
 				const argv = ws.tool_argv(t.name, args);
 				const res = await run(argv[0], argv.slice(1), r);
 				return text(`${res.code === 0 ? "" : `exit ${res.code}\n`}${res.out}${res.err ? `\n${res.err}` : ""}`.trim() || "(no output)", { argv, code: res.code });
+			},
+		});
+	}
+
+	// ---- the chat's read-only commands, as declared (loop/chat_tools.json; loop-chat step 3, CHAT.md §2) ------
+	// The person may ask in words for what the chat's /status, /replay, /why … answer: these run the same answer
+	// (python -m loop.chat --root DIR "/replay …", 0 USD), so the person need not know the slash.
+	let chatDecl: any[] = [];
+	try {
+		chatDecl = JSON.parse(readFileSync(join(LOOP_REPO, "loop", "chat_tools.json"), "utf8")).tools;
+	} catch (e: any) {
+		console.error(`metis-workspace: no chat tools (${e.message})`);
+	}
+	for (const t of chatDecl.filter((x: any) => CHAT_READ.has(x.name))) {
+		pi.registerTool({
+			name: `chat_${t.name}`,
+			label: `/${t.name}`,
+			description: `the chat's /${t.name}, answered by the backend at 0 USD: ${t.description}. Run it when the person asks for it in words; report its rows as they print.`,
+			parameters: Type.Unsafe(schema(t.parameters)),
+			async execute(_id, params: any) {
+				const r = root();
+				const line = chatLine(t, params || {});
+				const env = { ...process.env, PYTHONPATH: [LOOP_REPO, process.env.PYTHONPATH].filter(Boolean).join(":") };
+				const res = await run(process.env.METIS_LOOP_SDK_PY || "python3", ["-m", "loop.chat", "--root", r, line], r, env);
+				return text(`${res.code === 0 ? "" : `exit ${res.code}\n`}${res.out}${res.err ? `\n${res.err}` : ""}`.trim() || "(no output)", { line, code: res.code });
 			},
 		});
 	}

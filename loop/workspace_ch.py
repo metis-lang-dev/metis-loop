@@ -435,23 +435,10 @@ class WorkspaceChannels:
         s = self.session_of(page, msg)
         if name == "help":
             out["text"] = chat.help_text(a.command)
-        elif name == "status":
-            out["text"] = await self._run(chat.status_text, self.ws, self.child_state(), self.budget_next)
-            out["child"] = self.child_state()
-        elif name == "surprises":
-            out["text"] = await self._run(chat.surprises_text, self.ws, a.status)
-        elif name == "replay":
-            run, win = a.run, chat.window(a.window) if a.window else None
-            if run is not None and win is None and chat.window(run) is not None and a.window is None:
-                run, win = None, chat.window(run)         # /replay 412..430: the window of the last surprise's trace
-            out.update(await self._run(chat.replay, self.ws, run, win))
-        elif name == "why":
-            out.update(await self._run(chat.why, self.ws, a.atom, a.at))
-        elif name == "diff":
-            out.update(await self._run(chat.diff, self.ws, a.id))
-        elif name == "ruling":
-            sr, r = await self._run(chat.ruling_of, self.ws, a.id)
-            out.update(text=chat.ruling_line(sr, r), ruling=sr["id"])
+        elif name in chat.READ:                          # the workspace's alone: the pi loop's chat_<name> tools answer the same
+            out.update(await self._run(chat.answer, self.ws, name, a, self.child_state(), self.budget_next))
+            if name == "status":
+                out["child"] = self.child_state()
         elif name == "mark":
             sess = None
             if s is not None and s.trace is not None:
@@ -563,17 +550,27 @@ class WorkspaceChannels:
     async def _pump(self, child):
         """The child's events: each journalled (who: pi, pointers and short words), pushed to the pages; a confirm
         request becomes the gate frame, answered by confirm/refuse."""
+        turn = {"words": 0, "tools": 0}                  # this turn's text and tool calls (loop-chat step 3)
         try:
             async for ev in child["rpc"].events():
                 kind = ev.get("kind")
+                if kind == "text" and str(ev.get("text") or "").strip():
+                    turn["words"] += 1
+                elif kind == "tool_call":
+                    turn["tools"] += 1
+                elif kind == "turn_end":                 # a turn the tester saw no words of says so (the dog drive's F1)
+                    if not turn["words"] and not ev.get("aborted"):
+                        ev = dict(ev, empty=True, tools=turn["tools"],
+                                  note=f"pi ended its turn without words ({turn['tools']} tool call{'s' if turn['tools'] != 1 else ''})")
+                    turn = {"words": 0, "tools": 0}
                 if kind == "gate":
                     child["gates"][str(ev["token"])] = ev.get("plan")
                     await self.gw._send_all({"ch": "loop", "type": "gate", "plan": ev.get("plan"), "token": ev["token"]})
                     row = {"token": ev["token"]}
                 else:
                     await self.gw._send_all({"ch": "loop", "type": "pi", "event": ev})
-                    row = {k: ev[k] for k in ("name", "id", "ok", "code", "where", "level", "cost", "model", "aborted")
-                           if k in ev}
+                    row = {k: ev[k] for k in ("name", "id", "ok", "code", "where", "level", "cost", "model", "aborted",
+                                              "empty", "tools") if k in ev}
                     for k in ("text", "error", "stderr_tail"):        # the words, cut: the journal carries pointers
                         v = ev.get(k)
                         if v:

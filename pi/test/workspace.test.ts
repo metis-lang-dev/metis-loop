@@ -13,7 +13,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { firings, schema, tracePath } from "../extensions/metis-workspace.ts";
+import workspace, { chatLine, firings, schema, tracePath } from "../extensions/metis-workspace.ts";
 import * as ws from "../extensions/sdk/workspace.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -86,7 +86,8 @@ test("metis-workspace: its tools, the trace verbs as declared, their schemas as 
 	workspace(p.api);
 	const declared = ws.tools().tools.map((t) => t.name);
 	assert.ok(declared.includes("trace_case") && declared.includes("lint"), declared.join(" "));
-	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "surprise_list", "surprise_next", "workspace_context", ...declared].sort());
+	const chat = ["chat_diff", "chat_replay", "chat_ruling", "chat_status", "chat_surprises", "chat_why"];   // loop-chat step 3
+	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
 	const c = p.tools.get("trace_case").parameters;
 	assert.equal(c.type, "object");
 	assert.equal(c.properties.at.type, "integer");
@@ -345,10 +346,34 @@ test("metis-workspace: surprise_next shows the family's units resolved by the co
 	}
 });
 
+test("metis-workspace: the chat's read-only commands are tools: their line from the declaration, answered on the workspace", async () => {
+	const why = { name: "why", parameters: { properties: { atom: { type: "STRING", positional: 0 }, at: { type: "INTEGER", flag: "--at" } } } };
+	assert.equal(chatLine(why, { atom: "brake_late", at: 41 }), "/why brake_late --at 41");
+	assert.equal(chatLine({ name: "replay", parameters: { properties: { run: { positional: 0 }, window: { positional: 1 } } } }, { window: "412..430" }), "/replay 412..430");
+	assert.equal(chatLine({ name: "status", parameters: { properties: {} } }, {}), "/status");
+	assert.equal(chatLine({ name: "surprises", parameters: { properties: { status: { positional: 0 } } } }, { status: "a b" }), '/surprises "a b"');
+	scratch();
+	const p = fakePi();
+	workspace(p.api);
+	const r = await p.tools.get("chat_status").execute("c1", {});
+	assert.match(r.content[0].text, /surprises: 0 open, 0 taken, 0 ruled/, r.content[0].text);
+	assert.equal(r.details.line, "/status");
+});
+
 test("the system prompt: a workspace surprise is ruled only through pack_propose, never the person's own loop", () => {
 	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
 	assert.match(t, /A surprise in a workspace is ruled only through `pack_propose`\*\*: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_new` for it/);
 	assert.match(t, /Once it is ruled you are done with that surprise/);
+});
+
+test("the system prompt: the chat (loop-chat step 3, CHAT.md §2): words at every turn's end, a take in one turn, the intents", () => {
+	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
+	assert.match(t, /## The chat/);
+	assert.match(t, /End every turn with at least one line of words/);
+	assert.match(t, /in ONE turn/);
+	for (const intent of ["take", "explain", "why", "propose", "apply", "replay", "status", "narrate", "compare", "undo", "what changed"])
+		assert.ok(t.includes(`*${intent}`), intent);
+	for (const tool of ["chat_status", "chat_replay", "chat_why", "chat_diff", "chat_ruling", "chat_surprises"]) assert.ok(t.includes(tool), tool);
 });
 
 test("metis-workspace: past half the budget each tool reply carries the spend; the kernel's formalize spend is charged too", async () => {

@@ -399,7 +399,54 @@ def lint_targets(ws, member=None):
     return out
 
 
+# the commands that read the workspace only (no page, no session, no child to start or stop): the pi loop's tools too
+# (loop-chat step 3: pi/extensions/metis-workspace.ts registers chat_<name> from the table and runs the CLI below)
+READ = ("status", "surprises", "replay", "why", "diff", "ruling")
+
+
+def answer(ws, name, a, child=None, budget_next=None):
+    """The answer of a READ command (its argparse namespace A): {text, ruling?} — the chat's and the pi loop's alike."""
+    if name == "status":
+        return {"text": status_text(ws, child, budget_next)}
+    if name == "surprises":
+        return {"text": surprises_text(ws, a.status)}
+    if name == "replay":
+        run, win = a.run, window(a.window) if a.window else None
+        if run is not None and win is None and window(run) is not None and a.window is None:
+            run, win = None, window(run)             # /replay 412..430: the window of the last surprise's trace
+        return replay(ws, run, win)
+    if name == "why":
+        return why(ws, a.atom, a.at)
+    if name == "diff":
+        return diff(ws, a.id)
+    if name == "ruling":
+        sr, r = ruling_of(ws, a.id)
+        return {"text": ruling_line(sr, r), "ruling": sr["id"]}
+    raise ValueError(f"/{name}: not a command the workspace answers alone (the chat's: /help)")
+
+
+def main(argv=None):
+    """python -m loop.chat [--root DIR] "/replay 412..430" — a READ command answered on the workspace at DIR (the
+    pi loop's chat_<name> tools); without --root, the line parsed only. Prints the text; exit 1 with the refusal."""
+    ap = argparse.ArgumentParser(prog="python -m loop.chat", description="the chat's read-only commands, on a workspace")
+    ap.add_argument("--root", help="the workspace (default: the line is parsed only)")
+    ap.add_argument("lines", nargs="+")
+    o = ap.parse_args(argv)
+    for line in o.lines:
+        try:
+            name, a = parse(line)
+            if o.root is None:
+                print(name, vars(a))
+                continue
+            out = answer(W.workspace(o.root), name, a)
+        except (ValueError, KeyError, T.TraceError, OSError) as e:
+            print(str(e).strip("'\""), file=sys.stderr)
+            return 1
+        print(out.get("text", ""))
+        if out.get("ruling"):
+            print(f"(ruling {out['ruling']}: the chat shows it as its card)")
+    return 0
+
+
 if __name__ == "__main__":
-    # python -m loop.chat "/status" — the table's line parsed (no workspace: the grammar alone)
-    for line in sys.argv[1:]:
-        print(parse(line))
+    sys.exit(main())

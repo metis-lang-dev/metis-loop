@@ -294,6 +294,40 @@ def exited(ws, secs=15):
     raise AssertionError("the child did not exit")
 
 
+class SilentTurns(StubPi):
+    """A child whose first turn ends on tool calls with no words (the dog drive's F1), and whose second speaks."""
+
+    async def say(self, text):
+        self.said.append(text)
+        if len(self.said) == 1:
+            for i in (1, 2):
+                await self.q.put({"kind": "tool_call", "name": "trace_count", "id": f"t{i}", "args": {}})
+                await self.q.put({"kind": "tool_result", "name": "trace_count", "id": f"t{i}", "ok": True, "text": "3"})
+        else:
+            await self.q.put({"kind": "text", "text": "go fired 3 times in the window"})
+        await self.q.put({"kind": "turn_end", "aborted": False})
+
+
+def test_a_turn_without_words_says_so(gw, tmp_path):
+    """loop-chat step 3: a turn that ends on tool calls with no text is marked (empty, its tool calls), so the chat
+    shows 'pi ended its turn without words (N tool calls)'; a turn with words is not; both journalled."""
+    gw.gw.wsc.pi_factory = SilentTurns
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        assert ask(ws, "loop", "start", mode="rpc")["child"]["state"] == "running"
+        ask(ws, "loop", "say", text="count go")
+        end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
+        assert end["empty"] is True and end["tools"] == 2
+        assert end["note"] == "pi ended its turn without words (2 tool calls)"
+        ask(ws, "loop", "say", text="and in words?")
+        end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
+        assert "empty" not in end
+        ask(ws, "loop", "stop")
+        exited(ws)
+    ends = [r for r in W.workspace(tmp_path).events() if r["kind"] == "rpc_turn_end"]
+    assert [(r.get("empty"), r.get("tools")) for r in ends] == [(True, 2), (None, None)]
+
+
 class FailsFirst(StubPi):
     """A child whose first start fails as loop.sh's refusal does (pi_rpc's PiRpcError, its stderr line in the words)."""
     tries = 0

@@ -153,9 +153,9 @@
           : el('div', { class: 'empty' }, held ? `the pi loop of pid ${held.pid} (${held.mode || '?'}) holds this workspace: its journal shows here, its words in its terminal`
             : running() ? 'say what to do: "take the next surprise"' : 'say what to do — "take the next surprise" starts the pi loop first')),
         el('form', { class: 'mw-row', onsubmit: e => { e.preventDefault(); say(e.target); } },
-          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace' : 'to the pi loop, or /help', disabled: !!held, 'aria-label': 'to the pi loop', autocomplete: 'off', list: listId }),
+          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace: /commands still answer (/help)' : 'to the pi loop, or /help', 'aria-label': 'to the pi loop', autocomplete: 'off', list: listId }),
           el('datalist', { id: listId }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description))),
-          el('button', { class: 'btn', type: 'submit', disabled: !!held }, 'say')));
+          el('button', { class: 'btn', type: 'submit' }, 'say')));
     }
     function journalBox() {
       return el('div', { class: 'mw-log mw-journal' }, s.journal.length ? s.journal.slice(-MAX).map(r => {
@@ -188,7 +188,10 @@
         push('tool' + (ev.ok === false ? ' err' : ''), ev.ok === false ? '✗' : '✓', `${ev.name}: ${short.length > 300 ? short.slice(0, 300) + '…' : short}`);
       } else if (k === 'notify') push('note', ev.level || 'note', ev.text || '');
       else if (k === 'error') push('err', 'error', `${ev.where || ''} ${ev.error || ''}`);
-      else if (k === 'turn_end') push('note', '', ev.aborted ? '— the turn was aborted —' : '— pi waits for you —');
+      else if (k === 'turn_end') {
+        if (ev.empty) push('err', 'pi', ev.note || 'pi ended its turn without words');   // the backend's line (loop-chat step 3)
+        push('note', '', ev.aborted ? '— the turn was aborted —' : '— pi waits for you —');
+      }
       else if (k === 'exit') push('err', 'exit', `pi exited (${ev.code})${ev.stderr_tail && ev.stderr_tail.length ? ': ' + [].concat(ev.stderr_tail).slice(-3).join(' | ') : ''}`);
       else if (k === 'usage') { s.spent += Number(ev.cost) || 0; }
       render();
@@ -257,7 +260,7 @@
       render();
       if (text.startsWith('/')) return command(text);       // the backend's, never a model turn
       if (!running()) {
-        if (elsewhere()) { push('err', 'error', 'another pi loop holds this workspace'); render(); return; }
+        if (elsewhere()) { push('err', 'error', 'another pi loop holds this workspace (its words are in its terminal): only /commands answer here'); render(); return; }
         if (!(await start())) return;
       }
       try { await io.ask('loop', 'say', { text }); } catch (e) { push('err', 'error', e.message); render(); }

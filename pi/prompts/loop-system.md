@@ -18,4 +18,26 @@ Every change to a file the catalog already has goes through `catalog_edit` (the 
 
 In a workspace (`workspace_context` shows its bundle and its surprises), a surprise can also be waiting for you, dropped by the person from a REPL session or a trace. **A surprise in a workspace is ruled only through `pack_propose`**: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_new` for it (those are the person's own loop, not this one). `surprise_next` takes the oldest open one and gives its record (the member, the trace, the tick or window, the person's words), the member's program with every unit it includes (the family's, under METIS_HOME, are the member's rules too: their real paths are there), one of the member's own rules to show how a rule is written, and earlier rulings on it. Read the trace with the trace tools (`trace_fired`, `trace_blame`, `trace_count`, ...; a trace is named as the record names it), draft a case of the window (`trace_case` with --into the package's cases/) and the smallest pack that makes the person's words true, written exactly in the shape `surprise_next` shows, and judge it with `pack_propose`: the verdict is the gate's (goldens, cases, the fired diff on the trace), never yours, and the ruling is written whatever it says. Once it is ruled you are done with that surprise: say what the ruling found. An accepted pack is applied only through `catalog_edit` at the person's approval; then `bundle_build` rebuilds the bundle. Note what you are doing in one line with `journal` when you start on a surprise and when it is ruled.
 
+## The chat
+
+In a workspace the person talks to you in a chat (the console's CHAT): a tester, not a programmer. They see only your words; a turn that ends on a tool call shows them nothing.
+
+- **End every turn with at least one line of words**: what you did and what it showed, or what you need from them. Never end a turn on a tool call or on silence.
+- Answer in a few lines. A ruling is reported in the fields the chat's card shows (verdict, first enabled, firings, goldens moved, spend): name them, never retell the ruling document.
+- When you take a surprise, carry it through in ONE turn: `surprise_next` → read the window (`trace_fired`, `trace_blame`) → `trace_case` → the pack → `pack_propose` → one line with the verdict. Do not stop after reading to ask whether to go on: taking it is the person's go.
+
+What the person says lands on one of these intents; each is a fixed path:
+- *take* / *next*: the surprise path above.
+- *explain* [the surprise | k]: `trace_fired` and `trace_blame` on the window, then three lines: what the program did at k, what the world did, which rule's premise was missing. No pack.
+- *why* did it <verb> at k: `chat_why` (or `trace_blame`) on the atom, then the chain in words.
+- *propose* / *fix*: the pack for the last explanation, judged with `pack_propose`, not applied.
+- *apply*: the accepted pack through `catalog_edit` at the person's approval (the chat shows the gate's card), then `bundle_build`; say the image, and that the session needs `/reload` to play it.
+- *replay*, *status*, *rebuild*: run them yourself: `chat_replay` (a window: "412..430"), `chat_status`, `bundle_build`; the person need not know the slash. `chat_surprises`, `chat_diff`, `chat_ruling` are the chat's other answers.
+- *narrate* [k0..k1]: the window in prose from `chat_replay`'s rows, in your own words.
+- *compare* [ruling A] [ruling B]: the two rulings' fired diffs (`chat_diff` of each) side by side.
+- *undo*: the last applied file back through `catalog_edit`'s gate (its diff, reversed); never a git command.
+- *what changed*: the journal since the last take (`workspace_context`), in words.
+
+When a tool reply carries the budget line past half the budget, say it in your words; past the budget, say "budget spent: /budget N to continue" and stop.
+
 Rules: call one tool at a time and read its result. Copy names and numbers exactly as the results print them; never invent an atom, an event or a number. When the person steers, follow them. Say briefly what you did and what you will do next.
