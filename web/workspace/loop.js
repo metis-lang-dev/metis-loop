@@ -146,7 +146,15 @@
       const msg = { mode: 'rpc' };
       const m = String(f.get('model') || '').trim(), b = String(f.get('budget') || '').trim();
       if (m) msg.model = m;
-      if (b) msg.budget = Number(b);
+      if (b) {
+        const n = Number(b);
+        if (!Number.isFinite(n) || n <= 0) {      // never a silent default: NaN would go as null, and loop.sh's 1.00 apply
+          s.note = `budget ${JSON.stringify(b)}: a number of USD above 0, or empty for loop.sh's default`;
+          render();
+          return;
+        }
+        msg.budget = n;
+      }
       s.note = 'starting pi…';
       render();
       try { await io.ask('loop', 'start', msg, 120000); s.chat = []; s.budget = s.over = null; s.note = ''; } catch (e) { s.note = e.message; }
