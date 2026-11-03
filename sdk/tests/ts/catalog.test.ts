@@ -51,26 +51,11 @@ test("the reads answer what the py CLI answers", () => {
 	assert.ok(existsSync(join(r, ".metis")));
 });
 
-test("plan writes nothing; apply writes the program, the extensions and the intents", () => {
-	const r = scratch();
-	const prog = readFileSync(join(r, "domains/dog/dog.llp"), "utf8") + "% from ts\n";
-	const w = { program: prog, extensions: { tricks: "% an extension\n", "Pet Moves": "% another\n" } };
-	const planned = catalog.plan("dog", w, r);
-	assert.deepEqual(planned.map((f) => [f.path, f.new]), [
-		["domains/dog/dog.llp", false], ["domains/dog/extensions/tricks.llp", true], ["domains/dog/extensions/pet_moves.llp", true]]);
-	assert.match(planned[0].diff, /\+% from ts/);
-	assert.ok(!existsSync(join(r, "domains/dog/extensions")));
-	const before = catalog.fingerprint("dog", r);
-	const out = catalog.apply("dog", w, r);
-	assert.deepEqual(out.written, planned.map((f) => f.path));                    // three texts: stdin and two files
-	assert.equal(readFileSync(join(r, "domains/dog/extensions/pet_moves.llp"), "utf8"), "% another\n");
-	assert.ok(out.fingerprint && out.fingerprint !== before);
-	assert.deepEqual(catalog.apply("dog", { program: prog }, r).written, []);    // unchanged: nothing
-	const it = catalog.apply("plant", { intentsSkeleton: true }, r);
-	assert.ok(it.written.includes("domains/plant/intent.yaml"));
-	const nu = catalog.apply("bell", { program: "% the bell\n", manifest: { display: "the bell" } }, r);
-	assert.deepEqual(nu.written, ["domains/bell/bell.llp", "domains/bell/domain.yaml"]);
-	assert.equal(readFileSync(join(r, "domains/bell/domain.yaml"), "utf8"), "display: the bell\nprogram: bell.llp\n");
+test("the writes are edit, new and take: no apply of a text over a package (workspace-files)", () => {
+	assert.equal((catalog as any).apply, undefined);
+	assert.equal((catalog as any).plan, undefined);
+	assert.equal(typeof catalog.new, "function");
+	assert.equal(typeof catalog.planNew, "function");
 });
 
 test("take brings a domain over, with a README from the run; build makes its bundle", () => {
@@ -80,7 +65,8 @@ test("take brings a domain over, with a README from the run; build makes its bun
 	cpSync(join(src, "tools"), join(into, "tools"), { recursive: true });
 	execFileSync("rm", [join(src, "domains/plant/intent/plant-spoken.txt")]);   // empty: take writes none
 	const planned = catalog.planTake("plant", src, {}, into);
-	assert.ok(planned.some((f) => f.path === "domains/plant/plant_host.py" && f.new));
+	assert.ok(planned.dry_run && planned.ok && planned.findings.length === 0);
+	assert.ok(planned.files.some((f) => f.path === "domains/plant/plant_host.py" && f.new));
 	assert.ok(!existsSync(join(into, "domains/plant")));
 	const out = catalog.take("plant", src, { readme: "# plant, taken\n" }, into);
 	assert.ok(out.written.includes("domains/plant/extensions/visitor.llp"));
@@ -98,15 +84,8 @@ test("take brings a domain over, with a README from the run; build makes its bun
 	assert.ok(existsSync(join(into, "domains/plant/build/plant.metis")));
 });
 
-test("apply's readme, host and corpus; readme() and ts() — py's plan/apply keywords, one for one", () => {
+test("readme() and ts()", () => {
 	const r = scratch();
-	const w = { readme: "# plant, by hand\n", host: "# the plant's host, again\n", corpus: "water it\tWATER\n" };
-	assert.deepEqual(catalog.plan("plant", w, r).map((f) => f.path),
-		["domains/plant/README.md", "domains/plant/intent/plant-corpus.tsv", "domains/plant/plant_host.py"]);
-	catalog.apply("plant", w, r);                                                      // three texts: stdin and two files
-	assert.equal(readFileSync(join(r, "domains/plant/README.md"), "utf8"), w.readme);
-	assert.equal(readFileSync(join(r, "domains/plant/plant_host.py"), "utf8"), w.host);
-	assert.equal(readFileSync(join(r, "domains/plant/intent/plant-corpus.tsv"), "utf8"), w.corpus);
 	assert.equal(catalog.readme("plant", r), py(r, "readme", "plant").readme);
 	const run = mkdtempSync(join(tmpdir(), "catalog-ts-run-"));
 	execFileSync(PY, ["-c", `import json,sys; json.dump({"seed": "domains/fiction/x.llp"}, open(sys.argv[1], "w"))`, join(run, "seed.json")]);
@@ -119,8 +98,9 @@ test("apply's readme, host and corpus; readme() and ts() — py's plan/apply key
 test("the SDK's refusals throw as CatalogError, with its words", () => {
 	const r = scratch();
 	assert.throws(() => catalog.get("nosuch", r), (e: any) => e instanceof catalog.CatalogError && e.verb === "get" && /nosuch/.test(e.message));
-	assert.throws(() => catalog.plan("dog", { manifest: { colour: "brown" } }, r), /unknown key/);
-	assert.throws(() => catalog.plan("dog", { intents: "x: 1\n", intentsSkeleton: true }, r), /not both/);
+	assert.throws(() => catalog.planEdit("dog", { path: "domain.yaml", old_string: "program:", new_string: "colour: brown\nprogram:" }, r),
+		/unknown key/);
+	assert.throws(() => catalog.planNew("dog", { program: "% x\n" }, r), (e: any) => e.verb === "new" && /change it with edit/.test(e.message));
 	assert.throws(() => catalog.take("dog", r, { readme: "x", readmeFromRun: r }, r), /not both/);
 	// a manifest host out of its domain (review R1): take would write another domain's file
 	const into = mkdtempSync(join(tmpdir(), "catalog-ts-into-"));
@@ -143,11 +123,13 @@ if (!HAS_METISC && process.env.METIS_LOOP_REQUIRE_METISC) throw new Error("METIS
 test("edit: one exact edit, its diff and since_diff; the refusals", { skip: !HAS_METISC && "no metisc" }, () => {
 	const r = scratch();
 	const e = { path: "plant.llp", old_string: "% Made in the loop console (new).", new_string: "% Made in the loop console." };
-	const planned = catalog.planEdit("plant", e, r);
+	const plan = catalog.planEdit("plant", e, r);
+	const planned = plan.files;
+	assert.ok(plan.dry_run && plan.ok && plan.diff === planned[0].diff);
 	assert.deepEqual(planned.map((f) => f.path), ["domains/plant/plant.llp"]);
-	assert.deepEqual(planned, py(r, "edit", "plant", "plant.llp", "--old", w(e.old_string), "--new", w(e.new_string), "--dry-run").files);
+	assert.deepEqual(plan, py(r, "edit", "plant", "plant.llp", "--old", w(e.old_string), "--new", w(e.new_string), "--dry-run"));
 	const refused = planned[0].text.replace("console.", "console, refused.");
-	const again = catalog.planEdit("plant", e, r, { since: { "domains/plant/plant.llp": refused } });
+	const again = catalog.planEdit("plant", e, r, { since: { "domains/plant/plant.llp": refused } }).files;
 	assert.match(again[0].since_diff!, /^-% Made in the loop console, refused\./m);
 	assert.match(again[0].since_diff!, /^\+% Made in the loop console\. Say/m);
 	assert.match(readFileSync(join(r, "domains/plant/plant.llp"), "utf8"), /\(new\)/);       // a plan writes nothing
@@ -155,13 +137,30 @@ test("edit: one exact edit, its diff and since_diff; the refusals", { skip: !HAS
 	assert.equal(readFileSync(join(r, "domains/plant/plant.llp"), "utf8"), planned[0].text);
 	assert.throws(() => catalog.edit("plant", e, r), (x: any) => x instanceof catalog.CatalogError && /not in it/.test(x.message));
 	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: "pred", new_string: "PRED" }, r), /occurs \d+ times/);
-	assert.equal(catalog.planEdit("plant", { path: "plant.llp", old_string: "sun", new_string: "light", replace_all: true }, r).length, 1);
-	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r),
+	assert.equal(catalog.planEdit("plant", { path: "plant.llp", old_string: "sun", new_string: "light", replace_all: true }, r).files.length, 1);
+	// a plan says what refuses as findings, never throwing: ok false; the write refuses with the words
+	const bad = catalog.planEdit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r);
+	assert.ok(!bad.ok && bad.findings.some((x) => x.file === "extensions/visitor.llp" && x.as === "extension" && x.refuses));
+	assert.throws(() => catalog.edit("plant", { path: "plant.llp", old_string: "moist", new_string: "wet", replace_all: true }, r),
 		/extensions\/visitor\.llp: error pred-undeclared/);                                // its extension, against the edited program
 	assert.throws(() => catalog.planEdit("plant", { path: "../dog/dog.llp", old_string: "a", new_string: "b" }, r), /not inside/);
 	const rule = readFileSync(join(r, "domains/plant/plant.llp"), "utf8").split("\n").find((l) => l.includes(" -o moist"))!;
-	assert.throws(() => catalog.planEdit("plant", { path: "plant.llp", old_string: rule, new_string: rule.replace("-o moist", "-o moistt") }, r),
+	assert.throws(() => catalog.edit("plant", { path: "plant.llp", old_string: rule, new_string: rule.replace("-o moist", "-o moistt") }, r),
 		/adds 1 diagnostic[^]*moistt/);
+	// old_string "": a file the domain lacks (its extension), checked against the program; the lint shown
+	const ext = "catalog tired 1.\nextends plant.\nstage main {\n  %% I stay dry.\n  tire [dyn] : dry -o dry.\n}\n";
+	const made = catalog.edit("plant", { path: "extensions/tired.llp", old_string: "", new_string: ext }, r);
+	assert.ok(made.ok && made.written.includes("domains/plant/extensions/tired.llp"));
+	// new: a package the catalog lacks, its program checked
+	const bell = "% the bell\ncatalog bell 1.\nlayers (dyn).\nstages (main).\nnamespace bell produce (dyn).\npred still : bell.\n" +
+		"pred rung : bell.\nstage main {\n  %% I ring.\n  ring [dyn] : still -o rung.\n}\n#init still 1\n";
+	const pn = catalog.planNew("bell", { program: bell, manifest: { display: "the bell" } }, r);
+	assert.ok(pn.ok && !existsSync(join(r, "domains/bell")));
+	assert.deepEqual(pn.files.map((f) => f.path), ["domains/bell/bell.llp", "domains/bell/domain.yaml"]);
+	const nu = catalog.new("bell", { program: bell, manifest: { display: "the bell" } }, r);
+	assert.deepEqual(nu.written, ["domains/bell/bell.llp", "domains/bell/domain.yaml"]);
+	assert.equal(readFileSync(join(r, "domains/bell/domain.yaml"), "utf8"), "display: the bell\nprogram: bell.llp\n");
+	assert.throws(() => catalog.new("gong", { program: bell.replace(/bell/g, "gong").replace("-o rung", "-o rungg") }, r), /adds 1 diagnostic/);
 	// the README, through the same edit
 	const rd = catalog.edit("plant", { path: "README.md", old_string: "plant", new_string: "Plant", replace_all: true }, r);
 	assert.deepEqual(rd.written, ["domains/plant/README.md"]);
@@ -174,31 +173,31 @@ function w(t: string): string {
 	return f;
 }
 
-test("since on plan and planTake; display and line; a plan's text", () => {
+test("since on planEdit and planTake; display and line through an edit of domain.yaml", { skip: !HAS_METISC && "no metisc" }, () => {
 	const r = scratch();
 	const rd = "# plant\n\nOne.\nTwo.\n";
-	const [f] = catalog.plan("plant", { readme: rd }, r, { since: { "domains/plant/README.md": "# plant\n\nOne.\nTwi.\n" } });
+	writeFileSync(join(r, "domains/plant/README.md"), "# plant\n\nOne.\nOld.\n");
+	const [f] = catalog.planEdit("plant", { path: "README.md", old_string: "Old.", new_string: "Two." }, r,
+		{ since: { "domains/plant/README.md": "# plant\n\nOne.\nTwi.\n" } }).files;
 	assert.equal(f.text, rd);
 	assert.match(f.since_diff!, /^-Twi\.$/m);
-	assert.equal(catalog.plan("plant", { readme: rd }, r)[0].since_diff, undefined);
+	assert.equal(catalog.planEdit("plant", { path: "README.md", old_string: "Old.", new_string: "Two." }, r).files[0].since_diff, undefined);
 	const into = mkdtempSync(join(tmpdir(), "catalog-ts-into-"));
 	mkdirSync(join(into, "domains"));
 	cpSync(join(r, "tools"), join(into, "tools"), { recursive: true });            // plant's intents are generated there
-	const t = catalog.planTake("plant", r, { readme: rd }, into, { since: { "domains/plant/README.md": "# plant\n" } });
+	const t = catalog.planTake("plant", r, { readme: rd }, into, { since: { "domains/plant/README.md": "# plant\n" } }).files;
 	assert.match(t.find((x) => x.path === "domains/plant/README.md")!.since_diff!, /^\+Two\.$/m);
-	const m = catalog.plan("plant", { display: "-the plant", line: "a potted plant: it dries out" }, r);
-	assert.deepEqual(m.map((x) => x.path), ["domains/plant/domain.yaml"]);
-	assert.match(m[0].text, /^display: -the plant$/m);
-	assert.match(m[0].text, /^line: 'a potted plant: it dries out'$/m);
-	catalog.apply("plant", { line: "dries out" }, r);
+	const line = catalog.get("plant", r).line;
+	catalog.edit("plant", { path: "domain.yaml", old_string: `line: ${JSON.stringify(line)}`, new_string: "line: dries out" }, r);
 	assert.equal(catalog.get("plant", r).line, "dries out");
-	assert.throws(() => catalog.plan("plant", { line: "two\nlines" }, r), /one line/);
 });
 
 test("readme(): the mechanical parts from the SDK, the model's summary and title; a world with no commands", () => {
 	const r = scratch();
 	const quiet = "% a quiet world\ncatalog quiet 1.\npred a : w.\npred b : w.\nstage s {\n  %% a becomes b.\n  ab [w] : a -o b.\n}\n#init a 1\n";
-	catalog.apply("quiet", { program: quiet }, r);
+	mkdirSync(join(r, "domains/quiet"), { recursive: true });                          // a fixture, written as it is
+	writeFileSync(join(r, "domains/quiet/quiet.llp"), quiet);
+	writeFileSync(join(r, "domains/quiet/domain.yaml"), "program: quiet.llp\n");
 	assert.deepEqual(catalog.commands("quiet", r), []);
 	assert.deepEqual(catalog.commands("plant", r), py(r, "intents", "plant", "--skeleton").commands);
 	assert.equal(catalog.skeleton("quiet", r), null);                                    // the default: no intent.yaml

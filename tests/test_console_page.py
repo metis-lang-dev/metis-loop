@@ -82,12 +82,13 @@ def test_the_editor_over_the_files_and_panels():
     assert not re.search(r"https?://[^\"']*codemirror", PAGE)
     assert "if(!GW){cmLib=null;return cmLib}" in PAGE
     for gone in ("indexedDB", "IndexedDB", "working " + "copy", "recompile", "certified", 'type:"work"', 'type:"save"',
-                 "saveWork", "newExtension", "offeredCopy"):
+                 "saveWork", "offeredCopy"):
         assert gone not in PAGE, gone
     assert 'if(f.type==="files"){if(f.session===sid)onFiles(f);return}' in PAGE
     assert 'wsSend({ch:"repl",type:"edit",session:sid,path,old:w.base,new:w.get()' in PAGE
     assert 'type:"edit",op:"confirm"' in PAGE and 'type:"edit",op:"refuse"' in PAGE
     assert 'w.reload=true;wsSend({ch:"repl",type:"files",session:sid})' in PAGE     # reload reads the disk now
+    assert 'id="newext"' in PAGE and "function newExtension(name)" in PAGE         # + extension: an edit of a new file
     assert 'const canWrite=()=>!!GW&&!!manifestM&&manifestM.mode==="personal";' in PAGE
     assert "lib.EditorView.editable.of(false)" in PAGE and "ta.readOnly=ro" in PAGE
     for d in ("catalog", "candidates", "records"):

@@ -482,7 +482,7 @@ class Gateway:
         (or the examples) on the intent model. Gateway-side: it never reaches
         the kernel REPL. Personal mode only (it runs the operator's model).
         Drafting intent.yaml was the agent seat's (retired, loop-workspace):
-        it is the pi loop's now (catalog_apply what=intents, at the gate)."""
+        it is the pi loop's now (catalog_new intents=true, at the gate)."""
         from . import intents as it
         item = {"id": iid, "cmd": cmd.strip(), "actor": actor, "ts": _now()}
         await self._broadcast(s, {"ch": "repl", "type": "queued", "session": s.sid, **item}, log=True)
@@ -496,7 +496,7 @@ class Gateway:
                 out = await loop.run_in_executor(None, it.check, self.srv, name)
                 ok, result = out["ok"], out["output"]
             elif not sub or sub[0] in ("show", "save"):
-                raise ValueError("drafting intent.yaml is the pi loop's (catalog_apply what=intents, at the "
+                raise ValueError("drafting intent.yaml is the pi loop's (catalog_new intents=true, at the "
                                  "gate; pi/loop.sh): the console's agent seat is retired. Here: intents check")
             else:
                 raise ValueError("usage: intents check")

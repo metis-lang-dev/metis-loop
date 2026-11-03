@@ -20,8 +20,9 @@ and the worked example.
   interfaces' own declarations. Nothing is written for pi that the interfaces do
   not declare, and nothing they declare is left out.
 - The one capability neither interface has is writing into the catalog. That
-  write is `catalog_apply`, behind the person's gate; `catalog_edit`, one exact
-  edit of a domain's file (old text → new, every other byte kept), and
+  write is `catalog_new` (a domain the catalog lacks), behind the person's gate;
+  `catalog_edit`, one exact edit of a domain's file (old text → new, every other byte
+  kept; every change to a domain the catalog has, workspace-files s-9ea4cfa4), and
   `catalog_take`, which takes a finished domain from the loop's catalog into the
   person's, are behind the same gate. pi's own edit tool stays off: it would
   write past the gate, the SDK's checks and the roots.
@@ -45,15 +46,15 @@ AGENT-LOOP.md's steps, each with the tools it uses and the state it leaves behin
 |---|---|---|---|
 | **start** | the person gives a goal and prose (pi: a prompt) | — | the session |
 | **formalize** | the prose goes into the REPL; the program is drafted by the kernel's own formalize (its `[llm]`: the driver's model, or `FORMALIZE_MODEL`) and checked as a whole program | `repl_text`, `repl_formalize`, `repl_revise`, `repl_show` | a candidate that passed `revise` |
-| **apply** | the candidate is written into the catalog, gated (the person sees the loop SDK's dry-run diff), through the catalog's one validated write (`python -m metis.catalog apply`); the REPL then serves it | `catalog_apply` what=program | the domain's program, plus `domain.yaml` when there is none |
-| **intents** | the person's verbs are drafted from the program's `cmd_*` atoms and `%%` lines (the SDK's `catalog intents --skeleton`; `apply --intents` writes it and generates its files), gated | `catalog_apply` what=intents | `intent.yaml` and `intent/` |
+| **new** | the candidate becomes a new domain of the catalog, gated (the person sees the loop SDK's dry-run diff and the findings), through `python -m metis.catalog new` (its program checked by metisc, the lint shown); the REPL then serves it | `catalog_new` program=candidate | the domain's program and its `domain.yaml` |
+| **intents** | the person's verbs are drafted from the program's `cmd_*` atoms and `%%` lines (the SDK's skeleton), in the new domain's write, its files generated | `catalog_new` intents=true | `intent.yaml` and `intent/` |
 | **exercise** | the domain agent runs the domain, the loop owning its clock | `domain_open`, `intent_<verb>`, `domain_clock`, `domain_state` / `why` / `events` / `ctx` / `findings` | the agent's records (`--records`) |
 | **exercise (no intents)** | a world without intents (an RDDL world, its host the gym) is exercised through its world: its ports, world lines, beats, and seeded episodes measured, every beat scored (per action, P(the world's answer \| that action) under the program); recorded, not fixed | `domain_ports`, `domain_world`, `domain_clock`, `domain_episodes` | the measure: outcomes, likelihood, surprises, mismatched atoms |
 | **surprise** | the world reads differently from the program; a message enters the loop | (a signal) | an open record |
 | **revise** | the missing behaviour is described, drafted as an extension, and gated as one | `repl_mine`, `repl_formalize`, `repl_gate`, `repl_show` | a candidate that passed `gate` |
-| **apply** | the extension is written, gated | `catalog_apply` what=extension | `domains/<n>/extensions/<name>.llp` |
+| **apply** | the extension is written, gated: an edit that makes its file, checked against the program | `catalog_edit` path=extensions/<name>.llp, old_string empty | `domains/<n>/extensions/<name>.llp` |
 | **re-exercise** | the domain is opened again on the catalog as it is now; the same situation must now be explained | `domain_open`, … | an explained record, or no surprise |
-| **seed** | a seeded start (`loop.sh --seed PATH.llp`): the REPL serves an existing program, and it becomes the domain's program as it is, gated; formalize and revise are skipped | `catalog_apply` what=served | the domain's program and `domain.yaml` |
+| **seed** | a seeded start (`loop.sh --seed PATH.llp`): the REPL serves an existing program, and it becomes the domain's program as it is, gated; formalize and revise are skipped | `catalog_new` program=served | the domain's program and `domain.yaml` |
 | **edit** | a small change to a file the catalog has (a comment, a header line, a README sentence, a value, one rule's text): the SDK's `edit`, old_string exactly once (or replace_all), the path inside the domain, a `.llp` edit adding no metisc diagnostic; never formalize or revise | `catalog_edit` | that one file |
 | **take** | when the person asks: the domain is taken from the loop's catalog (the directory it runs in) into the person's (`METIS_LOOP_TAKE_INTO`, `loop.sh --into DIR2`) through the SDK's `take`, with a README of the run and its bundle, gated, never a commit | `catalog_take` | `domains/<n>/` in the person's catalog |
 | **stop** | the person stops the run | (pi: abort) | the session file |
@@ -64,7 +65,7 @@ AGENT-LOOP.md's steps, each with the tools it uses and the state it leaves behin
 |---|---|
 | start | a prompt: the goal and the prose |
 | steer | `steer` (delivered after the current tool batch) or `follow_up` (after the run) |
-| approve | the `tool_call` gate on `catalog_apply`, `catalog_edit` and `catalog_take`: `ctx.ui.confirm`, which the TUI shows and RPC forwards as `extension_ui_request`. A file the person refused shows, at its next proposal, the diff from the refused text first, then the diff against the disk |
+| approve | the `tool_call` gate on `catalog_new`, `catalog_edit` and `catalog_take`: `ctx.ui.confirm`, which the TUI shows and RPC forwards as `extension_ui_request`. A file the person refused shows, at its next proposal, the diff from the refused text first, then the diff against the disk |
 | stop | `abort` |
 
 **The later autonomous entry** (step 2): a served domain spills surprise records,
@@ -98,7 +99,7 @@ The kernel's formalize has its own repair rounds.
 
 | file | process | tools | glue |
 |---|---|---|---|
-| `metis-repl.ts` | one `metis --json [llp]` per session; reopened on the applied program | `repl_<verb>` for every verb the wire's `help` lists (39 today), each with the description the wire declares; `catalog_apply`, `catalog_edit`, `catalog_take`; the `tool_call` gate | see the report |
+| `metis-repl.ts` | one `metis --json [llp]` per session; reopened on the applied program | `repl_<verb>` for every verb the wire's `help` lists (39 today), each with the description the wire declares; `catalog_new`, `catalog_edit`, `catalog_take`; the `tool_call` gate | see the report |
 | `metis-workspace.ts` | none: each call is the loop SDK's workspace face (`python -m metis.catalog.workspace`, docs/WORKSPACE.md §2) or a declared trace verb | `workspace_context`, `surprise_list`, `surprise_next` (takes the oldest open surprise), `trace_*` and `lint` for every verb of metispy's `metis/trace_tools.json`, `pack_propose` (propose.sh: the ruling and the pack written as the surprise's), `bundle_build` (`metisc build .`, the image before and after), `journal`; the pi lock (`.metis/loop/pi.json`) for the session | WORKSPACE.md §5.1 |
 | `metis-domain.ts` | one `domain_agent --domain <n> --case replay --consult template [--records DIR]` per `domain_open` | `domain_open`, `domain_clock`, `domain_ports`, `domain_world`, `domain_episodes`; `domain_<tool>` for every tool of `metis --tools-json` served by the domain agent (served_by repl / watch / agent: state, ctx, events, why, findings, consult, reset, explain, escalate); `intent_<verb>` for every verb of the domain's `intent.yaml` | |
 | `lib/jsonl.ts` | — | a JSON-lines child: one request, the lines until its answer, unasked lines to a callback | |

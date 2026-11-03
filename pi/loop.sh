@@ -4,7 +4,7 @@
 #
 # A loop starts in a directory, and that directory is the catalog and the workspace
 # (cwd-root s-ddac2cbf), as `cd DIR && claude` makes DIR the project: DIR's domain
-# packages are the catalog (an empty DIR is an empty catalog: the first catalog_apply
+# packages are the catalog (an empty DIR is an empty catalog: the first catalog_new
 # writes DIR/domains/<name>/), pi runs in DIR, and the loop's own state goes in
 # DIR/.metis/ (the loop SDK's catalog.state(): records/, sessions/, seed/, seed.json;
 # git-ignored when DIR is a checkout).
@@ -14,7 +14,7 @@
 #                                        a seeded start: the REPL serves an existing program
 #                                        (a copy in DIR/.metis/seed/), and pi's first message asks
 #                                        the model to make it DIR's domain NAME (default: the file's
-#                                        stem, - as _) through catalog_apply what=served — its rules
+#                                        stem, - as _) through catalog_new program=served — its rules
 #                                        unchanged — then exercise it and, when the person asks,
 #                                        catalog_take it (prompts/seed-task.md). A DIR is seeded once:
 #                                        the same --seed again goes on with it.
@@ -23,7 +23,7 @@
 #                                        message, so the model never runs another n before the person's
 #                                        PKG_DIR, a domain package (its manifest, program, included
 #                                        files, host): copied whole into DIR/.metis/seed/domains/NAME/,
-#                                        its program served there; what=served takes the package into
+#                                        its program served there; program=served takes the package into
 #                                        DIR, every file at the gate
 #   --into DIR2 (or METIS_LOOP_TAKE_INTO=DIR2)
 #                                        the catalog catalog_take takes a finished domain into (gated,

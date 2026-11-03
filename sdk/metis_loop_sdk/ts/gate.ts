@@ -3,8 +3,10 @@
 // through metispy's gate CLI (python -m metis.gate), so both loops follow one policy:
 //
 //   import * as gate from "./gate.ts";
-//   const pl = gate.propose("program", "lamp", { text, display, line }, { root, run, state });
+//   const pl = gate.propose("new", "lamp", { text, display, line }, { root, run, state });
+//   const ed = gate.propose("edit", "lamp", { path: "lamp.llp", old, new }, { root, run, state });
 //   pl.files            // [{path, new, diff, text, since_diff?}]: what confirm writes, each with its diff
+//   pl.findings         // metis.catalog's checks: metisc's diagnostics (one that refuses refuses the plan), the lint
 //   gate.confirm(pl.token, state)   // writes exactly that plan: {written, fingerprint, serve?, bundle?, note?}
 //   gate.refuse(pl.token, state)    // the person said no: its texts are remembered (the next plan diffs from them)
 //
@@ -13,9 +15,11 @@
 // that says no throws GateError with its words, named as the catalog face names its verbs:
 // "catalog <kind>: …" for a proposal, "gate confirm: …" / "gate refuse: …" after it.
 import { execFileSync } from "node:child_process";
-import type { Planned } from "./catalog.ts";
+import type { Finding, Planned } from "./catalog.ts";
 
-export type Kind = "program" | "served" | "extension" | "intents" | "readme" | "edit" | "take";
+/** The writes (workspace-files s-9ea4cfa4): new (a package the catalog lacks), edit (one file), take (a package
+ *  into another catalog). No kind writes a copy of a text over a package's file. */
+export type Kind = "new" | "edit" | "take";
 
 /** A plan the person reads: the files confirm writes, its token; note: nothing to write, and why;
  *  say: a word for the loop with the write's result; reopen: the REPL serves the program after it. */
@@ -25,6 +29,7 @@ export interface Plan {
 	domain: string;
 	root: string;
 	files: Planned[];
+	findings: Finding[];
 	reopen: boolean;
 	note?: string;
 	say?: string;
@@ -35,6 +40,7 @@ export interface Plan {
 export interface Confirmed {
 	written: string[];
 	fingerprint: string | null;
+	findings: Finding[];
 	note?: string;
 	serve?: { program: string; host: string | null };
 	bundle?: string;
@@ -71,8 +77,9 @@ function cli(args: string[], state: string, label: string, input = ""): any {
 	}
 }
 
-/** A plan of the write `kind` for `domain`: args as the kind takes them (text, display, line, name,
- *  title, path/old/new/replace_all, src). */
+/** A plan of the write `kind` for `domain`: args as the kind takes them (new: text, served, display, line,
+ *  extensions, intents (text, or true: the skeleton), readme (text, or {text, title}); edit: path, old, new,
+ *  replace_all; take: src; any: who, backend | pi, for a workspace's journal). */
 export function propose(kind: Kind, domain: string, args: Record<string, unknown>, o: { root: string; state: string; run?: string }): Plan {
 	return cli(["propose", kind, domain, "--root", o.root, "--run", o.run ?? o.state], o.state, `catalog ${kind}`, JSON.stringify(args));
 }

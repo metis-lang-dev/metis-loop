@@ -347,7 +347,7 @@ test("metis-workspace: surprise_next shows the family's units resolved by the co
 
 test("the system prompt: a workspace surprise is ruled only through pack_propose, never the person's own loop", () => {
 	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
-	assert.match(t, /A surprise in a workspace is ruled only through `pack_propose`\*\*: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_apply` for it/);
+	assert.match(t, /A surprise in a workspace is ruled only through `pack_propose`\*\*: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_new` for it/);
 	assert.match(t, /Once it is ruled you are done with that surprise/);
 });
 

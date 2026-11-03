@@ -24,7 +24,7 @@ workspace already (its `.metis/road/` holds the page's run today).
 | the bundle | `DIR/domains/composition.yaml` + `build/<name>.build` + the image (`metisc build .`, spec/17 §7; the road: `road/domains/`) | `build/`, `image.golden` | none: files |
 | the human loop's backend | `loop/gateway.py` + `console_serve.py`: REPL sessions over the kernel wire, the EDITOR's gated edit of the file on disk (workspace-files), records sink, the gate (plan/confirm), the LLM seats formalize/narrate/agent chat on `loop/brain.py` (claude -p, OpenRouter, Ollama) | memory only (D4) | ONE WebSocket `/ws`, channels `repl`, `meta`, `chat`, gate ops |
 | the console | `console/loop_console.html` + `console/lib/shell.*` + the SDK's catalog widget | browser | the gateway's socket |
-| the pi loop | `pi/loop.sh`: pi (TUI or `--mode rpc`) with `metis-domain.ts` (domain_open/clock/ports/world/episodes) and `metis-repl.ts` (REPL tools, catalog_apply/edit/take at pi's confirm); the brain on Ollama (`pi/ollama/`, `models.json`) | `.metis/seed/`, pi's own session files | pi's RPC mode over stdio, or nothing (the TUI) |
+| the pi loop | `pi/loop.sh`: pi (TUI or `--mode rpc`) with `metis-domain.ts` (domain_open/clock/ports/world/episodes) and `metis-repl.ts` (REPL tools, catalog_new/edit/take at pi's confirm); the brain on Ollama (`pi/ollama/`, `models.json`) | `.metis/seed/`, pi's own session files | pi's RPC mode over stdio, or nothing (the TUI) |
 | the policy driver + the pack verb | `pi/policy/driver.py` (phases, the ask), `propose.sh --pack` (the judge: gate cascade, goldens, cases, fired diff, lint rows, the ruling document) | `RUN/records/`, `RUN/state/journal.jsonl`, `RUN/cost.jsonl`, the ruling .md | none: files and a command line |
 | the trace | metispy `metis.trace`: Segments writer (`TRACE/segments`, `checkpoints/k<k>.json`), replay/case/blame/count/families/holds/diff/outcomes/fired/timeline | a trace dir per run | none: a command line |
 
@@ -79,7 +79,7 @@ in one `LAYOUT` table both faces read).
   rulings/
     <id>.md          the pack verb's document (propose.py document(): verdict, evidence, the model's words)
     <id>.json        {verdict, pack: "packs/<id>.llp", moved: [...], lint: [...], reads_absent: [...], spent}
-  packs/<id>.llp     the candidate pack judged (applied only through the gate: catalog_apply)
+  packs/<id>.llp     the candidate pack judged (applied only through the gate: catalog_edit)
   traces/<run>/      the Segments writer's dirs (header, segments, checkpoints), one per run
   records/, sessions/, seed/, seed.json      as today (metis.catalog.state)
   cost.jsonl         one line per paid call: {ts, who, model, cost, usage_before} (the existing cost log, one file)
@@ -158,7 +158,7 @@ parity rule, extended from the REPL to the trace).
    on the same member. The loop drafts a case (`metis.trace case`) and a pack, judges it (`pack_propose` =
    propose.py: gate cascade, goldens with the family's skips, the cases, the fired diff, the lint rows, the
    moved-golden lines, reads-absent; the model's words only with a budget), writes `rulings/<id>`.
-4. **Applied** only through `catalog_apply` at the person's confirm (pi's confirm in the TUI; the `loop`
+4. **Applied** only through `catalog_edit` at the person's confirm (pi's confirm in the TUI; the `loop`
    channel's confirm frame in rpc mode) → the catalog → the bundle rebuilt → STALE in the backend → reload.
 5. **Narrated** when wanted: the agent's gemma4 (metis-agent) narrates a trace window over the agent's
    wire when the agent runs beside the workspace (the road, later). The backend keeps no narrator. "We will
@@ -174,7 +174,7 @@ TypeScript face: `workspace_context` (ws.context + bundle state), `surprise_next
 `trace_*` (every verb of §3.1, one tool each, generated from the declaration table at load),
 `pack_propose` (propose.py through `propose.sh`, the ruling path returned), `bundle_build` (`metisc build .`
 in the workspace, the image hash before and after), `journal` (append a line: the loop's own progress, in
-words, for the UI). `catalog_apply/edit/take` keep the gate. pi's built-in edit stays off.
+words, for the UI). `catalog_new/edit/take` keep the gate. pi's built-in edit stays off.
 
 The pi loop works on the BUNDLE: `domain_open` opens the composition's members as one (the composition's
 root), the REPL tools serve one member for a question. The seeded start (`--seed`) is unchanged.

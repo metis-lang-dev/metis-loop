@@ -114,7 +114,7 @@ def test_a_new_domain_from_a_seed(tmp_path):
     seed.write_text((srv.root / "domains/plant/plant.llp").read_text().replace("catalog plant 1.", "catalog lamp 1.")
                     .replace(": plant.", ": lamp.").replace("namespace plant", "namespace lamp"))
     pl = srv.seed_plan("", str(seed), "a lamp")
-    assert pl["kind"] == "program" and pl["domain"] == "lamp"
+    assert pl["kind"] == "new" and pl["domain"] == "lamp"
     assert sorted(f["path"] for f in pl["files"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
     srv.gate_confirm(pl["token"])
     assert (srv.root / "domains/lamp/lamp.llp").is_file()
@@ -258,4 +258,19 @@ def test_a_bare_name_is_the_package_not_a_goldens_case(tmp_path):
     case.write_text("catalog plant 1.\n")
     assert srv.resolve("plant") == (srv.root / PROG).resolve()
     assert srv.resolve("goldens/cases/plant") == case.resolve()        # the full name still opens the case file
+
+
+def test_a_new_extension_is_an_edit_of_a_missing_file(tmp_path):
+    """"+ extension" (workspace-files s-9ea4cfa4, the architect's ruling): extensions/<name>.llp is an edit with
+    old "" on the missing path, through the same plan and gate (it compiles against the program); after the
+    write the session's files carry it."""
+    srv = server(tmp_path)
+    assert srv.open_session("s", {"llp": "domains/plant/plant"})["status"] != "closed"
+    ext = "domains/plant/extensions/tired.llp"
+    pl = srv.edit_plan(ext, "", "% the plant tires\ncatalog plant_tired 1.\nextends plant.\n")
+    assert pl["ok"] and pl["token"] and "+catalog plant_tired 1." in pl["diff"]
+    assert not (srv.root / ext).exists()
+    assert srv.gate_confirm(pl["token"])["written"] == [ext]
+    assert srv.open_session("s", {"llp": "domains/plant/plant"})["status"] != "closed"
+    assert [f["path"] for f in srv.files_of("s")["files"]] == [PROG, ext]
 

@@ -399,12 +399,12 @@ class ConsoleServer:
         if d.exists():
             raise ValueError(f"domains/{name} exists already — open it from the list")
         line = " ".join((line or f"the {name} domain").split())[:160]
-        catalog.apply(name, r=self.root,       # the one validated write (the manifest checked by the loader)
-                      manifest=f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
-                               f"program: {name}.llp\nrecords: records/\n",
-                      program=SKELETON.format(name=name, line=line.replace('"', "'"), date=time.strftime("%Y-%m-%d")),
-                      readme=f"# {name} — {line}\n\nA new domain, made in the loop console. "
-                             "Describe what there is, what can happen and what the person can ask.\n")
+        catalog.new(name, SKELETON.format(name=name, line=line.replace('"', "'"), date=time.strftime("%Y-%m-%d")),
+                    r=self.root,       # a package the catalog lacks (its program checked, the manifest by the loader)
+                    manifest=f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
+                             f"program: {name}.llp\nrecords: records/\n",
+                    readme=f"# {name} — {line}\n\nA new domain, made in the loop console. "
+                           "Describe what there is, what can happen and what the person can ask.\n")
         return f"domains/{name}/{name}"
 
     # -- the gate: every write is a plan the person confirms (docs/LOOP.md) ----------
@@ -495,21 +495,53 @@ class ConsoleServer:
         domain.yaml, intent.yaml, the host, an included file; a .llp edit adds no
         diagnostic); readme {text, title?}; intents {text?} (without text: the skeleton
         from the program's cmd_* atoms, no model); take — the domain into the operator's
-        other catalog ([console] take_into); program {text, display?, line?}. Refusals
-        come with the rule's words."""
+        other catalog ([console] take_into); new / ask as the gate has them. readme and
+        intents are drafted by metispy's helpers and planned as an edit of the file
+        (workspace-files s-9ea4cfa4). Refusals come with the rule's words."""
         a = dict(args or {})
         if kind == "take":
             if not self.take_into:
                 raise ValueError("take writes into another catalog: set [console] take_into (a directory)")
             pl = self.gate.propose("take", domain, self.take_into, src=str(self.root))
-        elif kind in ("edit", "readme", "intents", "program", "extension", "ask"):
+        elif kind in ("edit", "ask", "new"):
             try:
                 pl = self.gate.propose(kind, domain, self.root, **a)
             except Refused as e:
                 raise ValueError(str(e)) from None
+        elif kind in ("readme", "intents"):
+            try:
+                pl = self._drafted(kind, domain, a)
+            except Refused as e:
+                raise ValueError(str(e)) from None
+            except KeyError:
+                raise ValueError(f"no domain {domain} in the catalog yet: {kind} follows its program (new)") from None
+            if pl is None:
+                return {"kind": "edit", "domain": domain, "files": [], "token": "", "reopen": False,
+                        "note": f"nothing to write: the {'README' if kind == 'readme' else 'intent.yaml'} is that already"}
         else:
-            raise ValueError(f"the console's writes: edit, readme, intents, take, program, extension, ask; not {kind!r}")
+            raise ValueError(f"the console's writes: edit, readme, intents, take, ask, new; not {kind!r}")
         return self._shown(pl)
+
+    def _drafted(self, kind: str, domain: str, a: dict):
+        """README and intents, drafted by metispy's read-only helpers and planned as ONE edit of the file on disk
+        (old = its text now, "" when it is missing): readme {text, title?} = catalog.readme's text around the summary;
+        intents {text?} = the text, or catalog.skeleton's from the program's cmd_* atoms (no model). None when the
+        file is that text already; a plan with a note and no file when the world takes no commands."""
+        if kind == "readme":
+            if not (a.get("text") or "").strip():
+                raise Refused("readme: text is the summary paragraph (what the program tells; the SDK writes the rest)")
+            text, rel = catalog.readme(domain, self.root, None, a["text"], a.get("title")), "README.md"
+        else:
+            text, rel = (a["text"] if a.get("text") is not None else catalog.skeleton(domain, self.root)), "intent.yaml"
+            if text is None:
+                return {"kind": "edit", "domain": domain, "root": str(self.root), "reopen": False, "files": [],
+                        "token": "", "note": "no intent.yaml: the world takes no commands (its program has no cmd_* atom), "
+                                              "so the agents open it with no verbs"}
+        f = Path(catalog.get(domain, self.root).dir) / rel
+        old = f.read_text() if f.is_file() else ""
+        if old == text:
+            return None
+        return self.gate.propose("edit", domain, self.root, path=rel, old=old, new=text)
 
     def gate_asks(self) -> list:
         """The asks waiting for the person (loop-policy, docs/LOOP.md): the console's own gate's
@@ -576,7 +608,7 @@ class ConsoleServer:
         if (self.root / "domains" / name).exists():
             raise ValueError(f"domains/{name} exists already — open it from the list")
         line = " ".join((line or "").split())[:160]
-        return self._shown(self.gate.propose("program", name, self.root, text=p.read_text(),
+        return self._shown(self.gate.propose("new", name, self.root, text=p.read_text(),
                                              **({"line": line} if line else {})))
 
     def domains_doc(self) -> dict:

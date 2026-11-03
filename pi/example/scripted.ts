@@ -124,8 +124,8 @@ async function main() {
 	await emit("session_start", {}, person);
 	say(`\n## formalize  (${tools.size} tools)\n`);
 	await call("repl_text", { arg: PROGRAM }, "formalize");
-	say(`\n## the gate holds: an apply before a passed candidate is refused\n`);
-	await call("catalog_apply", { domain: "lamp", what: "program" }, "apply");
+	say(`\n## the gate holds: a new domain before a passed candidate is refused\n`);
+	await call("catalog_new", { domain: "lamp", program: "candidate" }, "apply");
 	say(`\n## formalize, again\n`);
 	let ok = false;
 	for (let i = 0; i < 3 && !ok; i++) {
@@ -133,9 +133,8 @@ async function main() {
 		ok = !(await call("repl_revise", { arg: "" }, "formalize")).startsWith("refused");
 	}
 	if (!ok) return say("formalize did not pass in 3 drafts: stop");
-	say(`\n## apply\n`);
-	await call("catalog_apply", { domain: "lamp", what: "program" }, "apply");
-	await call("catalog_apply", { domain: "lamp", what: "intents" }, "intents");
+	say(`\n## the new domain, its intents drafted in the same write\n`);
+	await call("catalog_new", { domain: "lamp", program: "candidate", intents: true }, "apply");
 	say(`\n## exercise\n`);
 	await call("domain_open", { domain: "lamp" }, "exercise");
 	await call("intent_on", {}, "exercise");
@@ -151,8 +150,15 @@ async function main() {
 		ok = !(await call("repl_gate", { arg: "" }, "revise")).startsWith("refused");
 	}
 	if (!ok) return say("the extension did not pass the gate in 3 drafts: stop");
-	await call("repl_show", { arg: "llp" }, "revise");
-	await call("catalog_apply", { domain: "lamp", what: "extension", name: "bulb" }, "revise");
+	// the domain is the catalog's: the extension is an edit that makes its file (workspace-files s-9ea4cfa4)
+	const shown = await call("repl_show", { arg: "llp" }, "revise");
+	let llp = "";
+	try {
+		llp = String(JSON.parse(shown).llp ?? "");
+	} catch {
+		llp = shown;
+	}
+	await call("catalog_edit", { domain: "lamp", path: "extensions/bulb.llp", old_string: "", new_string: llp.endsWith("\n") ? llp : llp + "\n" }, "revise");
 	say(`\n## re-exercise\n`);
 	await call("domain_open", { domain: "lamp" }, "re-exercise");
 	await call("intent_on", {}, "re-exercise");

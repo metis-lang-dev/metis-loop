@@ -89,7 +89,7 @@ def test_json_lines_parse():
     assert p("CALL: repl_state {}") == ("repl_state", {}, "")
     assert p("CALL: repl_state") == ("repl_state", {}, "")
     assert p('`CALL: repl_text {"arg": "a lamp\\nwith two lines"}`')[1] == {"arg": "a lamp\nwith two lines"}
-    assert p('CALL: catalog_apply {"domain": "lamp",\n  "what": "program"}')[1] == {"domain": "lamp", "what": "program"}
+    assert p('CALL: catalog_new {"domain": "lamp",\n  "program": "candidate"}')[1] == {"domain": "lamp", "program": "candidate"}
     assert p("CALL: x {not json}") == ("x", None, "")
     assert p("CALL: x [1]")[1] is None
     assert p("No call here; the lamp is dark.") is None

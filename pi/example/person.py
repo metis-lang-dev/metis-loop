@@ -34,10 +34,10 @@ PI = HERE.parent
 
 STAGE_OF = [  # the loop's stages by the tool the model calls (LOOP-AGENT.md)
     ("formalize", ("repl_text", "repl_formalize", "repl_revise")),
-    ("apply", ("catalog_apply:program",)),
-    ("intents", ("catalog_apply:intents",)),
+    ("apply", ("catalog_new",)),
+    # intents: drafted by catalog_new's intents=true, in the apply stage's write (workspace-files s-9ea4cfa4)
     ("exercise", ("domain_open#1", "intent_", "domain_clock", "domain_state", "domain_why", "domain_events", "domain_ctx", "domain_findings")),
-    ("revise", ("repl_mine", "repl_gate", "catalog_apply:extension", "repl_record", "repl_records", "repl_replay")),
+    ("revise", ("repl_mine", "repl_gate", "catalog_edit:extension", "repl_record", "repl_records", "repl_replay")),
     ("re-exercise", ("domain_open#2",)),
 ]
 
@@ -99,8 +99,8 @@ def main():
 
     def stage_of(tool, args):
         key = tool
-        if tool == "catalog_apply":
-            key = f"catalog_apply:{args.get('what')}"
+        if tool == "catalog_edit" and str(args.get("path") or "").startswith("extensions/"):
+            key = "catalog_edit:extension"           # an extension: an edit that makes its file (workspace-files)
         if tool == "domain_open":         # a re-exercise is an open after an extension was applied
             key = "domain_open#2" if "revise" in stages and stages["revise"].get("applied") else "domain_open#1"
         for st, keys in STAGE_OF:
@@ -157,7 +157,7 @@ def main():
                 if name == "domain_open":          # a stage counts only what went through
                     opens += 1
                 st = stage_of(name, args)
-                if name == "catalog_apply" and (args or {}).get("what") == "extension":
+                if name == "catalog_edit" and str((args or {}).get("path") or "").startswith("extensions/"):
                     stages.setdefault("revise", {"first": el, "last": el, "calls": 0, "turn_first": turns})["applied"] = True
                 if st:
                     s = stages.setdefault(st, {"first": el, "last": el, "calls": 0, "turn_first": turns})
@@ -209,7 +209,7 @@ def main():
             msg = None
             if name in ("repl_formalize", "repl_revise") and ('\\"ok\\": false' in txt or "refused" in txt):
                 msg = STEER_FORMALIZE
-            elif name == "catalog_apply" and not rec.get("isError") and (args or {}).get("what") == "program":
+            elif name == "catalog_new" and not rec.get("isError"):
                 msg = STEER_EXERCISE
             if msg:
                 n_steer += 1
