@@ -130,6 +130,7 @@ class PiRpc:
             raise PiRpcError(f"no open gate {token!r}")
         self._gates.discard(token)
         self._write({"type": "extension_ui_response", "id": token, "confirmed": bool(ok)})
+        await self._drain()
 
     async def events(self):
         while True:
@@ -150,8 +151,15 @@ class PiRpc:
         fut = asyncio.get_running_loop().create_future()
         self._pending[cid] = fut
         self._write(dict(rec, id=cid))
-        await self.proc.stdin.drain()
+        await self._drain()
         return await fut
+
+    async def _drain(self):
+        """The write's drain; pi dying between the write and the drain is pi not running, one error type for callers."""
+        try:
+            await self.proc.stdin.drain()
+        except (ConnectionResetError, BrokenPipeError) as e:
+            raise PiRpcError(f"pi is not running: {e}") from None
 
     def _emit(self, **ev):
         self._queue.put_nowait(ev)
@@ -216,6 +224,7 @@ class PiRpc:
                        ok=not rec.get("isError"), text=_text((rec.get("result") or {}).get("content")))
             return
         if t == "agent_settled":
+            self._gates.clear()                           # a turn that ended unanswered leaves no gate to answer
             self._emit(kind="turn_end", aborted=bool(rec.get("aborted")))
             return
         if t == "extension_error":

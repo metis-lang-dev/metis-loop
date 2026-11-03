@@ -130,3 +130,21 @@ def test_loop_sh_in_rpc_mode_keeps_the_clients_stdin(tmp_path):
     a = json.loads(args.read_text())
     assert a["stdin_devnull"] is False and "--mode" in a["argv"] and a["argv"][a["argv"].index("--mode") + 1] == "rpc"
     assert a["cwd"] == str(tmp_path)
+
+
+def test_a_gate_left_open_at_a_turns_end_is_cleared_and_a_dead_pi_is_one_error_type():
+    async def go():
+        rpc = PiRpc(STUB, env=dict(os.environ))
+        await rpc.start()
+        await rpc.say("abandon it")
+        evs = await until(rpc, "turn_end")
+        assert [e["token"] for e in evs if e["kind"] == "gate"] == ["g3"]
+        with pytest.raises(PiRpcError, match="no open gate"):
+            await rpc.answer("g3", True)                                   # pi gave up on it: no late answer is written
+        rpc.proc.kill()
+        await rpc.proc.wait()
+        for call in (rpc.say("anyone?"), rpc._command({"type": "get_state"})):
+            with pytest.raises(PiRpcError, match="not running"):      # never a bare ConnectionResetError / BrokenPipeError
+                await call
+        await rpc.stop()
+    run(go())
