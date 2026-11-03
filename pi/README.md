@@ -59,17 +59,16 @@ metis-agent; `METIS_LOOP_SDK_PY`, `METIS_LOOP_METIS` and `METIS_LOOP_AGENT_PY` f
 |---|---|---|---|
 | Node | v22.23.3 (2026-09-23; pi needs >= 22.19) | `node/` (gitignored) | `setup.sh`: nodejs.org tarball, SHA-256 checked against SHASUMS256.txt |
 | pi | `@earendil-works/pi-coding-agent` 1.3.0 | `node_modules/` (gitignored) | `setup.sh`: `npm ci --ignore-scripts` from `package-lock.json` (integrity hashes) |
-| Ollama | 0.24.0 (the host's service) | — | its built-in Gemma 4 renderer and parser |
-| the loop SDK | metis-loop `sdk/` (`metis_loop_sdk.models`, `.web`, `ts/catalog.ts`; the catalog and the gate are metispy's) | the packages venv (`METIS_LOOP_SDK_PY`, default `../.venv/bin/python`); `extensions/sdk` links its TypeScript face | `pip install -e ../metis-loop/sdk`, then `./setup.sh --link`: the kernel's formalize through its Ollama or OpenAI-compatible command face (thinking off), the GPU probe, and the catalog (a domain's intents, `catalog_apply`, `catalog_take`, the README of a run, the bundle) |
-| OpenRouter (trial) | pi's built-in provider | `MODEL=openrouter/<id>[:thinking]` | `OPENROUTER_API_KEY` from the environment only, never a file here; `agent/models.json` caps the trial's models at 2048 output tokens and routes them `data_collection: deny`; `example/openrouter_key.py` prints the key's spend (never the key). The cheap brain is `deepseek/deepseek-v4.1-flash-1017` (`MODEL=openrouter/deepseek/deepseek-v4.1-flash-1017:off`; pi 1.3.0 does not list it, so `agent/models.json` adds it with OpenRouter's prices): a seeded one-rule task on the dog cost 0.0147 USD by the key in 2.4 min (68 requests; release-r02 s-be51860c step 2). The kernel's formalize follows the driver (`FORMALIZE_MODEL=openrouter/<id>`, through the loop SDK's `openai-command`: reasoning off, 2048 tokens, `data_collection: deny`, each call and its cost in `records/formalize-calls.jsonl`); `FORMALIZE_MODEL=metis-gemma4-e4b` keeps it on Ollama |
-| model | our Gemma 4 E4B Q5_K_M GGUF (metis-agent `go/models/gemma4/`) | Ollama: `metis-gemma4-e4b`, `metis-gemma4-e4b-cpu` | `ollama create … -f ollama/Modelfile` (`Modelfile.cpu`: `num_gpu 0`) |
+| the loop SDK | metis-loop `sdk/` (`metis_loop_sdk.models`, `.web`, `ts/catalog.ts`; the catalog and the gate are metispy's) | the packages venv (`METIS_LOOP_SDK_PY`, default `../.venv/bin/python`); `extensions/sdk` links its TypeScript face | `pip install -e ../metis-loop/sdk`, then `./setup.sh --link`: the kernel's formalize through its OpenAI-compatible or claude -p command face (thinking off), and the catalog (a domain's intents, `catalog_apply`, `catalog_take`, the README of a run, the bundle) |
+| OpenRouter (trial) | pi's built-in provider | `MODEL=openrouter/<id>[:thinking]` | `OPENROUTER_API_KEY` from the environment only, never a file here; `agent/models.json` caps the trial's models at 2048 output tokens and routes them `data_collection: deny`; `example/openrouter_key.py` prints the key's spend (never the key). The cheap brain is `deepseek/deepseek-v4.1-flash-1017` (`MODEL=openrouter/deepseek/deepseek-v4.1-flash-1017:off`; pi 1.3.0 does not list it, so `agent/models.json` adds it with OpenRouter's prices): a seeded one-rule task on the dog cost 0.0147 USD by the key in 2.4 min (68 requests; release-r02 s-be51860c step 2). The kernel's formalize follows the driver (`FORMALIZE_MODEL=openrouter/<id>`, through the loop SDK's `openai-command`: reasoning off, 2048 tokens, `data_collection: deny`, each call and its cost in `records/formalize-calls.jsonl`); `FORMALIZE_MODEL=claude[/<id>]` puts it on the person's own claude -p login; with neither, no formalize endpoint is set |
+| model | none by default: `MODEL` is required (loop-workspace: Ollama out, WORKSPACE.md §5.3) | `MODEL=openrouter/<id>` | the Gemma 4 GGUFs are metis-agent's (its agent and narrator), not the loop's |
 
 | file | what |
 |---|---|
 | `setup.sh` | install / `--check` / `--link` (`extensions/sdk`: the loop SDK's TypeScript face, as installed) |
-| `pi.sh` | pi with this directory's config (`agent/models.json`: Ollama only, no keys, no OAuth), offline, no built-in tools, context files, skills, prompt templates or MCP, only the two extensions; the TUI in regular mode (the gate's diff stays in the terminal's scrollback, its Yes/No below it) |
+| `pi.sh` | pi with this directory's config (`agent/models.json`: OpenRouter's caps and routing, no keys, no OAuth), offline, no built-in tools, context files, skills, prompt templates or MCP, only the two extensions; the TUI in regular mode (the gate's diff stays in the terminal's scrollback, its Yes/No below it) |
 | `take.sh` | `cd DIR && take.sh --into DIR2 [NAME]`: `catalog_take` from the shell, after the session: a domain the loop made in DIR (default lamp) into DIR2, three calls of the loop SDK's CLI (`take --readme-from-run DIR/.metis`, its dry run, `build`); never a commit |
-| `loop.sh` | the loop over the directory it starts in (`METIS_CATALOG=DIR` from elsewhere); `--seed PATH.llp|PKG_DIR [--name NAME] [--episodes N]`: a seeded start ("A seeded start" below); `--into DIR2`: catalog_take's target; `MODEL=ollama/metis-gemma4-e4b[-cpu]`; pi's args (e.g. `--mode rpc`) |
+| `loop.sh` | the loop over the directory it starts in (`METIS_CATALOG=DIR` from elsewhere); `--seed PATH.llp|PKG_DIR [--name NAME] [--episodes N]`: a seeded start ("A seeded start" below); `--into DIR2`: catalog_take's target; `MODEL=<provider>/<id>` (required); pi's args (e.g. `--mode rpc`) |
 | `extensions/metis-repl.ts` | the REPL (`metis --json`): a tool per wire verb, `catalog_apply` (what=program, served, extension, intents, readme), `catalog_edit` (one exact edit of a domain's file, comments and all), `catalog_take` (a finished domain into `METIS_LOOP_TAKE_INTO`) and their gate, which shows a refused file's next proposal as its diff from the refused one; `lib/roots.ts`: which catalog each write goes to |
 | `extensions/metis-domain.ts` | the domain agent: `domain_open`, `domain_clock`, the REPL API's tools, the intents; for a world without intents `domain_ports`, `domain_world` and `domain_episodes` (seeded episodes measured against the world: outcomes, the program's likelihood of what it did, surprises, mismatched atoms) |
 | `prompts/loop-system.md` | the loop's system prompt (replaces pi's coding-assistant prompt); `seed-task.md`, a seeded start's first message |
@@ -143,16 +142,11 @@ DIR holds the plant beside the lamp, so copying it over is wrong. Both take the 
 
 ```
 ./setup.sh                                              # once
-ollama create metis-gemma4-e4b -f ollama/Modelfile    # once (from this checkout)
-# loop.sh probes the server first (python -m metis_loop_sdk.models ollama-probe --model M --load)
-# and warns when the model runs on the CPU: the system service started before the
-# NVIDIA driver was ready (it probes the GPU once, at start). Either restart it
-# (sudo systemctl restart ollama) or run a user-level server beside it:
-#   OLLAMA_HOST=127.0.0.1:11435 OLLAMA_MODELS=/usr/share/ollama/.ollama/models ollama serve &
-#   export OLLAMA_URL=http://127.0.0.1:11435
-./example/person.py /tmp/lamp-run          # the model drives, the scripted person steers/approves (≈ 15–30 min)
-./node/bin/node --experimental-strip-types example/scripted.ts /tmp/lamp-scripted
-                                                  # the loop's machinery with the model's choices scripted (≈ 5 min)
+export MODEL=openrouter/deepseek/deepseek-v4-pro      # a paid model: OPENROUTER_API_KEY from the environment
+./example/person.py /tmp/lamp-run --model "$MODEL" --max-usd 0.50
+                                                  # the model drives, the scripted person steers/approves
+MODEL=script:DRAFT.llp ./node/bin/node --experimental-strip-types example/scripted.ts /tmp/lamp-scripted
+                                                  # the machinery scripted, every formalize draft DRAFT.llp: 0 USD
 example/lamp/world.sh /tmp/lamp-tui && cd /tmp/lamp-tui && \
   METIS_LOOP_LLP=$PWD/domains/plant/plant.llp …/loop.sh    # pi's TUI: you are the person
 ```

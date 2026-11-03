@@ -17,7 +17,6 @@ def test_shims_resolve_to_the_kernel():
     import loop.llm
     import loop.narrate
     import loop.node
-    import loop.ollama
     import loop.repl
     import metis.loop.bus
     import metis.loop.node

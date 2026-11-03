@@ -6,7 +6,7 @@ The command face (`complete`; `python -m metis_loop_sdk.models
 claude-command`): the prompt on stdin, one completion on stdout, through
 the Agent SDK (extra `claude`). It plugs into the kernel's existing
 `command:` backend, so the kernel builds its prompts exactly as for
-ollama and only the completion moves to Claude. It was metis-loop's
+any endpoint and only the completion moves to Claude. It was metis-loop's
 loop/sdk_narrate.py (the console's narrate seat, CONSOLE-WS §4 D3); its
 model and thinking defaults are kept here.
 

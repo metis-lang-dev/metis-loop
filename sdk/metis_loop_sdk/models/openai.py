@@ -6,7 +6,7 @@ the kernel's `command:` backend — one user message to U/chat/completions, not
 streamed. The servers it is for:
 
   OpenRouter   https://openrouter.ai/api/v1, the key in $OPENROUTER_API_KEY
-  Ollama       http://127.0.0.1:11434/v1, no key
+  a local one  http://127.0.0.1:PORT/v1, no key
   any other    OpenAI-compatible server, the key in the variable --key-env names
 
     [llm]
@@ -14,7 +14,7 @@ streamed. The servers it is for:
 
 Reasoning off where the API allows (formalize wants the answer, not minutes
 of thought): OpenRouter's `reasoning: {"effort": "none"}`, elsewhere
-OpenAI's `reasoning_effort: "none"` (Ollama maps it to think off). Only the
+OpenAI's `reasoning_effort: "none"`. Only the
 message's content is the completion; reasoning the server returns anyway is
 dropped. Temperature 0 (formalize's), max_tokens bounded (2048, at most
 MAX_TOKENS). On OpenRouter the request also asks for providers that keep no
@@ -25,7 +25,7 @@ in the kernel's config), sent only as the Authorization header to the base
 URL, and never printed: errors quote the server with anything key-shaped
 masked. A key is sent to OpenRouter over https (openrouter.ai or a
 subdomain, by the exact host), or wherever --key-env names one; nowhere
-else (an OPENAI_API_KEY in the environment does not reach Ollama).
+else (an OPENAI_API_KEY in the environment does not reach a local server).
 
 `log`, when given, gets one JSON line per call: the model, the tokens, the
 cost the server reports (OpenRouter's usage.cost, USD), finish_reason, seconds."""

@@ -2,14 +2,16 @@
 // "The worked example"): the same two extensions pi loads, their tools called in the
 // loop's order by this script instead of a model, against the real processes — metispy's
 // `metis --json`, metis-agent's domain agent with the lamp's world — and the kernel's
-// formalize on Ollama. It separates the structural bar (the loop runs through, the calls
+// formalize on the model MODEL names. It separates the structural bar (the loop runs through, the calls
 // round-trip, the gates hold) from the model's quality, which person.py measures.
 //
-//   OLLAMA_URL=http://127.0.0.1:11434 node/bin/node --experimental-strip-types \
-//     example/scripted.ts DIR          (from this checkout)
-//   MODEL=openrouter/deepseek/deepseek-v4-pro …   formalize on OpenRouter instead (the loop
-//     SDK's OpenAI-compatible face; OPENROUTER_API_KEY from the environment; the calls and
-//     their cost in DIR/.metis/records/formalize-calls.jsonl)
+//   MODEL=openrouter/deepseek/deepseek-v4-pro node/bin/node --experimental-strip-types \
+//     example/scripted.ts DIR          (from this checkout; MODEL is required, no default)
+//   MODEL=openrouter/<id>   formalize on OpenRouter (the loop SDK's OpenAI-compatible face;
+//     OPENROUTER_API_KEY from the environment; the calls and their cost in
+//     DIR/.metis/records/formalize-calls.jsonl)
+//   MODEL=claude[/<id>]     formalize on the person's own claude -p login (the SDK's face)
+//   MODEL=script:FILE.llp   a script brain at 0 USD: every draft is FILE as it stands
 //
 // DIR is the catalog (cwd-root s-ddac2cbf): the lamp's world laid out in it (example/lamp/world.sh),
 // the script runs there, and its files (scripted.md, scripted.json, metis.toml, records/) go in DIR/.metis/.
@@ -25,8 +27,8 @@ const PI = join(HERE, "..");
 const PKGS = join(PI, "..");                                     // the workspace (its .venv, metis-agent: defaults)
 const AGENT = process.env.METIS_AGENT ?? join(PKGS, "metis-agent"); // the domain agent's checkout
 const dir = resolve(process.argv[2] ?? "/tmp/loop-scripted");
-const ollama = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
-const model = process.env.MODEL ?? "metis-gemma4-e4b";
+const model = process.env.MODEL ?? "";
+if (!model) throw new Error("scripted.ts: MODEL is required (openrouter/<id> | claude[/<id>] | script:FILE.llp)");
 
 const sdkPy = process.env.METIS_LOOP_SDK_PY ?? join(PKGS, ".venv", "bin", "python"); // the loop SDK's model adapters
 // the catalog: DIR, the lamp's world laid out in it as a demo does (example/lamp/world.sh); the script runs in it
@@ -35,10 +37,14 @@ const llp = execFileSync(join(HERE, "lamp", "world.sh"), [cat], { encoding: "utf
 const st = join(cat, ".metis");
 process.chdir(cat);
 const conf = join(st, "metis.toml");
-const face = model.startsWith("openrouter/")
-	? `openai-command --base-url https://openrouter.ai/api/v1 --model ${model.slice("openrouter/".length)} --log ${join(st, "records", "formalize-calls.jsonl")}`
-	: `ollama-command --model ${model} --url ${ollama}`;
-writeFileSync(conf, `[llm]\nendpoint = "command:${sdkPy} -m metis_loop_sdk.models ${face}"\n`);
+const sdkFace = (face: string) => `${sdkPy} -m metis_loop_sdk.models ${face}`;
+const endpoint = model.startsWith("openrouter/")
+	? sdkFace(`openai-command --base-url https://openrouter.ai/api/v1 --model ${model.slice("openrouter/".length)} --log ${join(st, "records", "formalize-calls.jsonl")}`)
+	: model === "claude" ? sdkFace("claude-command")
+	: model.startsWith("claude/") ? sdkFace(`claude-command --model ${model.slice("claude/".length)}`)
+	: model.startsWith("script:") ? `cat ${resolve(model.slice("script:".length))}`
+	: (() => { throw new Error(`scripted.ts: MODEL=${model}: openrouter/<id> | claude[/<id>] | script:FILE.llp`); })();
+writeFileSync(conf, `[llm]\nendpoint = "command:${endpoint}"\n`);
 Object.assign(process.env, {
 	METIS_CATALOG: cat,
 	METIS_CONFIG: conf,
@@ -52,7 +58,7 @@ Object.assign(process.env, {
 });
 
 const log = join(st, "scripted.md");
-writeFileSync(log, `# the loop, scripted (${new Date().toISOString()}; formalize on ${model}${model.startsWith("openrouter/") ? "" : " at " + ollama})\n\n`);
+writeFileSync(log, `# the loop, scripted (${new Date().toISOString()}; formalize on ${model})\n\n`);
 const say = (s: string) => {
 	appendFileSync(log, s + "\n");
 	console.log(s);

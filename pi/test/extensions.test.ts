@@ -275,7 +275,7 @@ test("metis-repl: a seeded run applies the seed first — what=program/extension
 
 // cwd-root s-ddac2cbf: loop.sh runs in the directory it starts in — DIR is the catalog, its state in DIR/.metis/
 function loopIn(dir: string, args: string[], extra: Record<string, string> = {}) {
-	const e: Record<string, string | undefined> = { ...process.env, METIS_LOOP_PI: join(HERE, "stub", "pi"), MODEL: "ollama/metis-gemma4-e4b-cpu", METIS_CONFIG: "",
+	const e: Record<string, string | undefined> = { ...process.env, METIS_LOOP_PI: join(HERE, "stub", "pi"), MODEL: "stub/script", METIS_CONFIG: "",
 		METIS_LOOP_SDK_PY: process.env.TEST_SDK_PY ?? join(PKGS, ".venv", "bin", "python"), METIS_LOOP_TAKE_INTO: "", METIS_LOOP_LLP: "" };
 	delete e.METIS_CATALOG;                                                              // the cwd is the catalog, unless `extra` names one
 	Object.assign(e, extra);
