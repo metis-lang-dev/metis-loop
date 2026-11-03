@@ -117,6 +117,8 @@ details summary{cursor:pointer;color:var(--dim)}
 /* ?panels=chat,surprises (CHAT.md §1, the embedding): the named docks only, the whole width; no band, REPL or strip */
 #root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}
 #root.panels #right{flex:1 1 auto;min-width:0}
+/* the CHAT fills its dock: the log scrolls, the line to say stays in view */
+#dock-chat>.dbody{display:flex;flex-direction:column;overflow:hidden}#w-chat{flex:1;min-height:0}
 </style>
 
 <div id="root" tabindex="-1">

@@ -49,7 +49,8 @@
 /* the CHAT (loop-chat step 1, CHAT.md §1): the header line, the cards in the log (the gate, a ruling, STALE) */
 .mw-head{border-bottom:1px solid var(--line);padding-bottom:4px;font-size:12px}
 .mw-opts{font-size:12px}
-.mw-chatw .mw-log{max-height:none;flex:1}
+.mw-chatw{height:100%;min-height:0}.mw-chatw .mw-chat{min-height:0}
+.mw-chatw .mw-log{max-height:none;flex:1;min-height:6em}
 .mw-card{border:1px solid var(--line);padding:5px 6px;margin:2px 0 6px;display:flex;flex-direction:column;gap:4px;font-size:12px;white-space:normal}
 .mw-card.mw-gate{border-color:var(--yellow)}
 .mw-ruling-card.ok{border-left:3px solid var(--green)}.mw-ruling-card.bad{border-left:3px solid var(--red)}
