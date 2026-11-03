@@ -203,6 +203,27 @@ test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; a 
 	}
 });
 
+test("metis-workspace: the session's end releases its takes that were not ruled (the architect's F7)", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	const a = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 1, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+	const b = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 2, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+	await p.tools.get("surprise_next").execute("n1", {});
+	await p.tools.get("surprise_next").execute("n2", {});
+	Object.assign(process.env, { STUB_VERDICT: "accepted", STUB_COST: "" });
+	await p.tools.get("pack_propose").execute("ja", { id: a, pack: "% x" });
+	assert.equal(ws.surprise(a, r).status, "ruled");
+	assert.equal(ws.surprise(b, r).status, "taken");
+	await p.emit("session_shutdown", {}, {});
+	assert.equal(ws.surprise(a, r).status, "ruled");                                  // a ruled one is left as it is
+	assert.equal(ws.surprise(b, r).status, "open");                                   // the unruled take is released
+	assert.ok(!existsSync(ws.path("taken", { id: b }, r)));
+	assert.ok(ws.events(0, r).some((e) => e.kind === "not_judged" && e.surprise === b && /ended without a ruling/.test(String(e.reason))));
+	assert.equal(ws.loops(r).pi, null);                                               // and the lock
+});
+
 test("metis-workspace: a loop that did not get the lock reads, and never takes, rules or builds", async () => {
 	const { r } = scratch();
 	const holder = spawn("sleep", ["30"]);
@@ -316,6 +337,23 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	assert.equal(empty.status, 1);
 	assert.match(empty.stderr, /is paid: give --budget USD/);
 	assert.match(run(["--budget", "lots"]).stderr, /a positive number of USD/);
+	// the architect's F5: no key in the environment, the person's key file is read when private (mode 600), else refused
+	const kd = mkdtempSync(join(tmpdir(), "ws-key-"));
+	const kf = join(kd, "openrouter.env");
+	writeFileSync(kf, "OPENROUTER_API_KEY=sk-or-v1-" + "1".repeat(64) + "\n");
+	chmodSync(kf, 0o600);
+	const nokey = { OPENROUTER_API_KEY: "", METIS_OPENROUTER_ENV: kf };
+	const fromFile = run([], nokey);
+	assert.equal(fromFile.status, 0, fromFile.stderr);
+	assert.match(fromFile.stderr, new RegExp(`OPENROUTER_API_KEY from ${kf}`));
+	assert.ok(!fromFile.stderr.includes("sk-or-v1-") && !fromFile.stdout.includes("sk-or-v1-"));   // never printed
+	chmodSync(kf, 0o644);
+	const loose = run([], nokey);
+	assert.equal(loose.status, 1);
+	assert.match(loose.stderr, /is not private \(chmod 600 it\): not read[\s\S]*needs OPENROUTER_API_KEY/);
+	const none = run([], { OPENROUTER_API_KEY: "", METIS_OPENROUTER_ENV: "" });
+	assert.equal(none.status, 1);
+	assert.match(none.stderr, /needs OPENROUTER_API_KEY: the environment, or a key file/);
 	const free = run([], { MODEL: "stub/script" });
 	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
 });
@@ -408,6 +446,15 @@ test("metis-workspace: past half the budget each tool reply carries the spend; t
 		delete process.env.METIS_LOOP_BUDGET;
 		delete process.env.METIS_LOOP_RECORDS;
 	}
+});
+
+test("pi.sh: a checkout without pi installed says the fix (the architect's F4: exit 127 and no word)", () => {
+	const d = mkdtempSync(join(tmpdir(), "pi-sh-"));
+	writeFileSync(join(d, "pi.sh"), readFileSync(join(HERE, "..", "pi.sh"), "utf8"));
+	chmodSync(join(d, "pi.sh"), 0o755);
+	const r = spawnSync(join(d, "pi.sh"), ["--mode", "rpc"], { encoding: "utf8" });
+	assert.equal(r.status, 127);
+	assert.match(r.stderr, new RegExp(`pi.sh: pi is not installed in ${d} .*run ${d}/setup.sh once`));
 });
 
 test("loop.sh: its own option after pi's arguments is refused, not handed to pi", () => {

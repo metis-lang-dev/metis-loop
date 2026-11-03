@@ -166,6 +166,7 @@ export function firings(e: any): { count: number; rows: number; of_rows: number;
 export default function (pi: ExtensionAPI) {
 	const root = () => resolve(writeRoot());
 	let locked = false;
+	const held = new Set<string>();                    // the surprises this session took (surprise_next)
 	// the writes (take, rule, build) are the lock holder's only: a loop that did not get the lock reads and no more
 	const mustHold = (r: string) => {
 		if (locked) return;
@@ -214,6 +215,7 @@ export default function (pi: ExtensionAPI) {
 			if (!open.length) return text("no open surprise", { surprise: null });
 			const s = open[0];
 			ws.take_surprise(s.id, process.pid, "pi", r); // the face journals the take
+			held.add(s.id);                                // released at the session's end unless ruled (F7)
 			let program: string | null = null;
 			let source = "";
 			try {
@@ -378,6 +380,7 @@ export default function (pi: ExtensionAPI) {
 
 	// a take that ends without a ruling releases itself: surprises/<id>.taken removed, a not_judged row with the reason
 	function release(id: string, reason: string, r: string) {
+		held.delete(id);
 		rmSync(ws.path("taken", { id }, r), { force: true });
 		ws.journal("pi", "not_judged", { surprise: id, reason: reason.slice(0, 400) }, r);
 	}
@@ -447,6 +450,18 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 	const unlockSession = () => {
+		// the takes this session holds and did not rule are released (the architect's F7: after a stop the surprise
+		// stayed TAKEN): .taken removed, a not_judged row; a ruled one has its ruling and is left as it is
+		const r = root();
+		for (const id of [...held]) {
+			try {
+				const s = ws.surprise(id, r);
+				if (s && s.status === "taken" && s.taken && s.taken.pid === process.pid) release(id, "the pi loop ended without a ruling", r);
+			} catch {
+				// a surprise gone with the workspace: nothing to release
+			}
+			held.delete(id);
+		}
 		if (!locked) return;
 		try {
 			ws.unlock("pi", process.pid, root());

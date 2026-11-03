@@ -31,7 +31,8 @@
 #   METIS_CATALOG=DIR loop.sh …          the same, started elsewhere
 #
 #   MODEL=<pi provider>/<id>, default openrouter/deepseek/deepseek-v4-pro (the user, 2026-11-03:
-#         "use deepseek v4 pro"; its key from the environment only: OPENROUTER_API_KEY;
+#         "use deepseek v4 pro"; its key OPENROUTER_API_KEY from the environment, else read from
+#         METIS_OPENROUTER_ENV (default ~/.config/metis/openrouter.env, only when private: mode 600);
 #         agent/models.json caps and routes it)
 #   --budget USD (or METIS_LOOP_BUDGET=USD): the session's spend cap on a paid model (openrouter/*),
 #         default 1.00; past it the workspace extension refuses further model turns, journals
@@ -149,8 +150,21 @@ cd "$DIR"                                           # the workspace: pi and the 
 MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
 # a paid model runs with a budget (1 USD by default: a session of v4 pro at 2048 tokens a request spends
 # cents a turn, so 1 USD bounds a runaway session well inside a paid round's limit); empty: refused
+# the key: the environment's; unset, the person's key file (the architect's F5: a start from the chat got no key),
+# read only when it is the person's own and private (mode 600 or 400), into the environment, never printed
+KEYFILE="${METIS_OPENROUTER_ENV-$HOME/.config/metis/openrouter.env}"
+case "$MODEL${FORMALIZE_MODEL:-}" in
+  *openrouter/*)
+    if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -n "$KEYFILE" ] && [ -f "$KEYFILE" ] && [ -O "$KEYFILE" ]; then
+      case "$(stat -c %a "$KEYFILE" 2>/dev/null)" in
+        600|400) set -a; . "$KEYFILE"; set +a; echo "loop.sh: OPENROUTER_API_KEY from $KEYFILE" >&2 ;;
+        *) echo "loop.sh: $KEYFILE is not private (chmod 600 it): not read" >&2 ;;
+      esac
+    fi ;;
+esac
 case "$MODEL" in
   openrouter/*)
+    [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "loop.sh: MODEL=$MODEL needs OPENROUTER_API_KEY: the environment, or ${KEYFILE:-a key file} (mode 600)" >&2; exit 1; }
     METIS_LOOP_BUDGET="${METIS_LOOP_BUDGET-1.00}"
     [ -n "$METIS_LOOP_BUDGET" ] || { echo "loop.sh: MODEL=$MODEL is paid: give --budget USD (or METIS_LOOP_BUDGET)" >&2; exit 1; }
     awk -v b="$METIS_LOOP_BUDGET" 'BEGIN { exit !(b + 0 > 0) }' || { echo "loop.sh: --budget $METIS_LOOP_BUDGET: a positive number of USD" >&2; exit 1; } ;;

@@ -11,6 +11,9 @@
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$HERE/node/bin:$PATH" PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HERE/agent}" \
        PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0
+# not installed in this checkout (the architect's F4: exit 127 from a shared checkout without pi): say the fix
+[ -x "$HERE/node_modules/.bin/pi" ] && [ -x "$HERE/node/bin/node" ] || {
+  echo "pi.sh: pi is not installed in $HERE (no node_modules/.bin/pi or node/bin/node): run $HERE/setup.sh once" >&2; exit 127; }
 "$HERE/setup.sh" --link                              # extensions/sdk: the loop SDK's TypeScript face, as installed
 exec "$HERE/node_modules/.bin/pi" --no-builtin-tools --no-context-files --no-skills \
   --no-prompt-templates --no-mcp --no-approve --no-extensions --tui-mode regular \
