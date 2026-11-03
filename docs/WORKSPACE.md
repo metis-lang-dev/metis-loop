@@ -94,9 +94,10 @@ append-only file the UI tails, and it carries pointers (ids, paths), never bodie
 
 `ws.lock("pi")` writes `.metis/loop/pi.json` if none holds a live pid (a dead pid's lock is stale and is
 taken over, with a journal line). A second `loop.sh` in the same DIR refuses with the lock's line and the
-pid. The same for the backend's port lock. The road page later is a backend of the road workspace: it takes
-the backend lock there, so the console cannot open a second backend on the road's `.metis/` while the page
-runs (the one-TraCI-client rule, made visible).
+pid. The same for the backend's port lock. The road page is NOT a backend of the road workspace and takes no
+lock: it is the world's host (metis-agent's service over `road/web`), which writes the run's trace and marks
+into the road's `.metis/`; the one frontend of the pi loop (§6.1) started in `metis-worlds/road` is the
+backend there. The one-TraCI-client rule is SUMO's own, not the workspace's.
 
 ### 2.4 How the parts meet: files and a watch, never a socket between them
 
@@ -141,8 +142,7 @@ ruling says so (no replay, the gate cascade and the goldens still run).
 `metis.trace`'s verbs (replay, case, blame, count, families, holds, diff, outcomes, fired, timeline, sort
 when it lands) and `metis.lint` get ONE declaration table (`metis/trace_tools.json`, generated from their
 argparse definitions by a script, checked by a test as `tools.json` is for the REPL's T): the backend's
-`trace` channel serves exactly those, the pi loop's extension (§5.1) exposes exactly those, the road page
-later reads the same file. Nothing is hand-written for a UI that the verb does not declare (LOOP-AGENT.md's
+`trace` channel serves exactly those, the pi loop's extension (§5.1) exposes exactly those. Nothing is hand-written for a UI that the verb does not declare (LOOP-AGENT.md's
 parity rule, extended from the REPL to the trace).
 
 ## 4. The surprise, from where it is seen to where it is ruled
@@ -201,8 +201,8 @@ and no Ollama words in its hints; `metis.loop.ollama` is renamed for what it is 
 
 `console/loop_console.html` keeps the shell (`console/lib/shell.*`) and the CATALOG widget pattern (the
 SDK's `web/catalog/`): every new panel is a widget under `sdk/metis_loop_sdk/widget/<name>/` (`<name>.js`,
-`<name>.css`, served by the gateway as `/sdk/<name>/…`), COPIED into a consumer page (the road page later),
-never imported across repos. The panels, each over one channel:
+`<name>.css`, served by the gateway as `/sdk/<name>/…`) of this console, the pi loop's one frontend (§6.1).
+The panels, each over one channel:
 
 | panel | over | shows / does |
 |---|---|---|
@@ -215,8 +215,29 @@ never imported across repos. The panels, each over one channel:
 | LOOP | loop | the pi loop's state (lock, mode, model, budget, spent), start/stop in rpc mode, the chat (say), the journal stream, the pending gate's plan with confirm/refuse |
 
 "To replay the rules and see what is going on in the pi loop": TRACE is the replay, LOOP is the feedback,
-RULINGS is why. The road page plugs TRACE, SURPRISES, RULINGS and LOOP beside its own panels in the next
-subject; its marks become SURPRISES drafts with the window filled.
+RULINGS is why.
+
+### 6.1 The pi loop's frontend is shared (the user, 2026-11-03)
+
+This console with its five panels is the ONE frontend of the pi loop, on every workspace: `run.sh` started
+in `metis-catalog`, in `metis-worlds/road`, in any DIR of §2.1. It is not copied into the road page or any
+other consumer page, and no loop code moves for it: `loop/workspace_ch.py`, `loop/pi_rpc.py` and
+`web/workspace/` stay metis-loop's, the SDK carries the widgets for this console alone, metis-agent's
+service gets no workspace frames. The road page stays the road's own UI. On the road the two run side by
+side on the same workspace (`metis-worlds/road/.metis/`): the road page as the world's host, writing; the
+pi frontend as the pi loop's, reading. They meet through the files and the watch (§2.4), never a socket.
+
+What the road owes the shared frontend (the next subject, road-agent; the road's code only, no pi code):
+1. one trace dir per run, `road/.metis/traces/<scenario>-<seed>-<started>/` (today `ROOT/.run/trace`,
+   overwritten by every run), so TRACE lists the runs;
+2. the run's marks beside its trace, `marks.jsonl` in the run dir, each row in the trace's k (on the road
+   k = log tick + 1; the writer shifts, nothing downstream computes it); TRACE lists a run's marks and
+   "mark here" from a mark fills the drop dialog with the window;
+3. the run's config pointer in the run dir (`run.json`: `config`), so `ws.bundle()` and the judge replay
+   the run's composition with the run's config;
+4. in metispy's face, `ws.keep_window(run, k0, k1, name)`: the segments and checkpoints that hold a window
+   copied under `traces/<run>-<name>/` before the surprise is written, called by the frontend's drop from a
+   window, so a marked window outlives the writer's ring.
 
 ## 7. Retired, kept, moved
 
@@ -237,7 +258,7 @@ subject; its marks become SURPRISES drafts with the window filled.
 | 2 | the backend's `trace`, `surprise`, `bundle`, `loop` channels; the session trace writer; the brain seats retired | gateway tests per frame; a surprise dropped from a REPL session and from a trace appear in `surprises/`; STALE flips on `metisc build`; `metis-loop --brain` gone |
 | 3 | `metis-workspace.ts`; Ollama out; the rpc bridge | the pi loop in the TUI takes a dropped surprise, rules it (0 USD with a script brain; one paid round at the user's word, cap 0.50 USD), applies at confirm, the bundle rebuilds; the same over rpc from the console; CI `pi` jobs green without Ollama |
 | 4 | the five widgets and the console over them | the flows of §4 (1), (2), (4) driven in the user's Chrome on `metis-catalog` as the workspace (the dog or kitchen bundle) and on `metis-worlds/road` with a committed trace: this is the user's test of the switch |
-| 5 | report: what the road plug needs (the marks → SURPRISES, the page as the road's backend) | the next subject's brief |
+| 5 | report: what the road owes the shared frontend (§6.1: the run's trace dir, marks in k, the config pointer, `keep_window`), nothing of the loop moved | the next subject's brief |
 
 Rules: 0 USD except the one paid round in step 3; MemoryMax 6G on every child; no sim runs; branches with
 CI green, the architect merges (metispy first, then metis-loop); one file per agent per step on the subject.
@@ -250,4 +271,4 @@ CI green, the architect merges (metispy first, then metis-loop); one file per ag
    narration the agent's (§4.5, §7).
 4. The policy driver stays as it is (the world-runner's loop); only the pack verb's output moves into the
    workspace. Unifying the driver's RUN dir with `.metis/` is a later step.
-5. Widgets live in the loop SDK and are copied into consumer pages (copies-not-deps).
+5. Widgets live in the loop SDK for this console alone (§6.1): the frontend is shared, not copied.
