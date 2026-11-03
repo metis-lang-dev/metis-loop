@@ -146,3 +146,20 @@ test("the declared trace tools and their command lines are py's", () => {
 	assert.throws(() => ws.tool_argv("trace_no_such_verb", {}), /not a declared trace tool/);
 	assert.ok(existsSync(argv[0]));
 });
+
+test("a run's marks and a window kept past the ring, as py has them (step 5)", { skip: !ws.layout().face.includes("keep_window") && "metispy before keep_window" }, () => {
+	const r = scratch();
+	const d = join(r, ".metis", "traces", "r1");
+	execFileSync(PY, ["-c", `import sys; from metis import trace as T
+s = T.Segments(sys.argv[1], every=3)
+for k in range(10):
+    if s.due(k): s.open_segment(k, {"members": {}}, {"state": {}})
+    s.line({"k": k})
+s.close()`, d]);
+	writeFileSync(join(d, "marks.jsonl"), '{"mark": 1, "edge": "start", "at_tick": 3, "at_k": 4}\n{"mark": 1, "edge": "stop", "at_tick": 6, "at_k": 7}\n');
+	assert.deepEqual(ws.marks("r1", r), pyws(r, 'ws.marks("r1")'));
+	assert.deepEqual(ws.marks("r1", r).map((m) => [m.k0, m.k1]), [[4, 7]]);
+	assert.equal(ws.keep_window("r1", 4, 7, "mark-1", r), "traces/r1-mark-1");
+	assert.deepEqual(readdirSync(join(r, ".metis", "traces", "r1-mark-1")).sort(), ["checkpoints", "marks.jsonl", "seg-3.jsonl", "seg-6.jsonl"]);
+	assert.throws(() => ws.keep_window("r1", 4, 7, "mark-1", r), /there already/);
+});

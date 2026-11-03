@@ -164,6 +164,16 @@ export function surprise(id: string, r?: string): Surprise {
 }
 
 /** Drop a surprise (the backend's write by default): → its id. */
+/** A run's marks as windows (traces/<run>/marks.jsonl: the world's rows with at_k, the trace's k). */
+export function marks(run: string, r?: string): { mark: unknown; k0: number | null; k1: number | null; start?: any; stop?: any }[] {
+	return cli(["marks", run], undefined, r);
+}
+
+/** The window [k0, k1] of a trace copied to traces/<run>-<name>/, past the writer's ring: its path. */
+export function keep_window(run: string, k0: number, k1: number, name: string, r?: string): string {
+	return cli(["keep", run, String(k0), String(k1), name], undefined, r).trace;
+}
+
 export function drop_surprise(rec: SurpriseIn, who: Who = "backend", r?: string): string {
 	return cli(["drop", "-", "--who", rec.who ?? who], JSON.stringify(rec), r).id;
 }
