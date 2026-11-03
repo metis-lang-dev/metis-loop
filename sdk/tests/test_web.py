@@ -40,7 +40,7 @@ def test_the_widget_is_web_catalogs_bytes():
 
 def test_the_typescript_face_is_package_data():
     rc, out = _cli("ts")
-    assert rc == 0 and out["files"] == ["catalog.ts", "gate.ts"] and Path(out["dir"]) == web.TS_DIR
+    assert rc == 0 and out["files"] == ["catalog.ts", "gate.ts", "workspace.ts"] and Path(out["dir"]) == web.TS_DIR
     assert (web.TS_DIR / "catalog.ts").read_text().startswith("// metis_loop_sdk/ts/catalog.ts")
     assert (web.TS_DIR / "gate.ts").read_text().startswith("// The loop SDK's gate, TypeScript face")
 
