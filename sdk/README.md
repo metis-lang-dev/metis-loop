@@ -7,8 +7,10 @@ writes (`metis.gate`) are metispy's. It holds:
 
 - `metis_loop_sdk.web`: the catalog widget the consoles serve (`WIDGET_DIR`,
   `WIDGET_URL`, `widget_file`) and where the TypeScript face is (`TS_DIR`):
-  `metis_loop_sdk/ts/catalog.ts` and `ts/gate.ts`, metis.catalog's and
-  metis.gate's faces for node (each call is one `python -m metis.catalog|gate … --json`);
+  `metis_loop_sdk/ts/catalog.ts`, `ts/gate.ts` and `ts/workspace.ts`,
+  metis.catalog's, metis.gate's and metis.catalog.workspace's faces for node
+  (each call is one `python -m metis.catalog|gate|catalog.workspace … --json`;
+  the workspace's `.metis/` layout is py's one LAYOUT table, docs/WORKSPACE.md §2);
 - `metis_loop_sdk.models`: the model adapters.
 
 Each has a JSON CLI (`python -m metis_loop_sdk.<module>`); `python -m

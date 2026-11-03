@@ -13,7 +13,7 @@ WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
 WIDGET_FILES = ("catalog.js", "catalog.css")
 
 TS_DIR = (Path(__file__).resolve().parent / "ts").resolve()          # the TypeScript face
-TS_FILES = ("catalog.ts", "gate.ts")
+TS_FILES = ("catalog.ts", "gate.ts", "workspace.ts")   # workspace.ts: metis.catalog.workspace's face (loop-workspace)
 
 
 def widget_file(name):

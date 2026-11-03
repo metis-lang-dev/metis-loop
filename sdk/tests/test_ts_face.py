@@ -26,6 +26,27 @@ def node():
     return None
 
 
+def node_or_skip():
+    n = node()
+    if not n:
+        if os.environ.get("METIS_LOOP_REQUIRE_NODE") == "1":
+            pytest.fail("no node >= 22.6 for the TypeScript face (NODE or PATH)")
+        pytest.skip("no node >= 22.6 for the TypeScript face")
+    return n
+
+
+def test_the_workspace_face_at_parity_with_the_py_workspace():
+    """ts/workspace.ts against metispy's metis.catalog.workspace (loop-workspace s-5b4be5fa step 1): the names,
+    the layout's paths, the reads and the writes; scratch workspaces only, no catalog needed."""
+    n = node_or_skip()
+    from metis_loop_sdk import web
+    env = {k: v for k, v in os.environ.items() if k != "METIS_CATALOG"}
+    env.update(METIS_LOOP_SDK_PY=sys.executable, METIS_LOOP_SDK_WS_TS=str(web.TS_DIR / "workspace.ts"))
+    p = subprocess.run([n, "--experimental-strip-types", "--no-warnings", "--test", str(HERE / "ts" / "workspace.test.ts")],
+                       capture_output=True, text=True, env=env, timeout=600)
+    assert p.returncode == 0, p.stdout[-4000:] + p.stderr[-2000:]
+
+
 def test_the_typescript_face_at_parity_with_the_cli():
     n = node()
     if not n:
