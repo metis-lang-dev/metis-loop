@@ -239,3 +239,53 @@ def test_the_loop_channel_through_loop_sh_and_pi_rpc(gw, tmp_path, monkeypatch):
     kinds = [r["kind"] for r in rows if r["who"] == "pi"]
     assert {"rpc_text", "rpc_gate", "rpc_tool_result", "rpc_exit"} <= set(kinds), kinds
     assert [r["kind"] for r in rows if r["who"] == "backend"][:2] == ["pi_start", "say"]
+
+
+class FailsFirst(StubPi):
+    """A child whose first start fails as loop.sh's refusal does (pi_rpc's PiRpcError, its stderr line in the words)."""
+    tries = 0
+
+    async def start(self):
+        FailsFirst.tries += 1
+        if FailsFirst.tries == 1:
+            from loop.workspace_ch import PiRpcError
+            raise PiRpcError("pi did not answer (exit 1): loop.sh: openrouter/x is paid: give --budget USD")
+
+
+class GoneAfterStart(StubPi):
+    """A child that exits at once; then say and confirm meet pi_rpc's 'pi is not running'."""
+
+    async def start(self):
+        await self.q.put({"kind": "exit", "code": 1, "stderr_tail": ["loop.sh: gone", "bye"]})
+
+    async def say(self, text):
+        from loop.workspace_ch import PiRpcError
+        raise PiRpcError("pi is not running")
+
+
+def test_a_failed_start_keeps_the_page_and_the_channel(gw, tmp_path):
+    """nina's review of step 2 (finding 1): a start that fails says why and leaves the channel free for the next; a say
+    after the child exited is an error frame, never the page's connection; a budget of 0 is refused (finding 2)."""
+    FailsFirst.tries = 0
+    gw.gw.wsc.pi_factory = FailsFirst
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        assert "above 0" in ask(ws, "loop", "start", mode="rpc", model="openrouter/x", budget=0)["error"]
+        bad = ask(ws, "loop", "start", mode="rpc", model="openrouter/x")
+        assert bad["type"] == "error" and "did not start" in bad["error"] and "--budget" in bad["error"]
+        assert ask(ws, "loop", "state")["child"] is None
+        good = ask(ws, "loop", "start", mode="rpc", model="openrouter/x", budget=1)
+        assert good["child"]["state"] == "running"
+        ask(ws, "loop", "stop")
+        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        assert ask(ws, "loop", "say", text="hi")["type"] == "error"              # exited: no say
+        gw.gw.wsc.pi_factory = GoneAfterStart
+        ask(ws, "loop", "start", mode="rpc")
+        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        e = ask(ws, "loop", "say", text="hi")
+        assert e["type"] == "error"
+        assert ask(ws, "loop", "state")["type"] == "state"                       # the page still talks
+    rows = W.workspace(tmp_path).events()
+    assert any(r["kind"] == "pi_start_failed" and "--budget" in r["error"] for r in rows)
+    ex = [r for r in rows if r["kind"] == "rpc_exit" and r.get("stderr_tail")]
+    assert ex and ex[-1]["stderr_tail"] == "loop.sh: gone\nbye"

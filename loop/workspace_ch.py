@@ -44,6 +44,12 @@ from typing import Optional
 from metis import trace as T
 from metis.catalog import workspace as W
 
+try:
+    from .pi_rpc import PiRpcError
+except ImportError:                                      # a checkout before loop/pi_rpc.py
+    class PiRpcError(RuntimeError):
+        pass
+
 CHANNELS = ("trace", "surprise", "bundle", "loop")
 WATCH_SECS = 2.0              # the bundle's stale watch and the journal's tail
 VERB_SECS = 300               # a trace verb's wall time
@@ -53,16 +59,23 @@ LOOP_SH = Path(__file__).resolve().parent.parent / "pi" / "loop.sh"
 CUT_VERBS = frozenset(["undo", "reset", "whatif", "load", "seed", "accept"])
 
 
+_SCOPE = []                   # the probe's answer, once per process
+
+
 def _scope():
-    """The 6G scope prefix for a child (the rule for every run's child), when a user scope can start here; else []."""
-    if not shutil.which("systemd-run"):
-        return []
-    try:
-        ok = subprocess.run(["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "true"],
-                            capture_output=True, timeout=10).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    """The 6G scope prefix for a child (the rule for every run's child), when a user scope can start here; else [].
+    Probed once per process."""
+    if not _SCOPE:
         ok = False
-    return ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0"] if ok else []
+        if shutil.which("systemd-run"):
+            try:
+                ok = subprocess.run(["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "true"],
+                                    capture_output=True, timeout=10).returncode == 0
+            except (OSError, subprocess.TimeoutExpired):
+                ok = False
+        _SCOPE.append(["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0"]
+                      if ok else [])
+    return list(_SCOPE[0])
 
 
 class SessionTrace:
@@ -170,6 +183,12 @@ class WorkspaceChannels:
         except (ValueError, KeyError, T.TraceError, FileNotFoundError) as e:
             await self.gw._send(page, {"ch": ch, "type": "error", "req": req,
                                        "error": str(e.args[0] if e.args else e)})
+        except PiRpcError as e:         # the child is gone or never answered: the page stays, the channel too
+            if self.child:
+                self.child["state"] = "exited"
+                self.child["gates"].clear()
+            await self.gw._send(page, {"ch": ch, "type": "error", "req": req,
+                                       "error": f"the pi loop is not running: {e}"})
 
     def drop(self, page):
         self.subs.discard(page)
@@ -256,7 +275,9 @@ class WorkspaceChannels:
 
     def surprise_of(self, msg):
         """The record a drop writes: from a REPL session (its member, its trace when it writes one, k its last tick)
-        or from a trace (run and member named). The person's reading or atoms, and words, as given."""
+        or from a trace (run and member named). The person's reading or atoms, and words, as given. No `config`: a
+        REPL session has no service config, and for a trace the judge falls back to the bundle's (pack_propose:
+        the argument, the surprise's, then ws.bundle().config, the architect's order)."""
         rec = {k: msg[k] for k in ("reading", "atoms", "words", "window", "k", "k0") if msg.get(k) not in (None, "", [])}
         if msg.get("session"):
             s = self.gw.sessions.get(str(msg["session"]))
@@ -267,6 +288,9 @@ class WorkspaceChannels:
             if tr is not None:
                 rec["trace"] = "traces/" + tr.path.name
                 rec.setdefault("k", tr.last_k())
+                if tr.extensions:               # metis.trace replays the program alone: say so on the record
+                    rec["trace_note"] = ("the session merged the extensions %s: a replay of the trace's program "
+                                         "runs without them" % ", ".join(tr.extensions))
             rec["session"] = s.sid
         elif msg.get("run"):
             run = W._check_run(str(msg["run"]))
@@ -315,7 +339,8 @@ class WorkspaceChannels:
         if typ == "stop":
             if not self.child:
                 raise ValueError("no pi loop runs from this backend")
-            await self.child["rpc"].stop()
+            if self.child["state"] != "exited":
+                await self.child["rpc"].stop()
             return {"child": self.child_state()}
         if typ == "say":
             text = str(msg.get("text") or "").strip()
@@ -334,7 +359,7 @@ class WorkspaceChannels:
         raise ValueError(f"loop: state | events | start | stop | say | confirm | refuse, not {typ!r}")
 
     def _rpc(self):
-        if not self.child:
+        if not self.child or self.child["state"] != "running":
             raise ValueError("no pi loop runs from this backend: start it (mode rpc)")
         return self.child["rpc"]
 
@@ -353,6 +378,7 @@ class WorkspaceChannels:
             raise ValueError("the backend starts the pi loop in rpc mode only (the TUI is a terminal's)")
         if self.child and self.child["state"] != "exited":
             raise ValueError("a pi loop already runs from this backend")
+        self.child = None
         held = (await self._run(self.ws.loops)).get("pi")
         if held and held.get("alive"):
             raise ValueError(f"a pi loop holds this workspace: pid {held.get('pid')} since {held.get('started')}"
@@ -364,17 +390,23 @@ class WorkspaceChannels:
                 raise ValueError("the rpc client (loop/pi_rpc.py) is not on this checkout yet") from None
             self.pi_factory = PiRpc
         budget = msg.get("budget")
-        if budget is not None and not (isinstance(budget, (int, float)) and budget >= 0):
-            raise ValueError(f"budget {budget!r}: USD, a number >= 0")
+        if budget is not None and (isinstance(budget, bool) or not isinstance(budget, (int, float)) or budget <= 0):
+            raise ValueError(f"budget {budget!r}: USD, a number above 0 (or none: loop.sh's default)")
         env = dict(os.environ, METIS_CATALOG=str(self.ws.root))
         if msg.get("model"):
             env["MODEL"] = str(msg["model"])
         if budget is not None:
             env["METIS_LOOP_BUDGET"] = str(budget)
         rpc = self.pi_factory(_scope() + [str(LOOP_SH), "--mode", "rpc"], str(self.ws.root), env)
-        self.child = {"rpc": rpc, "model": msg.get("model"), "budget": budget, "started": W._ts(),
-                      "gates": {}, "state": "starting"}
-        await rpc.start()
+        child = {"rpc": rpc, "model": msg.get("model"), "budget": budget, "started": W._ts(),
+                 "gates": {}, "state": "starting"}
+        self.child = child
+        try:
+            await rpc.start()
+        except Exception as e:                           # noqa: BLE001 — loop.sh refused, or pi died before it answered
+            self.child = None
+            await self._run(lambda: self.ws.journal("backend", "pi_start_failed", error=str(e)[:500]))
+            raise ValueError(f"the pi loop did not start: {e}") from None
         self.child["state"] = "running"
         self.child["task"] = asyncio.create_task(self._pump(self.child))
         await self._run(lambda: self.ws.journal("backend", "pi_start", pid=getattr(rpc, "pid", None),
@@ -393,14 +425,19 @@ class WorkspaceChannels:
                     row = {"token": ev["token"]}
                 else:
                     await self.gw._send_all({"ch": "loop", "type": "pi", "event": ev})
-                    row = {k: ev[k] for k in ("name", "id", "ok", "code") if k in ev}
-                    if ev.get("text"):
-                        row["text"] = str(ev["text"])[:500]      # the words, cut: the journal carries pointers
+                    row = {k: ev[k] for k in ("name", "id", "ok", "code", "where", "level", "cost", "model", "aborted")
+                           if k in ev}
+                    for k in ("text", "error", "stderr_tail"):        # the words, cut: the journal carries pointers
+                        v = ev.get(k)
+                        if v:
+                            v = "\n".join(map(str, v)) if isinstance(v, (list, tuple)) else str(v)
+                            row[k] = v[-500:] if k == "stderr_tail" else v[:500]
                 await self._run(lambda: self.ws.journal("pi", "rpc_" + str(kind or "event"), **row))
                 if kind == "exit":
                     break
         finally:
             child["state"] = "exited"
+            child["gates"].clear()                       # no confirm reaches a gone child
             await self.gw._send_all({"ch": "loop", "type": "child", "child": self.child_state()})
 
     # -- the watch -----------------------------------------------------------
