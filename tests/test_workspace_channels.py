@@ -315,11 +315,12 @@ def test_a_turn_without_words_says_so(gw, tmp_path):
     with gw.ws() as ws:
         frames(ws, lambda f: f.get("type") == "catalogs")
         assert ask(ws, "loop", "start", mode="rpc")["child"]["state"] == "running"
-        ask(ws, "loop", "say", text="count go")
+        # the say's reply may come after the child's events (the stub queues them inside say): wait for the turn's end
+        ws.send(json.dumps({"ch": "loop", "type": "say", "req": "s1", "text": "count go"}))
         end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
         assert end["empty"] is True and end["tools"] == 2
         assert end["note"] == "pi ended its turn without words (2 tool calls)"
-        ask(ws, "loop", "say", text="and in words?")
+        ws.send(json.dumps({"ch": "loop", "type": "say", "req": "s2", "text": "and in words?"}))
         end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
         assert "empty" not in end
         ask(ws, "loop", "stop")
