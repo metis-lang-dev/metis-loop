@@ -229,14 +229,19 @@ export default function (pi: ExtensionAPI) {
 				const res = await run(process.env.METIS_LOOP_PROPOSE || join(HERE, "..", "propose.sh"), argv, r);
 				const md = join(tmp, "run", "ruling.md");
 				const ev = join(tmp, "run", "evidence.json");
-				if (!existsSync(md) || !existsSync(ev)) throw new Error(`propose.sh wrote no ruling (exit ${res.code}): ${(res.err || res.out).trim().slice(-1500)}`);
+				if (!existsSync(md) || !existsSync(ev)) {
+					const why = `propose.sh wrote no ruling (exit ${res.code}): ${(res.err || res.out).trim().slice(-1500)}`;
+					release(p.id, `no ruling: exit ${res.code}`, r);
+					throw new Error(`${why}\nsurprise ${p.id} is released: open again`);
+				}
 				const e = JSON.parse(readFileSync(ev, "utf8"));
 				const doc = readFileSync(md, "utf8");
 				spent = logSpend(join(tmp, "run"), p.id, r);
 				if (e.verdict === "not judged") {
-					// past the time budget: no verdict at all, so no ruling; the surprise stays taken for a retry
-					ws.journal("pi", "not-judged", { surprise: p.id, code: res.code }, r);
-					return text(`not judged (the time budget ran out): surprise ${p.id} stays taken; judge it again with a longer budget\n\n${doc}`, { verdict: e.verdict, ruling: null, code: res.code, spent });
+					// past the time budget: no verdict at all, so no ruling; the take releases itself (the architect's
+					// ruling): the next loop, or this one with a longer budget, takes it again
+					release(p.id, `not judged: ${(e.reasons ?? []).join("; ") || "the time budget ran out"}`, r);
+					return text(`not judged (the time budget ran out): surprise ${p.id} is released, open again; judge it again with a longer budget\n\n${doc}`, { verdict: e.verdict, ruling: null, code: res.code, spent });
 				}
 				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace };
 				// the face journals the ruling
@@ -249,17 +254,31 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	// a take that ends without a ruling releases itself: surprises/<id>.taken removed, a not_judged row with the reason
+	function release(id: string, reason: string, r: string) {
+		rmSync(ws.path("taken", { id }, r), { force: true });
+		ws.journal("pi", "not_judged", { surprise: id, reason: reason.slice(0, 400) }, r);
+	}
+
 	// the brain's own per-call log (RUN/cost.jsonl: {ts, who, model, cost, usage_before}) into the workspace's, once
 	const logged = new Set<string>();
 	function logSpend(run: string, id: string, r: string): number {
 		const f = join(run, "cost.jsonl");
 		if (!existsSync(f)) return 0;
 		let sum = 0;
-		const rows = readFileSync(f, "utf8").split("\n").filter((l) => l.trim());
-		for (const l of rows) sum += Number(JSON.parse(l).cost) || 0;
+		const rows: any[] = [];
+		for (const l of readFileSync(f, "utf8").split("\n")) {
+			if (!l.trim()) continue;
+			try {
+				rows.push(JSON.parse(l));
+			} catch {
+				rows.push({ unparsed: l.slice(0, 400) }); // kept, never thrown: a bad line must not hide the run's own error
+			}
+		}
+		for (const x of rows) sum += Number(x.cost) || 0;
 		if (!logged.has(f)) {
 			logged.add(f);
-			for (const l of rows) appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ...JSON.parse(l), surprise: id }) + "\n");
+			for (const x of rows) appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ...x, surprise: id }) + "\n");
 		}
 		return sum;
 	}

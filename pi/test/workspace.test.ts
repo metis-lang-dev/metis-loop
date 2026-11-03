@@ -164,7 +164,7 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	await p.emit("session_shutdown", {}, {});
 });
 
-test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; not judged leaves the surprise taken", async () => {
+test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; a take without a ruling releases itself", async () => {
 	const { r } = scratch();
 	const p = fakePi();
 	workspace(p.api);
@@ -178,9 +178,9 @@ test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; no
 		const j = await p.tools.get("pack_propose").execute("ja", { id: a, pack: "% x", brain: "openrouter/m", budget: 0.5 });
 		assert.equal(j.details.spent, 0.0123);                                            // from the brain's own log, not the document
 		process.env.STUB_CRASH = "1";
-		await assert.rejects(p.tools.get("pack_propose").execute("jb", { id: b, pack: "% x", brain: "openrouter/m", budget: 0.5 }), /wrote no ruling/);
+		await assert.rejects(p.tools.get("pack_propose").execute("jb", { id: b, pack: "% x", brain: "openrouter/m", budget: 0.5 }), /wrote no ruling[\s\S]*is released: open again/);
 		delete process.env.STUB_CRASH;
-		assert.equal(ws.surprise(b, r).status, "taken");
+		assert.equal(ws.surprise(b, r).status, "open");                                   // a take without a ruling releases itself
 		const cost = ws.cost(r);
 		assert.equal(cost.calls, 2);                                                      // the crashed run's spend too
 		assert.ok(Math.abs(cost.total - 0.0246) < 1e-9, String(cost.total));
@@ -189,8 +189,11 @@ test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; no
 		Object.assign(process.env, { STUB_VERDICT: "not judged", STUB_COST: "" });
 		const nj = await p.tools.get("pack_propose").execute("jc", { id: c, pack: "% x" });
 		assert.equal(nj.details.ruling, null);
-		assert.equal(ws.surprise(c, r).status, "taken");                                  // no verdict: no ruling, retry later
-		assert.ok(ws.events(0, r).some((e) => e.kind === "not-judged" && e.surprise === c));
+		assert.equal(ws.surprise(c, r).status, "open");                                   // no verdict: no ruling, released, taken again later
+		assert.ok(ws.events(0, r).some((e) => e.kind === "not_judged" && e.surprise === c && /not judged/.test(String(e.reason))));
+		assert.ok(ws.events(0, r).some((e) => e.kind === "not_judged" && e.surprise === b && /exit 3/.test(String(e.reason))));
+		const again = await p.tools.get("surprise_next").execute("again", {});
+		assert.ok([b, c].includes(again.details.surprise.id));                            // a released one is taken again (ids of one second sort by their hex)
 	} finally {
 		delete process.env.STUB_COST;
 		await p.emit("session_shutdown", {}, {});
