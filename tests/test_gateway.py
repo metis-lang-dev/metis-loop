@@ -1,7 +1,8 @@
 """The console gateway (docs/CONSOLE-WS.md, step 1): the protocol over
 a REAL socket — sessions, the queue, busy/stop, re-attach with the
-in-memory log, run caps — and the shared-mode policy: token (D2), LLM
-seats and chat refused, per-IP session cap, rate limit."""
+in-memory log, run caps — and the shared-mode policy: token (D2), per-IP
+session cap, rate limit. The LLM seats and the chat are retired (loop-workspace):
+their verbs and frames are refused in every mode, naming the pi loop."""
 import asyncio
 import json
 import threading
@@ -121,23 +122,27 @@ def test_round_trip_queue_posting_and_reattach(personal):
             "error"] == "gone"
 
 
-def test_run_cap_and_chat_seat_precedence():
-    """Precedence, pinned: with no agent seat the seat reason wins over
-    "open a session first" (a session cannot fix a missing seat). The
-    seat is disabled by config so this holds with or without the SDK;
-    the session check itself is tested with the seat present
-    (test_agent_service)."""
-    r = Running(mode="personal", max_run_steps=2, agent=False)
+def test_run_cap_and_the_retired_seats_in_personal_mode():
+    """The run cap; and in PERSONAL mode too the LLM verbs and the chat are refused,
+    naming where they went (loop-workspace, WORKSPACE.md §3): no seat in the manifest."""
+    r = Running(mode="personal", max_run_steps=2)
     try:
         with r.ws() as ws:
+            man = json.loads(ws.recv(timeout=5))
+            assert man["seats"] == {"repl": True} and "brain" not in man
+            assert {"repl", "meta", "trace", "surprise", "bundle", "loop"} <= set(man["channels"])
             sid = open3(ws)["session"]
             post = send(ws, sid, "run 50", "i1")[-1]
             assert len(post["json"]["fired"]) == 2
             assert post["result"].startswith("(run capped at 2 steps)")
-            ws.send(json.dumps({"ch": "chat", "type": "say", "text": "hi"}))
+            for k, verb in enumerate(("narrate", "formalize x", "llm", ":llm anthropic")):
+                p = send(ws, sid, verb, f"n{k}")[-1]
+                assert p["status"] == "refused" and "pi loop" in p["result"], p
+            ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "hi"}))
             err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
-            assert err["error"] == ("agent chat unavailable here: "
-                                    "agent disabled in [console]")
+            assert "retired" in err["error"] and "pi loop" in err["error"]
+            p = send(ws, sid, "intents", "d0")[-1]
+            assert p["status"] == "error" and "pi loop" in p["result"]
     finally:
         r.close()
 
@@ -179,7 +184,7 @@ def test_stop_interrupts_the_running_command_and_drops_the_queue():
 
 def test_shared_mode_token_llm_seats_chat_caps_and_rate():
     r = Running(mode="shared", token="s3cret", max_sessions_per_ip=1,
-                rate_per_min=6, artifact_url="https://example.invalid/a")
+                rate_per_min=6)
     try:
         base = f"http://{r.url}/"
         with pytest.raises(urllib.error.HTTPError) as e:
@@ -192,16 +197,14 @@ def test_shared_mode_token_llm_seats_chat_caps_and_rate():
             r.ws().close()                          # no token: refused
         with r.ws("s3cret") as ws:
             man = json.loads(ws.recv(timeout=5))
-            assert man["seats"]["chat"] is None
-            assert man["seats"]["narrate"] is None
-            assert man["chat_pointer"] == "https://example.invalid/a"
+            assert man["seats"] == {"repl": True}
             sid = open3(ws)["session"]
             for k, verb in enumerate(("narrate", "formalize x", "llm")):
                 p = send(ws, sid, verb, f"n{k}")[-1]
-                assert p["status"] == "refused" and "credentials" in \
+                assert p["status"] == "refused" and "not served" in \
                     p["result"]
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "x"}))
-            assert "not served" in frames(
+            assert "retired" in frames(
                 ws, lambda f: f.get("ch") == "chat")[-1]["error"]
             ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs",
                                 "req": "r2"}))

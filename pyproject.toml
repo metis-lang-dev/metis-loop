@@ -17,8 +17,6 @@ dependencies = ["metis-loop-sdk"]
 # `metis-loop` (docs/CONSOLE-WS.md): the gateway, over the catalog in the cwd
 # (+ the catalog's loader: pip install metis-catalog, or -e a checkout)
 console = ["websockets>=13", "pyyaml>=6"]
-# the console's agent seat (personal mode, CONSOLE-WS §3)
-agent = ["websockets>=13", "metis-loop-sdk[claude]"]
 
 [project.scripts]
 metis-loop = "loop.cli:main"

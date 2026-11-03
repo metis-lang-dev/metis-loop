@@ -394,12 +394,11 @@ so every instrument now speaks about that tick.
       cannot derive; quote atoms; that text is the approved unit" }
     llp> mine %% the shepherd tallies the flock at rest: a fed wolf means a loss, a hungry one safety.
     llp> formalize
-    (drafts via the llm endpoint — `llm` shows, sets AND validates
-     it: for ollama it checks the server and whether the model is
-     pulled. The metis dot file seeds it ($METIS_CONFIG |
-     ./.metis.toml | ~/.config/metis/config.toml: [llm] endpoint,
-     [ollama] host/model under $OLLAMA_HOST/$OLLAMA_MODEL);
-     `anthropic[:MODEL]` or `command:ARGV` are the alternatives;
+    (drafts via the llm endpoint — `llm` shows, sets AND checks
+     it: an unset endpoint, a missing key or a command not on PATH
+     leaves a note. The metis dot file seeds it ($METIS_CONFIG |
+     ./.metis.toml | ~/.config/metis/config.toml: [llm] endpoint),
+     `anthropic[:MODEL]` or `command:ARGV`, with no default;
      findings feed back, <= 4 rounds. The doctrine split: narration
      runs local, formalization deserves the stronger model. Or
      write it yourself: `llp <<EOF`, or `load` it — here, the

@@ -19,42 +19,24 @@ run in DIR; the loops' own state goes in `DIR/.metis/` (git-ignored when DIR
 is a checkout). `cd metis-catalog && metis-loop` serves the catalog's own
 domains. Nothing is found "beside this checkout".
 
-## Your brain
+## No brain in the console
 
-The console's LLM seats (formalize, narrate, the agent chat) run on one brain,
-chosen when it starts (`loop/brain.py`):
-
-```sh
-cd DIR && metis-loop --brain claude                               # your Claude subscription
-cd DIR && metis-loop --brain openrouter                           # an OpenRouter key: deepseek/deepseek-v4-pro
-cd DIR && metis-loop --brain openrouter:qwen/qwen3-235b-a22b-2507 # another OpenRouter model
-cd DIR && metis-loop --brain ollama                               # the dot file's [llm] endpoint (local)
-BRAIN=openrouter ./run.sh                                         # the same, in the background
-```
-
-| brain | needs | formalize | narrate | agent chat |
-|---|---|---|---|---|
-| `claude` | `pip install 'metis-loop[agent]'` (the Agent SDK, with its `claude` CLI) and your `claude` login | `formalize_model` (claude-haiku-4-5) | `narrate_model` (claude-haiku-4-5) | yes |
-| `openrouter[:MODEL]` | `export OPENROUTER_API_KEY=…` (from the environment only, never a file) | MODEL, else `openrouter_model` | `openrouter_narrate_model` (deepseek/deepseek-v4-flash) | needs claude |
-| `ollama` | the kernel's `[llm] endpoint` (Ollama by default) | that endpoint | that endpoint | needs claude |
-
-Without `--brain` it is `[console] brain` in the metis dot file, else `claude`
-when the Agent SDK is installed, else `openrouter` when `OPENROUTER_API_KEY`
-is set, else `ollama` (so a key in your environment makes OpenRouter the
-default); the start line says which, with its models. `:llm X` in a session
-moves both of its seats to X. A brain
-named and not available refuses at startup with the fix. On OpenRouter every
-call goes only to providers that keep no prompts; formalize has reasoning off
-and 2048 tokens, narrate `[console] narrate_reasoning` ("low": with it off,
-narration invented events) and 4096 tokens; each call and its cost (OpenRouter's own figure) goes in
-`DIR/.metis/formalize-calls.jsonl`, and a session stops calling once it has
-spent `[console] max_usd` (1.00 USD). A shared instance (`--mode shared`)
-serves no LLM seat on any brain.
+The console is the REPL, the editor and the gate over the workspace; it runs no
+model (loop-workspace, docs/WORKSPACE.md). Its LLM seats (the agent chat, narrate,
+formalize, `--brain`) are retired: the REPL's `narrate`, `formalize` and `llm`
+are refused, naming where they went. A surprise is dropped to the workspace
+(`DIR/.metis/surprises/`), and the pi loop takes it, judges a pack and rules it
+(`pi/loop.sh`, in the same DIR; its model and spend are its own). Narration is
+the agent's (metis-agent's gemma4). The console's new channels `trace`,
+`surprise`, `bundle` and `loop` read and write that same `.metis/`
+(docs/WORKSPACE.md §3); a session opened with `trace: true` writes
+`DIR/.metis/traces/<session>/`, which `python -m metis.trace replay` reproduces.
+One backend per workspace: a second `metis-loop` in the same DIR refuses with the
+first one's line (`.metis/loop/backend.json`).
 
 Every write into the catalog goes through the loop's gate (docs/LOOP.md): the apply,
 an edit of a file on disk, the README, the intents skeleton, take into `[console] take_into`,
-a new domain from a seed — each a diff you confirm or refuse. The agent seat's apply waits
-for your confirm too.
+a new domain from a seed — each a diff you confirm or refuse.
 
 The explanation / formalization loop for metis catalogs:
 

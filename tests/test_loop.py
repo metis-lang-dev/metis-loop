@@ -14,8 +14,6 @@ def test_shims_resolve_to_the_kernel():
     import loop
     import loop.bus
     import loop.core
-    import loop.llm
-    import loop.narrate
     import loop.node
     import loop.repl
     import metis.loop.bus
@@ -37,3 +35,17 @@ def test_cli_is_the_console_and_points_elsewhere(capsys):
         assert rc == 2 and f"no `{verb}`" in err
     assert main(["--help"]) == 0
     assert "Loop Console backend" in capsys.readouterr().out
+
+
+def test_the_brain_seats_are_retired(capsys):
+    """loop-workspace (docs/WORKSPACE.md §7): loop/brain.py, the agent seat and the
+    narrate/llm shims are gone, and `metis-loop --brain` refuses, naming the pi loop."""
+    import loop
+    from loop.cli import main
+    here = Path(loop.__file__).parent
+    for m in ("brain", "agent_service", "llm", "narrate", "ollama"):
+        assert not (here / f"{m}.py").exists(), m
+    for flag in (["--brain", "claude"], ["--brain=openrouter"], ["--mock-agent"]):
+        assert main(flag) == 2
+        err = capsys.readouterr().err
+        assert "is gone" in err and "pi loop" in err

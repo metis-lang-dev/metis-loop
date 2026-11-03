@@ -33,8 +33,6 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"gate", op:"propose", session?, kind, domain, args, req}  -> {type:"gate", plan}
                                     kind edit | readme | intents | take | program (loop-parity step 2)
                  {ch:"repl", type:"gate", op:"confirm"|"refuse", token, req}  -> {type:"gate", written | refused}
-                 {ch:"chat", type:"say"|"stop"|"history", session, text}
-                                          (personal mode, the agent seat)
     gw -> page   {ch:"meta", type:"manifest", ...}  {ch:"meta", type:"catalogs", names}
                  {ch:"meta", type:"readme", readme}  the root's README.md, {path, text,
                                           links: {href: package path}} or null
@@ -54,13 +52,17 @@ the same `parse_intent` — approval verbs and paths cannot arrive.
 Session Manager = ConsoleServer + per-session command QUEUE (one
 command at a time, on the session's own worker thread), busy/stop
 (stop interrupts the running command and drops the queue), and the
-`[console]` caps. Mode manifest (§4): `personal` (own host) keeps the
-REPL's LLM seats; `shared` is REPL-only — chat/narrate/formalize/llm
-never run on the operator's credentials there — with an optional URL
-token (D2), per-IP session caps and a rate limit.
+`[console]` caps. Mode manifest (§4): `personal` (own host) and `shared`
+(an optional URL token (D2), per-IP session caps and a rate limit).
 
-Privacy (D4): sessions, postings and (later) chat live in MEMORY only;
-nothing a visitor types or runs is written to the operator's disk."""
+No brain (loop-workspace s-5b4be5fa, docs/WORKSPACE.md §3, §7): the LLM
+seats are retired, the agent chat, narrate and formalize with loop/brain.py.
+The REPL's `narrate`, `formalize` and `llm` are refused in every mode:
+a surprise is dropped to the workspace and the pi loop formalizes and
+rules it; narration is the agent's (metis-agent's gemma4).
+
+Privacy (D4): sessions and postings live in MEMORY only; nothing a
+visitor types or runs is written to the operator's disk."""
 import asyncio
 import ctypes
 import json
@@ -78,8 +80,11 @@ from urllib.parse import parse_qs, urlparse
 
 from metis_loop_sdk.web import WIDGET_URL, widget_file
 
-from . import brain, shell_lib
+from . import shell_lib
 from .console_serve import ConsoleServer
+from .workspace_ch import CHANNELS as WS_CHANNELS, SessionTrace, WorkspaceChannels
+
+CHANNELS = ("repl", "meta") + WS_CHANNELS    # the manifest says them; `chat` is retired
 
 PAGE = Path(__file__).resolve().parent.parent / "console" / "loop_console.html"
 VENDOR = PAGE.parent / "vendor"     # the CodeMirror bundle (one instance)
@@ -88,90 +93,46 @@ DEFAULTS = {
     "port": 8770, "bind": "127.0.0.1", "mode": "personal", "token": "",
     "max_sessions": 16, "max_sessions_per_ip": 4, "max_run_steps": 500,
     "idle_secs": 1800, "rate_per_min": 120, "history": 300,
-    "artifact_url": "",
-    # the agent seat (personal mode, step 2 — CONSOLE-WS §3)
-    "agent": True, "agent_model": "claude-opus-5-5", "agent_tool_calls": 10,
-    "agent_cmd_timeout": 60, "agent_max_turns": 12,
-    # the narrate seat (personal mode, step 3 — D3): "sdk" substitutes the
-    # session's LLM endpoint with the loop SDK's claude command face
-    # (metis_loop_sdk.models claude-command, Haiku); "llm" keeps
-    # the kernel's configured endpoint (ollama)
-    "narrate": "sdk", "narrate_model": "claude-haiku-4-5",
-    "narrate_thinking": 1024,       # tokens; 0 = off (fast, unfaithful)
-    # formalize on the claude brain (brain-choice): its own key, the same Haiku by default
-    "formalize_model": "claude-haiku-4-5", "formalize_thinking": 1024,
     # the band's AGENT field (human-loop step 3): metis-agent's console wire,
     # e.g. "ws://127.0.0.1:8395/ws"; "" = off; never in shared mode
     "metis_agent": "",
-    # the brain (brain-choice s-c59b7b51, loop/brain.py): claude | openrouter[:MODEL] |
-    # ollama; "" = by what is here (claude, else OpenRouter with a key, else ollama)
-    "brain": "", "openrouter_model": "deepseek/deepseek-v4-pro",
-    "openrouter_narrate_model": "deepseek/deepseek-v4-flash",
-    "max_usd": 1.00,                # per session, OpenRouter's reported cost
     # take (loop-parity step 2): the operator's other catalog a domain is taken into; "" = take is off
     "take_into": "",
     # loop-policy: a loop's state directory (pi's --state) whose asks the GATE shows and answers; "" = the console's own
     "loop_state": "",
-    # the agent seat's writes wait for the person's confirm this long, then count as refused (seconds)
-    "agent_gate_timeout": 600,
-    "narrate_reasoning": "low",     # OpenRouter's narrate (formalize: off); off invented events
 }
-# the LLM seats: never through the operator's credentials in shared mode
+# the retired LLM seats (loop-workspace): the REPL's verbs that would call a model, refused in every mode
 LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
+RETIRED = {     # [console] keys of the retired seats: a dot file that still has one is told, not failed
+    "agent", "agent_model", "agent_tool_calls", "agent_cmd_timeout", "agent_max_turns", "agent_gate_timeout",
+    "narrate", "narrate_model", "narrate_thinking", "narrate_reasoning", "formalize_model",
+    "formalize_thinking", "brain", "openrouter_model", "openrouter_narrate_model", "max_usd", "artifact_url"}
+SEATS_GONE = ("the console has no brain (loop-workspace, docs/WORKSPACE.md §3): drop a surprise to the "
+              "workspace (the SURPRISES panel) and the pi loop formalizes and rules it (pi/loop.sh); "
+              "narration is the agent's")
 
 
 def load_config(**overrides) -> dict:
     """DEFAULTS < the metis dot file's [console] table < overrides
-    (CLI flags; None means 'not given')."""
+    (CLI flags; None means 'not given'). A retired seat's key in the dot
+    file is ignored and named in cfg["retired"] (the start line says so)."""
     cfg = dict(DEFAULTS)
+    retired = []
     try:
         from metis.loop import config
         _, conf = config.load()
         t = conf.get("console")
         if isinstance(t, dict):
             cfg.update({k: v for k, v in t.items() if k in DEFAULTS})
+            retired = sorted(k for k in t if k in RETIRED)
     except Exception:                                   # noqa: BLE001
         pass
     cfg.update({k: v for k, v in overrides.items() if v is not None})
     if cfg["mode"] not in ("personal", "shared"):
         raise ValueError(f"[console] mode must be personal|shared, "
                          f"not {cfg['mode']!r}")
-    if cfg["narrate_reasoning"] not in brain.REASONING:
-        raise ValueError(f"[console] narrate_reasoning must be {'|'.join(brain.REASONING)}, "
-                         f"not {cfg['narrate_reasoning']!r}")
-    if not float(cfg["max_usd"]) > 0:
-        raise ValueError(f"[console] max_usd must be above 0, not {cfg['max_usd']!r}")
+    cfg["retired"] = retired
     return cfg
-
-
-def agent_seat(cfg: dict):
-    """(seat, reason): 'agent' when personal mode can run the Agent
-    Service here, else None with why."""
-    if cfg["mode"] == "shared":
-        return None, "shared instance"
-    if not cfg.get("agent", True):
-        return None, "agent disabled in [console]"
-    from .agent_service import available
-    why = available()
-    if why:
-        return None, why
-    b = brain.resolve(cfg)["name"]
-    if b != "claude":                   # brain-choice: the agent seat is Claude's
-        return None, f"needs claude (the brain is {b}: --brain claude)"
-    return "agent", None
-
-
-def narrate_seat(cfg: dict, sid: str = "", log=None):
-    """(label, endpoint spec or None): the narrate seat this instance
-    serves (D3), on the brain's provider (loop/brain.py). None spec =
-    leave the kernel's endpoint (ollama)."""
-    return brain.seats(cfg, sid, log)["narrate"]
-
-
-def formalize_seat(cfg: dict, sid: str = "", log=None):
-    """(label, endpoint spec or None): formalize's seat (brain-choice). None
-    spec = the session's one endpoint (the narrate seat's, or the kernel's)."""
-    return brain.seats(cfg, sid, log)["formalize"]
 
 
 def verb_lines() -> dict:
@@ -185,31 +146,16 @@ def verb_lines() -> dict:
 def manifest(cfg: dict) -> dict:
     """What this instance serves — the page renders only these (§4)."""
     shared = cfg["mode"] == "shared"
-    seat, why = agent_seat(cfg)
-    s = brain.seats(cfg)
     return {
         "mode": cfg["mode"],
-        "brain": s["brain"],                             # brain-choice: {name, model}; None when shared
-        "chat_unavailable": why,
-        "seats": {
-            "repl": True,
-            "chat": seat,                                # §3
-            "narrate": s["narrate"][0],                   # D3
-            "formalize": s["formalize"][0],
-        },
-        "chat_model": (cfg.get("agent_model") or "the CLI default")
-        if seat == "agent" else None,
-        "chat_pointer": cfg["artifact_url"] or None,
+        "seats": {"repl": True},                         # the LLM seats are retired (loop-workspace)
+        "channels": list(CHANNELS),
         "verbs": verb_lines(),
         "caps": {k: cfg[k] for k in ("max_sessions", "max_sessions_per_ip",
                                      "max_run_steps", "idle_secs",
                                      "rate_per_min")},
-        "policy": ("shared instance: REPL only — nobody's chat, "
-                   "narration or formalization runs on the operator's "
-                   "credentials; AI for shared users lives on the "
-                   "artifact console, billed to the viewer")
-                  if shared else
-                  "personal instance: the operator's own host and seats",
+        "policy": ("shared instance: the REPL, capped; no model runs here"
+                   if shared else "personal instance: the operator's own host"),
     }
 
 
@@ -228,7 +174,6 @@ class Sess:
         self.pool = ThreadPoolExecutor(max_workers=1,
                                        thread_name_prefix=f"sess-{sid}")
         self.lock = threading.Lock()
-        self.gate_wait: Dict[str, asyncio.Future] = {}   # the agent seat's plans waiting for the person
         self.tid: Optional[int] = None
         self.running: Optional[dict] = None
         self.stopping = False
@@ -249,15 +194,10 @@ class Gateway:
         self.rates: Dict[object, deque] = {}
         self.pages = set()
         self.agent_state = None
-        self.formalize_llm: Dict[str, Optional[str]] = {}   # sid -> formalize's endpoint (brain-choice)
-        self.seated_llm: Dict[str, Optional[str]] = {}      # sid -> the session's endpoint as _seat left it
         if cfg.get("metis_agent") and cfg["mode"] == "personal":
             from .agent_state import AgentState
             self.agent_state = AgentState(cfg["metis_agent"])
-        self.agent = None
-        if agent_seat(cfg)[0] == "agent":
-            from .agent_service import AgentService
-            self.agent = AgentService(self, cfg)
+        self.wsc = WorkspaceChannels(self)                 # trace, surprise, bundle, loop (WORKSPACE.md §3)
 
     # -- frames ----------------------------------------------------------
 
@@ -285,7 +225,9 @@ class Gateway:
         return {"ch": "repl", "type": "session", "session": s.sid,
                 "llp": s.llp, **fields, "busy": s.running is not None,
                 "running": s.running and s.running["cmd"],
-                "queued": s.queue.qsize(), **extra}
+                "queued": s.queue.qsize(),
+                "trace": ("traces/" + s.sid) if getattr(s, "trace", None) is not None else None,
+                **({"trace_error": s.trace_error} if getattr(s, "trace_error", None) else {}), **extra}
 
     # -- session manager -------------------------------------------------
 
@@ -306,8 +248,6 @@ class Gateway:
             await self._send(ws, self._session_frame(s, req=msg.get("req")))
             for f in list(s.log):
                 await self._send(ws, f)
-            if self.agent:
-                await self._send(ws, self.agent.history(sid))
             await self._send(ws, self._source_frame(s))
             return
         cap = self.cfg
@@ -337,7 +277,11 @@ class Gateway:
                                                              "cannot open")})
         s = Sess(sid, fields.get("llp", llp), ip, cap["history"])
         s.spec = spec                    # what idle recycling re-opens
-        self._seat(sid)
+        if msg.get("trace"):             # the session's trace (WORKSPACE.md §3): .metis/traces/<session>/
+            try:
+                s.trace = self.session_trace(s, fields)
+            except Exception as e:                       # noqa: BLE001 — the session serves without it, and says so
+                s.trace_error = f"no trace: {e}"
         self._init_work(s, spec)
         s.subs.add(ws)
         s.worker = asyncio.create_task(self._work(s))
@@ -430,17 +374,11 @@ class Gateway:
             if typ == "refuse":
                 tok = str(msg.get("token") or "")
                 out = await loop.run_in_executor(None, self.srv.save_refuse, tok)
-                self._decided(s, tok, ("refused", out))
                 return await self._send(ws, {"ch": "repl", "type": "refused", "session": s.sid, "token": tok, **out})
             if msg.get("token"):
                 tok = str(msg["token"])
-                try:
-                    out = await loop.run_in_executor(None, lambda: self.srv.save_apply(w, tok, **shown))
-                except ValueError as e:
-                    self._decided(s, tok, ("error", str(e)))
-                    raise
+                out = await loop.run_in_executor(None, lambda: self.srv.save_apply(w, tok, **shown))
                 w["certified"] = "checkout"
-                self._decided(s, tok, ("written", out))
                 await self._broadcast(s, self._source_frame(s))
                 await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
             else:
@@ -482,25 +420,41 @@ class Gateway:
                                          "token": tok, **out})
         raise ValueError(f"gate op: propose | confirm | refuse | asks | answer, not {op!r}")
 
-    async def ask_person(self, s: "Sess", plan: dict) -> tuple:
-        """The agent seat's write waits for the person (docs/LOOP.md rule 1, as pi's gate):
-        the plan goes to the session's pages as a save plan by the agent; the person's
-        save-with-token or refuse decides it. → ("written", out) | ("refused", out) |
-        ("error", words) | ("timeout", words)."""
-        fut = asyncio.get_running_loop().create_future()
-        s.gate_wait[plan["token"]] = fut
-        await self._broadcast(s, {"ch": "repl", "type": "save", "session": s.sid, "by": "agent", **plan})
-        try:
-            return await asyncio.wait_for(fut, float(self.cfg.get("agent_gate_timeout") or 600))
-        except asyncio.TimeoutError:
-            return ("timeout", "the person did not answer the agent's write")
-        finally:
-            s.gate_wait.pop(plan["token"], None)
+    def session_trace(self, s: "Sess", fields: dict) -> SessionTrace:
+        """The session's trace writer: personal mode only (it writes the operator's .metis/)."""
+        if self.cfg["mode"] == "shared":
+            raise ValueError("a session's trace writes the operator's workspace: personal mode only")
+        sh = self.srv.shells[s.sid]
+        member = self.member_of(s)
+        spec = s.spec or {}
+        if spec.get("source") is not None:
+            exts = [e.get("name") or f"extension {k}" for k, e in enumerate(spec.get("extensions") or [], 1)
+                    if str(e.get("source") or "").strip()]
+            return SessionTrace(self.wsc.ws.path("trace", run=s.sid), sh, member, extensions=exts,
+                                source=str(spec["source"]))
+        exts = [p.stem for p in self.srv.checkout_extensions(sh.path)]
+        return SessionTrace(self.wsc.ws.path("trace", run=s.sid), sh, member, program=sh.path, extensions=exts)
 
-    def _decided(self, s: "Sess", token: str, outcome: tuple):
-        fut = s.gate_wait.get(token)
-        if fut is not None and not fut.done():
-            fut.set_result(outcome)
+    def member_of(self, s: "Sess") -> str:
+        """The session's member as the workspace names it: its package (the program's file name, as
+        catalog.get finds it), else the in-memory copy's name."""
+        spec = s.spec or {}
+        if spec.get("source") is not None:
+            return str(spec.get("name") or "scratch").removesuffix(".llp").rsplit("/", 1)[-1]
+        return Path(self.srv.shells[s.sid].path).stem
+
+    async def reopen(self, s: "Sess", why: str):
+        """The session re-opened from what it was opened on (its catalog file, or its copy), epoch + 1: idle
+        recycling and the bundle's reload (STALE → reload)."""
+        loop = asyncio.get_running_loop()
+        ep = self.srv.epochs.get(s.sid, 1)
+        fields = await loop.run_in_executor(s.pool, self.srv.open_session, s.sid, s.spec)
+        if fields.get("status") == "closed":
+            raise ValueError(fields.get("error") or "cannot re-open")
+        self.srv.epochs[s.sid] = ep + 1
+        s.log.clear()
+        s.last = time.time()
+        await self._broadcast(s, self._session_frame(s, **({"recycled": "idle"} if why == "idle" else {why: True})))
 
     async def _send_all(self, frame: dict):
         for ws in list(self.pages):
@@ -524,7 +478,6 @@ class Gateway:
             return {"ok": False, "error": w["error"]}
         self.srv.epochs[s.sid] = ep + 1
         s.spec, s.llp = spec, fields.get("llp", s.llp)
-        self._seat(s.sid)
         w["certified"], w["error"] = "local", None
         s.log.clear()
         await self._broadcast(s, self._session_frame(s, recompiled=True))
@@ -532,34 +485,12 @@ class Gateway:
         return {"ok": True, "key": self.srv.shells[s.sid].key,
                 "extensions": fields.get("extensions", [])}
 
-    def _seat(self, sid: str):
-        """D3: in personal mode the session's narrate seat goes to the
-        brain's endpoint (kernel untouched — its `command:` backend runs the
-        loop SDK's claude command face, or loop.brain's OpenRouter one);
-        formalize's own endpoint, when the brain gives it one, is kept for
-        the formalize commands (_work)."""
-        s = brain.seats(self.cfg, sid, self.calls_log())
-        spec = s["narrate"][1]
-        r = self.srv.shells.get(sid)
-        if spec and r is not None:
-            r.llm = spec
-        self.formalize_llm[sid] = s["formalize"][1]
-        self.seated_llm[sid] = r.llm if r is not None else None    # what the seats left; a person's `:llm` moves it
-
-    def calls_log(self) -> str:
-        """The OpenRouter seats' call log: DIR/.metis/formalize-calls.jsonl (made
-        by the first call, through metis.catalog.state(); nothing here)."""
-        from metis import catalog
-        return str(Path(self.srv.root).resolve() / catalog.STATE / brain.LOG)
-
     def _gate(self, cmd: str) -> Optional[str]:
-        """Gateway-side policy beyond run_intent's whitelist: shared mode
-        refuses the LLM seats. Returns the refusal, or None."""
+        """Gateway-side policy beyond run_intent's whitelist: the retired
+        LLM seats' verbs are refused in every mode. Returns the refusal, or None."""
         verb = cmd.strip().lstrip(":").split(" ", 1)[0]
-        if self.cfg["mode"] == "shared" and verb in LLM_VERBS:
-            return (f"'{verb}' is not served on a shared instance — it "
-                    "would run on the operator's credentials. Use the "
-                    "artifact console for AI (billed to you).")
+        if verb in LLM_VERBS:
+            return f"'{verb}' is not served here: {SEATS_GONE}"
         return None
 
     def _cap_run(self, cmd: str):
@@ -590,23 +521,12 @@ class Gateway:
             return await self.intents(s, str(msg.get("cmd")), actor, iid)
         await self.enqueue(s, msg.get("cmd"), actor, iid)
 
-    INTENTS_ASK = (
-        "Draft this domain's intent.yaml (metis-catalog CATALOG.md \"intent.yaml\"): call "
-        "intents_read for the current file or a skeleton made from the program's cmd_* atoms and "
-        "%% lines, read the program with source_read where the meanings need it, then give the "
-        "person a few natural utterances per verb as examples, open-vocabulary slots where the "
-        "person names things, keep under `asks` only the candidate verbs the person asks as a "
-        "question (how it is, where a thing is) and drop the actions, and call intents_propose "
-        "with the WHOLE file. Fix what it reports. "
-        "Then tell the person: `intents save` writes it, `intents check` runs the check.")
-
     async def intents(self, s: "Sess", cmd: str, actor: str, iid: str):
-        """`intents` (e2e-workflow step 2, loop/intents.py): Claude drafts
-        the domain's intent.yaml; `intents show` the proposal's diff,
-        `intents save` writes it and its generated files, `intents check`
-        the corpus (or the examples) on the intent model. Gateway-side: it
-        never reaches the kernel REPL. Personal mode only (it writes the
-        operator's checkout and runs the operator's model)."""
+        """`intents check` (e2e-workflow step 2, loop/intents.py): the corpus
+        (or the examples) on the intent model. Gateway-side: it never reaches
+        the kernel REPL. Personal mode only (it runs the operator's model).
+        Drafting intent.yaml was the agent seat's (retired, loop-workspace):
+        it is the pi loop's now (catalog_apply what=intents, at the gate)."""
         from . import intents as it
         item = {"id": iid, "cmd": cmd.strip(), "actor": actor, "ts": _now()}
         await self._broadcast(s, {"ch": "repl", "type": "queued", "session": s.sid, **item}, log=True)
@@ -616,44 +536,23 @@ class Gateway:
             if self.cfg["mode"] == "shared":
                 raise ValueError("intents writes the operator's checkout and runs its model: personal mode only")
             name = str(s.work.get("name") or "")
-            if not sub:
-                if not self.agent:
-                    raise ValueError("intents is drafted by Claude: the agent seat is off on this instance")
-                err = await self.agent.say(s.sid, self.INTENTS_ASK)
-                if err:
-                    raise ValueError(err["error"])
-                result = "asked Claude to draft intent.yaml — see the chat; then `intents show`, `intents save`"
-            elif sub[0] == "show":
-                p = getattr(s, "intents_pending", None)
-                if not p:
-                    raise ValueError("no proposal yet — `intents` asks Claude for one")
-                result = self.intents_text(p)
-            elif sub[0] == "save":
-                out = await loop.run_in_executor(None, it.save, self.srv, getattr(s, "intents_pending", None),
-                                                 (getattr(s, "intents_pending", None) or {}).get("token"))
-                s.intents_pending = None
-                result = "wrote " + ", ".join(out["written"]) + " (not committed)"
-            elif sub[0] == "check":
+            if sub[:1] == ["check"]:
                 out = await loop.run_in_executor(None, it.check, self.srv, name)
                 ok, result = out["ok"], out["output"]
+            elif not sub or sub[0] in ("show", "save"):
+                raise ValueError("drafting intent.yaml is the pi loop's (catalog_apply what=intents, at the "
+                                 "gate; pi/loop.sh): the console's agent seat is retired. Here: intents check")
             else:
-                raise ValueError("usage: intents | intents show | intents save | intents check")
+                raise ValueError("usage: intents check")
         except ValueError as e:
             ok, result = False, str(e)
         post = {"status": "done" if ok else "error", "result": result,
                 "json": {"ok": ok}, "epoch": self.srv.epochs.get(s.sid), "done_ts": _now()}
         await self._broadcast(s, {"ch": "repl", "type": "posting", "session": s.sid, **item, **post}, log=True)
 
-    @staticmethod
-    def intents_text(p):
-        head = "%s intent.yaml proposed (%s) — %s%s" % (
-            p["domain"], "new" if p["new"] else "changed", p["mapped"],
-            "" if p["ok"] else "; misses:\n  " + "\n  ".join(p["misses"]))
-        return head + "\n" + (p["diff"] or "(no change)") + "\n`intents save` writes it"
-
     async def submit(self, s: "Sess", cmd: str, actor: str) -> dict:
-        """Queue a line and await its posting (the Agent Service's repl
-        tool): the same queue, whitelist, busy/stop and transcript."""
+        """Queue a line and await its posting (a backend caller's REPL line):
+        the same queue, whitelist, busy/stop and transcript."""
         iid = "a" + secrets.token_hex(6)
         fut = asyncio.get_running_loop().create_future()
         s.futs[iid] = fut
@@ -694,23 +593,15 @@ class Gateway:
             cmd, note = self._cap_run(item["cmd"])
 
             def run(cmd=cmd):
-                # formalize on its own endpoint for this one command (the kernel has one per session),
-                # unless the person moved the session's endpoint (`:llm X`): then both seats are on X, as before
-                f = self.formalize_llm.get(s.sid) if cmd.strip().lstrip(":").split(" ", 1)[0] == "formalize" else None
-                r = self.srv.shells.get(s.sid) if f else None
-                if r is not None and r.llm != self.seated_llm.get(s.sid):
-                    r = None
-                was = r.llm if r is not None else None
                 try:
                     with s.lock:
                         s.tid = threading.get_ident()
                     try:
-                        if r is not None:
-                            r.llm = f
-                        return self.srv.serve_one(s.sid, cmd)
+                        self._traced(s, "before")
+                        out = self.srv.serve_one(s.sid, cmd)
+                        self._traced(s, "after", cmd)
+                        return out
                     finally:
-                        if r is not None:
-                            r.llm = was
                         with s.lock:
                             s.tid = None
                 except KeyboardInterrupt:
@@ -735,13 +626,24 @@ class Gateway:
             self._resolve(s, item["id"], posting)
             await self._broadcast(s, self._session_frame(s))
 
+    def _traced(self, s: "Sess", when: str, cmd: str = ""):
+        """The session trace's hook around one command; a writer that fails stops writing (the session goes on)."""
+        tr = getattr(s, "trace", None)
+        sh = self.srv.shells.get(s.sid)
+        if tr is None or sh is None:
+            return
+        try:
+            tr.before(sh) if when == "before" else tr.after(sh, cmd)
+        except Exception as e:                           # noqa: BLE001
+            tr.close()
+            s.trace = None
+            print(f"session {s.sid}: the trace stopped: {e}", file=sys.stderr)
+
     async def stop(self, msg):
         """Interrupt the running command and drop the queued ones."""
         s = self.sessions.get(msg.get("session", ""))
         if not s:
             return
-        if self.agent:                       # [stop] stops Claude too
-            await self.agent.stop(s.sid)
         while not s.queue.empty():
             item = s.queue.get_nowait()
             post = {"status": "error", "result": "cancelled (stop)",
@@ -762,14 +664,14 @@ class Gateway:
         s = self.sessions.pop(sid, None)
         if not s:
             return
-        if self.agent:
-            await self.agent.close(sid)
         for fut in s.futs.values():
             if not fut.done():
                 fut.set_result({"status": "error", "result": "session closed",
                                 "json": {"ok": False, "error": "closed"}})
         if s.worker:
             s.worker.cancel()
+        if getattr(s, "trace", None) is not None:
+            s.trace.close()
         s.pool.shutdown(wait=False, cancel_futures=True)
         self.srv.close_session(sid)
         for ws in list(s.subs):
@@ -789,16 +691,7 @@ class Gateway:
             if not s.subs and now - s.last > 3 * idle:
                 await self.close(s.sid, "recycled (idle)")
                 continue
-            loop = asyncio.get_running_loop()
-            ep = self.srv.epochs.get(s.sid, 1)
-            await loop.run_in_executor(s.pool, self.srv.open_session,
-                                       s.sid, s.spec)
-            self._seat(s.sid)
-            self.srv.epochs[s.sid] = ep + 1
-            s.log.clear()
-            s.last = now
-            await self._broadcast(s, self._session_frame(
-                s, recycled="idle"))
+            await self.reopen(s, "idle")
 
     def _rate_ok(self, key) -> bool:
         q = self.rates.setdefault(key, deque())
@@ -837,8 +730,12 @@ class Gateway:
                                           "error": "bad json"})
                     continue
                 ch, typ = msg.get("ch"), msg.get("type")
-                if ch == "chat":
-                    await self.chat(ws, ip, msg)
+                if ch in WS_CHANNELS:           # the workspace's (loop/workspace_ch.py)
+                    await self.wsc.handle(ws, msg)
+                    continue
+                if ch == "chat":                # retired with the agent seat (loop-workspace)
+                    await self._send(ws, {"ch": "chat", "type": "error", "session": msg.get("session"),
+                                          "error": f"the chat is retired: {SEATS_GONE}"})
                     continue
                 if ch != "repl":
                     await self._send(ws, {"ch": "meta", "type": "error",
@@ -881,39 +778,9 @@ class Gateway:
                                           "error": f"unknown type {typ!r}"})
         finally:
             self.pages.discard(ws)
+            self.wsc.drop(ws)
             for s in self.sessions.values():
                 s.subs.discard(ws)
-
-    async def chat(self, ws, ip, msg):
-        """Chat frames (§1, §3): personal mode with the agent seat only;
-        a shared instance refuses them all."""
-        sid = msg.get("session", "")
-        if not self.agent:
-            why = ("chat is not served on this instance"
-                   if self.cfg["mode"] == "shared" else
-                   "agent chat unavailable here: " +
-                   (agent_seat(self.cfg)[1] or "?"))
-            return await self._send(ws, {"ch": "chat", "type": "error",
-                                         "session": sid, "error": why})
-        s = self.sessions.get(sid)
-        if not s or ws not in s.subs:
-            return await self._send(ws, {"ch": "chat", "type": "error",
-                                         "session": sid,
-                                         "error": "open a session first"})
-        typ = msg.get("type")
-        if typ == "say":
-            err = await self.agent.say(sid, msg.get("text"))
-            if err:
-                await self._send(ws, {"ch": "chat", "type": "error",
-                                      "session": sid, **err})
-        elif typ == "stop":
-            await self.stop({"session": sid})
-        elif typ == "history":
-            await self._send(ws, self.agent.history(sid))
-        else:
-            await self._send(ws, {"ch": "chat", "type": "error",
-                                  "session": sid,
-                                  "error": f"unknown chat type {typ!r}"})
 
     # -- HTTP on the same port -------------------------------------------
 
@@ -991,6 +858,7 @@ class Gateway:
                         self.cfg["idle_secs"]) / 4)))
                     await self.sweep()
             sw = asyncio.create_task(sweeper())
+            wt = asyncio.create_task(self.wsc.watch())    # the bundle's STALE and the journal's tail
             ag = None
             if self.agent_state:
                 async def to_pages(frame):
@@ -1003,6 +871,8 @@ class Gateway:
                 await (stop.wait() if stop else asyncio.Future())
             finally:
                 sw.cancel()
+                wt.cancel()
+                await self.wsc.close()
                 if ag:
                     ag.cancel()
                 for sid in list(self.sessions):
@@ -1042,9 +912,6 @@ def main(argv=None) -> int:
     ap.add_argument("--bind")
     ap.add_argument("--mode", choices=["personal", "shared"])
     ap.add_argument("--token")
-    ap.add_argument("--brain", metavar="claude|openrouter[:MODEL]|ollama",
-                    help="the LLM seats' provider (loop/brain.py); default: [console] brain, "
-                         "else claude when here, else openrouter with $OPENROUTER_API_KEY, else ollama")
     ap.add_argument("--metis-agent", metavar="WS_URL",
                     help="metis-agent's console wire (ws://127.0.0.1:8395/ws): "
                          "the band shows the agent's state of the open domain "
@@ -1053,26 +920,19 @@ def main(argv=None) -> int:
                     help="open the package domains/NAME at the start (the catalog root's, else "
                          "METIS_HOME's): a page with no session opens it; repeatable, the panel "
                          "lists and opens the rest")
-    ap.add_argument("--mock-agent", action="store_true",
-                    help="DEV ONLY: a canned chat client (never a model) "
-                         "for driving the page without spending anyone's "
-                         "subscription")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    gone = [a for a in argv if a.split("=", 1)[0] in ("--brain", "--mock-agent")]
+    if gone:                            # the retired seats' flags: said, not silently taken
+        print(f"metis-loop: {gone[0].split('=', 1)[0]} is gone: {SEATS_GONE}", file=sys.stderr)
+        return 2
     ns = ap.parse_args(argv)
     cfg = load_config(port=ns.port, bind=ns.bind, mode=ns.mode,
-                      token=ns.token, metis_agent=ns.metis_agent, brain=ns.brain)
-    if cfg["mode"] == "personal":       # a brain asked for and not here refuses now, naming the fix
-        try:
-            b = brain.resolve(cfg)
-        except brain.BrainError as e:
-            print(f"metis-loop: {e}", file=sys.stderr)
-            return 2
-        cfg["brain"] = b["name"] + (":" + b["model"] if b["name"] == "openrouter" else "")
+                      token=ns.token, metis_agent=ns.metis_agent)
     if cfg["mode"] == "shared" and cfg["bind"] not in ("127.0.0.1",
                                                        "localhost") \
             and not cfg["token"]:
         print("console-serve: shared mode on a non-local bind without a "
-              "token — anyone who can reach it can run catalogs (no AI "
-              "is ever served in shared mode).")
+              "token — anyone who can reach it can run catalogs.")
     try:                        # the CATALOG panel's loader, before any page connects
         from metis import catalog
         catalog.loader()
@@ -1097,10 +957,12 @@ def main(argv=None) -> int:
         print(f"console-serve: {e}", file=sys.stderr)
         return 1
     gw = Gateway(cfg)
-    if ns.mock_agent and gw.agent:
-        from .agent_service import MockClient
-        gw.agent.client_factory = MockClient
-        print("console-serve: --mock-agent — the chat is CANNED (dev only)")
+    if cfg["mode"] == "personal":       # one backend per workspace (WORKSPACE.md §2.3): its lock, or the holder's line
+        try:
+            gw.wsc.ws.lock("backend", port=int(cfg["port"]))
+        except ValueError as e:
+            print(f"console-serve: {e}", file=sys.stderr)
+            return 2
     q = f"?token={cfg['token']}" if cfg["token"] else ""
     print(f"loop console ({cfg['mode']}): http://{cfg['bind']}:"
           f"{cfg['port']}/{q}", flush=True)
@@ -1108,10 +970,19 @@ def main(argv=None) -> int:
     for p in cfg["pkg"]:
         print(f"--pkg: {p['name']} ({p['path']}): a page with no session opens "
               + ("it" if p is cfg["pkg"][0] else "the first; this one is the panel's"), flush=True)
-    print(brain.describe(cfg, os.path.relpath(gw.calls_log(), root)
-                         if cfg["mode"] == "personal" else None), flush=True)
+    print("no brain here: the pi loop formalizes and rules (pi/loop.sh, the workspace's .metis/)", flush=True)
+    if cfg["retired"]:
+        print("[console] keys of the retired seats, ignored: " + ", ".join(cfg["retired"]), flush=True)
+    import signal                       # run.sh stop's SIGTERM ends it as ^C does: the lock is released
+
+    def _term(*_):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _term)
     try:
         asyncio.run(gw.serve())
     except KeyboardInterrupt:
         pass
+    finally:
+        if cfg["mode"] == "personal":
+            gw.wsc.ws.unlock("backend")
     return 0

@@ -130,10 +130,10 @@ def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
 def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):
     """cwd-root rules 9 and 10: `cd domains/ceptre && metis-loop` — the
     packages sit directly under DIR (no domains/), the list has them; DIR's
-    README is the page's landing, its links to a package resolve to it, and
-    every session's narrate seat reads the README after its doctrine."""
+    README is the page's landing and its links to a package resolve to it.
+    No narrate seat reads it (retired with the brain, loop-workspace): a
+    session's prompts are the kernel's own."""
     import shutil
-    from metis.loop.prompts import resolve
     for n in ("three_pigs", "gossip"):
         shutil.copytree(catalog_root() / "domains/ceptre" / n, tmp_path / n,
                         ignore=shutil.ignore_patterns("records", "build", "__pycache__"))
@@ -149,12 +149,9 @@ def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):
     assert rd["links"] == {"three_pigs/": "three_pigs/three_pigs", "gossip/gossip.llp": "gossip/gossip"}
     s = srv.open_session("p1", {"llp": "three_pigs"})
     assert s["status"] == "running", s
-    sysp = srv.shells["p1"].sys_prompts["narrate"]
-    assert sysp.startswith(resolve("narrate", None)[0]) and "# the ports" in sysp and "README.md" in sysp
+    assert "narrate" not in srv.shells["p1"].sys_prompts           # no narrator's context here
     (tmp_path / "README.md").unlink()
     assert srv.readme() is None
-    srv.open_session("p2", {"llp": "three_pigs"})
-    assert "narrate" not in srv.shells["p2"].sys_prompts           # no README: the doctrine alone
 
 
 def test_a_package_resolves_from_the_root_then_metis_home(tmp_path, monkeypatch):
