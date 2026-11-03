@@ -133,7 +133,16 @@ class SessionTrace:
         """The command's tick, or a cut when the command left the recorded course."""
         verb = cmd.strip().lstrip(":").split(" ", 1)[0]
         n = len(shell.fired_rows)
-        moved = T.session_state(shell) != self.state
+        now = T.session_state(shell)
+        moved = now != self.state
+        take = self._take_of(cmd, verb, now) if shell is self.shell and n == self.rows and moved else None
+        if take is not None:                             # an intervention: the session's input, a take (loop-chat F2)
+            self.k += 1
+            self.w.line({"k": self.k, "t": round(time.time(), 3),
+                         "members": {self.member: {"why": "command", "cmd": cmd[:200],
+                                                   "seq": [{"take": take, "by": "person"}], "out": []}}})
+            self.state = now
+            return
         if shell is not self.shell or verb in CUT_VERBS or n < self.rows or (n == self.rows and moved):
             self.k += 1
             self._attach(shell, "reload" if shell is not self.shell else "cut")
@@ -152,6 +161,24 @@ class SessionTrace:
         self.k += 1
         self.w.line({"k": self.k, "t": round(time.time(), 3),
                      "members": {self.member: {"why": "command", "cmd": cmd[:200], "seq": seq, "out": []}}})
+
+    def _take_of(self, cmd, verb, now):
+        """`do +ATOM [N]` / `do -ATOM [N]` as the take a replay applies ([its do-line]), when that line on the counts
+        before gives exactly the counts now and nothing else of the state moved (stage, quiet, rng); else None (a
+        cut, as any other move with no row). The REPL's do appends no row, so without this the session's input
+        lived only in a checkpoint and the verbs (replay, fired, the judge) never saw it."""
+        if verb != "do":
+            return None
+        line = cmd.strip().lstrip(":").split(" ", 1)[1].strip() if " " in cmd.strip() else ""
+        if not line or line[0] not in "+-":
+            return None
+        from metis.fw.plugin import exo_event
+        try:
+            _, after = exo_event([line], dict(self.state["counts"]))
+        except Exception:                                # noqa: BLE001 — a line the do-line grammar does not read: a cut
+            return None
+        same = all(now[k] == self.state[k] for k in now if k != "counts")
+        return [line] if same and after == now["counts"] else None
 
     def last_k(self):
         return self.k
