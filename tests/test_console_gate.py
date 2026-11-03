@@ -322,3 +322,16 @@ def test_a_bundle_members_rule_files_are_the_editors(tmp_path):
     assert srv.gate_confirm(pl["token"])["written"] == ["domains/hier/lamp_rules.llp"]
     assert "now." in (h / "lamp_rules.llp").read_text()
 
+
+def test_an_edit_of_another_domains_file_is_its_own_with_a_session_open(tmp_path):
+    """nina's review of L5: with a session open on plant, an edit of lamp's README is lamp's (as with no session); only
+    a file of the session member's bundle is planned from the member."""
+    srv = server(tmp_path)
+    srv.new_domain("lamp", "a lamp")
+    assert srv.open_session("s", {"llp": "domains/plant/plant"})["status"] != "closed"
+    readme = "domains/lamp/README.md"
+    text = (srv.root / readme).read_text()
+    for sid in (None, "s"):
+        pl = srv.edit_plan(readme, text.splitlines()[0], text.splitlines()[0] + " (edited)", sid=sid)
+        assert pl["ok"] and pl["domain"] == "lamp" and pl["token"], (sid, pl)
+

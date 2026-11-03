@@ -465,8 +465,11 @@ class ConsoleServer:
         holds a plan (its token) that confirm writes (gate_confirm). Lint rows show, never refuse."""
         p = self._under(rel)
         sh = self.shells.get(sid) if sid else None
-        if sh is not None and Path(sh.path).resolve().parent not in p.parents:
-            d = Path(sh.path).resolve().parent         # a bundle file of the session's member: from its domain (../x.llp)
+        d = Path(sh.path).resolve().parent if sh is not None else None
+        bundle = catalog.bundle_dir(d, self.root) if d is not None and hasattr(catalog, "bundle_dir") else None
+        if d is not None and d not in p.parents and bundle is not None and bundle in p.parents:
+            # a file of the session member's bundle (its ../x.llp): planned from that member (nina: only then; any
+            # other file is its own domain's, as without a session)
             domain, path = d.name, Path(os.path.relpath(p, d)).as_posix()
         else:
             domain, path, _ = self._domain_file(rel)
