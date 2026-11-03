@@ -121,6 +121,7 @@
     }
     const api = {
       refresh,
+      render: () => render(),
       draft(d) { draft = Object.assign({}, d); note = ''; render(true); const f = box.querySelector('textarea[name=words]'); if (f) f.focus(); },
     };
     io.on('surprise', 'dropped', () => refresh());

@@ -69,6 +69,22 @@ history live in MEMORY only (D4: nothing a visitor types or runs is
 written to disk); `{source, name}` opens a catalog from text, compiled
 in memory (§4a).
 
+**The workspace panels** (loop-workspace step 4, docs/WORKSPACE.md §6): in personal mode the page
+mounts the loop SDK's five widgets as docks, each over one of the backend's channels:
+- **LOOP** (`loop`): who holds the workspace, the spend, start/stop of a pi loop as the backend's child
+  (rpc mode), the chat with it, the gate's plan with confirm/refuse, the budget line past half the
+  budget, the journal.
+- **SURPRISES** (`surprise`): open · taken · ruled, and the drop dialog, from the open session or from
+  a tick marked in TRACE.
+- **RULINGS** (`surprise`): the verdict with when the candidate is first enabled and how often it fires,
+  the goldens moved, lint, the readings absent, the spend, the pack and the document.
+- **TRACE** (`trace`): the runs in `.metis/traces/`, the Tick table at k, step and jump, the declared
+  trace verbs, and "mark here".
+- **BUNDLE** (`bundle`): the composition, its image, STALE with why, and the session's reload.
+
+A session opened here writes its trace (`.metis/traces/<session>/`), so a surprise dropped from it
+replays.
+
 Config — the metis dot file's `[console]` table (flags override):
 
     [console]

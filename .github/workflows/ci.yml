@@ -125,6 +125,11 @@ jobs:
               assert got.is_file() and not got.is_symlink(), got
               assert got.read_bytes() == (web / f).read_bytes(), f
               print("widget", f, "=", web / f, len(got.read_bytes()), "bytes")
+          for f in w.WS_WIDGET_FILES:       # the workspace widgets (loop-workspace step 4), byte for byte web/workspace/
+              got = w.WS_WIDGET_DIR / f
+              assert "site-packages" in str(got) and got.is_file() and not got.is_symlink(), got
+              assert got.read_bytes() == (web.parent / "workspace" / f).read_bytes(), f
+              print("workspace", f, len(got.read_bytes()), "bytes")
           for f in w.TS_FILES:              # the TypeScript face, its own files
               got = w.TS_DIR / f
               assert "site-packages" in str(got) and got.is_file(), got

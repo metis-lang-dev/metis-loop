@@ -636,6 +636,7 @@ function wsHandle(f){
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
     seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();
+    if(wsW){wsW.surprises.render();wsW.bundle.render()}   // their session buttons follow the open session
     return}
   if((f.type==="queued"||f.type==="posting")&&f.session===sid){
     const old=intents.get(f.id);
