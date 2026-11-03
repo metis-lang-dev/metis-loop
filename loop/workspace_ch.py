@@ -461,7 +461,8 @@ class WorkspaceChannels:
         elif name == "drop":
             if s is None:
                 raise ValueError("/drop: no open session on this page (open one, or /mark RUN K WORDS)")
-            r = await self._surprise(page, "drop", {"session": s.sid, "words": " ".join(a.words)})
+            words = " ".join(a.words)                    # the words are enough: the reading is their first sentence
+            r = await self._surprise(page, "drop", {"session": s.sid, "words": words, "reading": chat.first_sentence(words)})
             out.update(text=f"dropped {r['id']}: the pi loop takes it from .metis/surprises/", id=r["id"])
         elif name == "rebuild":
             out.update(await self._run(chat.rebuild, self.ws, _scope()))
@@ -490,6 +491,8 @@ class WorkspaceChannels:
             out.update(text="the pi loop is stopping", child=self.child_state())
         elif name == "take":
             started = ""
+            if self.child and self.child["state"] == "starting":
+                raise ValueError("/take: the pi loop is starting: say it again in a moment")
             if not self.child or self.child["state"] != "running":
                 await self.start({"mode": "rpc"})
                 started = f"started the pi loop (budget {self.child['budget'] or 'loop.sh default'}); "

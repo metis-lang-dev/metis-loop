@@ -123,8 +123,8 @@ def parse(line):
     name = words[0].lower()
     if name not in {c[0] for c in COMMANDS}:
         raise ValueError(f"/{name}: no such command; /help")
-    if name == "why":
-        words = [("--at" if w == "at" else w) for w in words]
+    if name == "why" and len(words) >= 4 and words[-2] == "at" and re.match(r"^-?\d+$", words[-1]):
+        words = words[:-2] + ["--at", words[-1]]                 # only the closing `at K`: an atom named at stays one
     return name, parser().parse_args([name] + words[1:])
 
 
@@ -138,6 +138,14 @@ def window(text):
     if b < a:
         raise ValueError(f"window {text}: K0..K1 with K0 <= K1")
     return a, b
+
+
+def first_sentence(words):
+    """The reading a /drop carries (a record needs a reading or atoms; the architect: the words are enough): the words'
+    first sentence, up to its stop (. ! ?), else the words, one line, at most 200 characters."""
+    one = " ".join(str(words or "").split())
+    m = re.match(r"^(.+?[.!?])(\s|$)", one)
+    return (m.group(1) if m else one)[:200]
 
 
 def help_text(command=None):

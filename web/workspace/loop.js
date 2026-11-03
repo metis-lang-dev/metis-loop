@@ -51,6 +51,7 @@
     const s = { state: null, bundle: undefined, chat: [], journal: [], budget: null, over: null, spent: 0, note: '',
       tab: 'chat', options: false, model: '', budgetIn: '', ruled: new Set(), commands: [] };
     box.classList.add('mw', 'mw-loop', 'mw-chatw');
+    const listId = 'mw-cmds-' + Math.random().toString(36).slice(2, 8);     // one chat per mount: its own completion list
     const child = () => s.state && s.state.child;
     const running = () => { const c = child(); return !!(c && c.state === 'running'); };
     const elsewhere = () => { const l = s.state && s.state.loops && s.state.loops.pi; return l && l.alive && !running() ? l : null; };
@@ -152,8 +153,8 @@
           : el('div', { class: 'empty' }, held ? `the pi loop of pid ${held.pid} (${held.mode || '?'}) holds this workspace: its journal shows here, its words in its terminal`
             : running() ? 'say what to do: "take the next surprise"' : 'say what to do — "take the next surprise" starts the pi loop first')),
         el('form', { class: 'mw-row', onsubmit: e => { e.preventDefault(); say(e.target); } },
-          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace' : 'to the pi loop, or /help', disabled: !!held, 'aria-label': 'to the pi loop', autocomplete: 'off', list: 'mw-cmds' }),
-          el('datalist', { id: 'mw-cmds' }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description))),
+          el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace' : 'to the pi loop, or /help', disabled: !!held, 'aria-label': 'to the pi loop', autocomplete: 'off', list: listId }),
+          el('datalist', { id: listId }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description))),
           el('button', { class: 'btn', type: 'submit', disabled: !!held }, 'say')));
     }
     function journalBox() {
