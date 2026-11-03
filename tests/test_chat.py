@@ -52,6 +52,9 @@ class GW:
     async def reopen(self, s, why):
         self.reopened.append((s.sid, why))
 
+    def member_of(self, s):
+        return s.trace.member
+
 
 class StubPi:
     made = []
@@ -190,6 +193,8 @@ def test_why(root):
     assert "planner: now want 1 have 5 at k 50: last moved at k 41 by world (+now); the world's reading" in t
     assert "planner: not this package's" in t
     assert say(ch, "/why now")["k"] == 50                                            # the surprise's window end
+    assert chat.parse("/why at at 3")[1].atom == "at" and chat.parse("/why at at 3")[1].at == 3   # an atom named at
+    assert chat.parse("/why at")[1].atom == "at" and chat.parse("/why at")[1].at is None
 
 
 def rule(root, sid):
@@ -226,12 +231,18 @@ def test_mark_from_a_trace_and_the_refusals(root):
 
 def test_mark_and_drop_from_the_pages_session(root):
     ch = channels(root)
-    trace = SimpleNamespace(path=root / ".metis" / "traces" / "s1", member="lamp", last_k=lambda: 7)
+    trace = SimpleNamespace(path=root / ".metis" / "traces" / "s1", member="lamp", last_k=lambda: 7, extensions=())
     ch.gw.sessions["s1"] = SimpleNamespace(sid="s1", subs={"page"}, trace=trace, running=False)
     f = say(ch, "/mark it should be on", session="s1")
     assert f["draft"] == {"session": "s1", "k": 7, "words": "it should be on"}        # the dialog drops from the session
     assert "no open session" in say(ch, "/drop it should be on")["error"]            # no session named: refused
     assert "no open session" in say(ch, "/drop x", session="other")["error"]         # not this page's
+    f = say(ch, "/drop it should be on. The switch was pressed at 5.", session="s1")   # opus's review: the drop writes
+    rec = W.workspace(root).surprise(f["id"])
+    assert f["text"] == f"dropped {f['id']}: the pi loop takes it from .metis/surprises/"
+    assert (rec["session"], rec["member"], rec["trace"], rec["k"], rec["words"], rec["reading"], rec["status"]) == \
+        ("s1", "lamp", "traces/s1", 7, "it should be on. The switch was pressed at 5.", "it should be on.", "open")
+    assert chat.first_sentence("  no stop here  ") == "no stop here" and chat.first_sentence("a? b.") == "a?"
 
 
 def test_rebuild(root):
@@ -281,6 +292,8 @@ def test_budget_take_and_stop(root):
     assert t["text"] == "started the pi loop (budget 0.3); said to pi: take the next surprise"
     assert u["text"] == "said to pi: take surprise 20261103T000000-abcdef"            # running: no second start
     assert ch.child["state"] == "exited"
+    ch.child = {"state": "starting", "rpc": None, "gates": {}, "model": None, "budget": None, "started": ""}
+    assert "the pi loop is starting" in say(ch, "/take")["error"]                       # opus's review (5)
 
 
 def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
@@ -289,7 +302,8 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     js = (HERE.parent / "web" / "workspace" / "loop.js").read_text()
     assert "if (text.startsWith('/')) return command(text);" in js
     assert js.index("if (text.startsWith('/')) return command(text);") < js.index("if (!running()) {\n        if (elsewhere())")
-    assert "list: 'mw-cmds'" in js and "io.ask('loop', 'commands')" in js and "o.onMark(r.draft)" in js
+    assert "list: listId" in js and "el('datalist', { id: listId }" in js and "io.ask('loop', 'commands')" in js
+    assert "o.onMark(r.draft)" in js
     page = (HERE.parent / "console" / "loop_console.html").read_text()
     assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,\n    onMark:' in page
     assert "d.words || ''" in (HERE.parent / "web" / "workspace" / "surprises.js").read_text()   # the draft's words filled in
