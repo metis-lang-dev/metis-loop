@@ -179,7 +179,7 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({
 			id: Type.String({ description: "the surprise's id (surprise_next)" }),
 			pack: Type.String({ description: "the pack's text: rules in `stage S { }`, `pred` lines, `drop NAME`; or a whole program" }),
-			config: Type.Optional(Type.String({ description: "the run's service config (default: the surprise's config)" })),
+			config: Type.Optional(Type.String({ description: "the run's service config (default: the surprise's, else the bundle's)" })),
 			cases: Type.Optional(Type.Array(Type.String(), { description: "case files (trace_case --into) the pack must pass" })),
 			unit: Type.Optional(Type.String({ description: "the file the pack amends (default: the member's program)" })),
 			brain: Type.Optional(Type.String({ description: "who writes the ruling's words: script:FILE (0 USD) or openrouter/<id> (needs budget); none: the evidence alone" })),
@@ -191,10 +191,11 @@ export default function (pi: ExtensionAPI) {
 			if (s.status === "ruled") throw new Error(`surprise ${p.id} is ruled already`);
 			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
 			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay (the ruling would have no fired diff)`);
-			const config = p.config ?? (s as any).config;
-			if (!config) throw new Error(`surprise ${p.id} names no service config: give config`);
 			if (p.brain?.startsWith("openrouter/") && !(p.budget && p.budget > 0)) throw new Error("a paid brain needs a budget (USD)");
 			const b = ws.bundle(undefined, r);
+			// the service config: the argument, else the surprise's (the session it was dropped from), else the bundle's
+			const config = p.config ?? (s as any).config ?? (b as any)?.config;
+			if (!config) throw new Error(`no service config for surprise ${p.id}: give config (the surprise and the bundle name none)`);
 			const tmp = mkdtempSync(join(tmpdir(), "pack-propose-"));
 			try {
 				const pack = join(tmp, "pack.llp");

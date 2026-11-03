@@ -150,6 +150,9 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
 	await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x" }), /not taken: surprise_next first/);
 	await p.tools.get("surprise_next").execute("n", {});
+	const none = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 4, atoms: ["lit"] }, "backend", r);
+	ws.take_surprise(none, process.pid, "pi", r);
+	await assert.rejects(p.tools.get("pack_propose").execute("j", { id: none, pack: "% x" }), /no service config/);   // none named anywhere
 	process.env.STUB_VERDICT = "refused";
 	const j = await p.tools.get("pack_propose").execute("j", { id, pack: "% x" });
 	assert.equal(j.details.verdict, "refused");
