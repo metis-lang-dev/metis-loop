@@ -217,6 +217,11 @@ The panels, each over one channel:
 "To replay the rules and see what is going on in the pi loop": TRACE is the replay, LOOP is the feedback,
 RULINGS is why.
 
+**Amended by [CHAT.md](CHAT.md) (loop-chat, the user's verdict after loop-test, 2026-11-03):** the tester sees two
+panels, CHAT (LOOP's chat with its state as the header line, the gate, the ruling and STALE as cards) and
+SURPRISES; TRACE, RULINGS and BUNDLE are the developer's, behind the band's "developer" switch; a host page
+embeds the served page as an iframe with `?panels=chat,surprises`.
+
 ### 6.1 The pi loop's frontend is shared (the user, 2026-11-03)
 
 This console with its five panels is the ONE frontend of the pi loop, on every workspace: `run.sh` started

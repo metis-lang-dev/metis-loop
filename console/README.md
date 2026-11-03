@@ -69,18 +69,29 @@ history live in MEMORY only (D4: nothing a visitor types or runs is
 written to disk); `{source, name}` opens a catalog from text, compiled
 in memory (§4a).
 
-**The workspace panels** (loop-workspace step 4, docs/WORKSPACE.md §6): in personal mode the page
-mounts the loop SDK's five widgets as docks, each over one of the backend's channels:
-- **LOOP** (`loop`): who holds the workspace, the spend, start/stop of a pi loop as the backend's child
-  (rpc mode), the chat with it, the gate's plan with confirm/refuse, the budget line past half the
-  budget, the journal.
+**The workspace panels** (loop-workspace step 4, docs/WORKSPACE.md §6; reduced by loop-chat step 1,
+docs/CHAT.md §1): in personal mode the page mounts the loop SDK's widgets as docks, each over the backend's
+channels. The tester's two are open by default:
+- **CHAT** (`loop`, with `bundle` and `surprise` for its cards): the header line (the bundle's name, image,
+  BUILT/STALE; the pi child, or the lock of a pi loop elsewhere; the spend of the session's budget), the chat
+  with the pi loop (a line said with no child starts one first: the options' model and budget, else
+  loop.sh's), the gate's plan as a card with confirm/refuse, a ruling as a card (verdict, first enabled,
+  firings, goldens moved, lint, spend, show pack / show document), STALE as a notice with [rebuild] [reload],
+  the journal behind its chip.
 - **SURPRISES** (`surprise`): open · taken · ruled, and the drop dialog, from the open session or from
-  a tick marked in TRACE.
+  a tick marked in TRACE; a ruled one opens its card in the CHAT.
+
+The developer's three, behind the band's **developer** switch (hidden by default, per viewer):
 - **RULINGS** (`surprise`): the verdict with when the candidate is first enabled and how often it fires,
   the goldens moved, lint, the readings absent, the spend, the pack and the document.
 - **TRACE** (`trace`): the runs in `.metis/traces/`, the Tick table at k, step and jump, the declared
   trace verbs, and "mark here".
 - **BUNDLE** (`bundle`): the composition, its image, STALE with why, and the session's reload.
+
+On a workspace CATALOG starts folded and RECORDS hidden (the strip shows them); the layout is kept per
+viewer (`loopconsole.docks.v5`). **Embedding:** `/?panels=chat,surprises` (with `&token=` when the gateway
+has one) mounts only the named docks, across the whole page, with no band, REPL or strip: a host page (the
+road's) shows it as an iframe of the served URL, never a copy of its code.
 
 A session opened here writes its trace (`.metis/traces/<session>/`), so a surprise dropped from it
 replays.

@@ -84,7 +84,7 @@ def test_working_copy_editor_and_panels():
     assert 'indexedDB.open("loopconsole"' in PAGE
     for d in ("catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'key:"loopconsole.docks.v4"' in PAGE   # v4: the workspace docks (loop-workspace step 4; v3: the CLAUDE dock went)
+    assert 'key:"loopconsole.docks.v5"' in PAGE   # v5: CHAT + SURPRISES (loop-chat step 1; v4: the five workspace docks)
     assert 'data-cmd="step ${esc(e.name)}"' in PAGE         # events step
 
 
@@ -151,15 +151,57 @@ def test_no_voice_navigation_on_the_page():
 
 
 def test_the_workspace_docks_mount_the_sdk_widgets():
-    """loop-workspace step 4 (WORKSPACE.md §6): LOOP, SURPRISES, RULINGS, TRACE, BUNDLE are docks whose bodies the
-    SDK's widgets fill, mounted when the manifest serves the loop channel; their frames go to the widgets' wire;
-    TRACE's mark and SURPRISES' ruled row hand over to the next widget; a session opened here writes its trace."""
-    for d in ("loop", "surprises", "rulings", "trace", "bundle"):
+    """loop-workspace step 4 (WORKSPACE.md §6), reduced by loop-chat step 1 (CHAT.md §1): CHAT, SURPRISES, RULINGS,
+    TRACE, BUNDLE are docks whose bodies the SDK's widgets fill, mounted when the manifest serves the loop channel;
+    their frames go to the widgets' wire; TRACE's mark hands over to SURPRISES, a ruled surprise opens its card in the
+    CHAT; a session opened here writes its trace."""
+    for d in ("chat", "surprises", "rulings", "trace", "bundle"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE and f'id="w-{d}"' in PAGE
-    assert 'key:"loopconsole.docks.v4"' in PAGE
+    assert 'data-dock="loop"' not in PAGE and 'id="w-loop"' not in PAGE
+    assert 'key:"loopconsole.docks.v5"' in PAGE and "docks.v4" not in PAGE
     assert '(m.channels||[]).includes("loop")&&!wsW)mountWorkspace()' in PAGE
     assert "if(wsIO&&WS_CH.includes(f.ch)){wsIO.feed(f);return}" in PAGE
     for g in ("MetisBundle", "MetisRulings", "MetisSurprises", "MetisTrace", "MetisLoop"):
         assert f"{g}.mount(" in PAGE
-    assert "onMark:d=>" in PAGE and "W.surprises.draft(d)" in PAGE and "W.rulings.show(id)" in PAGE
+    assert "onMark:d=>" in PAGE and "W.surprises.draft(d)" in PAGE and "W.chat.ruling(id)" in PAGE
     assert "...(wsW?{trace:true}:{})" in PAGE
+
+
+def test_chat_and_surprises_by_default_the_rest_behind_developer():
+    """loop-chat step 1 (CHAT.md §1): on a workspace CHAT and SURPRISES are open; TRACE, RULINGS, BUNDLE are hidden,
+    their docks and strip buttons behind the band's developer switch (kept per viewer)."""
+    i = PAGE.index('key:"loopconsole.docks.v5",')
+    dflt = PAGE[i:PAGE.index("}}});", i) + 2]
+    assert "chat:{shown:!!GW,open:true}" in dflt and "surprises:{shown:!!GW,open:true}" in dflt
+    for d in ("rulings", "trace", "bundle"):
+        assert f"{d}:{{shown:false,open:false}}" in dflt
+        assert f'class="dock ws-dock dev-dock" id="dock-{d}"' in PAGE
+        assert f'data-strip="{d}" class="ws-strip dev-strip"' in PAGE
+    assert 'id="devbtn" hidden aria-pressed="false"' in PAGE
+    assert 'DEV_DOCKS=["rulings","trace","bundle"]' in PAGE and 'store.get("loopconsole.dev",false)' in PAGE
+    assert PAGE.index('id="dock-chat"') < PAGE.index('id="dock-surprises"') < PAGE.index('id="dock-rulings"')
+
+
+def test_panels_query_mounts_only_those():
+    """loop-chat step 1 (CHAT.md §1, the embedding): ?panels=chat,surprises mounts the named widgets only, with a
+    layout key of its own, no band, REPL or strip, and no package opened."""
+    assert 'new URLSearchParams(location.search).get("panels")' in PAGE
+    assert 'if(PANELS)$("#root").classList.add("panels")' in PAGE
+    assert "#root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}" in PAGE
+    assert 'key:"loopconsole.docks.v5.panels"' in PAGE
+    for w in ("bundle", "rulings", "chat", "surprises", "trace"):
+        assert f'if(wsOn("{w}"))W.{w}=' in PAGE
+    assert "&&!PANELS){pkgOpened=true;openCatalog" in PAGE
+
+
+def test_the_chat_widget_carries_the_cards():
+    """loop-chat step 1 (CHAT.md §1): the CHAT's header line (bundle, pi, spend of budget), the gate and a ruling as
+    cards, STALE as a notice with rebuild and reload; the ruling card is RULINGS' own function, not a copy."""
+    js = (Path(__file__).resolve().parents[1] / "web/workspace/loop.js").read_text()
+    for part in ("function header()", "bundlePart()", "piPart()", "spendPart()", "function gateCard(", "function staleCard(",
+                 "function builtCard(", "window.MetisRulings.card", "sendLine('/rebuild')", "io.ask('bundle', 'reload'",
+                 "io.ask('loop', 'start'", "'confirm'", "'refuse'"):
+        assert part in js, part
+    assert "row.kind === 'ruling'" in js                      # a ruling journalled opens its card
+    rjs = (Path(__file__).resolve().parents[1] / "web/workspace/rulings.js").read_text()
+    assert "window.MetisRulings = { mount, card };" in rjs

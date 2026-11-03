@@ -114,6 +114,9 @@ details summary{cursor:pointer;color:var(--dim)}
 #root{flex:1;display:flex;flex-direction:column;min-height:0;outline:none}
 #savewin:not([open]){display:none}#savewin[open]{width:auto;height:auto;margin:0;max-width:none;max-height:none;padding:0;color:var(--fg)}
 #savewin::backdrop{background:rgba(0,0,0,.45)}
+/* ?panels=chat,surprises (CHAT.md §1, the embedding): the named docks only, the whole width; no band, REPL or strip */
+#root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}
+#root.panels #right{flex:1 1 auto;min-width:0}
 </style>
 
 <div id="root" tabindex="-1">
@@ -142,6 +145,7 @@ details summary{cursor:pointer;color:var(--dim)}
     <span id="tokens"><b>TOKENS</b><span id="b-tok" class="empty">—</span></span>
     <span><b>ENABLED</b><span class="v" id="b-en">—</span></span>
     <span id="b-mode" hidden><b>MODE</b><span class="v" id="b-modev"></span></span>
+    <button class="chip" id="devbtn" hidden aria-pressed="false" title="the developer's docks: TRACE, RULINGS, BUNDLE (CHAT.md §1)">developer</button>
   </div>
 </header>
 <div id="banner" role="status" hidden></div>
@@ -188,23 +192,23 @@ details summary{cursor:pointer;color:var(--dim)}
       <header><span class="tw">▾</span><span class="tt">SURPRISE RECORDS</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="records"><div class="empty">No surprise records.</div></div></div>
     </section>
-    <section class="dock ws-dock" id="dock-loop" data-dock="loop" aria-label="the pi loop" tabindex="-1" hidden>
-      <header><span class="tw">▾</span><span class="tt">LOOP · the pi loop</span><button class="x" title="hide">✕</button></header>
-      <div class="dbody"><div id="w-loop"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    <section class="dock ws-dock" id="dock-chat" data-dock="chat" aria-label="the chat with the pi loop" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">CHAT · the pi loop</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-chat"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
     <section class="dock ws-dock" id="dock-surprises" data-dock="surprises" aria-label="surprises" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">SURPRISES</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-surprises"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
-    <section class="dock ws-dock" id="dock-rulings" data-dock="rulings" aria-label="rulings" tabindex="-1" hidden>
+    <section class="dock ws-dock dev-dock" id="dock-rulings" data-dock="rulings" aria-label="rulings" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">RULINGS</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-rulings"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
-    <section class="dock ws-dock" id="dock-trace" data-dock="trace" aria-label="traces" tabindex="-1" hidden>
+    <section class="dock ws-dock dev-dock" id="dock-trace" data-dock="trace" aria-label="traces" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">TRACE</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-trace"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
-    <section class="dock ws-dock" id="dock-bundle" data-dock="bundle" aria-label="the bundle" tabindex="-1" hidden>
+    <section class="dock ws-dock dev-dock" id="dock-bundle" data-dock="bundle" aria-label="the bundle" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">BUNDLE</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-bundle"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
@@ -213,11 +217,11 @@ details summary{cursor:pointer;color:var(--dim)}
     <button data-strip="catalog" title="working copy and extensions">Catalog</button>
     <button data-strip="candidates" title="candidates">Candidates</button>
     <button data-strip="records" title="surprise records">Records</button>
-    <button data-strip="loop" class="ws-strip" title="the pi loop" hidden>Loop</button>
+    <button data-strip="chat" class="ws-strip" title="the chat with the pi loop" hidden>Chat</button>
     <button data-strip="surprises" class="ws-strip" title="surprises" hidden>Surprises</button>
-    <button data-strip="rulings" class="ws-strip" title="rulings" hidden>Rulings</button>
-    <button data-strip="trace" class="ws-strip" title="traces" hidden>Trace</button>
-    <button data-strip="bundle" class="ws-strip" title="the bundle" hidden>Bundle</button>
+    <button data-strip="rulings" class="ws-strip dev-strip" title="rulings" hidden>Rulings</button>
+    <button data-strip="trace" class="ws-strip dev-strip" title="traces" hidden>Trace</button>
+    <button data-strip="bundle" class="ws-strip dev-strip" title="the bundle" hidden>Bundle</button>
   </nav>
 </main>
 </div>
@@ -250,6 +254,10 @@ let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
    its flag); published as an artifact it keeps the db/sample shims.
    Both feed the same `intents`/`sess` state — the renderers are one. */
 const GW=window.LOOP_GATEWAY||null;
+/* ?panels=chat,surprises: an embedding host's iframe of this served page mounts these docks only (CHAT.md §1) */
+const PANELS=(()=>{const q=new URLSearchParams(location.search).get("panels");if(q===null)return null;
+  const p=q.split(",").map(x=>x.trim()).filter(x=>["chat","surprises","rulings","trace","bundle"].includes(x));return p.length?p:null})();
+if(PANELS)$("#root").classList.add("panels");
 let pkgOpened=false;   // --pkg NAME: a page with no session opens the first package's domain once (GW.pkg: the panel's rows)
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
@@ -597,7 +605,7 @@ function wsConnect(){
   const q=GW.token?"?token="+encodeURIComponent(GW.token):"";
   try{wsock=new WebSocket(proto+location.host+GW.ws+q)}catch(e){wsRetryLater();return}
   wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");workspaceAgain();if(sid)wsSend({ch:"repl",type:"open",session:sid});
-    else if(GW.pkg&&GW.pkg.length&&!pkgOpened){pkgOpened=true;openCatalog(GW.pkg[0])}
+    else if(GW.pkg&&GW.pkg.length&&!pkgOpened&&!PANELS){pkgOpened=true;openCatalog(GW.pkg[0])}
     wsSend({ch:"repl",type:"gate",op:"asks"})};
   wsock.onclose=()=>{const was=wsUp;wsUp=false;
     if(was)banner("console backend connection lost — reconnecting…");wsRetryLater()};
@@ -636,7 +644,7 @@ function wsHandle(f){
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
     seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();
-    if(wsW){wsW.surprises.render();wsW.bundle.render()}   // their session buttons follow the open session
+    if(wsW){for(const k of ["surprises","bundle"])if(wsW[k])wsW[k].render()}   // their session buttons follow the open session
     return}
   if((f.type==="queued"||f.type==="posting")&&f.session===sid){
     const old=intents.get(f.id);
@@ -658,26 +666,42 @@ function applyManifest(){
   renderRecords();wsSend({ch:"repl",type:"records"});   // the file-backed Records dock
   if((m.channels||[]).includes("loop")&&!wsW)mountWorkspace()}
 
-/* ---- the workspace (loop-workspace step 4, WORKSPACE.md §6): the loop SDK's five widgets over the backend's
-   trace / surprise / bundle / loop channels, mounted when the manifest serves them (personal mode). TRACE's
-   "mark here" and SURPRISES' "drop from the session" open the drop dialog; a ruled surprise opens its RULING. */
-const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["loop","surprises","rulings","trace","bundle"];
+/* ---- the workspace (loop-workspace step 4, WORKSPACE.md §6; loop-chat step 1, CHAT.md §1): the loop SDK's widgets
+   over the backend's trace / surprise / bundle / loop channels, mounted when the manifest serves them (personal
+   mode). The tester's two: CHAT and SURPRISES; the developer's three (TRACE, RULINGS, BUNDLE) behind the band's
+   "developer" switch. A ruled surprise opens its card in the CHAT; TRACE's "mark here" and SURPRISES' "drop from
+   the session" open the drop dialog. ?panels=chat,surprises mounts only those (an embedding host's iframe). */
+const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["chat","surprises","rulings","trace","bundle"],DEV_DOCKS=["rulings","trace","bundle"];
 let wsIO=null,wsW=null;
+const wsOn=d=>!PANELS||PANELS.includes(d);
 function mountWorkspace(){
   if(!window.MetisIO)return;
   wsIO=MetisIO.make(wsSend);
   document.querySelectorAll(".ws-dock,.ws-strip").forEach(e=>e.hidden=false);
   const W={};
-  W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
-  W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
-  W.surprises=MetisSurprises.mount($("#w-surprises"),wsIO,{session:()=>sid,
-    onRuling:id=>{dockUI.set("rulings",{shown:true,open:true});W.rulings.show(id)}});
-  W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
-  W.loop=MetisLoop.mount($("#w-loop"),wsIO,{});
-  wsW=W;applyDocks()}
+  if(wsOn("bundle"))W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
+  if(wsOn("rulings"))W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
+  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid});
+  if(wsOn("surprises"))W.surprises=MetisSurprises.mount($("#w-surprises"),wsIO,{session:()=>sid,
+    onRuling:id=>{if(W.chat){dockUI.set("chat",{shown:true,open:true});W.chat.ruling(id)}
+      else if(W.rulings){dockUI.set("rulings",{shown:true,open:true});W.rulings.show(id)}}});
+  if(wsOn("trace"))W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{if(!W.surprises)return;dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
+  wsW=W;
+  if(!PANELS){$("#devbtn").hidden=false;applyDev()}
+  applyDocks()}
 function workspaceAgain(){   // a reconnect: the backend forgot this page's journal tail
   if(!wsW)return;
-  wsW.loop.refresh();wsW.loop.tail();wsW.surprises.refresh();wsW.bundle.refresh();wsW.trace.refresh();wsW.rulings.refresh()}
+  for(const w of Object.values(wsW))w.refresh();
+  if(wsW.chat)wsW.chat.tail()}
+/* the developer switch: TRACE, RULINGS, BUNDLE shown (collapsed) or hidden with their strip buttons; per viewer */
+function applyDev(){
+  const on=!!store.get("loopconsole.dev",false);
+  $("#devbtn").setAttribute("aria-pressed",on?"true":"false");
+  document.querySelectorAll(".dev-strip").forEach(b=>b.hidden=!on);
+  for(const d of DEV_DOCKS)if(!on&&dockUI.state[d]&&dockUI.state[d].shown)dockUI.set(d,{shown:false})}
+$("#devbtn").addEventListener("click",()=>{const on=!store.get("loopconsole.dev",false);store.set("loopconsole.dev",on);
+  if(on)for(const d of DEV_DOCKS)dockUI.set(d,{shown:true,open:false});
+  applyDev();applyDocks()});
 
 /* ---- the working copy + floating editors (CONSOLE-WS §4a, the user's
    simple model): open → the catalog's text is copied into IndexedDB
@@ -829,10 +853,16 @@ function downloadWork(){if(!work){banner("nothing to save — open a catalog fir
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: lib/shell.js, this console's copy) ---- */
-const DOCKS=["catalog","candidates","records","loop","surprises","rulings","trace","bundle"];
-const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v4",store,defaults:{catalog:{shown:true,open:true},
-  candidates:{shown:!GW,open:false},records:{shown:true,open:false},
-  loop:{shown:!!GW,open:true},surprises:{shown:!!GW,open:true},rulings:{shown:!!GW,open:false},trace:{shown:!!GW,open:false},bundle:{shown:!!GW,open:false}}});
+/* v5 (loop-chat step 1, CHAT.md §1): on a workspace (personal mode) CHAT and SURPRISES open, CATALOG folded, the rest
+   hidden (the strip shows them; the developer's three behind the band's switch). ?panels= keeps a layout of its own. */
+const DOCKS=["catalog","candidates","records","chat","surprises","rulings","trace","bundle"];
+const WSP=!!GW&&GW.mode==="personal";
+const dockUI=PANELS?MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5.panels",store,
+    defaults:Object.fromEntries(DOCKS.map(d=>[d,{shown:PANELS.includes(d),open:true}]))})
+  :MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5",store,defaults:{catalog:{shown:true,open:!WSP},
+  candidates:{shown:!GW,open:false},records:{shown:!WSP,open:false},
+  chat:{shown:!!GW,open:true},surprises:{shown:!!GW,open:true},rulings:{shown:false,open:false},trace:{shown:false,open:false},bundle:{shown:false,open:false}}});
+if(PANELS)for(const d of DOCKS)dockUI.state[d]={...(dockUI.state[d]||{}),shown:PANELS.includes(d)};   // the query decides what shows
 const applyDocks=dockUI.apply;
 
 /* the CATALOG panel: the catalogs of metis-catalog (the domains first, one
