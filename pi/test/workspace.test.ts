@@ -63,13 +63,16 @@ mkdir -p build; n=$(cat build/n 2>/dev/null || echo 0); n=$((n+1)); echo $n > bu
 printf 'image lampset.v-abc%s\\n' "$n" > build/lampset.build
 echo "built lampset v-abc$n"
 `);
-	// propose.sh: the judge's two files, its verdict from STUB_VERDICT, its arguments recorded
+	// propose.sh: the judge's two files, its verdict from STUB_VERDICT, its arguments recorded; STUB_COST: the brain's
+	// per-call log (RUN/cost.jsonl) with that cost; STUB_CRASH: it spends, then dies before any ruling
 	exe(join(bin, "propose"), `#!/bin/sh
 run=""; prev=""; for a in "$@"; do [ "$prev" = --run ] && run="$a"; prev="$a"; done
 mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/propose.args"
+[ -z "$STUB_COST" ] || printf '{"ts": "t", "who": "judge", "model": "openrouter/m", "cost": %s, "usage_before": 0}\\n' "$STUB_COST" > "$run/cost.jsonl"
+[ -z "$STUB_CRASH" ] || exit 3
 printf '# Ruling: %s\\n\\nThe gate %s it. 0 USD.\\n' "$STUB_VERDICT" "$STUB_VERDICT" > "$run/ruling.md"
 printf '{"verdict": "%s", "receipt": {"moved": ["lamp"]}, "lint": [], "reads_absent": []}' "$STUB_VERDICT" > "$run/evidence.json"
-[ "$STUB_VERDICT" = accepted ]
+case "$STUB_VERDICT" in accepted) exit 0 ;; "not judged") exit 2 ;; *) exit 1 ;; esac
 `);
 	Object.assign(process.env, { METIS_CATALOG: r, METISC: join(bin, "metisc"), METIS_LOOP_PROPOSE: join(bin, "propose"), MODEL: "stub/script", METIS_LOOP_MODE: "tui" });
 	return { r, bin };
@@ -147,6 +150,7 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	const { r } = scratch();
 	const p = fakePi();
 	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
 	const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
 	await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x" }), /not taken: surprise_next first/);
 	await p.tools.get("surprise_next").execute("n", {});
@@ -157,6 +161,64 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	const j = await p.tools.get("pack_propose").execute("j", { id, pack: "% x" });
 	assert.equal(j.details.verdict, "refused");
 	assert.equal(ws.surprise(id, r).ruling.verdict, "refused");
+	await p.emit("session_shutdown", {}, {});
+});
+
+test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; not judged leaves the surprise taken", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		const a = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 1, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		const b = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 2, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		const c = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		for (let i = 0; i < 3; i++) await p.tools.get("surprise_next").execute(`n${i}`, {});
+		Object.assign(process.env, { STUB_VERDICT: "accepted", STUB_COST: "0.0123" });
+		const j = await p.tools.get("pack_propose").execute("ja", { id: a, pack: "% x", brain: "openrouter/m", budget: 0.5 });
+		assert.equal(j.details.spent, 0.0123);                                            // from the brain's own log, not the document
+		process.env.STUB_CRASH = "1";
+		await assert.rejects(p.tools.get("pack_propose").execute("jb", { id: b, pack: "% x", brain: "openrouter/m", budget: 0.5 }), /wrote no ruling/);
+		delete process.env.STUB_CRASH;
+		assert.equal(ws.surprise(b, r).status, "taken");
+		const cost = ws.cost(r);
+		assert.equal(cost.calls, 2);                                                      // the crashed run's spend too
+		assert.ok(Math.abs(cost.total - 0.0246) < 1e-9, String(cost.total));
+		const rows = readFileSync(ws.path("cost", {}, r), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+		assert.deepEqual(rows.map((x) => x.surprise), [a, b]);
+		Object.assign(process.env, { STUB_VERDICT: "not judged", STUB_COST: "" });
+		const nj = await p.tools.get("pack_propose").execute("jc", { id: c, pack: "% x" });
+		assert.equal(nj.details.ruling, null);
+		assert.equal(ws.surprise(c, r).status, "taken");                                  // no verdict: no ruling, retry later
+		assert.ok(ws.events(0, r).some((e) => e.kind === "not-judged" && e.surprise === c));
+	} finally {
+		delete process.env.STUB_COST;
+		await p.emit("session_shutdown", {}, {});
+	}
+});
+
+test("metis-workspace: a loop that did not get the lock reads, and never takes, rules or builds", async () => {
+	const { r } = scratch();
+	const holder = spawn("sleep", ["30"]);
+	try {
+		ws.lock("pi", { mode: "rpc", model: "m" }, holder.pid!, r);
+		const p = fakePi();
+		workspace(p.api);
+		notes.length = 0;
+		await p.emit("session_start", {}, ctx);
+		assert.match(notes.join("\n"), /holds this workspace/);
+		assert.match((await p.tools.get("workspace_context").execute("c", {})).content[0].text, /the lamp workspace/);
+		ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 1, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		const held = new RegExp(`does not hold the workspace: pid ${holder.pid} \\(mode rpc`);
+		await assert.rejects(p.tools.get("surprise_next").execute("n", {}), held);
+		await assert.rejects(p.tools.get("bundle_build").execute("b", {}), held);
+		await assert.rejects(p.tools.get("pack_propose").execute("j", { id: ws.surprises("open", r)[0].id, pack: "% x" }), held);
+		assert.equal(ws.surprises("open", r).length, 1);                                    // nothing taken
+		await p.emit("session_shutdown", {}, {});
+		assert.equal(ws.loops(r).pi!.pid, holder.pid);                                      // the holder's lock untouched
+	} finally {
+		holder.kill();
+	}
 });
 
 test("metis-workspace: a trace argument is a path, a workspace run resolved under .metis/", () => {

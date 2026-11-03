@@ -29,7 +29,7 @@
 //   METIS_LOOP_MODE    tui | rpc (the lock's mode)          MODEL   the pi model (the lock's model)
 //   METISC             metisc for bundle_build (else metisc on PATH)
 //   METIS_LOOP_PROPOSE propose.sh for pack_propose (else ../propose.sh beside this file)
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -66,10 +66,20 @@ export function tracePath(v: string, root: string): string {
 	return join(st, v);
 }
 
-/** Run a command in DIR, asynchronously (the judge takes minutes): its code, stdout, stderr. */
+// every child in the 6G scope (the subject's rule), as propose.sh caps itself: systemd-run when it can start a
+// user scope here (probed once; a host or CI runner without a user session runs the child plain)
+const CAP = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0"];
+let capped: boolean | undefined;
+function cap6g(): string[] {
+	if (capped === undefined) capped = spawnSync(CAP[0], [...CAP.slice(1), "true"], { stdio: "ignore", timeout: 10000 }).status === 0;
+	return capped ? CAP : [];
+}
+
+/** Run a command in DIR, asynchronously (the judge takes minutes), in the 6G scope: its code, stdout, stderr. */
 function run(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<{ code: number; out: string; err: string }> {
+	const [c, ...a] = [...cap6g(), cmd, ...args];
 	return new Promise((done) => {
-		execFile(cmd, args, { cwd, env, maxBuffer: 1 << 26, encoding: "utf8" }, (e: any, out, err) =>
+		execFile(c, a, { cwd, env, maxBuffer: 1 << 26, encoding: "utf8" }, (e: any, out, err) =>
 			done({ code: e ? (typeof e.code === "number" ? e.code : 127) : 0, out: String(out ?? ""), err: String(err ?? e?.message ?? "") }),
 		);
 	});
@@ -81,6 +91,12 @@ const json = (o: unknown) => JSON.stringify(o, null, 1);
 export default function (pi: ExtensionAPI) {
 	const root = () => resolve(writeRoot());
 	let locked = false;
+	// the writes (take, rule, build) are the lock holder's only: a loop that did not get the lock reads and no more
+	const mustHold = (r: string) => {
+		if (locked) return;
+		const h = ws.loops(r).pi;
+		throw new Error(h ? `this pi loop does not hold the workspace: pid ${h.pid} (mode ${h.mode}, started ${h.started}) does; one pi loop per workspace` : "this pi loop does not hold the workspace's lock (session_start took none)");
+	};
 
 	// ---- the workspace: what a brain is given first ------------------------------------------------
 	pi.registerTool({
@@ -118,6 +134,7 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({}),
 		async execute() {
 			const r = root();
+			mustHold(r);
 			const open = ws.surprises("open", r);
 			if (!open.length) return text("no open surprise", { surprise: null });
 			const s = open[0];
@@ -187,6 +204,7 @@ export default function (pi: ExtensionAPI) {
 		}),
 		async execute(_id, p) {
 			const r = root();
+			mustHold(r);
 			const s = ws.surprise(p.id, r);
 			if (s.status === "ruled") throw new Error(`surprise ${p.id} is ruled already`);
 			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
@@ -197,6 +215,7 @@ export default function (pi: ExtensionAPI) {
 			const config = p.config ?? (s as any).config ?? (b as any)?.config;
 			if (!config) throw new Error(`no service config for surprise ${p.id}: give config (the surprise and the bundle name none)`);
 			const tmp = mkdtempSync(join(tmpdir(), "pack-propose-"));
+			let spent = 0;
 			try {
 				const pack = join(tmp, "pack.llp");
 				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
@@ -213,17 +232,37 @@ export default function (pi: ExtensionAPI) {
 				if (!existsSync(md) || !existsSync(ev)) throw new Error(`propose.sh wrote no ruling (exit ${res.code}): ${(res.err || res.out).trim().slice(-1500)}`);
 				const e = JSON.parse(readFileSync(ev, "utf8"));
 				const doc = readFileSync(md, "utf8");
-				const spent = Number(e.spent ?? (doc.match(/([0-9.]+) USD/) ?? [])[1] ?? 0) || 0;
+				spent = logSpend(join(tmp, "run"), p.id, r);
+				if (e.verdict === "not judged") {
+					// past the time budget: no verdict at all, so no ruling; the surprise stays taken for a retry
+					ws.journal("pi", "not-judged", { surprise: p.id, code: res.code }, r);
+					return text(`not judged (the time budget ran out): surprise ${p.id} stays taken; judge it again with a longer budget\n\n${doc}`, { verdict: e.verdict, ruling: null, code: res.code, spent });
+				}
 				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace };
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
-				if (spent > 0) appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ts: new Date().toISOString(), who: "judge", model: p.brain, cost: spent, surprise: p.id }) + "\n");
 				return text(`${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });
 			} finally {
+				logSpend(join(tmp, "run"), p.id, r); // a run that spent and then wrote no ruling still leaves its spend
 				rmSync(tmp, { recursive: true, force: true });
 			}
 		},
 	});
+
+	// the brain's own per-call log (RUN/cost.jsonl: {ts, who, model, cost, usage_before}) into the workspace's, once
+	const logged = new Set<string>();
+	function logSpend(run: string, id: string, r: string): number {
+		const f = join(run, "cost.jsonl");
+		if (!existsSync(f)) return 0;
+		let sum = 0;
+		const rows = readFileSync(f, "utf8").split("\n").filter((l) => l.trim());
+		for (const l of rows) sum += Number(JSON.parse(l).cost) || 0;
+		if (!logged.has(f)) {
+			logged.add(f);
+			for (const l of rows) appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ...JSON.parse(l), surprise: id }) + "\n");
+		}
+		return sum;
+	}
 
 	// ---- the bundle ---------------------------------------------------------------------------------
 	pi.registerTool({
@@ -233,6 +272,7 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({}),
 		async execute() {
 			const r = root();
+			mustHold(r);
 			const before = ws.bundle(undefined, r);
 			if (!before) throw new Error("the workspace has no bundle (no domains/composition.yaml)");
 			const cdir = join(r, dirname(before.composition));
