@@ -825,7 +825,8 @@ function showEdit(f){
   gateCur={via:"edit",token:f.token||null,path:f.path,files:f.token?1:0};
   $("#savetitle").textContent="SAVE";
   $("#savesub").textContent=`one edit of ${f.path} on disk — read the diff and the gate's findings, then write it`+(f.ok?"":": the gate refuses it as it is");
-  $("#savebody").innerHTML=`<div><b>${esc(f.path)}</b><pre>${DIFFHTML(f.diff)}</pre></div>
+  $("#savebody").innerHTML=`<div><b>${esc(f.path)}</b>
+    ${f.since_diff?`<div class="since"><span class="empty">changed since you refused it</span><pre>${DIFFHTML(f.since_diff)}</pre></div>`:""}<pre>${DIFFHTML(f.diff)}</pre></div>
     <div><b>findings</b> ${fs.length?`<pre>${fs.map(x=>`<span class="${LV[x.level]||""}">${esc(x.level)} ${esc(x.code||"")}${x.line?" @ line "+x.line:""}: ${esc(x.msg||"")}</span>`).join("\n")}</pre>`
       :'<span class="empty">none: metisc and the lint have nothing to say</span>'}</div>`;
   $("#savego").disabled=!f.ok||!f.token;$("#savego").textContent="write it";$("#savex").textContent=f.token?"refuse":"close";

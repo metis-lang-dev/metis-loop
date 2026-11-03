@@ -434,39 +434,14 @@ class ConsoleServer:
         raise ValueError(f"'{rel}' is not a file of a domain of this catalog")
 
     def _plan_edit(self, domain: str, path: str, old: str, new: str) -> dict:
-        """The edit's dry run: {path, diff, findings: [{level, code, line, msg}]}: metisc's diagnostics of the
-        edited text (an extension against its program) and metis.lint's rows for a program. Uses metispy's
-        catalog.edit(..., dry_run=True) when it has it (workspace-files step 1), else computes them here."""
-        import inspect
-        if "dry_run" in inspect.signature(catalog.edit).parameters:
-            pl = catalog.edit(domain, path, old, new, r=self.root, dry_run=True)
-            out = {"path": path, "diff": pl.get("diff", ""), "findings": list(pl.get("findings") or [])}
-            if "ok" in pl:                  # metispy's: ok = no finding refuses (an added diagnostic, any level)
-                out["ok"] = bool(pl["ok"])
-            return out
-        dom = catalog.get(domain, self.root)
-        d = Path(dom.dir).resolve()
-        p = (d / path).resolve()
-        text = catalog.edited(p.read_text(), old, new, what=f"{domain}/{path}")
-        diff = catalog._diff(p.read_text(), text, path, path)
-        found = []
-        if p.suffix == ".llp":
-            prog = Path(dom.program).resolve() if dom.program else None
-            with catalog._Beside(p, text) as cand:
-                for x in catalog.diagnostics(cand, prog if prog and p != prog else None):
-                    found.append({"level": "error" if x.get("severity") == "error" else "warning",
-                                  "code": x.get("code") or "", "line": x.get("line"), "msg": x.get("text") or ""})
-                if p == prog and not any(f["level"] == "error" for f in found):
-                    try:
-                        from metis.lang import compile_catalog, parse, resolve_includes
-                        from metis.lint import lint
-                        doc = compile_catalog(resolve_includes(parse(text, file=str(p)), p.parent))
-                        man = d / "domain.yaml"           # lint reads the manifest from its file
-                        for x in lint(doc, text, str(man) if man.is_file() else None, cand):
-                            found.append({"level": "lint", "code": x.code, "line": x.loc.line or None, "msg": x.text})
-                    except Exception as e:      # noqa: BLE001 — lint never refuses: say it did not run
-                        found.append({"level": "lint", "code": "lint-not-run", "line": None, "msg": str(e)[:300]})
-        return {"path": path, "diff": diff, "findings": found}
+        """The edit's dry run (metispy's catalog.edit, dry_run=True): {path, diff, findings: [{level, code, line, msg,
+        …}], ok (no finding refuses), since_diff?: what changed since the person refused this file's last plan}."""
+        pl = catalog.edit(domain, path, old, new, r=self.root, dry_run=True, since=self.gate.refused(self.root))
+        out = {"path": path, "diff": pl.get("diff", ""), "findings": list(pl.get("findings") or []), "ok": bool(pl.get("ok"))}
+        since = next((f.get("since_diff") for f in pl.get("files") or [] if f.get("since_diff")), None)
+        if since:
+            out["since_diff"] = since
+        return out
 
     def edit_plan(self, rel: str, old: str, new: str) -> dict:
         """The EDITOR's save (workspace-files s-9ea4cfa4): one exact edit of a checkout file `rel`, old → new,
@@ -477,8 +452,8 @@ class ConsoleServer:
             pl = self._plan_edit(domain, path, old, new)
         except ValueError as e:
             raise ValueError(self.scrub(str(e))) from None
-        out = {"path": rel, "domain": domain, "diff": pl["diff"], "findings": pl["findings"],
-               "ok": pl.get("ok", not any(f.get("level") == "error" for f in pl["findings"]))}
+        out = {"path": rel, "domain": domain, "diff": pl["diff"], "findings": pl["findings"], "ok": pl["ok"],
+               **({"since_diff": pl["since_diff"]} if pl.get("since_diff") else {})}
         if out["ok"]:
             try:
                 g = self.gate.propose("edit", domain, self.root, path=path, old=old, new=new)

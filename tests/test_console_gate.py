@@ -34,9 +34,11 @@ def test_an_edit_is_a_plan_refused_then_written(tmp_path):
     assert all(f["level"] != "error" for f in pl["findings"])
     assert all({"level", "code", "line", "msg"} <= set(f) for f in pl["findings"])     # metispy's carry more
     assert not any(f["code"] == "lint-not-run" for f in pl["findings"]), pl["findings"]     # the lint ran
+    assert "since_diff" not in pl                                      # nothing refused yet
     assert srv.gate_refuse(pl["token"]) == {"refused": [PROG]}
     assert "slowly" not in prog.read_text()
     again = srv.edit_plan(PROG, "%% I wake up.", "%% I wake up very slowly.")
+    assert "very slowly" in again["since_diff"]                       # what changed since the refused plan (nina's review)
     out = srv.gate_confirm(again["token"])
     assert out["written"] == [PROG] and "very slowly" in prog.read_text()
 
