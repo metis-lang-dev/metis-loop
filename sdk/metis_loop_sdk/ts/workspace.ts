@@ -6,7 +6,7 @@
 // one (tests/ts/workspace.test.ts holds them to it). Node built-ins only, erasable TypeScript only.
 //
 //   import * as ws from ".../metis_loop_sdk/ts/workspace.ts";   // `python -m metis_loop_sdk.web ts`: where
-//   ws.bundle()                         // {name, composition, members, image, golden, build, stale, why} | null
+//   ws.bundle()                         // {name, composition, members, image, golden, config, build, stale, why} | null
 //   ws.surprises("open")                // the open surprises, oldest first
 //   const id = ws.drop_surprise({ member: "responder", trace: "traces/s1", k: 41, words: "…", atoms: [...] })
 //   ws.take_surprise(id)                // this process takes it (its pid in surprises/<id>.taken)
@@ -42,6 +42,9 @@ export type Bundle = {
 	members: string[];
 	image: string | null;
 	golden: string | null;
+	/** the service config a run of the bundle takes (propose.sh --config), absolute: composition.yaml's
+	 *  `service:`, else service.yaml beside it, else null */
+	config: string | null;
 	build: string | null;
 	stale: boolean;
 	why: string | null;

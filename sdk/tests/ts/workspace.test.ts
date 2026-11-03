@@ -99,6 +99,10 @@ test("the journal, the bundle and a trace from node are py's", () => {
 	writeFileSync(join(d, "composition.yaml"), "# two members\nname: duo\nspecialists: [a]\ndirect: boss\n");
 	assert.deepEqual(ws.bundle(undefined, r), py(r, "bundle"));
 	assert.equal(ws.bundle(undefined, r)!.stale, true);
+	assert.equal(ws.bundle(undefined, r)!.config, null);
+	writeFileSync(join(d, "service.yaml"), "trace: {}\n");
+	assert.equal(ws.bundle(undefined, r)!.config, join(resolve(d), "service.yaml"));
+	assert.deepEqual(ws.bundle(undefined, r), py(r, "bundle"));
 	const t = join(r, ".metis", "traces", "s1");
 	mkdirSync(join(t, "checkpoints"), { recursive: true });
 	writeFileSync(join(t, "checkpoints", "k0.json"), "{}");
