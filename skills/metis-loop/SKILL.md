@@ -221,26 +221,21 @@ For live work, start the standing backend and work in its page —
 commands answer over one WebSocket in milliseconds, no drain to
 babysit:
 
-    pip install -e '.[agent]'      # websockets + claude-agent-sdk
+    pip install -e '.[console]'    # websockets
     metis-loop console-serve       # personal: http://127.0.0.1:8770/
 
-- **personal** (your host, your `claude login`): multi-session REPL;
-  the chat pane is the Agent Service (claude-opus-5-5 by default) —
-  it acts ONLY through three console tools (repl / ctx / transcript),
-  no built-in tools, nothing persisted; `narrate` runs on
-  claude-haiku-4-5 via the SDK (1024-token thinking budget — measured
-  faithful at ~8-18 s; thinking off is fast but fuses beats);
-  formalize keeps the kernel's `llm` endpoint.
-- **shared** (`--mode shared --bind 0.0.0.0 --token T`): REPL only —
-  chat/narrate/formalize/llm are refused (they would spend the
-  operator's credentials); per-IP caps, rate limit; nothing a visitor
-  does is written to disk.
-- The terminal REPL is untouched: it narrates through ollama.
-- Dev: `--mock-agent` gives the chat a canned client (never a model);
-  `METIS_AGENT_LIVE=1 pytest -k live` runs the opt-in real turns.
+- **No brain** (loop-workspace, docs/WORKSPACE.md): the console's chat,
+  narrate and formalize seats are retired; `narrate`/`formalize`/`llm`
+  are refused in every mode, naming the pi loop. A surprise is dropped
+  to `DIR/.metis/surprises/` (the `surprise` channel) and the pi loop
+  (`pi/loop.sh` in the same DIR) takes, judges and rules it.
+- **personal** (your host): multi-session REPL, the editor and the gate,
+  and the workspace channels `trace`, `surprise`, `bundle`, `loop`.
+- **shared** (`--mode shared --bind 0.0.0.0 --token T`): REPL only;
+  per-IP caps, rate limit; nothing a visitor does is written to disk.
 
 The published artifact stays the SHARED window — demos, approvals from
-any device, `sample` chat billed to the viewer; serve its db only when
+any device; serve its db only when
 someone is using that surface, as below.
 
 ## Serving the console (docs/CONSOLE.md §5a) — the artifact surface (secondary transport)

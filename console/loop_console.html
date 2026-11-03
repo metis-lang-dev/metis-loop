@@ -7,29 +7,9 @@
 .st-done,.st-closed{color:var(--gray)}.st-opening{color:var(--cyan)}
 /* human-loop step 3: the agent's state of the open domain */
 .ag-live{color:var(--green)}.ag-stale{color:var(--yellow)}.ag-reloaded{color:var(--cyan)}.ag-down,.ag-none{color:var(--gray)}
-#dock-claude .dbody{display:flex;flex-direction:column;overflow:hidden}
-#dock-claude.collapsed .dbody{display:none}
-#chatlog{flex:1;overflow:auto;min-height:0}
 .plist .pk{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:3px 0}
 .plist .pk .nm{flex:1}
 /* the shell (band, docks, strip, splitter, tokens, the catalog rows): lib/shell.css, this console's copy */
-.turn{margin:0 0 8px}
-.turn .who{color:var(--dim);font-size:11px}
-.turn.user .who{color:var(--cyan)}.turn.assistant .who{color:var(--purple)}
-.turn .txt{white-space:pre-wrap;word-break:break-word}
-.turn .tool{color:var(--dim);font-size:11.5px}
-.turn .tool.refused{color:var(--red)}
-.turn.err .txt{color:var(--red)}
-#chatin{display:flex;gap:6px;align-items:flex-end;border-top:1px solid var(--line);padding-top:6px}
-#chatq{flex:1;background:var(--bg);color:var(--fg);caret-color:var(--cyan);font:12.5px/1.45 var(--mono);border:1px solid var(--line);resize:vertical;min-height:2.6em;max-height:12em;padding:3px 6px;outline:none}
-#chatq:focus-visible{border-color:var(--cyan)}
-#chatcm{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)}
-#chatcm:focus-within{border-color:var(--cyan)}
-#chatcm .cm-editor{max-height:14em;font-size:12.5px}#chatcm .cm-scroller{font-family:var(--mono)}
-#chatcm .cm-editor.cm-focused{outline:none}
-#chatmic{min-width:2.4em}#chatmic.on{color:var(--bg);background:var(--red,#f85149);border-color:transparent}
-#chatinterim{color:var(--dim);font-style:italic;min-height:1em;font-size:11.5px;padding:0 2px}
-#chatstate{color:var(--dim);font-size:11px;min-height:1.4em}
 #stream{flex:1;overflow:auto;padding:8px 12px}
 .ent{margin:0 0 6px}
 .cmd{color:var(--fg)}.cmd .p{color:var(--cyan)}.cmd .p.claude{color:var(--purple)}
@@ -187,7 +167,6 @@ details summary{cursor:pointer;color:var(--dim)}
       <button class="chip" data-cmd="graph">graph</button>
       <button class="chip" data-cmd="why">why</button>
       <button class="chip" data-cmd="findings">findings</button>
-      <button class="chip" data-cmd="narrate">narrate</button>
       <button class="chip" data-cmd="undo">undo</button>
     </div>
     <div id="promptrow"><span id="busy" hidden><span class="st-quiescent">running</span> <span id="busycmd" class="v"></span><span id="busyq" class="empty"></span> <button class="btn" id="stopcmd" title="interrupt the running command and drop the queued ones">stop</button></span><span class="p">llp&gt;</span>
@@ -196,21 +175,6 @@ details summary{cursor:pointer;color:var(--dim)}
   </section>
   <div id="split" role="separator" aria-orientation="vertical" tabindex="0"></div>
   <aside id="right" aria-label="tool panels">
-    <section class="dock" id="dock-claude" data-dock="claude" aria-label="Claude" tabindex="-1">
-      <header><span class="tw">▾</span><span class="tt">CLAUDE</span><button class="x" title="hide (the strip brings it back)">✕</button></header>
-      <div class="dbody">
-        <p class="ph" id="chatsub">reinterprets the machine; acts only through the REPL (its lines show as claude&gt; on the left)</p>
-        <div id="chatlog" aria-live="polite" tabindex="-1"><div class="empty" id="chathello">Ask about the run — "why is blow_brick waiting?", "run it to the end and tell me what mattered". Claude drives the REPL with the same whitelist you have; it can never approve.</div></div>
-        <div id="chatstate" role="status"></div>
-        <div id="chatinterim" aria-live="polite"></div>
-        <div id="chatin">
-          <textarea id="chatq" aria-label="message to Claude" placeholder="Ask Claude — Enter sends, Shift+Enter newline" rows="2"></textarea>
-          <button class="btn" id="chatmic" hidden title="dictate (browser speech recognition)">mic</button>
-          <button class="btn" id="chatsend">send</button>
-          <button class="btn" id="chatstop" hidden>stop</button>
-        </div>
-      </div>
-    </section>
     <section class="dock" id="dock-catalog" data-dock="catalog" aria-label="catalog and extensions" tabindex="-1">
       <header><span class="tw">▾</span><span class="tt">CATALOG · working copy &amp; extensions</span><button class="x" title="hide">✕</button></header>
       <div class="dbody" id="catdock"><div class="empty">Open a catalog — its working copy and extensions show here.</div></div>
@@ -225,7 +189,6 @@ details summary{cursor:pointer;color:var(--dim)}
     </section>
   </aside>
   <nav id="strip" aria-label="tool windows">
-    <button data-strip="claude" title="Claude">Claude</button>
     <button data-strip="catalog" title="working copy and extensions">Catalog</button>
     <button data-strip="candidates" title="candidates">Candidates</button>
     <button data-strip="records" title="surprise records">Records</button>
@@ -368,8 +331,7 @@ function contextHtml(c,only){
   if(want.has("proof"))out.push(proofHtml(c));
   return out.length?`<div class="ctxblk">${out.join("")}</div>`:""}
 /* FINDINGS (spec 08 D4): one line per diagnostic, expandable to the
-   full slice; NARRATOR: a section, never a chat — the REPL's own LLM
-   seat over the certified trace; GRAPH: the beat text + downloads
+   full slice; GRAPH: the beat text + downloads
    built in the page (no capability needed). */
 function findingsHtml(ds){
   if(!ds.length)return `<div class="sect"><h4>FINDINGS</h4><div class="empty">no findings — catalog, last gate and runtime are clean</div></div>`;
@@ -382,13 +344,6 @@ function findingsHtml(ds){
         ${Object.entries(d.data||{}).map(([a,b])=>`<span>${esc(a)}</span><span>${esc(typeof b==="string"?b:JSON.stringify(b))}</span>`).join("")}</div>
       ${(d.context||[]).length?`<pre class="out">${esc(d.context.join("\n"))}</pre>`:""}
       <div class="empty">findings ${k+1} — the full record</div></details>`}).join("")}</div>`}
-function narratorHtml(j){
-  const what=j.source==="session"?`this session's run (${j.events} event${j.events===1?"":"s"})`:`seeded trace ${j.seed} (${j.events} events)`;
-  const m=/sdk_narrate.*--model\s+(\S+)/.exec(String(j.llm||""));
-  const seat=m?m[1].replace(/['"]/g,"")+" (Claude Agent SDK)":(j.llm||"?");
-  return `<div class="sect"><h4>NARRATOR · ${esc(seat)} · ${esc(what)}<span class="mark">certified trace only</span></h4>
-    <div class="prose">${esc(j.narration||"")}</div>
-    <div class="empty" style="margin-top:4px">prose from the REPL's narrator over the certified beats, state and %% docs — read it as a retelling, the beats above are the record</div></div>`}
 function graphHtml(i){
   return `<div class="sect"><h4>GRAPH · ${(i.json.nodes||[]).length} nodes · ${(i.json.edges||[]).length} edges · frontier ${(i.json.frontier||[]).join(" ")}</h4>
     <button class="dl" data-dl="dot" data-iid="${esc(i.id)}">causality.dot</button><button class="dl" data-dl="json" data-iid="${esc(i.id)}">causality.json</button>
@@ -449,7 +404,6 @@ function bodyHtml(i,isLastStop,seenMax){
   else if(v==="events"&&Array.isArray(j.enabled))h=j.enabled.length?`<div class="sect"><h4>EVENTS · click one to fire it as the next step</h4>${
     j.enabled.map(e=>`<div class="meas"><span class="nm"><button class="evbtn" data-cmd="step ${esc(e.name)}">${esc(e.k)}. ${esc(e.name)}</button></span><span class="bar" style="width:${Math.max(2,Math.round(e.p*160))}px"></span><span>p=${(+e.p).toFixed(3)}${e.kind==="link"?" · stage link":""}</span></div>`).join("")}</div>`
     :'<div class="empty">nothing can fire</div>';
-  else if(v==="narrate"&&j.narration!==undefined)h=narratorHtml(j);
   else if(v==="graph"&&j.nodes)h=graphHtml(i);
   else h=`<pre class="out">${linkify(i.result)}</pre>`;
   if(isLastStop&&c)h+=contextHtml(c);
@@ -523,7 +477,7 @@ function renderRight(){
 
 /* ---- actions: every one is an intents doc ---- */
 async function queue(cmd,actor,quiet){
-  /* returns the intent id, or null; `quiet` callers (the chat's tool)
+  /* returns the intent id, or null; `quiet` callers
      get the reason thrown instead of a banner */
   cmd=String(cmd||"").trim().replace(/^:/,"");if(!cmd)return null;
   const fail=m=>{if(quiet)throw new Error(m);banner(m,5000);return null};
@@ -602,190 +556,7 @@ async function openCatalog(pick){
   try{await db.doc("sessions/"+id).set({llp,host,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
   catch(e){banner("Session not opened: "+(e&&e.message||e),6000);return}
   sid=id;sstore.set("loopconsole.sid",sid);$("#stream").innerHTML="";
-  chatLoad();renderChat();subscribeSession()}
-
-/* ---- the chat (CONSOLE §3): in-page Claude via `sample`, ONE tool ---- */
-const PREAMBLE_VERSION="console-chat 1 (CONSOLE.md §3, 2026-10-05)";
-const PREAMBLE=`You are the interpreter panel of the metis Loop Console (${PREAMBLE_VERSION}).
-The console is a state debugger over ONE kernel REPL running a linear-logic
-story/behavior catalog (LLP). You REINTERPRET the machine for the viewer: you
-run REPL lines through the \`repl\` tool and explain what they show. The tool is
-the only way you act; whatever you run appears in the viewer's transcript as
-"claude>", exactly as if they had typed it. Never invent results — run the line.
-
-== REPL skill: the commands (prefix every line with ":" when calling repl) ==
-:ctx [tokens|rules|trace]  the context at this stop: catalog, key, stage, BEAT,
-                           EPISODE, status running|quiescent|done, tokens, enabled
-:run N / :step [k|name]    fire N sampled events / one (k from :events, or a rule name)
-:events                    enabled events with weights w and normalized p
-:undo / :reset             back one command / back to the file's #init (new epoch)
-:why [ATOM|K]              causal cone: what the current state (or ATOM's last
-                           producer, or event K) rests on; the rest is "pruned"
-:causes A B                per occurrence of B: is some A among its causes (yes/some/no)
-:graph                     the run as beats with covering parents (i<j, flow atoms)
-:list / :state / :log      rules with marks / the multiset / fired events
-:findings [N]              diagnostics (catalog, last gate, runtime notes)
-:trace [SEED] / :map / :marginals   seeded replay / modal derivation / exact marginals
-:narrate [SEED]            prose of the run (the REPL's own narrator)
-:do +A [N] | -A | EVENT | ~EVENT   an intervention, recorded as one: set/remove
-                           atoms, FORCE an enabled event, or block (~) an event/rule
-:fork [K] / :back          branch at occurrence K (one shelved world) / return to it
-:whatif K do(X)... query A [N] | run N   fork, intervene, compare (fact · with do ·
-                           by chance), back — the session is left untouched
-:necessity K [A]           PN: block #K from K-1 on; P(not A | do(not K)) beside the fact
-:sufficiency K A           the INTERVENTIONAL PROXY for PS (labelled; exact PS deferred)
-:gate / :revise / :mine / :text / :formalize / :records / :record N / :replay / :show
-
-How to read what comes back:
-- BEATS (Foata levels): events in one beat are causally independent — never
-  say one caused another inside a beat; across beats, order is real. A stage
-  switch (quiescence link, e.g. act2) opens a new EPISODE.
-- Effects: −atom consumed, +atom produced, $atom read and kept.
-- RULE STATES (list's marks): * fireable now · ◂ #k the present rests on
-  occurrence k · · fired but nothing it touched is still present · ? waiting on
-  an atom some rule here makes ("← maker", * = enabled) · – spent: the atom is
-  gone and nothing here makes it. Presence-only: "pruned" never means "caused
-  nothing".
-- status quiescent = only a stage link can fire; done = nothing can.
-- Atoms are indistinguishable: this is dependence on the multiset, not token lineage.
-- INTERVENTIONS: rows marked [forced] (a chosen step) or [do] were not chance —
-  never describe them as luck or as sampled; the likelihood excludes them.
-  \`why\` is structural (the cone), \`necessity\` is measure (PN): give both. The
-  exact tier may refuse on its state budget — report that, never guess a number.
-
-== Formalization skill (the loop) ==
-surprise record → mine the gap as a short factual %% text → a candidate LLP extension
-(an extension WRITES only what the base's namespaces grant its layer — the
-gate's containment check enforces those produce-rights; a base that
-grants nothing means the extension only reads base atoms and produces its
-own) → :gate (the cascade decides) →
-on findings, repair FROM THE DIAGNOSTICS (:findings), never by rewriting the base
-→ the HUMAN approves in the console's candidate buttons. You never approve:
-:accept is refused by design — do not try it, and say so if asked.
-
-== Style ==
-Answer in plain language, cite what you ran and where it shows ("BEAT 4",
-"RULES: blow_brick waiting on brickhouse"). Prefer one or two well-chosen
-lines over many; each tool round costs the viewer. Keep answers short.`;
-let sampleNs=null,chatTurns=[],chatBusy=null;
-const chatKey=()=>"loopconsole.chat."+(sid||"none");
-function chatLoad(){try{chatTurns=JSON.parse(sessionStorage.getItem(chatKey())||"[]")}catch(e){chatTurns=[]}
-  chatTurns.forEach(t=>{if(t.pending){t.pending=false;t.content=(t.content||"")+" [interrupted]"}})}
-function chatSave(){try{sessionStorage.setItem(chatKey(),JSON.stringify(
-  chatTurns.filter(t=>!(t.pending&&!t.content)).slice(-40)))}catch(e){}}
-function renderChat(){
-  const el=$("#chatlog");const atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-24;
-  el.innerHTML=chatTurns.length?chatTurns.map(t=>`<div class="turn ${t.role}${t.err?" err":""}">
-    <div class="who">${t.role==="user"?"you":"claude"}</div>
-    ${(t.tools||[]).map(x=>`<div class="tool${x.status==="refused"||x.status==="error"?" refused":""}">⚙ repl ${esc(x.line)} → ${esc(x.status)}</div>`).join("")}
-    <div class="txt">${esc(t.content||(t.pending?"Thinking…":""))}</div></div>`).join("")
-    :$("#chathello")?$("#chathello").outerHTML:"";
-  if(atEnd)el.scrollTop=el.scrollHeight}
-function trimJson(j){
-  /* what goes back to Claude: small and plain (each tool round bills) */
-  if(!j||typeof j!=="object")return j;
-  const o={};
-  for(const [k,v] of Object.entries(j)){
-    if(k==="text"||k==="src"||k==="dot"||k==="narration")continue;
-    if(k==="fired"&&Array.isArray(v))o.fired=v.slice(0,30).map(f=>({i:f.i,name:f.name,beat:f.beat,kind:f.kind,consume:f.consume,produce:f.produce}));
-    else if(k==="rules"&&Array.isArray(v))o.rules=v.map(r=>({name:r.name,state:r.state,detail:r.detail}));
-    else if(k==="nodes"||k==="edges")o[k+"_count"]=Array.isArray(v)?v.length:0;
-    else if(Array.isArray(v))o[k]=v.slice(0,30);
-    else o[k]=v}
-  return o}
-function chatContext(){const c=sess&&sess.ctx;
-  return c?`[console now: catalog ${c.catalog}, stage ${c.stage}, beat ${c.beat}, episode ${c.episode}, ${c.status}, ${c.fired-(c.base||0)} fired since base, last ${c.last_event||"—"}]`
-    :"[console now: no open session — the viewer must open a catalog before the repl tool can run]"}
-/* the chat input: CodeMirror (from the vendor bundle) under the gateway,
-   the textarea elsewhere — one small interface either way */
-const chatIn={get:()=>$("#chatq").value,set:v=>{$("#chatq").value=v},focus:()=>$("#chatq").focus(),
-  insert(t){const q=$("#chatq"),a=q.selectionStart??q.value.length;q.value=q.value.slice(0,a)+t+q.value.slice(q.selectionEnd??a);
-    q.selectionStart=q.selectionEnd=a+t.length}};
-async function chatInputCM(){
-  const lib=await loadCM(),cm=lib&&lib.mod;if(!cm||!cm.minimalSetup)return;
-  const host=document.createElement("div");host.id="chatcm";const ta=$("#chatq");
-  ta.replaceWith(host);
-  const send=()=>{chatSend();return true};
-  const view=new cm.EditorView({parent:host,doc:ta.value,extensions:[cm.minimalSetup,cm.EditorView.lineWrapping,cm.oneDark,
-    cm.placeholder(ta.placeholder),cm.EditorView.contentAttributes.of({"aria-label":"message to Claude"}),
-    cm.Prec.highest(cm.keymap.of([{key:"Enter",run:send},
-      {key:"Shift-Enter",run:v=>{v.dispatch(v.state.replaceSelection("\n"),{scrollIntoView:true});return true}}]))]});
-  Object.assign(chatIn,{get:()=>view.state.doc.toString(),
-    set:v=>view.dispatch({changes:{from:0,to:view.state.doc.length,insert:v}}),focus:()=>view.focus(),
-    insert:t=>{view.dispatch(view.state.replaceSelection(t),{scrollIntoView:true})}})}
-
-/* dictation: the browser's SpeechRecognition (Chrome/Edge/Safari). NOTE in
-   Chrome the audio goes to the vendor's speech service — the button says
-   so; a local Whisper engine can replace `recog` behind the same button. */
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recog=null,dictating=false;
-function micUi(){const b=$("#chatmic");b.classList.toggle("on",dictating);b.textContent=dictating?"● rec":"mic";
-  b.setAttribute("aria-pressed",dictating);if(!dictating)$("#chatinterim").textContent=""}
-function micToggle(){
-  if(!SR)return;
-  if(dictating){dictating=false;try{recog.stop()}catch(e){}micUi();return}
-  recog=new SR();recog.continuous=true;recog.interimResults=true;recog.lang=store.get("loopconsole.lang",navigator.language||"en-US");
-  recog.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
-      if(r.isFinal){const t=r[0].transcript.trim();if(t){const cur=chatIn.get();chatIn.insert((cur&&!/\s$/.test(cur)?" ":"")+t)}}
-      else interim+=r[0].transcript}
-    $("#chatinterim").textContent=interim};
-  recog.onerror=e=>{if(e.error==="no-speech"||e.error==="aborted")return;
-    dictating=false;micUi();$("#chatstate").textContent="dictation: "+e.error+(e.error==="network"?" (the browser's speech service is unreachable)":"")};
-  /* engines end a session after a pause or ~a minute: long narrations keep going */
-  recog.onend=()=>{if(dictating){try{recog.start()}catch(e){dictating=false;micUi()}}else micUi()};
-  try{recog.start();dictating=true;micUi();chatIn.focus()}catch(e){$("#chatstate").textContent="dictation unavailable: "+e.message}}
-
-async function chatSend(){
-  const text=chatIn.get().trim();
-  if(GW){
-    if(!text||gwChatBusy)return;
-    if(!sid||!sess){$("#chatstate").textContent="open a catalog first — Claude works in your session";return}
-    if(!wsUp){$("#chatstate").textContent="not connected to the backend";return}
-    chatIn.set("");$("#chatstate").textContent="";
-    if(dictating)micToggle();
-    wsSend({ch:"chat",type:"say",session:sid,text});return}
-  if(!text||chatBusy)return;
-  if(!sampleNs){$("#chatstate").textContent="chat unavailable in this view";return}
-  chatIn.set("");
-  chatTurns.push({role:"user",content:text});
-  const reply={role:"assistant",content:"",pending:true,tools:[]};
-  chatTurns.push(reply);chatSave();renderChat();
-  const ctl=new AbortController();chatBusy=ctl;
-  $("#chatstop").hidden=false;$("#chatsend").disabled=true;$("#chatstate").textContent="";
-  /* no server memory: the whole turn list every call; the preamble
-     rides the first user turn, the live context the last one */
-  const turns=chatTurns.filter(t=>t!==reply&&!t.err&&(t.content||"").trim()).map(t=>({role:t.role,content:t.content}));
-  turns[0]={role:"user",content:PREAMBLE+"\n\n== The viewer ==\n"+turns[0].content};
-  turns[turns.length-1]={role:"user",content:turns[turns.length-1].content+"\n\n"+chatContext()};
-  const tool={name:"repl",
-    description:"Run ONE line in the console's REPL session (the viewer's window). Prefix with ':' (e.g. ':run 6', ':why', ':ctx rules'). Same whitelist as the viewer: :accept, file paths and command: specs are refused. Returns {status, result, json}.",
-    inputSchema:{type:"object",properties:{line:{type:"string",description:"one REPL line, starting with ':'"}},required:["line"]},
-    execute:async({line},ctx2)=>{
-      const rec={line:String(line||""),status:"queued"};reply.tools.push(rec);renderChat();
-      let post;
-      try{const id=await queue(line,"claude",true);
-        post=await awaitPosting(id,(ctx2&&ctx2.signal)||ctl.signal,90000)}
-      catch(e){rec.status=/no posting/.test(e.message)?"timed out (no serving session?)":
-        e.message==="cancelled"?"cancelled":"error";renderChat();throw e}
-      rec.status=post.status;renderChat();
-      const out={status:post.status,result:String(post.result||"").slice(0,1800),json:trimJson(post.json)};
-      if(post.status==="refused")throw new Error("refused by the console whitelist: "+out.result.slice(0,400));
-      return out}};
-  try{
-    const r=await sampleNs(turns,{cache:false,modelTier:"default",signal:ctl.signal,tools:[tool],
-      onText:({text})=>{reply.pending=false;reply.content=text;renderChat()}});
-    reply.pending=false;reply.content=r.text||reply.content||"(no answer)";
-    if(r.truncated)reply.content+="\n[answer truncated]";
-  }catch(e){
-    reply.pending=false;const code=e&&e.code;
-    if(e&&e.text)reply.content=e.text;
-    if(code==="cancelled")reply.content=(reply.content||"")+" [stopped]";
-    else if(code==="not_granted"){reply.err=true;reply.content="Claude is not available here (not granted).";
-      $("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable — the rest of the console works as before"}
-    else if(code==="rate_limited"){reply.err=!reply.content;reply.content=reply.content||"Rate limited — wait a minute before asking again.";
-      $("#chatstate").textContent="rate limited — not retrying"}
-    else{reply.err=!reply.content;reply.content=reply.content||("Claude call failed: "+((e&&e.message)||e))}
-  }finally{chatBusy=null;$("#chatstop").hidden=true;$("#chatsend").disabled=false;chatSave();renderChat()}}
+  subscribeSession()}
 
 /* ---- the gateway transport (CONSOLE-WS §1/§5) ---- */
 function wsSend(f){try{wsock&&wsock.readyState===1&&wsock.send(JSON.stringify(f))}catch(e){}}
@@ -812,7 +583,6 @@ function wsHandle(f){
   if(f.ch==="repl"&&f.type==="gate"){showGatePlan(f);return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
     $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("");return}
-  if(f.ch==="chat"){chatFrame(f);return}
   if(f.ch!=="repl")return;
   if(f.type==="error"){
     if(f.req&&f.req===pendingReq)pendingReq=null;
@@ -825,7 +595,7 @@ function wsHandle(f){
   if(f.type==="source"){if(f.session===sid)onSource(f);return}
   if(f.type==="session"){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
-      intents=new Map();seenEpoch=null;$("#stream").innerHTML="";chatTurns=[];chatBusyUi(false);renderChat();
+      intents=new Map();seenEpoch=null;$("#stream").innerHTML="";
       const file=f.ctx&&f.ctx.file;if(file)$("#catin").value=String(file).replace(/\.llp$/,"");
       if(pendingRec)wsSend({ch:"repl",type:"sink",session:sid,file:pendingRec.file});   // a record picked before its domain was open
     }
@@ -839,28 +609,6 @@ function wsHandle(f){
     if(f.type==="queued"&&old&&old.status!=="queued")return;
     intents.set(f.id,{...(old||{}),...f,status:f.type==="queued"?"queued":f.status});
     renderStream();settle()}}
-/* the agent chat over the gateway (CONSOLE-WS §3): the backend holds
-   the turns (memory only); the page renders its frames into the same
-   chatTurns structure v1 renders */
-let gwChatBusy=false;
-function lastReply(){for(let k=chatTurns.length-1;k>=0;k--)if(chatTurns[k].role==="assistant")return chatTurns[k];return null}
-function chatBusyUi(b){gwChatBusy=b;$("#chatstop").hidden=!b;$("#chatsend").disabled=b}
-function chatFrame(f){
-  if(f.session&&f.session!==sid)return;
-  if(f.type==="history"){chatTurns=(f.turns||[]).map(t=>({...t}));chatBusyUi(!!f.busy);renderChat();return}
-  if(f.type==="user"){chatTurns.push({role:"user",content:f.text});
-    chatTurns.push({role:"assistant",content:"",pending:true,tools:[]});chatBusyUi(true);renderChat();return}
-  const r=lastReply();
-  if(f.type==="token"&&r){r.content=f.text;r.pending=false;renderChat();return}
-  if(f.type==="tool"&&r){r.tools=r.tools||[];r.tools[(f.n||r.tools.length+1)-1]={line:f.line,status:f.status};renderChat();return}
-  if(f.type==="done"&&r){r.content=f.text||r.content||"(no answer)";r.pending=false;
-    if(f.error){r.err=!f.text;r.content=(f.text?f.text+"\n":"")+"["+f.error+"]"}
-    chatBusyUi(false);renderChat();return}
-  if(f.type==="error"){
-    if(gwChatBusy&&r&&r.pending!==undefined&&(f.text!==undefined)){r.pending=false;r.err=true;
-      r.content=(f.text||"")+(f.text?"\n":"")+"Claude call failed: "+f.error;chatBusyUi(false);renderChat()}
-    else $("#chatstate").textContent=f.error||"";
-    return}}
 function renderBusy(){
   const b=!!(GW&&sess&&sess.busy);
   $("#busy").hidden=!b;
@@ -870,31 +618,18 @@ function renderBusy(){
 function applyManifest(){
   const m=manifestM;if(!m)return;
   $("#b-mode").hidden=false;$("#b-modev").textContent=m.mode+(m.mode==="shared"?" · REPL only":"");
-  const se=m.seats||{},vb=m.verbs||{};   // a declared verb's chip says the model's line
+  const vb=m.verbs||{};   // a declared verb's chip says the model's line
   document.querySelectorAll("#chips [data-cmd]").forEach(c=>{const v=vb[c.dataset.cmd.split(" ")[0]];if(v)c.title=v});
-  $("#b-mode").title=[m.policy||"","seats — repl: yes · chat: "+(se.chat?"agent ("+(m.chat_model||"?")+")":"off")+
-    " · narrate: "+(se.narrate||"off")+" · formalize: "+(se.formalize||"off")].join("\n");
-  const chat=m.seats&&m.seats.chat,ptr=m.chat_pointer;
-  const link=ptr?` <a href="${esc(ptr)}" target="_blank" rel="noopener">the artifact console</a>`:" the artifact console";
-  renderRecords();wsSend({ch:"repl",type:"records"});   // the file-backed Records dock, whatever the seats
-  $("#chatin").hidden=chat!=="agent";
-  if(chat==="agent"){$("#chatsub").textContent="the agent on this host (the operator's login); it acts only through the REPL — its lines show as claude> on the left";
-    $("#chatstate").textContent="";if(sid)wsSend({ch:"chat",type:"history",session:sid});return}
-  if(chat!=="agent"){                // no chat here: no invitation to one
-    $("#chatsub").textContent=chat==="pending"?"agent chat (step 2)":"not on this instance";
-    if(!chatTurns.length)$("#chatlog").innerHTML=""}
-  $("#chatstate").innerHTML=m.mode!=="shared"
-    ?"agent chat unavailable on this host — "+esc(m.chat_unavailable||"not configured")
-    :"AI chat is not served on this shared instance — it would run on the operator's credentials. Claude for you lives on"+link+" (billed to you).";
-  $("#cands").innerHTML=`<div class="empty">approvals live on${link}.</div>`}
+  $("#b-mode").title=(m.policy||"")+"\nno brain here: the pi loop formalizes and rules (the workspace's .metis/)";
+  renderRecords();wsSend({ch:"repl",type:"records"})}   // the file-backed Records dock
 
 /* ---- the working copy + floating editors (CONSOLE-WS §4a, the user's
    simple model): open → the catalog's text is copied into IndexedDB
    (certified: it IS the checkout's); edits are stored there and make it
    UNCERTIFIED until [recompile] builds the session from it (+ extension
    extensions on top) cleanly; [download] takes it home to merge by the one
-   road. Editors are floating, non-modal windows — the REPL and the chat
-   stay live beside them. Claude's source tools edit the same copy. */
+   road. Editors are floating, non-modal windows — the REPL stays live
+   beside them. */
 let work=null;const wins=new Map();let cmLib=null,cmTried=false,workTimer=null;
 const idb={db:null,
   async open(){if(this.db)return this.db;if(!window.indexedDB)return null;
@@ -1038,8 +773,8 @@ function downloadWork(){if(!work){banner("nothing to save — open a catalog fir
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: lib/shell.js, this console's copy) ---- */
-const DOCKS=["claude","catalog","candidates","records"];
-const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v2",store,defaults:{claude:{shown:true,open:true},catalog:{shown:true,open:true},
+const DOCKS=["catalog","candidates","records"];
+const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v3",store,defaults:{catalog:{shown:true,open:true},
   candidates:{shown:!GW,open:false},records:{shown:true,open:true}}});
 const applyDocks=dockUI.apply;
 
@@ -1094,9 +829,9 @@ const GATE_WORDS={program:["APPLY","the working copy into the catalog source (th
   seed:["NEW DOMAIN","a new domain from the seed — read what it writes, then apply"]};
 function renderGate(f,kind){
   const files=f.files||[];
-  const [title,sub]=f.by==="agent"?["THE AGENT'S APPLY","Claude wants to write this — it waits for you: apply, or refuse (it is told)"]:(GATE_WORDS[kind]||GATE_WORDS.program);
+  const [title,sub]=GATE_WORDS[kind]||GATE_WORDS.program;
   $("#savetitle").textContent=title;$("#savesub").textContent=sub+(f.say?" "+f.say:"");
-  $("#saveshown").hidden=!(kind==="program"&&gateCur.via==="save"&&f.by!=="agent");
+  $("#saveshown").hidden=!(kind==="program"&&gateCur.via==="save");
   $("#savebody").innerHTML=f.note?`<div class="note empty">${esc(f.note)}</div>`:files.length?files.map(x=>`<div><b>${esc(x.path)}</b> ${x.new?'<span class="badge local">new file</span>':""}
       ${x.since_diff?`<div class="since"><span class="empty">changed since you refused it</span><pre>${DIFFHTML(x.since_diff)}</pre></div>`:""}
       <pre>${DIFFHTML(x.diff)}</pre></div>`).join("")
@@ -1147,7 +882,7 @@ $("#asksbtn").addEventListener("click",()=>{if(asksList.length)showAsk(asksList[
 setInterval(()=>{if(wsUp)wsSend({ch:"repl",type:"gate",op:"asks"})},10000);    // a loop elsewhere ([console] loop_state) asks too
 function showSave(f){
   if(f.written){closeGate("applied: "+f.written.join(", ")+" — metis-agent sees the change; git is yours (nothing committed)");return}
-  saveTok=f.token;gateCur={via:"save",token:f.token,by:f.by,kind:"program",files:(f.files||[]).length,shown:f.by==="agent"?{}:saveShown};
+  saveTok=f.token;gateCur={via:"save",token:f.token,kind:"program",files:(f.files||[]).length,shown:saveShown};
   renderGate(f,"program")}
 function showGatePlan(f){
   if(f.op==="asks"){showAsks(f);return}
@@ -1223,7 +958,7 @@ function mdRender(text,links){
   return out.join("")}
 function renderRootReadme(){
   if(!rootReadme)return "";
-  return `<details class="rootrd"${work?"":" open"}><summary>${esc(rootReadme.path)} · the catalog's context (the narrate seat reads it)</summary>
+  return `<details class="rootrd"${work?"":" open"}><summary>${esc(rootReadme.path)} · the catalog's context</summary>
     <div class="md">${mdRender(rootReadme.text,rootReadme.links)}</div></details>`}
 function renderDomainList(){
   const nf=GW&&(!manifestM||manifestM.mode!=="shared")?`<form class="newdom" id="newdom"><input class="nm" name="nm" placeholder="new domain" aria-label="new domain name" autocomplete="off" pattern="[a-z][a-z0-9_]{1,31}">
@@ -1300,14 +1035,6 @@ document.addEventListener("click",e=>{
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest("[data-rule]");
   if(t&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click()}});
 $("#open").addEventListener("click",()=>openCatalog());
-$("#chatsend").addEventListener("click",chatSend);
-$("#chatstop").addEventListener("click",()=>{
-  if(GW){if(sid)wsSend({ch:"chat",type:"stop",session:sid});return}
-  if(chatBusy)chatBusy.abort()});
-$("#chatq").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();chatSend()}});
-if(SR){$("#chatmic").hidden=false;$("#chatmic").title="dictate — the browser's speech recognition (in Chrome the audio is sent to Google's speech service)";
-  $("#chatmic").addEventListener("click",micToggle)}
-if(GW)chatInputCM();
 $("#catin").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();openCatalog()}});
 $("#reset").addEventListener("click",()=>queue("reset"));
 $("#editbtn").addEventListener("click",()=>openEditor("copy"));
@@ -1323,10 +1050,6 @@ $("#prompt").addEventListener("keydown",e=>{
 MetisShell.splitter();
 syncLenses();renderBand();renderRight();applyDocks();renderCatalogDock();
 
-chatLoad();renderChat();
-claude.use("sample").then(ns=>{sampleNs=ns;
-  if(GW)return;                      // the gateway's manifest owns the pane
-  if(!ns){$("#chatin").hidden=true;$("#chatstate").textContent="chat unavailable in this view — the debugger works as before"}});
 claude.use("downloads").then(ns=>{downloadsNs=ns});
 (async()=>{
   user=await claude.use("user");

@@ -52,10 +52,10 @@ def _shared(root):
 
 
 # `new <name>`: the skeleton program (the header, #init, one commented rule
-# with its %% line — the narrator and the mapper read the %% line)
+# with its %% line — the mapper reads the %% line)
 SKELETON = """% {name} — {line}
 % Made in the loop console (new). Say in prose what there is, what can
-% happen and what the person can ask; formalize writes the rules.
+% happen and what the person can ask; the pi loop writes the rules.
 catalog {name} 1.
 provenance text "{line}" "{date}".
 layers (dyn).
@@ -76,14 +76,6 @@ stage main {{
 
 MAX_SOURCE = 256 * 1024     # an in-memory catalog's byte cap
 README_MAX = 64 * 1024      # the root README the page lands on
-CONTEXT_MAX = 16 * 1024     # … and the part of it the narrate seat reads
-
-# the narrate seat's context (cwd-root rule 10): DIR/README.md after the
-# doctrine, as Claude Code reads CLAUDE.md — the catalog's own terms
-NARRATE_CONTEXT = ("\n\n## The catalog's README\n\nThe catalog this world is from describes "
-                   "itself in its README ({path}). Narrate in its terms — its names for the "
-                   "worlds, the people and the moves — and never against the program's own "
-                   "comments, which stay the source of what happened.\n\n{text}")
 
 
 def _source_repl(path: Path, source: str, seed: int, plugin=None):
@@ -165,17 +157,6 @@ class ConsoleServer:
             elif rel.removesuffix(".llp") in progs:
                 links[href] = rel.removesuffix(".llp")
         return self.scrub({"path": "README.md", "text": text, "links": links})
-
-    def _context(self, r):
-        """The narrate seat of the session `r` reads the root README after its
-        doctrine (rule 10); without one it keeps the doctrine alone."""
-        f = self.root / "README.md"
-        if not f.is_file():
-            return
-        from metis.loop.prompts import resolve
-        head, _ = resolve("narrate", None)
-        r.sys_prompts["narrate"] = head + NARRATE_CONTEXT.format(
-            path=f.name, text=f.read_text(errors="replace")[:CONTEXT_MAX].strip())
 
     def domains(self):
         """The CATALOG panel's list (the SDK's catalog.index): every catalog
@@ -294,7 +275,6 @@ class ConsoleServer:
             label = rel + (f" + {spec}" if spec else "")
             if reports:
                 label += f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
-            self._context(r)
             return r, label, reports
         src = str(doc["source"])
         extensions = list(doc.get("extensions") or [])
@@ -312,7 +292,6 @@ class ConsoleServer:
         label = name.removesuffix(".llp") + " (in memory" + (
             f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
             if reports else "") + ")"
-        self._context(r)
         return r, label, reports
 
     def _merge_extensions(self, r, extensions) -> list:

@@ -1,7 +1,7 @@
 """Static guards on the published page (console/loop_console.html):
-the artifact skeleton contract, capability discipline, and the chat's
-preamble/tool invariants (CONSOLE.md §3). The behavior itself is
-driven in Chrome through console/dev_serve.py."""
+the artifact skeleton contract and capability discipline; the chat and
+the narrator are retired with the brain (loop-workspace, WORKSPACE.md §7).
+The behavior itself is driven in Chrome through console/dev_serve.py."""
 import re
 from pathlib import Path
 
@@ -45,49 +45,42 @@ def test_the_band_has_the_agents_field():
 
 def test_capabilities_only_through_use_and_no_dev_shim():
     assert not re.search(r"window\.claude\.", PAGE)
-    for cap in ('"db"', '"user"', '"sample"'):
+    for cap in ('"db"', '"user"'):
         assert f"claude.use({cap})" in PAGE
+    assert 'claude.use("sample")' not in PAGE          # no model in the page: the chat is retired
     assert "mockSample" not in PAGE and "/db" not in PAGE
 
 
-def test_chat_preamble_and_tool_invariants():
-    pre = PAGE[PAGE.index("const PREAMBLE="):PAGE.index("let sampleNs")]
-    assert "prefix every line with \":\"" in pre
-    assert ":accept is refused" in pre and "never approve" in pre
-    assert "FROM THE DIAGNOSTICS" in pre
-    assert 'name:"repl"' in PAGE and 'queue(line,"claude",true)' in PAGE
-    assert "cache:false" in PAGE                 # chat never replays
-    assert 'code==="not_granted"' in PAGE and 'code==="rate_limited"' in PAGE
+def test_no_brain_on_the_page():
+    """loop-workspace (WORKSPACE.md §3, §7): no CLAUDE dock, no chat, no dictation into it, no
+    narrate chip, no narrator section; the formalize/narrate seats' words are gone too."""
+    for gone in ('id="dock-claude"', 'data-strip="claude"', "chatq", "chatSend", "PREAMBLE",
+                 'data-cmd="narrate"', "narratorHtml", "SpeechRecognition", '{ch:"chat"'):
+        assert gone not in PAGE, gone
 
 
 def test_gateway_transport_is_flag_gated_and_manifest_driven():
     """CONSOLE-WS §5: the WS client only switches on under the gateway's
-    flag; the artifact build keeps its capability shims; the chat pane
-    and LLM affordances follow the manifest; stop is wired."""
+    flag; the artifact build keeps its capability shims; stop is wired."""
     assert "const GW=window.LOOP_GATEWAY||null" in PAGE
     assert "if(GW){wsConnect();return}" in PAGE            # skips the db
     assert "new WebSocket(" in PAGE and "GW.ws" in PAGE
     assert "function applyManifest()" in PAGE
-    assert '"chat is not served' not in PAGE                # gateway says it
     assert 'type:"stop"' in PAGE and 'id="stopcmd"' in PAGE
 
 
-def test_working_copy_editor_panels_and_dictation():
+def test_working_copy_editor_and_panels():
     """§4a: CodeMirror only from the ONE vendor bundle (two CDN copies of
     @codemirror/state refuse to run) and only under the gateway; the
     copy lives in IndexedDB; the right side is tool panels whose state
-    is a per-viewer convenience; dictation is feature-detected and says
-    where Chrome sends the audio."""
+    is a per-viewer convenience."""
     assert 'import("/vendor/codemirror.js")' in PAGE
     assert not re.search(r"https?://[^\"']*codemirror", PAGE)
     assert "if(!GW){cmLib=null;return cmLib}" in PAGE
     assert 'indexedDB.open("loopconsole"' in PAGE
-    for d in ("claude", "catalog", "candidates", "records"):
+    for d in ("catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'key:"loopconsole.docks.v2"' in PAGE   # v2: the Records dock shows (e2e step 1)
-    assert "#chatq{flex:1;background:var(--bg);color:var(--fg)" in PAGE
-    assert "window.SpeechRecognition||window.webkitSpeechRecognition" in PAGE
-    assert "Google's speech service" in PAGE
+    assert 'key:"loopconsole.docks.v3"' in PAGE   # v3: the CLAUDE dock went (loop-workspace)
     assert 'data-cmd="step ${esc(e.name)}"' in PAGE         # events step
 
 
@@ -144,10 +137,10 @@ LIB = Path(__file__).resolve().parents[1] / "console" / "lib"
 def test_no_voice_navigation_on_the_page():
     """voice-nav-removal s-90621b2c (the user, 2026-10-24: one voice paradigm, the dialog with the
     agent and the game; the web UI stays web): the console has no TALK dock, no navigation agent,
-    no flip key and no widget tags; CLAUDE is its one chat. console/lib is the shell alone — the
+    no flip key and no widget tags (and, since loop-workspace, no chat at all). console/lib is the shell alone — the
     fsttm-web copies went with TALK (copies, not a dependency: none is left to keep equal)."""
     assert sorted(p.name for p in LIB.iterdir()) == ["shell.css", "shell.js"]
     for gone in ("dock-talk", 'data-strip="talk"', "nav.js", "ui-port", "importmap", "fsttm-web/",
                  "navHook", "consolePage", "flip_key", "data-w=", "data-role=", "lib/panel.css"):
         assert gone not in PAGE, gone
-    assert 'id="dock-claude"' in PAGE and '<dialog id="savewin"' in PAGE
+    assert '<dialog id="savewin"' in PAGE

@@ -1,5 +1,14 @@
 # CONSOLE-WS — the Loop Console v2 (one backend, real transport)
 
+> **Superseded in part (loop-workspace s-5b4be5fa, 2026-11-03; docs/WORKSPACE.md §3, §7).**
+> The LLM seats this design gave the backend are retired: the `chat` channel and the
+> Agent Service (§3), the narrate seat (D3) and formalize's seat, `--brain` and
+> loop/brain.py. The REPL's `narrate`, `formalize` and `llm` are refused in every mode;
+> the pi loop formalizes in the same workspace, narration is the agent's. The transport,
+> the Session Manager, the modes, the caps and D4 stand, and the backend gains the
+> `trace`, `surprise`, `bundle` and `loop` channels (WORKSPACE.md §3,
+> loop/workspace_ch.py). Read the seat sections below as history.
+
 **Status: ACCEPTED 2026-10-05 (user review); D1–D5 resolved in §D.** Builds on
 CONSOLE.md (v1, shipped as artifact v8); v1's page rendering, kernel
 ops and ConsoleServer are REUSED, its artifact-db transport is

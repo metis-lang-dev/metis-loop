@@ -20,8 +20,8 @@ decision, narrated from certified material (MAP derivation +
 per-candidate marginals + the rules' own %% docs), never generated
 from thin air. The LLM sits at exactly two text boundaries —
 formalize in, narrate out — and never inside the semantics.
-Both boundaries speak through ONE configurable endpoint (loop/llm.py:
-ollama[:MODEL] | anthropic[:MODEL] | command:ARGV; `:llm` sets it,
+Both boundaries speak through ONE configurable endpoint (metis.loop.llm:
+anthropic[:MODEL] | command:ARGV, no default; `:llm` sets it,
 page intents may never name a command). The narrate boundary is the
 `:narrate` verb (loop/narrate.py): one seeded trace rendered in its
 Foata beats + final state + %% docs, prompt-bound to the concurrency
@@ -72,14 +72,13 @@ NO semantics:
                                 verification after (`fixed` = likelihood
                                 moved positive)
     :text  :llp                 the approved unit; the candidate source
-    :formalize [BACKEND]        draft the candidate. Default: the local
-                                model through the OLLAMA ADAPTER
-                                (loop/ollama.py, stdlib urllib; $OLLAMA_HOST
-                                / $OLLAMA_MODEL; `ollama:MODEL` picks one) —
-                                no plugins in the path. Anything else is an
-                                external command (stdin: prompt, stdout:
-                                LLP); `python -m loop.ollama` is that same
-                                adapter as a command
+    :formalize [BACKEND]        draft the candidate on the session's [llm]
+                                endpoint (anthropic[:MODEL], or command:ARGV:
+                                stdin the prompt, stdout the LLP; the loop
+                                SDK's openai-command is the OpenAI-compatible
+                                route). No default: an unset endpoint is an
+                                error naming both forms. The console refuses
+                                it (loop-workspace): the pi loop formalizes
     :gate                       EXTENSION: full cascade against the world
     :revise                     BASE EDIT: gate the candidate standalone;
                                 the next :accept REPLACES the world
@@ -165,7 +164,7 @@ measure, never an explosion. The layered checks, in order:
   whitelist: drafting and instrument verbs; never :accept, file
   paths, or arbitrary backend commands) and posts {status:
   done|refused, result}. The console holds NO model integration of
-  its own: the only LLM in the loop is the REPL's ollama backend.
+  its own (loop-workspace: its seats are retired; the pi loop formalizes).
 - **Loop -> catalog**: approved candidates become metis-catalog
   commits (the text is the commit body), then recompile + corpus
   replay.
@@ -201,9 +200,8 @@ scene (verified: meadow, IR PARITY + marginal equality at 1e-12).
 ## 8. Deployment shapes (status)
 
 - REPL kernel + CLI: BUILT (this repo) — and since the surprise /
-  refinement verbs (:sink/:record/:mine/:replay) and the built-in
-  Ollama backend landed, the REPL alone IS the loop: no plugin, no
-  console, no external command required.
+  refinement verbs (:sink/:record/:mine/:replay) landed, the REPL alone
+  IS the loop on its [llm] endpoint: no plugin and no console required.
 - Claude Code plugin: BUILT (skills/metis-loop) — OPTIONAL; a
   conversational seat over the same wire, never a dependency.
 - Web console: A REPL WRAPPER (2026-09-29). The page follows the

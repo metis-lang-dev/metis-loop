@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # metis-loop — start the loop console (the gateway over the catalog in the
-# current directory: one kernel REPL per page, the CATALOG panel, the agent
-# seat) in the background and print its URL. As `cd DIR && claude` makes DIR
+# current directory: one kernel REPL per page, the CATALOG panel; no brain,
+# the pi loop formalizes in the same workspace) in the background and print its URL. As `cd DIR && claude` makes DIR
 # the project, `cd DIR && …/metis-loop/run.sh` makes DIR the catalog and the
 # workspace (cwd-root s-ddac2cbf): its domains/<name>/ are the catalog, an
 # empty DIR is an empty catalog (`new` writes the first domain), the gateway
@@ -17,9 +17,6 @@
 #   …/run.sh log         follow the gateway's log
 #
 #   VENV=../.venv  PORT=8770  BIND=127.0.0.1  MODE=personal|shared  TOKEN=…
-#   BRAIN=claude|openrouter[:MODEL]|ollama   the LLM seats' provider (loop/brain.py; default:
-#                              [console] brain, else claude when here, else openrouter with
-#                              OPENROUTER_API_KEY in the environment, else ollama)
 #   METIS_CATALOG=<dir>        the catalog when it is not the current directory
 #   METIS_AGENT_WS=<ws url>    the band's AGENT field: metis-agent's console wire
 #                              (default ws://127.0.0.1:8395/ws in personal mode; empty: off)
@@ -50,6 +47,7 @@ SERVED="$RUN/catalog"
 
 running() { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }
 
+[ -z "${BRAIN:-}" ] || { echo "BRAIN= is gone: the console has no brain; the pi loop formalizes (pi/loop.sh)" >&2; exit 2; }
 PKG=()
 VERB="${1:-start}"
 case "${1:-}" in --*) VERB=start ;; start) shift ;; esac
@@ -104,7 +102,7 @@ mkdir -p "$RUN"
 echo "$CATALOG" >"$SERVED"
 cd "$CATALOG"                     # the workspace: the gateway and its REPLs run in the catalog
 AGENT_WS="${METIS_AGENT_WS-ws://127.0.0.1:8395/ws}"; [ "$MODE" = personal ] || AGENT_WS=""
-METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${BRAIN:+--brain "$BRAIN"} ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} ${PKG[@]+"${PKG[@]}"} >"$LOG" 2>&1 &
+METIS_CATALOG="$CATALOG" nohup "$PY" -m loop.cli --port "$PORT" --bind "$BIND" --mode "$MODE" ${TOKEN:+--token "$TOKEN"} ${AGENT_WS:+--metis-agent "$AGENT_WS"} ${PKG[@]+"${PKG[@]}"} >"$LOG" 2>&1 &
 echo $! >"$PID"
 
 for _ in $(seq 1 60); do
@@ -117,6 +115,6 @@ grep -q "^loop console" "$LOG" || { echo "not serving after 30 s — see $LOG" >
 cat <<MSG
 metis-loop console is up (pid $(cat "$PID")): open $URL
   mode: $MODE · catalog: $CATALOG · log: $LOG
-  $(grep -m1 "^brain:" "$LOG" || true)
+  $(grep -m1 "^no brain here" "$LOG" || true)
   $0 stop · $0 log · $0 status
 MSG
