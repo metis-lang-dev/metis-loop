@@ -1,6 +1,6 @@
-/* The workspace widgets' wire (loop-workspace s-5b4be5fa step 4; docs/WORKSPACE.md §6): one small object a host page
-   makes over its own socket and hands to each widget. The widgets never open a socket: the host owns the transport
-   (the loop console's gateway socket today, the road page's next), the widgets speak the backend's frames
+/* The workspace widgets' wire (loop-workspace s-5b4be5fa step 4; docs/WORKSPACE.md §6, §6.1): one small object the console
+   makes over its own socket and hands to each widget. The widgets never open a socket: the console owns the transport
+   (its gateway socket), the widgets speak the backend's frames
    (loop/workspace_ch.py: the trace, surprise, bundle and loop channels).
 
      const io = MetisIO.make(frame => socket.send(JSON.stringify(frame)));
@@ -8,7 +8,7 @@
      io.ask(ch, type, fields)  -> Promise of the reply frame (its req matched); an error frame rejects
      io.on(ch, type, fn)       a push (no req, or not ours): fn(frame); type null = every type of ch
 
-   Copy this file with the widgets (copies, not dependencies). */
+   The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
   'use strict';
   function make(send, opts) {

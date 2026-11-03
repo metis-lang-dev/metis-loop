@@ -13,7 +13,8 @@ WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
 WIDGET_FILES = ("catalog.js", "catalog.css")
 
 # the workspace widgets (loop-workspace step 4, WORKSPACE.md §6): BUNDLE, TRACE, SURPRISES, RULINGS, LOOP over the
-# backend's channels, and the wire they share; a host page COPIES them (copies, not deps), the console serves them here
+# backend's channels, and the wire they share: the pi loop's ONE frontend (§6.1), served to the metis-loop console on every
+# workspace; never copied into another page (the road page stays the road's own UI)
 WS_WIDGET_DIR = (Path(__file__).resolve().parent / "workspace").resolve()   # the checkout: ../../web/workspace
 WS_WIDGET_URL = "/sdk/workspace/"
 WS_WIDGETS = ("bundle", "trace", "surprises", "rulings", "loop")

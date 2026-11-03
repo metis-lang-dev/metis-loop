@@ -8,7 +8,7 @@
      r.show(id)        the ruling of surprise ID
      r.refresh()       the list of ruled surprises
 
-   Copy with io.js and workspace.css (copies, not dependencies). */
+   The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
   'use strict';
   function el(tag, attrs, ...kids) {

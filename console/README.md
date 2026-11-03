@@ -85,6 +85,10 @@ mounts the loop SDK's five widgets as docks, each over one of the backend's chan
 A session opened here writes its trace (`.metis/traces/<session>/`), so a surprise dropped from it
 replays.
 
+This console with these panels is the pi loop's one frontend (WORKSPACE.md §6.1), on every
+workspace: run it in `metis-catalog`, in `metis-worlds/road` (beside the road page, which stays the
+road's own UI and the world's host), or in any DIR. Nothing of it is copied into another page.
+
 Config — the metis dot file's `[console]` table (flags override):
 
     [console]

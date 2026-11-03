@@ -1,6 +1,6 @@
 /* The workspace widgets' styles (loop-workspace step 4: BUNDLE, TRACE, SURPRISES, RULINGS, LOOP). The host's shell gives
    the colour tokens (--bg --panel --line --fg --dim --green --yellow --red --cyan --purple --mono) and .btn .chip
-   .empty; this adds only what the widgets draw. Copy with the widgets. */
+   .empty; this adds only what the widgets draw. The shared frontend's (WORKSPACE.md §6.1), served with the widgets. */
 .mw{display:flex;flex-direction:column;gap:6px;min-height:0;font-size:12.5px}
 .mw .mono{font-family:var(--mono)}
 .mw .warn{color:var(--yellow)}.mw .bad{color:var(--red)}
