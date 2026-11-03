@@ -90,7 +90,7 @@ Shape: the code says what to do. A few (`metisc --diag-registry` lists the 54 di
 | code | means | do |
 |---|---|---|
 | `doc-missing` | a rule without `%%` | write the sentence; narration reads it |
-| `rule-name-collision` | one short name, several rules: a WARNING that now fires only on a catalog compiled without resolving includes; on a resolved program the duplicate is the `rule-duplicate` error above | rename: traces read short names |
+| ~~`rule-name-collision`~~ | retired 2026-11-03 (spec/08 amendment): every compile path now refuses a short name twice as the `rule-duplicate` error above, so the warning had nothing left to see | — |
 | I2 | an `in` only produced, or an `out` never produced | fix the direction or the rule |
 | I4 | a rule consumes its `out` without producing it | read it with `$` |
 | I5 | a gating program has no rule reading `tick__grant` | gate the acting rules |
