@@ -46,7 +46,7 @@
     const fold = (label, text, cls) => text ? el('details', { class: 'mw-fold' }, el('summary', {}, label), el('pre', { class: cls }, text)) : null;
     return el('div', { class: 'mw-card mw-ruling-card' + (ok ? ' ok' : ' bad') },
       el('div', { class: 'mw-row' },
-        el('span', { class: 'mw-badge ' + (ok ? 'ok' : 'bad') }, r.verdict || '?'),
+        el('span', { class: 'mw-badge ' + (ok ? (r.inert ? 'warn' : 'ok') : 'bad'), title: r.inert ? 'accepted, but no candidate rule was enabled on the trace: it says nothing of the rule\'s effect' : null }, (r.verdict || '?') + (r.inert ? ' (inert)' : '')),
         el('b', {}, s.member || ''), el('span', { class: 'mono empty' }, s.id || '')),
       ok && r.firings && r.firings.rows > 1 ? el('div', { class: 'warn mw-lesson' },
         'Accepted by the gate, mechanically: read when it fires and how often before you apply it.') : null,
@@ -70,7 +70,7 @@
       const ok = r.verdict === 'accepted';
       return el('div', { class: 'mw-ruling' },
         el('div', { class: 'mw-row' },
-          el('span', { class: 'mw-badge ' + (ok ? 'ok' : 'bad') }, r.verdict || '?'),
+          el('span', { class: 'mw-badge ' + (ok ? (r.inert ? 'warn' : 'ok') : 'bad'), title: r.inert ? 'accepted, but no candidate rule was enabled on the trace: it says nothing of the rule\'s effect' : null }, (r.verdict || '?') + (r.inert ? ' (inert)' : '')),
           el('b', {}, s.member), el('span', { class: 'mono' }, s.id), el('span', { class: 'empty' }, r.ts || '')),
         ok && r.firings && r.firings.rows > 1 ? el('div', { class: 'warn mw-lesson' },
           'Accepted by the gate, mechanically. Read when it fires and how often before you apply it: a rule that fires through most of the run is rarely the one asked for.') : null,

@@ -267,7 +267,7 @@ def ruling_of(ws, sid=None):
 
 def ruling_line(s, r):
     e, f = r.get("first_enabled") or {}, r.get("firings") or {}
-    parts = [r.get("verdict") or "?"]
+    parts = [(r.get("verdict") or "?") + (" (inert)" if r.get("inert") else "")]   # accepted with nothing enabled says so
     if e:
         parts.append(f"first enabled k {e.get('k')} {e.get('rule')}")
     if f:

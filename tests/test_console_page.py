@@ -217,3 +217,4 @@ def test_the_chat_widget_carries_the_cards():
     assert "disabled: !!held" not in js                                     # step 3: /commands answer under a TUI
     rjs = (Path(__file__).resolve().parents[1] / "web/workspace/rulings.js").read_text()
     assert "window.MetisRulings = { mount, card };" in rjs
+    assert rjs.count("(r.inert ? ' (inert)' : '')") == 2                     # the card and the dock: accepted (inert)

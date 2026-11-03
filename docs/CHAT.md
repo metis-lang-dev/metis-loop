@@ -75,6 +75,13 @@ and says so. The loop's conduct in the chat is a section of `pi/prompts/loop-sys
   - *what changed*: the journal since the last take, in words.
 - every tool reply past half the budget carries the budget line (as today); past the budget the loop
   refuses with the line, and the chat says "budget spent: /budget N to continue".
+- **As landed (loop-chat step 3):** the prompt's "## The chat" (pi/prompts/loop-system.md) makes every turn end with
+  a line of words and carries a take through `pack_propose` in one turn; the read-only commands are the loop's
+  tools `chat_status`, `chat_surprises`, `chat_replay`, `chat_why`, `chat_diff`, `chat_ruling` (loop/chat.py
+  `READ`, the same answers as the slash, through `python -m loop.chat --root DIR LINE`); a turn that still ends
+  without words shows "pi ended its turn without words (N tool calls)" (the backend marks it); the chat's input
+  answers /commands while another pi loop (the TUI) holds the workspace; an acceptance with nothing enabled reads
+  "accepted (inert)" in the card and in `/ruling`.
 
 ## 3. What the tester sees, in order (the acceptance)
 

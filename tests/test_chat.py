@@ -307,3 +307,13 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     page = (HERE.parent / "console" / "loop_console.html").read_text()
     assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,\n    onMark:' in page
     assert "d.words || ''" in (HERE.parent / "web" / "workspace" / "surprises.js").read_text()   # the draft's words filled in
+
+
+def test_an_inert_acceptance_says_so():
+    """patterns open item 6 (opus): 'accepted' with no candidate rule enabled reads as more than it is: the chat's
+    /ruling line says 'accepted (inert)', as the ruling's title does."""
+    from loop import chat
+    line = chat.ruling_line({"id": "x", "member": "m"}, {"verdict": "accepted", "inert": True})
+    assert line.startswith("x on m: accepted (inert) · ")
+    assert "(inert)" not in chat.ruling_line({"id": "x", "member": "m"}, {"verdict": "accepted", "first_enabled": {"k": 3, "rule": "r"}})
+
