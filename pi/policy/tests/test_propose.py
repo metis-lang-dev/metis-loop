@@ -113,7 +113,7 @@ def test_loop_sh_does_not_read_a_stdin_nobody_closes(tmp_path):
     stub = tmp_path / "stub-pi"
     stub.write_text("#!/bin/sh\ncat\necho read-to-the-end\n")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
-    env = dict(os.environ, METIS_LOOP_PI=str(stub), METIS_LOOP_SDK_PY=sys.executable, MODEL="ollama/stand-in", FORMALIZE_MODEL="stand-in")
+    env = dict(os.environ, METIS_LOOP_PI=str(stub), METIS_LOOP_SDK_PY=sys.executable, MODEL="stub/stand-in")
     p = subprocess.Popen(["bash", str(HERE.parent.parent / "loop.sh")], cwd=tmp_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     timer = threading.Timer(60, p.kill)      # stdin stays open all the while: only the loop's own redirect lets this end
     timer.start()

@@ -7,7 +7,7 @@ the goal and the prose, steers once, answers every apply confirmation, says
 "continue" when the model stops before the loop is through (each one counted,
 the person's turn), and stops the run (abort) at the end or at the budget.
 
-    example/person.py DIR [--model ollama/metis-gemma4-e4b] [--minutes 60]
+    example/person.py DIR --model PROVIDER/ID [--minutes 60]
         [--deny-first]       refuse the first apply (the gate holds: the model must ask)
         [--max-usd X]        abort once the model's cost (pi's usage, the catalog's prices) passes X
 
@@ -63,7 +63,7 @@ FAKE_CALL = re.compile(r"(?:response|call):\w+\{|<\|tool_response>|\{\s*\"name\"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dir", type=Path)
-    ap.add_argument("--model", default="ollama/metis-gemma4-e4b")
+    ap.add_argument("--model", required=True, help="a pi provider/id, e.g. openrouter/deepseek/deepseek-v4-pro (no default)")
     ap.add_argument("--minutes", type=float, default=60)
     ap.add_argument("--nudges", type=int, default=8)
     ap.add_argument("--deny-first", action="store_true")

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # pi.sh — pi as the agentic loop's host: the pinned node and pi, this
-# directory's agent config (models.json: Ollama, and pi's built-in OpenRouter capped at
+# directory's agent config (models.json: pi's built-in OpenRouter capped at
 # 2048 output tokens with data_collection=deny; a key only from the environment,
 # never in a file here; no OAuth), no startup network, no built-in tools, no
 # context files, skills, prompt templates or MCP, only the two metis extensions
 # (docs/LOOP-AGENT.md). The TUI in regular mode: the apply gate's diff can be taller
 # than the terminal, and fullscreen then hides its Yes/No; regular leaves it in the
 # terminal's scrollback (a later --tui-mode fullscreen overrides).
-#   pi.sh [pi args...]      e.g. --mode rpc, --model ollama/metis-gemma4-e4b
+#   pi.sh [pi args...]      e.g. --mode rpc, --model openrouter/deepseek/deepseek-v4-pro
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$HERE/node/bin:$PATH" PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HERE/agent}" \
        PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0

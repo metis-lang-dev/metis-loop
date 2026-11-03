@@ -1,7 +1,7 @@
 # The agentic loop — an agent that refines a formalization, hosted in pi
 
 agentic-loop s-3ddb3e87 step 1 (nina, 2026-10-16; architect brief v2). The code
-is in this repository (metis-agentic-loop): two thin pi extensions, the Ollama Modelfile, the launcher
+is in this repository (metis-agentic-loop): two thin pi extensions, the launcher
 and the worked example.
 
 ## The cut
@@ -9,8 +9,8 @@ and the worked example.
 - **metis-loop is the person's loop**: its consoles and its UI. The agentic loop
   shares **nothing** with its human loop. Code that has to stay the same in every
   consumer is metis-loop's SDK (`metis_loop_sdk`, loop-sdk s-9aabd5a0): this loop
-  uses its model adapters (the kernel's formalize on Ollama or, through the
-  OpenAI-compatible face, on OpenRouter, thinking off either way; the GPU probe).
+  uses its model adapters (the kernel's formalize through the OpenAI-compatible
+  face on OpenRouter, or the claude -p face, thinking off either way).
 - Both loops stand on the same two lower layers:
   - the **metis REPL** (metispy), over its JSON-lines wire (`metis --json`);
   - **metis-agent's lower half**: the domain agent (`python -m
@@ -28,8 +28,9 @@ and the worked example.
 - **Host: pi** (`@earendil-works/pi-coding-agent`, pinned in this repository).
   - Built-in tools, context files, skills, prompt templates and MCP are all off.
   - The system prompt is the loop's own (`prompts/loop-system.md`).
-- **Model, version 1:** Ollama with our Gemma 4 E4B GGUF (`ollama/`).
-  - No API keys.
+- **Model:** the one `MODEL` names; there is no default (version 1 was Ollama with a
+  Gemma 4 E4B GGUF; it went with loop-workspace, WORKSPACE.md §5.3).
+  - A key only from the environment (`OPENROUTER_API_KEY`), never in a file here.
   - pi's Claude OAuth is never used.
   - The `claude -p` route for pi is postponed with pi as the principal loop
     (loop-sdk brief v2).
@@ -139,9 +140,8 @@ fired ×200, beat 0: …`.
 
 ```
 ./setup.sh                                    # node v22.23.3 + pi 1.3.0 into this checkout (once)
-ollama create metis-gemma4-e4b -f ollama/Modelfile     # the GPU model (…-cpu: Modelfile.cpu)
-example/lamp/world.sh /tmp/loop && cd /tmp/loop && …/loop.sh   # pi's TUI over a catalog with the lamp's world
-./example/person.py /tmp/run1                 # the worked example, the person scripted over RPC
+example/lamp/world.sh /tmp/loop && cd /tmp/loop && MODEL=openrouter/<id> …/loop.sh   # pi's TUI over the lamp's world
+./example/person.py /tmp/run1 --model openrouter/<id> --max-usd 0.50   # the worked example, the person scripted over RPC
 ```
 
 ## The worked example

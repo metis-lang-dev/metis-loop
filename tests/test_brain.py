@@ -193,8 +193,8 @@ def test_the_gateway_runs_formalize_on_its_own_endpoint(here, monkeypatch, tmp_p
                     return {"posting": {"status": "done", "result": "spied", "json": {"ok": True}}}
                 return serve(sid_, cmd)
             r.gw.srv.serve_one = spy
-            assert send(ws, sid, ":llm ollama:brain-choice-test", "l1")[-1]["status"] == "done"
+            assert send(ws, sid, ":llm anthropic:brain-choice-test", "l1")[-1]["status"] == "done"
             send(ws, sid, ":formalize", "f2")
-            assert seen == ["ollama:brain-choice-test"]
+            assert seen == ["anthropic:brain-choice-test"]
     finally:
         r.close()

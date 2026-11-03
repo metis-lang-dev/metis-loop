@@ -5,7 +5,7 @@ The code that has to stay the same in every consumer, and nothing else:
            (the catalog itself is metispy's metis.catalog, the gate
            metis.gate: the SDK's shims went at 0.1.14)
   models   the model adapters: claude -p (command, seat, chat endpoint)
-           and ollama (think-off command, the GPU probe)
+           and an OpenAI-compatible server's command face (openai)
 
 Each has a JSON CLI for non-Python consumers (`python -m metis_loop_sdk.<m>`).
 

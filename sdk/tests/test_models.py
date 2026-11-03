@@ -1,5 +1,6 @@
-"""metis_loop_sdk.models offline: no claude -p and no Ollama are run — the
-claude seat's process is stubbed, Ollama is a local stand-in server."""
+"""metis_loop_sdk.models offline: no claude -p and no hosted model are run —
+the claude seat's process is stubbed, an OpenAI-compatible server is a local
+capture server."""
 import asyncio
 import json
 import threading
@@ -8,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from metis_loop_sdk.models import claude, ollama, openai
+from metis_loop_sdk.models import claude, openai
 from metis_loop_sdk.models.__main__ import main as cli
 
 
@@ -113,107 +114,19 @@ def test_seat_ask_opens_then_resumes():
     assert s.session != sess                      # a first turn is a new session
 
 
-# -- ollama ------------------------------------------------------------------
+# -- the Ollama faces are gone (loop-workspace, WORKSPACE.md §5.3) ----------
+# test_ollama_generate_thinks_off, test_ollama_probe, test_ollama_cli and
+# test_ollama_probe_ps_failing_is_unknown went with the adapter; reasoning off
+# on an OpenAI-compatible server is test_openai_body_dialects', the CLI's
+# test_openai_cli's. What stays to test is that nobody can reach the old faces.
 
-class Ollama:
-    """A stand-in Ollama: /api/version, /api/ps, /api/generate."""
-
-    def __init__(self, ps=(), loads=None):
-        self.ps, self.loads, self.posts = list(ps), loads, []
-        me = self
-
-        class H(BaseHTTPRequestHandler):
-            def log_message(self, *a):
-                pass
-
-            def _send(self, obj):
-                b = json.dumps(obj).encode()
-                self.send_response(200)
-                self.send_header("content-length", str(len(b)))
-                self.end_headers()
-                self.wfile.write(b)
-
-            def do_GET(self):
-                self._send({"version": "0.12.3"} if self.path == "/api/version" else {"models": me.ps})
-
-            def do_POST(self):
-                body = json.loads(self.rfile.read(int(self.headers["content-length"])))
-                me.posts.append(body)
-                if body["prompt"] == "" and me.loads:
-                    me.ps.append(me.loads)
-                self._send({"response": "pred lit : lamp."})
-        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
-        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
-        self.url = "http://127.0.0.1:%d" % self.srv.server_port
-
-    def close(self):
-        self.srv.shutdown()
-        self.srv.server_close()
-
-
-def test_ollama_generate_thinks_off():
-    o = Ollama()
-    try:
-        assert ollama.generate("draft it", "metis-gemma4-e4b", o.url) == "pred lit : lamp."
-        assert o.posts[-1] == {"model": "metis-gemma4-e4b", "prompt": "draft it", "stream": False, "think": False,
-                               "options": {"temperature": 0, "num_predict": 2048}}
-    finally:
-        o.close()
-
-
-def test_ollama_probe():
-    gpu = {"name": "metis-gemma4-e4b:latest", "size": 6 << 30, "size_vram": 6 << 30}
-    cpu = dict(gpu, size_vram=0)
-    o = Ollama(ps=[gpu])
-    try:
-        r = ollama.probe(o.url, "metis-gemma4-e4b")
-        assert r["up"] and r["version"] == "0.12.3" and r["on_gpu"] is True and "100% of 6144 MiB" in r["why"]
-        o.ps = [cpu]
-        r = ollama.probe(o.url, "metis-gemma4-e4b", gpu_present=lambda: "GPU 0: NVIDIA RTX")
-        assert r["on_gpu"] is False and "restart it" in r["why"] and "NVIDIA RTX" in r["why"]
-        r = ollama.probe(o.url, "metis-gemma4-e4b", gpu_present=lambda: None)
-        assert r["on_gpu"] is False and "no NVIDIA GPU" in r["why"]
-        o.ps = [dict(gpu, size_vram=2 << 30)]
-        r = ollama.probe(o.url, "metis-gemma4-e4b")
-        assert r["on_gpu"] is False and "split: only 33% of 6144 MiB" in r["why"]
-        o.ps = []
-        r = ollama.probe(o.url, "metis-gemma4-e4b")
-        assert r["on_gpu"] is None and "not loaded" in r["why"]
-        o.loads = gpu
-        r = ollama.probe(o.url, "metis-gemma4-e4b", load=True)
-        assert r["on_gpu"] is True and o.posts[-1]["keep_alive"] == "5m"
-    finally:
-        o.close()
-    r = ollama.probe(o.url, "metis-gemma4-e4b")
-    assert not r["up"] and "does not answer" in r["why"]
-
-
-def test_ollama_cli(capsys, monkeypatch):
-    import io
-    o = Ollama(ps=[{"name": "m:latest", "size": 100, "size_vram": 0}])
-    try:
-        monkeypatch.setattr("sys.stdin", io.StringIO("draft"))
-        assert cli(["ollama-command", "--model", "m", "--url", o.url]) == 0
-        assert capsys.readouterr().out == "pred lit : lamp."
-        assert o.posts[-1]["think"] is False
-        assert cli(["ollama-probe", "--url", o.url, "--model", "m"]) == 3
-        assert json.loads(capsys.readouterr().out)["on_gpu"] is False
-        assert cli(["ollama-probe", "--url", o.url]) == 2
-    finally:
-        o.close()
-    capsys.readouterr()
-    assert cli(["ollama-probe", "--url", o.url, "--model", "m"]) == 2      # down: a JSON answer, exit 2
-    assert "does not answer" in json.loads(capsys.readouterr().out)["why"]
-
-
-def test_ollama_probe_ps_failing_is_unknown(monkeypatch):
-    def get(url, path, timeout):
-        if path == "/api/ps":
-            raise OSError("reset by peer")
-        return {"version": "0.24.0"}
-    monkeypatch.setattr(ollama, "_get", get)
-    r = ollama.probe("http://x", "m")
-    assert r["up"] and r["on_gpu"] is None and "/api/ps does not answer" in r["why"]
+def test_ollama_faces_are_gone():
+    import importlib
+    with pytest.raises(ImportError):
+        importlib.import_module("metis_loop_sdk.models.ollama")
+    for face in ("ollama-command", "ollama-probe"):
+        with pytest.raises(SystemExit):
+            cli([face, "--model", "m"])
 
 
 # -- openai: the OpenAI-compatible command face (a local capture server, a fake key) --
@@ -287,7 +200,7 @@ def test_openai_complete_sends_the_key_only_where_named(tmp_path):
     c = Capture(answer("<think>hm</think>\npred lit : lamp.", cost=0.00012))
     log = tmp_path / "records" / "calls.jsonl"          # its directory made on the first call
     try:
-        env = {"OPENAI_API_KEY": FAKE_KEY}          # in the environment, but not named: Ollama gets no key
+        env = {"OPENAI_API_KEY": FAKE_KEY}          # in the environment, but not named: a local server gets no key
         assert openai.complete("draft", "m", c.url, env=env) == "pred lit : lamp."
         assert c.got[-1]["path"] == "/v1/chat/completions"
         assert "authorization" not in c.got[-1]["headers"]
