@@ -7,7 +7,7 @@ packaging (pi-release s-8e13f6a8 step 2, `@metis-lang-dev/metis-agentic-loop` 0.
 trusted publishing) is PARKED on the archived repo's `pi-package` branch; when it resumes it lands
 here under a `pi-v*` tag.
 
-pi hosts the agentic loop. The two metis extensions give it its tools. Everything
+pi hosts the agentic loop. The three metis extensions give it its tools. Everything
 pi needs is pinned and installed here, not globally.
 
 **A loop starts in a directory, and that directory is the catalog and the workspace**,
@@ -66,10 +66,11 @@ metis-agent; `METIS_LOOP_SDK_PY`, `METIS_LOOP_METIS` and `METIS_LOOP_AGENT_PY` f
 | file | what |
 |---|---|
 | `setup.sh` | install / `--check` / `--link` (`extensions/sdk`: the loop SDK's TypeScript face, as installed) |
-| `pi.sh` | pi with this directory's config (`agent/models.json`: OpenRouter's caps and routing, no keys, no OAuth), offline, no built-in tools, context files, skills, prompt templates or MCP, only the two extensions; the TUI in regular mode (the gate's diff stays in the terminal's scrollback, its Yes/No below it) |
+| `pi.sh` | pi with this directory's config (`agent/models.json`: OpenRouter's caps and routing, no keys, no OAuth), offline, no built-in tools, context files, skills, prompt templates or MCP, only the three extensions; the TUI in regular mode (the gate's diff stays in the terminal's scrollback, its Yes/No below it) |
 | `take.sh` | `cd DIR && take.sh --into DIR2 [NAME]`: `catalog_take` from the shell, after the session: a domain the loop made in DIR (default lamp) into DIR2, three calls of the loop SDK's CLI (`take --readme-from-run DIR/.metis`, its dry run, `build`); never a commit |
 | `loop.sh` | the loop over the directory it starts in (`METIS_CATALOG=DIR` from elsewhere); `--seed PATH.llp|PKG_DIR [--name NAME] [--episodes N]`: a seeded start ("A seeded start" below); `--into DIR2`: catalog_take's target; `MODEL=<provider>/<id>` (required); pi's args (e.g. `--mode rpc`) |
 | `extensions/metis-repl.ts` | the REPL (`metis --json`): a tool per wire verb, `catalog_apply` (what=program, served, extension, intents, readme), `catalog_edit` (one exact edit of a domain's file, comments and all), `catalog_take` (a finished domain into `METIS_LOOP_TAKE_INTO`) and their gate, which shows a refused file's next proposal as its diff from the refused one; `lib/roots.ts`: which catalog each write goes to |
+| `extensions/metis-workspace.ts` | the workspace (`../docs/WORKSPACE.md` §5.1) over the SDK's TypeScript face: `workspace_context`, `surprise_list` / `surprise_next`, the declared trace verbs and `lint` (metispy's `metis/trace_tools.json`), `pack_propose` (the surprise's ruling through `propose.sh`), `bundle_build`, `journal`; one pi loop per workspace (`loop.sh` refuses while a live one holds `.metis/loop/pi.json`) |
 | `extensions/metis-domain.ts` | the domain agent: `domain_open`, `domain_clock`, the REPL API's tools, the intents; for a world without intents `domain_ports`, `domain_world` and `domain_episodes` (seeded episodes measured against the world: outcomes, the program's likelihood of what it did, surprises, mismatched atoms) |
 | `prompts/loop-system.md` | the loop's system prompt (replaces pi's coding-assistant prompt); `seed-task.md`, a seeded start's first message |
 | `example/` | the worked example: the lamp's world (`lamp/lamp_host.py`; `lamp/world.sh DIR` lays it out in a catalog), the person's prose, `person.py` (the person over RPC); `seeded.ts`, a seeded start scripted end to end (no model); `seedperson.py`, a seeded run over RPC with a human at every gate, through files (`DIR/.metis/ask/<n>.md` → `<n>.ans`: y, or n and a steer), with a cost cap |

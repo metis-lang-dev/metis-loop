@@ -209,4 +209,4 @@ jobs:
           export TEST_REQUIRE_AGENT=1 TEST_REQUIRE_GYM=1
           # the fixtures' catalog (love_triangle, nav, the dog): the checkout, named (the installed wheel has no ceptre/)
           export TEST_CATALOG="$GITHUB_WORKSPACE/metis-catalog"
-          ./node/bin/node --experimental-strip-types --test test/extensions.test.ts
+          ./node/bin/node --experimental-strip-types --test test/extensions.test.ts test/workspace.test.ts
