@@ -62,7 +62,17 @@ export type SurpriseIn = {
 	who?: Who;
 	[more: string]: unknown;
 };
-export type Surprise = SurpriseIn & { id: string; ts: string; who: Who; status: Status; taken?: any; ruling?: any };
+/** status: ruled (its ruling exists), taken (a live pid's .taken: `taken`), else open; an open one over a dead
+ *  pid's .taken carries it as `stale_take`, and the next take_surprise re-takes it (journal `retake`). */
+export type Surprise = SurpriseIn & {
+	id: string;
+	ts: string;
+	who: Who;
+	status: Status;
+	taken?: { pid: number; ts: string };
+	stale_take?: { pid: number; ts: string };
+	ruling?: any;
+};
 export type Lock = { pid: number; started: string; alive?: boolean; [field: string]: unknown };
 export type Row = { ts: string; who: Who; kind: string; [ptr: string]: unknown };
 export type Cost = { total: number; calls: number; by_model: Record<string, number>; by_who: Record<string, number> };
@@ -144,6 +154,7 @@ export function trace(run: string, r?: string): { run: string; path: string; k0:
 	return cli(["trace", run], undefined, r);
 }
 
+/** The surprises, oldest first: py's order, by (ts with microseconds, id), so one second keeps its drop order. */
 export function surprises(status?: Status, r?: string): Surprise[] {
 	return cli(["surprises", ...(status ? ["--status", status] : [])], undefined, r);
 }
@@ -157,7 +168,8 @@ export function drop_surprise(rec: SurpriseIn, who: Who = "backend", r?: string)
 	return cli(["drop", "-", "--who", rec.who ?? who], JSON.stringify(rec), r).id;
 }
 
-/** Take a surprise: PID (default this process) in surprises/<id>.taken; refused while a live pid holds it. */
+/** Take a surprise: PID (default this process) in surprises/<id>.taken; refused while a live pid holds it, a dead
+ *  pid's take re-taken (journal `retake`, naming the dead pid). */
 export function take_surprise(id: string, pid: number = process.pid, who: Who = "pi", r?: string): string {
 	return cli(["take", id, "--pid", String(pid), "--who", who], undefined, r).id;
 }
