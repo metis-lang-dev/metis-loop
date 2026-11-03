@@ -437,7 +437,10 @@ class ConsoleServer:
         import inspect
         if "dry_run" in inspect.signature(catalog.edit).parameters:
             pl = catalog.edit(domain, path, old, new, r=self.root, dry_run=True)
-            return {"path": path, "diff": pl.get("diff", ""), "findings": list(pl.get("findings") or [])}
+            out = {"path": path, "diff": pl.get("diff", ""), "findings": list(pl.get("findings") or [])}
+            if "ok" in pl:                  # metispy's: ok = no finding refuses (an added diagnostic, any level)
+                out["ok"] = bool(pl["ok"])
+            return out
         dom = catalog.get(domain, self.root)
         d = Path(dom.dir).resolve()
         p = (d / path).resolve()
@@ -472,7 +475,7 @@ class ConsoleServer:
         except ValueError as e:
             raise ValueError(self.scrub(str(e))) from None
         out = {"path": rel, "domain": domain, "diff": pl["diff"], "findings": pl["findings"],
-               "ok": not any(f.get("level") == "error" for f in pl["findings"])}
+               "ok": pl.get("ok", not any(f.get("level") == "error" for f in pl["findings"]))}
         if out["ok"]:
             try:
                 g = self.gate.propose("edit", domain, self.root, path=path, old=old, new=new)

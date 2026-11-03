@@ -32,7 +32,7 @@ def test_an_edit_is_a_plan_refused_then_written(tmp_path):
     assert pl["path"] == PROG and pl["domain"] == "plant" and pl["ok"] and pl["token"]
     assert "-  %% I wake up." in pl["diff"] and "+  %% I wake up slowly." in pl["diff"]
     assert all(f["level"] != "error" for f in pl["findings"])
-    assert all(set(f) == {"level", "code", "line", "msg"} for f in pl["findings"])
+    assert all({"level", "code", "line", "msg"} <= set(f) for f in pl["findings"])     # metispy's carry more
     assert not any(f["code"] == "lint-not-run" for f in pl["findings"]), pl["findings"]     # the lint ran
     assert srv.gate_refuse(pl["token"]) == {"refused": [PROG]}
     assert "slowly" not in prog.read_text()
