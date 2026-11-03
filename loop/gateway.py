@@ -21,6 +21,7 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"edit", session, path, old, new, req}  -> {type:"edit", op:"plan", path, diff,
                                     findings:[{level,code,line,msg}], ok, token?} one exact edit of a checkout file
                                     (the EDITOR's save, workspace-files s-9ea4cfa4: the workspace owns the file)
+                 {ch:"repl", type:"files", session, req}  -> the files frame again (the EDITOR's reload)
                  {ch:"repl", type:"edit", op:"confirm"|"refuse", session, token, req}  -> {type:"edit",
                                     op:"written"|"refused"}; written: the session re-opened (epoch + 1), its files again
                  {ch:"repl", type:"close",  session}
@@ -712,6 +713,10 @@ class Gateway:
                     await self.intent(ws, msg)
                 elif typ == "stop":
                     await self.stop(msg)
+                elif typ == "files":                     # the EDITOR's reload: the session's files as on disk now
+                    s = self.sessions.get(msg.get("session", ""))
+                    if s and ws in s.subs:
+                        await self._send(ws, dict(await self._files_frame(s), req=msg.get("req")))
                 elif typ == "close":
                     s = self.sessions.get(msg.get("session", ""))
                     if s and (ws in s.subs):

@@ -455,7 +455,8 @@ class ConsoleServer:
                         from metis.lang import compile_catalog, parse, resolve_includes
                         from metis.lint import lint
                         doc = compile_catalog(resolve_includes(parse(text, file=str(p)), p.parent))
-                        for x in lint(doc, text, dom.manifest, cand):
+                        man = d / "domain.yaml"           # lint reads the manifest from its file
+                        for x in lint(doc, text, str(man) if man.is_file() else None, cand):
                             found.append({"level": "lint", "code": x.code, "line": x.loc.line or None, "msg": x.text})
                     except Exception as e:      # noqa: BLE001 — lint never refuses: say it did not run
                         found.append({"level": "lint", "code": "lint-not-run", "line": None, "msg": str(e)[:300]})

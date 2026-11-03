@@ -33,6 +33,7 @@ def test_an_edit_is_a_plan_refused_then_written(tmp_path):
     assert "-  %% I wake up." in pl["diff"] and "+  %% I wake up slowly." in pl["diff"]
     assert all(f["level"] != "error" for f in pl["findings"])
     assert all(set(f) == {"level", "code", "line", "msg"} for f in pl["findings"])
+    assert not any(f["code"] == "lint-not-run" for f in pl["findings"]), pl["findings"]     # the lint ran
     assert srv.gate_refuse(pl["token"]) == {"refused": [PROG]}
     assert "slowly" not in prog.read_text()
     again = srv.edit_plan(PROG, "%% I wake up.", "%% I wake up very slowly.")
@@ -155,6 +156,10 @@ def test_the_gateways_frames(tmp_path):
             assert done["op"] == "written" and done["written"] == [PROG]
             assert [f for f in got if f.get("type") == "session"][-1].get("edited")      # re-opened, epoch + 1
             assert got[-1]["files"][0]["text"] == new == (srv.root / PROG).read_text()
+            (srv.root / PROG).write_text(new + "% someone else\n")              # changed on disk: reload reads it
+            ws.send(json.dumps({"ch": "repl", "type": "files", "session": sid, "req": 6}))
+            again = frames(ws, lambda f: f.get("type") == "files")[-1]
+            assert again["req"] == 6 and again["files"][0]["text"].endswith("% someone else\n")
             ws.send(json.dumps({"ch": "repl", "type": "gate", "op": "propose", "kind": "readme", "domain": "plant",
                                 "args": {"text": "A plant wilts and recovers."}, "req": 7}))
             g = frames(ws, lambda f: f.get("type") == "gate")[-1]

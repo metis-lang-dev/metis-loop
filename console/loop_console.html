@@ -716,7 +716,7 @@ function onFiles(f){
   edFiles=f.files&&f.files.length?{program:f.program,files:f.files}:null;
   if(f.error)banner("the session's files: "+f.error,5000);
   for(const [p,w] of wins){const d=fileOf(p);if(!d)continue;
-    if(w.get()===w.base||w.get()===d.text){w.base=d.text;w.disk=undefined;if(w.get()!==d.text)w.set(d.text)}   // not edited here, or the edit just written
+    if(w.reload||w.get()===w.base||w.get()===d.text){w.reload=false;w.base=d.text;w.disk=undefined;if(w.get()!==d.text)w.set(d.text)}   // not edited here, or the edit just written
     else w.disk=d.text;                                   // edited here and changed on disk: reload before a save
     paintWin(p)}
   renderCatalogDock()}
@@ -784,7 +784,7 @@ async function openEditor(path,opt){
       if(a==="close"){if(view)view.destroy();el.remove();wins.delete(path)}
       else if(a==="min")el.classList.toggle("min");
       else if(a==="save")saveFile(path);
-      else if(a==="reload"){const f=fileOf(path);if(f){w.base=f.text;w.disk=undefined;w.set(f.text);paintWin(path)}}})}
+      else if(a==="reload"){w.reload=true;wsSend({ch:"repl",type:"files",session:sid})}})}   // the disk's text now
   w.el.style.zIndex=++zTop;w.el.classList.remove("min");paintWin(path);
   if(opt.rule)gotoRule(w,opt.rule)}
 function gotoRule(w,rule){
