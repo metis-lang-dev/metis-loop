@@ -148,6 +148,10 @@ export MODEL=openrouter/deepseek/deepseek-v4-pro      # a paid model: OPENROUTER
                                                   # the model drives, the scripted person steers/approves
 MODEL=script:DRAFT.llp ./node/bin/node --experimental-strip-types example/scripted.ts /tmp/lamp-scripted
                                                   # the machinery scripted, every formalize draft DRAFT.llp: 0 USD
+./node/bin/node --experimental-strip-types example/workspace-scripted.ts DIR SPEC.json
+                                                  # the workspace's flow scripted (docs/WORKSPACE.md §4): a dropped
+                                                  # surprise taken, judged by the real propose.sh, applied at the
+                                                  # person's confirm, the bundle rebuilt; 0 USD (≈ 2.5 min on the road)
 example/lamp/world.sh /tmp/lamp-tui && cd /tmp/lamp-tui && \
   METIS_LOOP_LLP=$PWD/domains/plant/plant.llp …/loop.sh    # pi's TUI: you are the person
 ```
