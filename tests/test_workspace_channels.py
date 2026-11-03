@@ -209,3 +209,33 @@ def test_a_shared_instance_refuses_the_workspace(tmp_path):
         assert not (tmp_path / ".metis").exists()
     finally:
         r.close()
+
+
+def test_the_loop_channel_through_loop_sh_and_pi_rpc(gw, tmp_path, monkeypatch):
+    """The real chain, no model: the gateway's start runs pi/loop.sh --mode rpc under loop/pi_rpc.PiRpc, with
+    tests/stub_pi.py as pi; the person's say reaches pi, pi's confirm is the gate frame, the confirm goes back and
+    the tool's result follows; the child's words are journalled (who: pi)."""
+    import sys
+    from pathlib import Path
+    here = Path(__file__).resolve().parent
+    for k, v in (("METIS_LOOP_PI", str(here / "stub_pi.py")), ("METIS_LOOP_SDK_PY", os.environ.get("TEST_SDK_PY", sys.executable)),
+                 ("METIS_CONFIG", ""), ("METIS_LOOP_TAKE_INTO", ""), ("METIS_LOOP_LLP", "")):
+        monkeypatch.setenv(k, v)
+    gw.gw.wsc.pi_factory = None                                  # the real client
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        st = ask(ws, "loop", "start", mode="rpc", model="stub/script")
+        assert st["type"] == "start" and st["child"]["state"] == "running", st
+        ask(ws, "loop", "say", text="please apply the pack")
+        gate = frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "gate")[-1]
+        assert gate["token"] and gate["plan"].get("title")
+        ask(ws, "loop", "confirm", token=gate["token"])
+        got = frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "pi" and f["event"]["kind"] == "turn_end")
+        res = [f["event"] for f in got if f.get("type") == "pi" and f["event"]["kind"] == "tool_result"]
+        assert res and res[-1]["ok"], res
+        ask(ws, "loop", "stop")
+        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+    rows = W.workspace(tmp_path).events()
+    kinds = [r["kind"] for r in rows if r["who"] == "pi"]
+    assert {"rpc_text", "rpc_gate", "rpc_tool_result", "rpc_exit"} <= set(kinds), kinds
+    assert [r["kind"] for r in rows if r["who"] == "backend"][:2] == ["pi_start", "say"]
