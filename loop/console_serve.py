@@ -418,10 +418,26 @@ class ConsoleServer:
         root = self.root.resolve()
         prog = Path(sh.path).resolve()
         out = [{"path": prog.relative_to(root).as_posix(), "text": prog.read_text(), "role": "program"}]
-        for e in self.checkout_extensions(prog):
-            e = Path(e).resolve()
+        exts = [Path(e).resolve() for e in self.checkout_extensions(prog)]
+        for e in exts:
             if e.is_relative_to(root):
                 out.append({"path": e.relative_to(root).as_posix(), "text": e.read_text(), "role": "extension"})
+        # a bundle member's rule files (the alf drive's L5): what its program includes inside the composition's directory,
+        # a generated (DERIVED) file shown as its source, the one copy an edit changes (metispy's includes(within=))
+        bundle = catalog.bundle_dir(prog.parent, self.root) if hasattr(catalog, "bundle_dir") else None
+        if bundle is not None:
+            try:
+                inc = catalog.includes(prog.parent, [prog, *exts], self.root, within=bundle)
+            except ValueError:
+                inc = {}
+            for rel in sorted(inc):
+                f = (prog.parent / rel).resolve()
+                if prog.parent in f.parents or not f.is_relative_to(root) or not f.is_file():
+                    continue
+                text = f.read_text()
+                if text.startswith("% DERIVED from"):
+                    continue                        # generated (make): its source is listed instead
+                out.append({"path": f.relative_to(root).as_posix(), "text": text, "role": "bundle"})
         return {"program": out[0]["path"], "files": out}
 
     def _domain_file(self, rel: str):
@@ -443,11 +459,17 @@ class ConsoleServer:
             out["since_diff"] = since
         return out
 
-    def edit_plan(self, rel: str, old: str, new: str) -> dict:
+    def edit_plan(self, rel: str, old: str, new: str, sid: str = None) -> dict:
         """The EDITOR's save (workspace-files s-9ea4cfa4): one exact edit of a checkout file `rel`, old → new,
         planned: {path, diff, findings, ok, token?}. ok = no error-level finding; only then the console's gate
         holds a plan (its token) that confirm writes (gate_confirm). Lint rows show, never refuse."""
-        domain, path, _ = self._domain_file(rel)
+        p = self._under(rel)
+        sh = self.shells.get(sid) if sid else None
+        if sh is not None and Path(sh.path).resolve().parent not in p.parents:
+            d = Path(sh.path).resolve().parent         # a bundle file of the session's member: from its domain (../x.llp)
+            domain, path = d.name, Path(os.path.relpath(p, d)).as_posix()
+        else:
+            domain, path, _ = self._domain_file(rel)
         try:
             pl = self._plan_edit(domain, path, old, new)
         except ValueError as e:

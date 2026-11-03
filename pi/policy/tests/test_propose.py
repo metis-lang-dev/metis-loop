@@ -126,3 +126,25 @@ def test_loop_sh_does_not_read_a_stdin_nobody_closes(tmp_path):
     assert p.returncode != -9, "loop.sh sat on the open stdin"
     if "read-to-the-end" not in out:
         pytest.skip("loop.sh stopped before pi here: %s" % out[-200:])
+
+
+def test_a_bad_config_is_refused_in_words_not_a_traceback(tmp_path):
+    """The alf drive's L3: a config that is not a service config (a guessed one) crashed load_config with a traceback in
+    the tool's reply, then a ruling refused with "the gate: 'v3'". Now: one line, no ruling run."""
+    import subprocess
+    pytest.importorskip("metis_agent")
+    here = Path(__file__).resolve().parents[1] / "propose.py"
+    pack = tmp_path / "p.llp"
+    pack.write_text("% a pack\n")
+    for body, want in (("{not: yaml: [", "does not read as YAML"), ("trace: {}\n", "no v3 section"), (None, "no such file")):
+        cfg = tmp_path / "c.yaml"
+        if body is None:
+            cfg = tmp_path / "missing.yaml"
+        else:
+            cfg.write_text(body)
+        p = subprocess.run([sys.executable, str(here), "--pack", str(pack), "--member", "m", "--trace", str(tmp_path),
+                            "--root", str(tmp_path), "--config", str(cfg), "--run", str(tmp_path / "run")],
+                           capture_output=True, text=True, timeout=120)
+        assert p.returncode != 0 and want in p.stderr, (body, p.stderr[-400:])
+        assert "Traceback" not in p.stderr, p.stderr[-400:]
+

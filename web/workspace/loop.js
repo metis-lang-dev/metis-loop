@@ -49,7 +49,7 @@
   function mount(box, io, opts) {
     const o = opts || {};
     const s = { state: null, bundle: undefined, chat: [], journal: [], budget: null, over: null, spent: 0, note: '',
-      tab: 'chat', options: false, model: '', budgetIn: '', ruled: new Set(), commands: [] };
+      tab: 'chat', options: false, model: '', budgetIn: '', thinking: false, ruled: new Set(), commands: [] };
     box.classList.add('mw', 'mw-loop', 'mw-chatw');
     const listId = 'mw-cmds-' + Math.random().toString(36).slice(2, 8);     // one chat per mount: its own completion list
     const child = () => s.state && s.state.child;
@@ -97,6 +97,8 @@
       return el('div', { class: 'mw-row mw-opts' },
         el('input', { name: 'model', placeholder: "model (loop.sh's default)", 'aria-label': 'model', disabled: run, oninput: e => { s.model = e.target.value; } }),
         el('input', { name: 'budget', class: 'mw-num', placeholder: 'USD', 'aria-label': 'budget in USD', disabled: run, title: 'the session budget (USD, above 0); empty: loop.sh\'s default', oninput: e => { s.budgetIn = e.target.value; } }),
+        el('label', { class: 'empty', title: "the model thinks before it acts: off by default (the alf drive: thinking ate the token cap, turns with no words)" },
+          el('input', { type: 'checkbox', disabled: run, checked: s.thinking, onchange: e => { s.thinking = e.target.checked; } }), ' thinking'),
         el('span', { class: 'empty' }, run ? 'for the next start' : 'used by the next start (or the first line said)'));
     }
 
@@ -219,6 +221,7 @@
       const msg = { mode: 'rpc' };
       const m = String(s.model || '').trim(), b = String(s.budgetIn || '').trim();
       if (m) msg.model = m;
+      if (s.thinking) msg.thinking = true;
       if (b) {
         const n = Number(b);
         if (!Number.isFinite(n) || n <= 0)      // never a silent default: NaN would go as null, and loop.sh's 1.00 apply
@@ -230,10 +233,13 @@
     async function start() {
       let msg;
       try { msg = startMsg(); } catch (e) { s.note = e.message; s.options = true; render(); return false; }
-      push('note', 'loop', `starting the pi loop (${msg.model || "loop.sh's model"}, budget ${msg.budget || DEFAULT_BUDGET + ' USD, loop.sh\'s default'}${msg.budget ? ' USD' : ''})…`);
+      push('note', 'loop', 'starting the pi loop…');
       render();
       try {
-        await io.ask('loop', 'start', msg, 120000);
+        const r = await io.ask('loop', 'start', msg, 120000);
+        const c = r.child || {};                       // what started: the backend's budget (/budget's too), not the form's (L4)
+        push('note', 'loop', `started the pi loop: ${c.model || msg.model || "loop.sh's model"}, thinking ${msg.thinking ? 'on' : 'off'}, ` +
+          `budget ${c.budget ? c.budget + ' USD' : DEFAULT_BUDGET + " USD (loop.sh's default)"}`);
         s.budget = s.over = null; s.spent = 0; s.note = '';
         await refresh();
         return true;

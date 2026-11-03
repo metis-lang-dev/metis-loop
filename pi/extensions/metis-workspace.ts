@@ -317,7 +317,6 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({
 			id: Type.String({ description: "the surprise's id (surprise_next)" }),
 			pack: Type.String({ description: "the pack's text: rules in `stage S { }`, `pred` lines, `drop NAME`; or a whole program" }),
-			config: Type.Optional(Type.String({ description: "the run's service config (default: the surprise's, else the bundle's)" })),
 			cases: Type.Optional(Type.Array(Type.String(), { description: "case files (trace_case --into) the pack must pass" })),
 			unit: Type.Optional(Type.String({ description: "the file the pack amends (default: the member's program)" })),
 			brain: Type.Optional(Type.String({ description: "who writes the ruling's words: script:FILE (0 USD) or openrouter/<id> (needs budget); none: the evidence alone" })),
@@ -332,9 +331,12 @@ export default function (pi: ExtensionAPI) {
 			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay (the ruling would have no fired diff)`);
 			if (p.brain?.startsWith("openrouter/") && !(p.budget && p.budget > 0)) throw new Error("a paid brain needs a budget (USD)");
 			const b = ws.bundle(undefined, r);
-			// the service config: the argument, else the surprise's (the session it was dropped from), else the bundle's
-			const config = p.config ?? (s as any).config ?? (b as any)?.config;
-			if (!config) throw new Error(`no service config for surprise ${p.id}: give config (the surprise and the bundle name none)`);
+			// the service config: the surprise's (the run it was dropped from), else the bundle's service.yaml; never the
+			// model's guess (the alf drive's L3: a guessed config crashed the judge, then a ruling "refused: 'v3'")
+			const config = (s as any).config ?? (b as any)?.config;
+			if (!config) throw new Error(`surprise ${p.id} cannot be judged here: no service config (the surprise names none, ` +
+				`and the bundle has no service.yaml beside its composition.yaml). The judge replays the bundle on its service ` +
+				`config: say so to the person; do not write one.`);
 			const tmp = mkdtempSync(join(tmpdir(), "pack-propose-"));
 			let spent = 0;
 			try {

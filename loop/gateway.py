@@ -309,7 +309,7 @@ class Gateway:
             raise ValueError("an edit writes the operator's checkout: personal mode only (a visitor's view reads)")
         if op == "plan":
             out = await loop.run_in_executor(None, self.srv.edit_plan, str(msg.get("path") or ""),
-                                             str(msg.get("old") or ""), str(msg.get("new") or ""))
+                                             str(msg.get("old") or ""), str(msg.get("new") or ""), s.sid)
             return await self._send(ws, {"ch": "repl", "type": "edit", "op": "plan", "session": s.sid,
                                          "req": msg.get("req"), **out})
         tok = str(msg.get("token") or "")

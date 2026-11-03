@@ -19,7 +19,8 @@ The events, one dict each:
     {kind: "tool_result", id, name, ok, text}         tool_execution_end (ok: not isError; text: the result's text)
     {kind: "gate", token, plan: {title, message}}     an extension's confirm (the catalog's gate): answer(token, ok)
     {kind: "notify", level, text}                     an extension's notify (fire-and-forget)
-    {kind: "usage", cost, model}                      an assistant message's cost as pi reports it (USD; 0 for a free one)
+    {kind: "usage", cost, model, stop, reasoning, output}   an assistant message's cost as pi reports it (USD; 0 for a free
+                                                      one), its stopReason and its reasoning / output tokens
     {kind: "turn_end", aborted}                       agent_settled: pi will do nothing more until the next say
     {kind: "error", where, error}                     a refused command, or an extension's handler that threw
     {kind: "exit", code, stderr_tail}                 the child is gone; the iterator ends after it
@@ -213,8 +214,10 @@ class PiRpc:
                 txt = _text(m.get("content"))
                 if txt.strip():
                     self._emit(kind="text", text=txt)
-                cost = ((m.get("usage") or {}).get("cost") or {}).get("total") or 0
-                self._emit(kind="usage", cost=cost, model=m.get("model"))
+                u = m.get("usage") or {}
+                cost = (u.get("cost") or {}).get("total") or 0
+                self._emit(kind="usage", cost=cost, model=m.get("model"), stop=m.get("stopReason"),
+                           reasoning=u.get("reasoning"), output=u.get("output"))
             return
         if t == "tool_execution_start":
             self._emit(kind="tool_call", id=rec.get("toolCallId"), name=rec.get("toolName"), args=rec.get("args"))

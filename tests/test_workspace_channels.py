@@ -303,6 +303,7 @@ class SilentTurns(StubPi):
             for i in (1, 2):
                 await self.q.put({"kind": "tool_call", "name": "trace_count", "id": f"t{i}", "args": {}})
                 await self.q.put({"kind": "tool_result", "name": "trace_count", "id": f"t{i}", "ok": True, "text": "3"})
+            await self.q.put({"kind": "usage", "cost": 0.002, "stop": "length", "reasoning": 2048, "output": 2048})
         else:
             await self.q.put({"kind": "text", "text": "go fired 3 times in the window"})
         await self.q.put({"kind": "turn_end", "aborted": False})
@@ -319,14 +320,28 @@ def test_a_turn_without_words_says_so(gw, tmp_path):
         ws.send(json.dumps({"ch": "loop", "type": "say", "req": "s1", "text": "count go"}))
         end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
         assert end["empty"] is True and end["tools"] == 2
-        assert end["note"] == "pi ended its turn without words (2 tool calls)"
+        assert end["note"] == "pi ended its turn without words (2 tool calls; stopped: length, reasoning 2048 tokens, no words)"
+        assert end["stop"] == "length"                     # the alf drive's L1: thinking ate the token cap
         ws.send(json.dumps({"ch": "loop", "type": "say", "req": "s2", "text": "and in words?"}))
         end = frames(ws, lambda f: f.get("type") == "pi" and f["event"]["kind"] == "turn_end")[-1]["event"]
         assert "empty" not in end
         ask(ws, "loop", "stop")
         exited(ws)
     ends = [r for r in W.workspace(tmp_path).events() if r["kind"] == "rpc_turn_end"]
-    assert [(r.get("empty"), r.get("tools")) for r in ends] == [(True, 2), (None, None)]
+    assert [(r.get("empty"), r.get("tools"), r.get("stop")) for r in ends] == [(True, 2, "length"), (None, None, None)]
+    assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "off"            # the chat's model thinks only when asked
+
+
+def test_the_chat_start_thinks_only_when_asked(gw, tmp_path):
+    """The alf drive's L1: the backend's child runs with METIS_LOOP_THINKING=off (loop.sh appends :off), on only
+    when the start asks; the child's budget is the one the start used (/budget's too: the page's note reads it)."""
+    gw.gw.wsc.pi_factory = StubPi
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        st = ask(ws, "loop", "start", mode="rpc", thinking=True, budget=0.3)
+        assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "on" and st["child"]["budget"] == 0.3
+        ask(ws, "loop", "stop")
+        exited(ws)
 
 
 class FailsFirst(StubPi):

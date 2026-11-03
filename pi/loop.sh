@@ -148,6 +148,12 @@ export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
 MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
+# METIS_LOOP_THINKING=off (the console's chat sets it unless its options ask for thinking): pi's :off suffix on a MODEL
+# without a thinking suffix of its own (the alf drive: v4 pro's thinking ate its 2048-token cap, turns with no words)
+case "${METIS_LOOP_THINKING:-}:$MODEL" in
+  off:*:off|off:*:minimal|off:*:low|off:*:medium|off:*:high|off:*:xhigh|off:*:max) ;;
+  off:*) MODEL="$MODEL:off" ;;
+esac
 # a paid model runs with a budget (1 USD by default: a session of v4 pro at 2048 tokens a request spends
 # cents a turn, so 1 USD bounds a runaway session well inside a paid round's limit); empty: refused
 # the key: the environment's; unset, the person's key file (the architect's F5: a start from the chat got no key),

@@ -529,6 +529,9 @@ class WorkspaceChannels:
         env = dict(os.environ, METIS_CATALOG=str(self.ws.root))
         if msg.get("model"):
             env["MODEL"] = str(msg["model"])
+        # the chat's model thinks only when asked (the alf drive's L1: v4 pro's thinking ate the 2048-token cap: turns
+        # with no words and no tool call); loop.sh appends :off to a MODEL without a thinking suffix
+        env["METIS_LOOP_THINKING"] = "on" if msg.get("thinking") else "off"
         if budget is not None:
             env["METIS_LOOP_BUDGET"] = str(budget)
         rpc = self.pi_factory(_scope() + [str(LOOP_SH), "--mode", "rpc"], str(self.ws.root), env)
@@ -550,7 +553,7 @@ class WorkspaceChannels:
     async def _pump(self, child):
         """The child's events: each journalled (who: pi, pointers and short words), pushed to the pages; a confirm
         request becomes the gate frame, answered by confirm/refuse."""
-        turn = {"words": 0, "tools": 0}                  # this turn's text and tool calls (loop-chat step 3)
+        turn = {"words": 0, "tools": 0, "stop": None}    # this turn's text, tool calls, last stop (loop-chat step 3)
         try:
             async for ev in child["rpc"].events():
                 kind = ev.get("kind")
@@ -558,11 +561,17 @@ class WorkspaceChannels:
                     turn["words"] += 1
                 elif kind == "tool_call":
                     turn["tools"] += 1
+                elif kind == "usage":
+                    turn["stop"] = {k: ev.get(k) for k in ("stop", "reasoning", "output")}
                 elif kind == "turn_end":                 # a turn the tester saw no words of says so (the dog drive's F1)
                     if not turn["words"] and not ev.get("aborted"):
-                        ev = dict(ev, empty=True, tools=turn["tools"],
-                                  note=f"pi ended its turn without words ({turn['tools']} tool call{'s' if turn['tools'] != 1 else ''})")
-                    turn = {"words": 0, "tools": 0}
+                        st = turn["stop"] or {}
+                        why = ""
+                        if st.get("stop"):              # the alf drive's L1: thinking ate the token cap
+                            why = f"; stopped: {st['stop']}" + (f", reasoning {st['reasoning']} tokens" if st.get("reasoning") else "") + ", no words"
+                        ev = dict(ev, empty=True, tools=turn["tools"], stop=st.get("stop"),
+                                  note=f"pi ended its turn without words ({turn['tools']} tool call{'s' if turn['tools'] != 1 else ''}{why})")
+                    turn = {"words": 0, "tools": 0, "stop": None}
                 if kind == "gate":
                     child["gates"][str(ev["token"])] = ev.get("plan")
                     await self.gw._send_all({"ch": "loop", "type": "gate", "plan": ev.get("plan"), "token": ev["token"]})
@@ -570,7 +579,7 @@ class WorkspaceChannels:
                 else:
                     await self.gw._send_all({"ch": "loop", "type": "pi", "event": ev})
                     row = {k: ev[k] for k in ("name", "id", "ok", "code", "where", "level", "cost", "model", "aborted",
-                                              "empty", "tools") if k in ev}
+                                              "empty", "tools", "stop", "reasoning") if k in ev}
                     for k in ("text", "error", "stderr_tail"):        # the words, cut: the journal carries pointers
                         v = ev.get(k)
                         if v:

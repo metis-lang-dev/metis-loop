@@ -149,6 +149,23 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 	assert.equal(ws.loops(r).pi, null);                                                   // released at the session's end
 });
 
+test("metis-workspace: pack_propose never guesses a config: none on the surprise or the bundle is refused in words (the alf drive's L3)", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		assert.ok(!("config" in p.tools.get("pack_propose").parameters.properties));        // the model cannot pass one
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 1, atoms: ["lit"] }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		assert.equal(ws.bundle(undefined, r)!.config, null);
+		await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x" }),
+			/cannot be judged here: no service config .*no service.yaml beside its composition.yaml.*do not write one/);
+	} finally {
+		await p.emit("session_shutdown", {}, {});
+	}
+});
+
 test("metis-workspace: a refused pack is ruled refused; a surprise not taken is not judged", async () => {
 	const { r } = scratch();
 	const p = fakePi();
@@ -369,6 +386,10 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	const none = run([], { OPENROUTER_API_KEY: "", METIS_OPENROUTER_ENV: "" });
 	assert.equal(none.status, 1);
 	assert.match(none.stderr, /needs OPENROUTER_API_KEY: the environment, or a key file/);
+	// the alf drive's L1: the chat's start asks METIS_LOOP_THINKING=off: pi's :off on a model without a thinking suffix
+	assert.equal(run([], { METIS_LOOP_THINKING: "off" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:off budget=1.00 USD");
+	assert.equal(run([], { METIS_LOOP_THINKING: "off", MODEL: "openrouter/x:high" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/x:high budget=1.00 USD");
+	assert.equal(run([], { METIS_LOOP_THINKING: "on" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
 	const free = run([], { MODEL: "stub/script" });
 	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
 });

@@ -203,7 +203,15 @@ def main(argv=None):
     run = Path(a.run)
     run.mkdir(parents=True, exist_ok=True)
     pack = Path(a.pack).read_text()
-    cfg = S.load_config(a.config)
+    try:                                       # a bad config refused in words (the alf drive's L3: a traceback, then "the gate: 'v3'")
+        cfg = S.load_config(a.config)
+    except FileNotFoundError:
+        sys.exit(f"propose.sh: --config {a.config}: there is no such file")
+    except Exception as e:  # noqa: BLE001 — YAML that does not read
+        sys.exit(f"propose.sh: --config {a.config} does not read as YAML: {str(e).splitlines()[0][:200]}")
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("v3"), dict):
+        sys.exit(f"propose.sh: --config {a.config} is not a service config: it has no v3 section (the Live's: its "
+                 "composition, its catalog); the judge replays the bundle on it")
     cfg.pop("trace", None)
 
     def config(root):

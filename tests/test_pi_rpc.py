@@ -39,7 +39,9 @@ def test_a_turn_its_words_and_turn_end():
         evs = await until(rpc, "turn_end")
         texts = [e["text"] for e in evs if e["kind"] == "text"]
         assert texts == ["heard: hello there"]                  # one record: LF framing only
-        assert {"kind": "usage", "cost": 0.0, "model": "stub/model"} in evs
+        use = [e for e in evs if e["kind"] == "usage"]
+        assert use and {k: use[0][k] for k in ("cost", "model")} == {"cost": 0.0, "model": "stub/model"}
+        assert {"stop", "reasoning", "output"} <= set(use[0])         # the stop reason, for an empty turn's line
         assert evs[-1] == {"kind": "turn_end", "aborted": False}
         await rpc.stop()
         await rpc.stop()                                                  # idempotent
@@ -56,7 +58,7 @@ def test_the_gate_is_a_token_answered_by_the_person(ok):
         await rpc.start()
         await rpc.say("please apply the ruling")
         evs = await until(rpc, "gate")
-        assert {"kind": "usage", "cost": 0.002, "model": "stub/model"} in evs
+        assert any(e["kind"] == "usage" and e["cost"] == 0.002 and e["model"] == "stub/model" for e in evs)
         call = [e for e in evs if e["kind"] == "tool_call"]
         assert call == [{"kind": "tool_call", "id": "t1", "name": "catalog_edit", "args": {"domain": "planner"}}]
         assert any(e["kind"] == "notify" and "select" in e["text"] and "cancelled" in e["text"] for e in evs)

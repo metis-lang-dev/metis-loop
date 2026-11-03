@@ -276,3 +276,49 @@ def test_a_new_extension_is_an_edit_of_a_missing_file(tmp_path):
     assert srv.open_session("s", {"llp": "domains/plant/plant"})["status"] != "closed"
     assert [f["path"] for f in srv.files_of("s")["files"]] == [PROG, ext]
 
+
+LAMP = """% lamp
+catalog lamp 1.
+provenance text "a lamp" "2026-11-04".
+layers (dyn).
+stages (main).
+include "../tree/lamp_rules.llp".
+#init off 1
+"""
+RULES = """catalog lamp_rules 1.
+namespace lamp produce (dyn).
+pred off : lamp.
+pred on : lamp.
+stage main {
+  %% I switch it on.
+  switch_on [dyn] : off -o on.
+}
+"""
+
+
+def test_a_bundle_members_rule_files_are_the_editors(tmp_path):
+    """The alf drive's L5 (and metispy's M1): a bundle member's program includes the bundle's files; the EDITOR's files
+    list them (a DERIVED file as its source, the one copy), and a save plans an edit of the source from the session."""
+    from metis import catalog
+    if not hasattr(catalog, "bundle_dir"):
+        pytest.skip("metispy before edit-bundle-includes")
+    h = tmp_path / "domains" / "hier"
+    (h / "lamp").mkdir(parents=True)
+    (h / "tree").mkdir()
+    (h / "composition.yaml").write_text("name: lampset\ndirect: lamp\n")
+    (h / "lamp_rules.llp").write_text("% the lamp's rules, the one copy\n" + RULES)
+    (h / "tree" / "lamp_rules.llp").write_text("% DERIVED from ../lamp_rules.llp by the test: edit that file, never this one.\n" + RULES)
+    (h / "lamp" / "domain.yaml").write_text("display: the lamp\nline: a lamp\nprogram: lamp.llp\n")
+    (h / "lamp" / "lamp.llp").write_text(LAMP)
+    srv = ConsoleServer(tmp_path)
+    assert srv.open_session("s", {"llp": "domains/hier/lamp/lamp"})["status"] != "closed"
+    got = srv.files_of("s")
+    assert [(f["path"], f["role"]) for f in got["files"]] == [
+        ("domains/hier/lamp/lamp.llp", "program"), ("domains/hier/lamp_rules.llp", "bundle")]   # not tree/: DERIVED
+    if not catalog.metisc():
+        pytest.skip("no metisc for the edit's diagnostics")
+    pl = srv.edit_plan("domains/hier/lamp_rules.llp", "%% I switch it on.", "%% I switch it on, now.", sid="s")
+    assert pl["ok"] and pl["token"] and pl["domain"] == "lamp", pl
+    assert srv.gate_confirm(pl["token"])["written"] == ["domains/hier/lamp_rules.llp"]
+    assert "now." in (h / "lamp_rules.llp").read_text()
+
