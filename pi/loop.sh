@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# loop.sh — the agentic loop (docs/LOOP-AGENT.md): pi with the two
-# metis extensions over a catalog, on the model the person names (MODEL: no default).
+# loop.sh — the agentic loop (docs/LOOP-AGENT.md): pi with the three
+# metis extensions over a catalog (the workspace's: docs/WORKSPACE.md §5), on the model the person names (MODEL: no default).
 #
 # A loop starts in a directory, and that directory is the catalog and the workspace
 # (cwd-root s-ddac2cbf), as `cd DIR && claude` makes DIR the project: DIR's domain
@@ -172,4 +172,13 @@ export METIS_LOOP_METIS="${METIS_LOOP_METIS:-$PKGS/.venv/bin/metis}"
 export METIS_LOOP_SDK_PY="$SDK_PY"                    # the extensions' catalog: the loop SDK's catalog CLI
 export METIS_LOOP_AGENT_PY="${METIS_LOOP_AGENT_PY:-$AGENT/py/.venv/bin/python}"
 export METIS_LOOP_AGENT_DIR="$AGENT/py"
+# one pi loop per workspace (WORKSPACE.md §2.3): a live one's lock refuses this start; the extension
+# (metis-workspace) takes the lock for pi's own pid, a dead holder's is taken over
+held="$("$SDK_PY" -m metis.catalog.workspace --root "$DIR" loops --json | "$SDK_PY" -c '
+import json, sys
+p = json.load(sys.stdin).get("pi")
+print("" if not p or p.get("alive") is False else "pid %s, started %s, mode %s" % (p.get("pid"), p.get("started"), p.get("mode")), end="")')"
+[ -z "$held" ] || { echo "loop.sh: a pi loop runs in $DIR already ($held): one per workspace" >&2; exit 1; }
+case " $* " in *" --mode rpc "*) export METIS_LOOP_MODE=rpc ;; *) export METIS_LOOP_MODE=tui ;; esac
+export MODEL
 exec "${METIS_LOOP_PI:-$HERE/pi.sh}" --model "$MODEL" --system-prompt "$HERE/prompts/loop-system.md" "$@" "${TASK[@]}"

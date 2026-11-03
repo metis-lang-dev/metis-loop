@@ -1,7 +1,7 @@
 # The agentic loop — an agent that refines a formalization, hosted in pi
 
 agentic-loop s-3ddb3e87 step 1 (nina, 2026-10-16; architect brief v2). The code
-is in this repository (metis-agentic-loop): two thin pi extensions, the launcher
+is in this repository (metis-agentic-loop): three thin pi extensions, the launcher
 and the worked example.
 
 ## The cut
@@ -97,6 +97,7 @@ The kernel's formalize has its own repair rounds.
 | file | process | tools | glue |
 |---|---|---|---|
 | `metis-repl.ts` | one `metis --json [llp]` per session; reopened on the applied program | `repl_<verb>` for every verb the wire's `help` lists (39 today), each with the description the wire declares; `catalog_apply`, `catalog_edit`, `catalog_take`; the `tool_call` gate | see the report |
+| `metis-workspace.ts` | none: each call is the loop SDK's workspace face (`python -m metis.catalog.workspace`, docs/WORKSPACE.md §2) or a declared trace verb | `workspace_context`, `surprise_list`, `surprise_next` (takes the oldest open surprise), `trace_*` and `lint` for every verb of metispy's `metis/trace_tools.json`, `pack_propose` (propose.sh: the ruling and the pack written as the surprise's), `bundle_build` (`metisc build .`, the image before and after), `journal`; the pi lock (`.metis/loop/pi.json`) for the session | WORKSPACE.md §5.1 |
 | `metis-domain.ts` | one `domain_agent --domain <n> --case replay --consult template [--records DIR]` per `domain_open` | `domain_open`, `domain_clock`, `domain_ports`, `domain_world`, `domain_episodes`; `domain_<tool>` for every tool of `metis --tools-json` served by the domain agent (served_by repl / watch / agent: state, ctx, events, why, findings, consult, reset, explain, escalate); `intent_<verb>` for every verb of the domain's `intent.yaml` | |
 | `lib/jsonl.ts` | — | a JSON-lines child: one request, the lines until its answer, unasked lines to a callback | |
 
