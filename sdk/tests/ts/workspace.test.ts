@@ -70,6 +70,14 @@ test("a surprise dropped, taken and ruled from node is what py reads", () => {
 	assert.throws(() => ws.drop_surprise({ member: "m" } as any, "backend", r), (e: any) => e.name === "WorkspaceError" && /a reading or atoms/.test(e.message));
 });
 
+test("three dropped from node in one second read back in drop order", () => {
+	const r = scratch();
+	const ids = [0, 1, 2].map((i) => ws.drop_surprise({ member: "m", atoms: [`a${i}`] }, "backend", r));
+	assert.deepEqual(ws.surprises(undefined, r).map((s) => s.id), ids, "each drop its own process: the ts orders them");
+	assert.deepEqual(ws.surprises(undefined, r), py(r, "surprises"));
+	assert.ok(ws.surprises(undefined, r).every((s) => /\.\d{6}/.test(s.ts)), "sub-second ts");
+});
+
 test("a dead pid's take is stale: open again, and re-taken with a retake row", () => {
 	const r = scratch();
 	const id = ws.drop_surprise({ member: "planner", atoms: ["accel"] }, "backend", r);

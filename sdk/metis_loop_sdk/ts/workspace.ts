@@ -154,6 +154,7 @@ export function trace(run: string, r?: string): { run: string; path: string; k0:
 	return cli(["trace", run], undefined, r);
 }
 
+/** The surprises, oldest first: py's order, by (ts with microseconds, id), so one second keeps its drop order. */
 export function surprises(status?: Status, r?: string): Surprise[] {
 	return cli(["surprises", ...(status ? ["--status", status] : [])], undefined, r);
 }
