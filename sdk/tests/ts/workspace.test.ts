@@ -143,6 +143,6 @@ test("the declared trace tools and their command lines are py's", () => {
 	const argv = ws.tool_argv("trace_count", { trace: "t", atom: "a", by: ["b", "c"] });
 	assert.deepEqual(argv.slice(1), ["-m", "metis.trace", "count", "t", "a", "--by", "b", "--by", "c"]);
 	assert.throws(() => ws.tool_argv("trace_count", { trace: "t" }), /atom required/);
-	assert.throws(() => ws.tool_argv("trace_sort", {}), /not a declared trace tool/);
+	assert.throws(() => ws.tool_argv("trace_no_such_verb", {}), /not a declared trace tool/);
 	assert.ok(existsSync(argv[0]));
 });
