@@ -37,7 +37,7 @@ def opened(ws, trace=True):
                         "req": "r1"}))
     f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
     assert f["type"] == "session", f
-    frames(ws, lambda g: g.get("type") == "source")
+    frames(ws, lambda g: g.get("type") == "files")
     return f
 
 

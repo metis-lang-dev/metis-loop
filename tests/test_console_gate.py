@@ -1,5 +1,6 @@
 """The console's writes through the loop's gate (loop-parity s-72d9d36b step 2, docs/LOOP.md), on a
-temp root: save as a plan with the since-diff of a refused proposal, an edit of a file on disk,
+temp root: the EDITOR's save as one planned edit of the file on disk (workspace-files s-9ea4cfa4: its diff,
+its findings, refused or written), an edit of another file on disk,
 the README, the intents skeleton (no model), take into the operator's other catalog, a new domain
 from a seed (an .llp or a package), confirm refusing a source changed since the plan; and the
 gateway's frames for them (personal mode only). Nothing is committed."""
@@ -19,40 +20,51 @@ def server(tmp_path, take=True):
     return srv
 
 
-def work(srv, text=None):
-    p = srv.root / "domains/plant/plant.llp"
-    return {"name": "domains/plant/plant", "copy": p.read_text() if text is None else text, "extensions": []}
+PROG = "domains/plant/plant.llp"
 
 
-def test_save_is_a_plan_refused_then_shown_with_what_changed_since(tmp_path):
+def test_an_edit_is_a_plan_refused_then_written(tmp_path):
+    """workspace-files s-9ea4cfa4 step 2: the EDITOR's save is one exact edit of the file on disk, planned (its
+    diff, the gate's findings, the console's token), refused (remembered) or confirmed (written)."""
     srv = server(tmp_path)
-    prog = srv.root / "domains/plant/plant.llp"
-    w = work(srv, prog.read_text().replace("%% I wake up.", "%% I wake up slowly."))
-    pl = srv.save_plan(w)
-    assert pl["files"][0]["path"] == "domains/plant/plant.llp" and "slowly" in pl["files"][0]["diff"]
-    assert "since_diff" not in pl["files"][0] and "text" not in pl["files"][0]
-    assert srv.save_refuse(pl["token"]) == {"refused": ["domains/plant/plant.llp"]}
-    w["copy"] = w["copy"].replace("slowly", "very slowly")
-    again = srv.save_plan(w)
-    assert again["files"][0]["since_diff"] and "very slowly" in again["files"][0]["since_diff"]
-    with pytest.raises(ValueError, match="the copy changed since the diff was shown"):
-        srv.save_apply(dict(w, copy=w["copy"] + "\n% more\n"), again["token"])
-    assert "very slowly" not in prog.read_text()
-    out = srv.save_apply(w, again["token"])
-    assert out["written"] and "very slowly" in prog.read_text()
-    assert "since_diff" not in srv.save_plan(dict(w, copy=w["copy"] + "% x\n"))["files"][0]   # a write forgets
+    prog = srv.root / PROG
+    pl = srv.edit_plan(PROG, "%% I wake up.", "%% I wake up slowly.")
+    assert pl["path"] == PROG and pl["domain"] == "plant" and pl["ok"] and pl["token"]
+    assert "-  %% I wake up." in pl["diff"] and "+  %% I wake up slowly." in pl["diff"]
+    assert all(f["level"] != "error" for f in pl["findings"])
+    assert all(set(f) == {"level", "code", "line", "msg"} for f in pl["findings"])
+    assert srv.gate_refuse(pl["token"]) == {"refused": [PROG]}
+    assert "slowly" not in prog.read_text()
+    again = srv.edit_plan(PROG, "%% I wake up.", "%% I wake up very slowly.")
+    out = srv.gate_confirm(again["token"])
+    assert out["written"] == [PROG] and "very slowly" in prog.read_text()
 
 
-def test_save_carries_the_extensions_and_display_line(tmp_path):
+def test_an_edit_that_breaks_the_program_is_shown_and_never_planned(tmp_path):
+    """A finding at error level (metisc's diagnostics of the edited text) is shown with the diff, and no token is
+    made: nothing can write it. An old text that is not in the file (changed on disk since it was read) refuses."""
     srv = server(tmp_path)
-    w = work(srv)
-    w["extensions"] = [{"name": "Tired Plant", "source": "% an extension\n"}]
-    pl = srv.save_plan(w, display="the plant", line="a plant that wilts and recovers")
-    paths = sorted(f["path"] for f in pl["files"])
-    assert paths == ["domains/plant/domain.yaml", "domains/plant/extensions/tired_plant.llp"]
-    srv.save_apply(w, pl["token"], display="the plant", line="a plant that wilts and recovers")
-    y = (srv.root / "domains/plant/domain.yaml").read_text()
-    assert "recovers" in y and (srv.root / "domains/plant/extensions/tired_plant.llp").is_file()
+    prog = srv.root / PROG
+    before = prog.read_text()
+    bad = srv.edit_plan(PROG, "wake [dyn] : idle -o awake.", "wake [dyn] : idle -o .")
+    assert not bad["ok"] and "token" not in bad and bad["diff"]
+    assert any(f["level"] == "error" for f in bad["findings"])
+    assert prog.read_text() == before
+    with pytest.raises(ValueError, match="not in it"):
+        srv.edit_plan(PROG, "no such text", "x")
+    with pytest.raises(ValueError, match="not a file of a domain"):
+        srv.edit_plan("loose.llp", "a", "b")
+
+
+def test_the_session_files_are_the_disks(tmp_path):
+    """No copy: a session's files are its program and its domain's extensions as they are on disk; an in-memory
+    catalog is refused."""
+    srv = server(tmp_path)
+    assert srv.open_session("s", {"llp": "domains/plant/plant"})["status"] != "closed"
+    got = srv.files_of("s")
+    assert got["program"] == PROG and got["files"] == [{"path": PROG, "text": (srv.root / PROG).read_text(), "role": "program"}]
+    out = srv.open_session("t", {"source": "catalog x 1.\n", "name": "x"})
+    assert out["status"] == "closed" and "the workspace owns the file" in out["error"]
 
 
 def test_edit_readme_and_intents_through_the_gate(tmp_path):
@@ -125,19 +137,24 @@ def test_the_gateways_frames(tmp_path):
     r = Running(srv, mode="personal")
     try:
         with r.ws() as ws:
-            sid = open3(ws, "domains/plant/plant")["session"]
-            text = (srv.root / "domains/plant/plant.llp").read_text().replace("%% I wake up.", "%% I wake up slowly.")
-            ws.send(json.dumps({"ch": "repl", "type": "work", "session": sid, "copy": text}))
-            ws.send(json.dumps({"ch": "repl", "type": "save", "session": sid}))
-            pl = frames(ws, lambda f: f.get("type") == "save")[-1]
-            ws.send(json.dumps({"ch": "repl", "type": "refuse", "session": sid, "token": pl["token"]}))
-            assert frames(ws, lambda f: f.get("type") == "refused")[-1]["refused"] == ["domains/plant/plant.llp"]
-            ws.send(json.dumps({"ch": "repl", "type": "save", "session": sid}))
-            again = frames(ws, lambda f: f.get("type") == "save")[-1]
-            assert "since_diff" in again["files"][0]
-            ws.send(json.dumps({"ch": "repl", "type": "save", "session": sid, "token": again["token"]}))
-            done = frames(ws, lambda f: f.get("type") == "save" and f.get("written"))[-1]
-            assert done["written"] == ["domains/plant/plant.llp"]
+            o = open3(ws, "domains/plant/plant")
+            sid, fs = o["session"], o["_files"]
+            assert fs["program"] == PROG and fs["files"][0]["text"] == (srv.root / PROG).read_text()
+            text = fs["files"][0]["text"]
+            new = text.replace("%% I wake up.", "%% I wake up slowly.")
+            ws.send(json.dumps({"ch": "repl", "type": "edit", "session": sid, "path": PROG, "old": text, "new": new, "req": 5}))
+            pl = frames(ws, lambda f: f.get("type") == "edit")[-1]
+            assert pl["op"] == "plan" and pl["ok"] and pl["req"] == 5 and "slowly" in pl["diff"]
+            ws.send(json.dumps({"ch": "repl", "type": "edit", "op": "refuse", "session": sid, "token": pl["token"]}))
+            assert frames(ws, lambda f: f.get("type") == "edit")[-1]["op"] == "refused"
+            ws.send(json.dumps({"ch": "repl", "type": "edit", "session": sid, "path": PROG, "old": text, "new": new}))
+            again = frames(ws, lambda f: f.get("type") == "edit")[-1]
+            ws.send(json.dumps({"ch": "repl", "type": "edit", "op": "confirm", "session": sid, "token": again["token"]}))
+            got = frames(ws, lambda f: f.get("type") == "files")
+            done = [f for f in got if f.get("type") == "edit"][-1]
+            assert done["op"] == "written" and done["written"] == [PROG]
+            assert [f for f in got if f.get("type") == "session"][-1].get("edited")      # re-opened, epoch + 1
+            assert got[-1]["files"][0]["text"] == new == (srv.root / PROG).read_text()
             ws.send(json.dumps({"ch": "repl", "type": "gate", "op": "propose", "kind": "readme", "domain": "plant",
                                 "args": {"text": "A plant wilts and recovers."}, "req": 7}))
             g = frames(ws, lambda f: f.get("type") == "gate")[-1]
@@ -163,6 +180,9 @@ def test_the_gateways_frames(tmp_path):
                                 "args": {"text": "x"}}))
             err = frames(ws, lambda f: f.get("type") == "error")[-1]
             assert "personal mode only" in err["error"]
+            ws.send(json.dumps({"ch": "repl", "type": "edit", "session": "nope", "path": PROG, "old": "a", "new": "b"}))
+            err = frames(ws, lambda f: f.get("type") == "error")[-1]
+            assert "no open session" in err["error"] or "personal mode only" in err["error"]
     finally:
         shared.close()
 

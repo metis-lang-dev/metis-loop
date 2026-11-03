@@ -125,6 +125,13 @@ gateway advertises a MODE MANIFEST and the page renders what exists
 
 ### 4a. Command interception and copy-on-write catalogs (user, 2026-10-05)
 
+> **RETIRED (workspace-files s-9ea4cfa4, the user 2026-11-03: "the workspace owns the file").** The working
+> copy (IndexedDB + the gateway's memory), the floating editors over it, the open from TEXT (`{source, name,
+> extensions}`, `SourceRepl`, `MAX_SOURCE`), recompile and the copy's save gate are gone. The EDITOR edits the
+> session's files as they are on disk; its save is ONE gated edit (`repl/edit {path, old, new}` → the diff and
+> the gate's findings → confirm writes, the session re-opens at epoch + 1); a visitor's view reads only. See
+> docs/LOOP.md "The console's writes" and console/README.md. The text below is the history.
+
 D3's pattern generalized: the gateway INTERCEPTS the commands whose
 terminal semantics (local editors, local paths) mean nothing over
 the web, and substitutes web-native ones. The kernel is untouched;

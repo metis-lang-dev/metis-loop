@@ -66,8 +66,14 @@ workspace channels (`trace`, `surprise`, `bundle`, `loop`: WORKSPACE.md §3);
 **shared** = the REPL only, with a URL token, per-IP session cap and a
 rate limit. Sessions, postings and
 history live in MEMORY only (D4: nothing a visitor types or runs is
-written to disk); `{source, name}` opens a catalog from text, compiled
-in memory (§4a).
+written to disk). A session opens a checkout program (`{llp}`); the
+workspace owns the file (workspace-files s-9ea4cfa4): the EDITOR (the
+band's **edit**, the REPL's `edit RULE`, a file's row on CATALOG) edits
+the session's program and extensions as they are on disk, and **save**
+is one gated edit — the diff and the gate's findings (metisc's
+diagnostics, the lint) in the dialog, then confirm writes the file and
+the session re-opens (epoch + 1). Nothing is kept in the browser. A
+visitor's view (shared mode, the artifact) reads only.
 
 **The workspace panels** (loop-workspace step 4, docs/WORKSPACE.md §6; reduced by loop-chat step 1,
 docs/CHAT.md §1): in personal mode the page mounts the loop SDK's widgets as docks, each over the backend's

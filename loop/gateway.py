@@ -15,23 +15,20 @@ Frames (JSON, one per message):
 
     page -> gw   {ch:"repl", type:"open",   llp, req}      new session
                  {ch:"repl", type:"open",   llp, host:true, req}  …with the host the index names
-                 {ch:"repl", type:"open",   source, name, req}  from catalog
-                                          TEXT, compiled in memory (§4a)
                  {ch:"repl", type:"open",   session}       re-attach
                  {ch:"repl", type:"intent", session, id, cmd, actor}
                  {ch:"repl", type:"stop",   session}
-                 {ch:"repl", type:"work",   session, copy?, extensions?}  the
-                                          editor's working copy (§4a)
-                 {ch:"repl", type:"recompile", session}  rebuild from it
+                 {ch:"repl", type:"edit", session, path, old, new, req}  -> {type:"edit", op:"plan", path, diff,
+                                    findings:[{level,code,line,msg}], ok, token?} one exact edit of a checkout file
+                                    (the EDITOR's save, workspace-files s-9ea4cfa4: the workspace owns the file)
+                 {ch:"repl", type:"edit", op:"confirm"|"refuse", session, token, req}  -> {type:"edit",
+                                    op:"written"|"refused"}; written: the session re-opened (epoch + 1), its files again
                  {ch:"repl", type:"close",  session}
                  {ch:"repl", type:"records"} -> {ch:"meta", type:"records", records}
                  {ch:"repl", type:"sink", session, file}  a checkout records file into the session
                  {ch:"repl", type:"new", name, line, req}  domains/<name>/ made, then opened
                  {ch:"repl", type:"new", name?, line?, seed, req}  -> {type:"gate", plan} a new domain from a
                                     seed (a package dir: taken whole; an .llp: its program), confirmed by gate
-                 {ch:"repl", type:"save", session[, token][, display, line]}  -> {type:"save", files:[{path,new,diff,
-                                    since_diff?}], token[, written]} (the gate's plan: docs/LOOP.md)
-                 {ch:"repl", type:"refuse", session, token}  the person said no: remembered (the next plan's since_diff)
                  {ch:"repl", type:"gate", op:"propose", session?, kind, domain, args, req}  -> {type:"gate", plan}
                                     kind edit | readme | intents | take | program (loop-parity step 2)
                  {ch:"repl", type:"gate", op:"confirm"|"refuse", token, req}  -> {type:"gate", written | refused}
@@ -43,8 +40,8 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"session", session, req?, …fields, busy, running, queued}
                  {ch:"repl", type:"queued",  session, id, cmd, actor, ts}
                  {ch:"repl", type:"posting", session, id, cmd, actor, ts, …intent_posting}
-                 {ch:"repl", type:"source",  session, name, copy, extensions,
-                                          certified: checkout|local|null, error, key}
+                 {ch:"repl", type:"files",   session, program, files:[{path, text, role}]}  the EDITOR's
+                                          files of the session, as they are on disk (after open and every write)
                  {ch:"…",    type:"error",   error, session?, id?}
 
 The posting payload is `intent_posting` verbatim (via ConsoleServer.
@@ -250,7 +247,7 @@ class Gateway:
             await self._send(ws, self._session_frame(s, req=msg.get("req")))
             for f in list(s.log):
                 await self._send(ws, f)
-            await self._send(ws, self._source_frame(s))
+            await self._send(ws, await self._files_frame(s))
             return
         cap = self.cfg
         if len(self.sessions) >= cap["max_sessions"]:
@@ -267,9 +264,11 @@ class Gateway:
                                          f"({cap['max_sessions_per_ip']})"})
         sid = "w" + secrets.token_urlsafe(9).replace("-", "x").replace("_", "y")
         llp = str(msg.get("llp") or "")
-        spec = ({"source": msg["source"], "name": msg.get("name"),
-                 "extensions": msg.get("extensions") or []}
-                if msg.get("source") is not None else {"llp": llp, "host": bool(msg.get("host"))})
+        if msg.get("source") is not None:
+            return await self._send(ws, {"ch": "repl", "type": "error", "req": msg.get("req"),
+                                         "error": "a session opens a checkout program (llp): the workspace owns "
+                                         "the file, edit it in the EDITOR (no in-memory catalogs)"})
+        spec = {"llp": llp, "host": bool(msg.get("host"))}
         fields = await loop.run_in_executor(
             None, self.srv.open_session, sid, spec)
         if fields.get("status") == "closed":
@@ -284,67 +283,69 @@ class Gateway:
                 s.trace = self.session_trace(s, fields)
             except Exception as e:                       # noqa: BLE001 — the session serves without it, and says so
                 s.trace_error = f"no trace: {e}"
-        self._init_work(s, spec)
         s.subs.add(ws)
         s.worker = asyncio.create_task(self._work(s))
         self.sessions[sid] = s
         await self._send(ws, self._session_frame(s, req=msg.get("req")))
-        await self._send(ws, self._source_frame(s))
+        await self._send(ws, await self._files_frame(s))
 
-    # -- the working copy (CONSOLE-WS §4a, the user's simple model) -----
-    #    open → the catalog's text is the copy (certified: it IS the
-    #    checkout's); edits make it uncertified until a recompile builds
-    #    a session from it (+ its extensions) cleanly. The page keeps
-    #    it in IndexedDB; the gateway mirrors it in MEMORY for the agent's
-    #    source tools. Nothing reaches the operator's disk.
+    # -- the files (workspace-files s-9ea4cfa4): the workspace owns them; the EDITOR edits them in place
+    #    through one gated edit (diff + findings, then confirm), never a copy.
 
-    def _init_work(self, s: "Sess", spec: dict):
-        if spec.get("source") is not None:
-            copy, name = str(spec["source"]), str(spec.get("name") or "")
-            extensions = [dict(p) for p in spec.get("extensions") or []]
-            cert = "local"
-        else:
-            path = self.srv.resolve(spec.get("llp", ""))
-            # the copy is the checkout's: the program and its extensions (the served program)
-            copy, name, extensions, cert = path.read_text(), str(
-                path.relative_to(self.srv.root.resolve()).with_suffix("")), \
-                [{"name": p.stem, "source": p.read_text()} for p in self.srv.checkout_extensions(path)], "checkout"
-        s.work = {"name": name, "copy": copy, "extensions": extensions,
-                  "certified": cert, "error": None}
-
-    def _source_frame(self, s: "Sess") -> dict:
-        w = getattr(s, "work", None) or {}
-        key = None
+    async def _files_frame(self, s: "Sess") -> dict:
+        loop = asyncio.get_running_loop()
         try:
-            key = self.srv.shells[s.sid].key
-        except KeyError:
-            pass
-        return {"ch": "repl", "type": "source", "session": s.sid, **w,
-                "key": key}
+            got = await loop.run_in_executor(None, self.srv.files_of, s.sid)
+        except (ValueError, OSError) as e:
+            return {"ch": "repl", "type": "files", "session": s.sid, "program": None, "files": [], "error": str(e)}
+        return {"ch": "repl", "type": "files", "session": s.sid, **got}
 
-    async def work(self, ws, msg):
-        """The page's editor changed the copy or an extension: mirror it (the
-        agent sees the same text) and mark it uncertified."""
-        s = self.sessions.get(msg.get("session", ""))
-        if not s or ws not in s.subs:
-            return
-        w = s.work
-        if "copy" in msg and msg["copy"] != w["copy"]:
-            w["copy"], w["certified"] = str(msg["copy"]), None
-        if "extensions" in msg and msg["extensions"] != w["extensions"]:
-            w["extensions"] = [{"name": str(p.get("name") or f"extension {k}"),
-                           "source": str(p.get("source") or "")}
-                          for k, p in enumerate(msg["extensions"], 1)]
-            w["certified"] = None
-        for other in list(s.subs):
-            if other is not ws:
-                await self._send(other, self._source_frame(s))
+    async def edit(self, ws, msg, s):
+        """The EDITOR's save: plan one exact edit (to the asking page), confirm it (the gate writes, the
+        sessions on that domain re-open, epoch + 1; the bundle's watch says STALE), or refuse it."""
+        loop, op = asyncio.get_running_loop(), msg.get("op") or "plan"
+        if self.cfg["mode"] == "shared":
+            raise ValueError("an edit writes the operator's checkout: personal mode only (a visitor's view reads)")
+        if op == "plan":
+            out = await loop.run_in_executor(None, self.srv.edit_plan, str(msg.get("path") or ""),
+                                             str(msg.get("old") or ""), str(msg.get("new") or ""))
+            return await self._send(ws, {"ch": "repl", "type": "edit", "op": "plan", "session": s.sid,
+                                         "req": msg.get("req"), **out})
+        tok = str(msg.get("token") or "")
+        if op == "refuse":
+            out = await loop.run_in_executor(None, self.srv.gate_refuse, tok)
+            return await self._send(ws, {"ch": "repl", "type": "edit", "op": "refused", "session": s.sid,
+                                         "req": msg.get("req"), "token": tok, **out})
+        if op != "confirm":
+            raise ValueError(f"edit op: plan | confirm | refuse, not {op!r}")
+        if s.running:
+            raise ValueError("busy: stop the running command before the write (the session re-opens after it)")
+        out = await loop.run_in_executor(None, self.srv.gate_confirm, tok)
+        await self._send(ws, {"ch": "repl", "type": "edit", "op": "written", "session": s.sid,
+                              "req": msg.get("req"), "token": tok, **out})
+        written = {str(w) for w in out.get("written") or []}
+        prog = self.srv.files_of(s.sid)
+        mine = {f["path"] for f in prog["files"]}
+        for o in list(self.sessions.values()):         # every session whose program or extension was written
+            try:
+                theirs = {f["path"] for f in self.srv.files_of(o.sid)["files"]}
+            except ValueError:
+                continue
+            if o is s or theirs & (written or mine):
+                if not o.running:
+                    try:
+                        await self.reopen(o, "edited")
+                    except ValueError as e:
+                        await self._broadcast(o, {"ch": "repl", "type": "error", "session": o.sid,
+                                                  "error": f"the file is written; the session did not re-open: {e}"})
+                await self._broadcast(o, await self._files_frame(o))
+        await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
 
     async def files(self, ws, ip, msg):
         """The checkout's files (e2e-workflow step 1): records sank by
         the domain agents (list; `sink` one into a session), `new`
-        domain, `save` the working copy (a diff first, the token of
-        that diff to write it). Nothing is committed."""
+        domain, `edit` a file of the session (a plan first, the token of
+        that plan to write it). Nothing is committed."""
         typ, loop = msg.get("type"), asyncio.get_running_loop()
         s = self.sessions.get(msg.get("session", ""))
         try:
@@ -368,24 +369,9 @@ class Gateway:
             if typ == "sink":
                 out = await loop.run_in_executor(s.pool, self.srv.load_sink, s.sid, str(msg.get("file") or ""))
                 return await self._send(ws, {"ch": "repl", "type": "sink", "session": s.sid, **out})
-            # save: the plan (diffs + token), or with token the write; refuse: the person said no
-            if self.cfg["mode"] == "shared":
-                raise ValueError("save writes the operator's checkout: personal mode only")
-            w = s.work
-            shown = {k: msg[k] for k in ("display", "line") if msg.get(k)}
-            if typ == "refuse":
-                tok = str(msg.get("token") or "")
-                out = await loop.run_in_executor(None, self.srv.save_refuse, tok)
-                return await self._send(ws, {"ch": "repl", "type": "refused", "session": s.sid, "token": tok, **out})
-            if msg.get("token"):
-                tok = str(msg["token"])
-                out = await loop.run_in_executor(None, lambda: self.srv.save_apply(w, tok, **shown))
-                w["certified"] = "checkout"
-                await self._broadcast(s, self._source_frame(s))
-                await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
-            else:
-                out = await loop.run_in_executor(None, lambda: self.srv.save_plan(w, **shown))
-            return await self._send(ws, {"ch": "repl", "type": "save", "session": s.sid, **out})
+            if typ == "edit":
+                return await self.edit(ws, msg, s)
+            raise ValueError(f"unknown type {typ!r}")
         except ValueError as e:
             return await self._send(ws, {"ch": "repl", "type": "error", "session": msg.get("session"),
                                          "req": msg.get("req"), "error": str(e)})
@@ -428,29 +414,21 @@ class Gateway:
             raise ValueError("a session's trace writes the operator's workspace: personal mode only")
         sh = self.srv.shells[s.sid]
         member = self.member_of(s)
-        spec = s.spec or {}
-        if spec.get("source") is not None:
-            exts = [e.get("name") or f"extension {k}" for k, e in enumerate(spec.get("extensions") or [], 1)
-                    if str(e.get("source") or "").strip()]
-            return SessionTrace(self.wsc.ws.path("trace", run=s.sid), sh, member, extensions=exts,
-                                source=str(spec["source"]))
         exts = [p.stem for p in self.srv.checkout_extensions(sh.path)]
         return SessionTrace(self.wsc.ws.path("trace", run=s.sid), sh, member, program=sh.path, extensions=exts)
 
     def member_of(self, s: "Sess") -> str:
         """The session's member as the workspace names it: its package (the program's file name, as
-        catalog.get finds it), else the in-memory copy's name."""
-        spec = s.spec or {}
-        if spec.get("source") is not None:
-            return str(spec.get("name") or "scratch").removesuffix(".llp").rsplit("/", 1)[-1]
+        catalog.get finds it)."""
         return Path(self.srv.shells[s.sid].path).stem
 
     async def reopen(self, s: "Sess", why: str):
-        """The session re-opened from what it was opened on (its catalog file, or its copy), epoch + 1: idle
-        recycling and the bundle's reload (STALE → reload)."""
+        """The session re-opened from its catalog file, epoch + 1: idle recycling, the bundle's reload (STALE →
+        reload) and an edit written (the sunk records and the selected one go on)."""
         loop = asyncio.get_running_loop()
         ep = self.srv.epochs.get(s.sid, 1)
-        fields = await loop.run_in_executor(s.pool, self.srv.open_session, s.sid, s.spec)
+        spec = dict(s.spec or {}, **({"keep_loop": True} if why == "edited" else {}))
+        fields = await loop.run_in_executor(s.pool, self.srv.open_session, s.sid, spec)
         if fields.get("status") == "closed":
             raise ValueError(fields.get("error") or "cannot re-open")
         self.srv.epochs[s.sid] = ep + 1
@@ -461,31 +439,6 @@ class Gateway:
     async def _send_all(self, frame: dict):
         for ws in list(self.pages):
             await self._send(ws, frame)
-
-    async def recompile(self, s: "Sess") -> dict:
-        """Build the session again from the working copy + extensions (in
-        memory). Success: a new interpreter, epoch + 1, the copy
-        certified (locally); failure: the error, the old world kept."""
-        w = s.work
-        spec = {"source": w["copy"], "name": w["name"] or "scratch",
-                "extensions": w["extensions"], "host": bool((getattr(s, "spec", None) or {}).get("host")),
-                "keep_loop": True}          # the sunk records and the selected record go on
-        loop = asyncio.get_running_loop()
-        ep = self.srv.epochs.get(s.sid, 1)
-        fields = await loop.run_in_executor(s.pool, self.srv.open_session,
-                                            s.sid, spec)
-        if fields.get("status") == "closed":
-            w["error"] = fields.get("error")
-            await self._broadcast(s, self._source_frame(s))
-            return {"ok": False, "error": w["error"]}
-        self.srv.epochs[s.sid] = ep + 1
-        s.spec, s.llp = spec, fields.get("llp", s.llp)
-        w["certified"], w["error"] = "local", None
-        s.log.clear()
-        await self._broadcast(s, self._session_frame(s, recompiled=True))
-        await self._broadcast(s, self._source_frame(s))
-        return {"ok": True, "key": self.srv.shells[s.sid].key,
-                "extensions": fields.get("extensions", [])}
 
     def _gate(self, cmd: str) -> Optional[str]:
         """Gateway-side policy beyond run_intent's whitelist: the retired
@@ -537,7 +490,7 @@ class Gateway:
         try:
             if self.cfg["mode"] == "shared":
                 raise ValueError("intents writes the operator's checkout and runs its model: personal mode only")
-            name = str(s.work.get("name") or "")
+            name = str(s.llp or "").split(" + ")[0]
             if sub[:1] == ["check"]:
                 out = await loop.run_in_executor(None, it.check, self.srv, name)
                 ok, result = out["ok"], out["output"]
@@ -753,24 +706,12 @@ class Gateway:
                     continue
                 if typ == "open":
                     await self.open(ws, ip, msg)
-                elif typ in ("records", "sink", "new", "save", "refuse", "gate"):    # e2e-workflow step 1; the gate
+                elif typ in ("records", "sink", "new", "gate", "edit"):    # e2e-workflow step 1; the gate; the edit
                     await self.files(ws, ip, msg)
                 elif typ == "intent":
                     await self.intent(ws, msg)
                 elif typ == "stop":
                     await self.stop(msg)
-                elif typ == "work":
-                    await self.work(ws, msg)
-                elif typ == "recompile":
-                    s = self.sessions.get(msg.get("session", ""))
-                    if s and ws in s.subs:
-                        if s.running:
-                            await self._send(ws, {
-                                "ch": "repl", "type": "error",
-                                "session": s.sid, "error": "busy — stop "
-                                "the running command before recompiling"})
-                        else:
-                            await self.recompile(s)
                 elif typ == "close":
                     s = self.sessions.get(msg.get("session", ""))
                     if s and (ws in s.subs):

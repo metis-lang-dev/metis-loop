@@ -82,25 +82,14 @@ def test_drain_is_a_pure_rows_to_writes_mapping(srv):
     assert fresh.catalogs_doc()["path"] == "meta/catalogs"
 
 
-def test_open_session_from_source_in_memory(srv, tmp_path, monkeypatch):
-    """CONSOLE-WS §4a from day one: {source, name} compiles catalog TEXT
-    in memory — the same kernel, no file written anywhere."""
-    src = (srv.resolve("three_pigs")).read_text().replace(
-        "#init pig 3", "#init pig 1")
+def test_an_open_from_source_is_refused(srv, tmp_path, monkeypatch):
+    """workspace-files s-9ea4cfa4: the workspace owns the file, no in-memory catalogs (the old CONSOLE-WS §4a
+    open from TEXT): a {source} open closes with the reason and writes nothing."""
     monkeypatch.chdir(tmp_path)
     before = set(srv.root.rglob("*"))
-    s = srv.open_session("f1", {"source": src, "name": "domains/ceptre/three_pigs/three_pigs"})
-    assert s["status"] == "running" and s["llp"].endswith("(in memory)")
-    assert s["ctx"]["counts"]["pig"] == 1                 # the edited text
-    out = srv.serve_one("f1", "run 6")["posting"]
-    assert out["status"] == "done"
+    s = srv.open_session("f1", {"source": "catalog x 1.\n", "name": "domains/ceptre/three_pigs/three_pigs"})
+    assert s["status"] == "closed" and "the workspace owns the file" in s["error"]
     assert set(srv.root.rglob("*")) == before and not any(tmp_path.iterdir())
-    bad = srv.open_session("f2", {"source": "stage go {", "name": "x"})
-    assert bad["status"] == "closed" and bad["error"]
-    big = srv.open_session("f3", {"source": "%" * (300 * 1024)})
-    assert "KiB" in big["error"]
-    scratch = srv.open_session("f4", {"source": src, "name": "my fork!"})
-    assert scratch["status"] == "running"
 
 
 def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
@@ -123,8 +112,6 @@ def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
     (tmp_path / ".metis/scratch").mkdir()
     (tmp_path / ".metis/scratch/x.llp").write_text("catalog x 1.\n")
     assert srv.catalogs() == ["domains/lamp/lamp"] and srv.records() == []
-    assert srv._source_path("a copy") == tmp_path.resolve() / ".metis/scratch/a_copy.llp"
-    assert not (tmp_path / ".metis/scratch/a_copy.llp").exists()
 
 
 def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):

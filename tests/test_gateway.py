@@ -68,8 +68,8 @@ def open3(ws, llp="three_pigs"):
     ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp,
                         "req": "r1"}))
     f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
-    if f.get("type") == "session":            # then the working copy (§4a)
-        frames(ws, lambda g: g.get("type") == "source")
+    if f.get("type") == "session":            # then its files, as they are on disk (workspace-files s-9ea4cfa4)
+        f["_files"] = frames(ws, lambda g: g.get("type") == "files")[-1]
     return f
 
 
@@ -230,19 +230,14 @@ def test_config_layers_and_mode_validation():
         load_config(mode="public")
 
 
-def test_open_from_source_over_the_socket(personal):
-    """§4a's open frame: catalog TEXT compiled in memory."""
-    from loop.console_serve import catalog_root
-    src = (catalog_root() / "domains/ceptre/three_pigs/three_pigs.llp").read_text()
+def test_an_open_from_source_is_refused(personal):
+    """workspace-files s-9ea4cfa4: the workspace owns the file; a session opens a checkout program, never
+    catalog TEXT compiled in memory (the old §4a open)."""
     with personal.ws() as ws:
         frames(ws, lambda f: f.get("type") == "catalogs")
-        ws.send(json.dumps({"ch": "repl", "type": "open", "req": "s1",
-                            "source": src.replace("#init pig 3",
-                                                  "#init pig 2"),
-                            "name": "domains/ceptre/three_pigs/three_pigs"}))
+        ws.send(json.dumps({"ch": "repl", "type": "open", "req": "s1", "source": "catalog x 1.\n", "name": "x"}))
         f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
-        assert f["type"] == "session" and f["llp"].endswith("(in memory)")
-        assert f["ctx"]["counts"]["pig"] == 2
+        assert f["type"] == "error" and f["req"] == "s1" and "the workspace owns the file" in f["error"]
 
 
 def test_vendor_bundles_served_and_nothing_else():
@@ -306,7 +301,7 @@ def test_shared_mode_never_shows_the_operators_paths():
         with r.ws("t0k") as ws:
             got = frames(ws, lambda f: f.get("type") == "catalogs")
             ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs"}))
-            got += frames(ws, lambda f: f.get("type") == "source")
+            got += frames(ws, lambda f: f.get("type") == "files")
             sid = [f for f in got if f.get("type") == "session"][-1]["session"]
             for k, cmd in enumerate(["run 2", "list", "ctx", "state", "why",
                                      "graph", "show llp", "findings",
@@ -346,9 +341,9 @@ def test_interventions_served_in_shared_mode_and_whatif_run_capped():
         r.close()
 
 
-def test_the_copy_of_a_domain_carries_its_extensions(tmp_path):
-    """human-loop step 1: the one-click open's working copy is the program
-    AND its extensions (the served program), certified as the catalog's."""
+def test_the_files_of_a_domain_carry_its_extensions(tmp_path):
+    """human-loop step 1, workspace-files s-9ea4cfa4: the one-click open's files are the program AND its
+    extensions (the served program), as they are on disk."""
     from loop.console_serve import ConsoleServer
     from test_workflow_files import SOIL, VISITOR
     srv = ConsoleServer(tmp_path)
@@ -362,8 +357,10 @@ def test_the_copy_of_a_domain_carries_its_extensions(tmp_path):
         with r.ws() as ws:
             frames(ws, lambda f: f.get("type") == "catalogs")
             ws.send(json.dumps({"ch": "repl", "type": "open", "llp": llp, "req": "r1"}))
-            src = frames(ws, lambda f: f.get("type") == "source")[-1]
-            assert src["extensions"] == [{"name": "visitor", "source": VISITOR}] and src["certified"] == "checkout"
+            fs = frames(ws, lambda f: f.get("type") == "files")[-1]
+            assert fs["program"] == "domains/plant/plant.llp"
+            assert fs["files"] == [{"path": "domains/plant/plant.llp", "text": SOIL, "role": "program"},
+                                   {"path": "domains/plant/extensions/visitor.llp", "text": VISITOR, "role": "extension"}]
     finally:
         r.close()
 
@@ -383,7 +380,7 @@ def test_a_gateway_started_in_an_empty_dir_serves_it(tmp_path, monkeypatch):
             assert [f["readme"] for f in hello if f.get("type") == "readme"] == [None]     # no README.md
             assert hello[-1]["names"] == []
             ws.send(json.dumps({"ch": "repl", "type": "new", "name": "lamp", "line": "a lamp", "req": "n1"}))
-            got = frames(ws, lambda f: f.get("type") == "source")
+            got = frames(ws, lambda f: f.get("type") == "files")
             doms = [f["domains"] for f in got if f.get("type") == "domains"]
             assert [e["name"] for e in doms[-1]] == ["lamp"]
             assert (tmp_path / "domains/lamp/lamp.llp").is_file()

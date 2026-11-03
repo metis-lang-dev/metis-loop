@@ -1,7 +1,8 @@
 """e2e-workflow s-143c3088 step 1 (b)(c): the loop console's checkout
 files — the records the domain agents sank (listed, loaded into a session
-with metispy's own sink), `new <name>`, `save` (a diff first, the token of
-that diff to write, never a commit). On a scratch checkout."""
+with metispy's own sink), `new <name>`, and the EDITOR's save as one edit
+of the file (workspace-files s-9ea4cfa4: a plan first, the token of that plan
+to write, never a commit). On a scratch checkout."""
 import json
 
 import pytest
@@ -31,23 +32,22 @@ def test_new_makes_a_domain_that_opens_and_runs(srv, tmp_path):
     assert [e["path"] for e in srv.domains() if e["kind"] == "domain"] == ["domains/plant/plant"]
 
 
-def test_save_shows_the_diff_and_writes_only_what_was_shown(srv, tmp_path):
+def test_an_edit_shows_the_diff_and_writes_only_what_was_shown(srv, tmp_path):
     llp = srv.new_domain("plant", "a plant")
     path = tmp_path / "domains/plant/plant.llp"
-    work = {"name": llp, "copy": path.read_text().replace("%% I wake up.", "%% I wake up slowly."),
-            "extensions": [{"name": "Visitor Waters", "source": "% an extension\n"}]}
-    plan = srv.save_plan(work)
-    assert [f["path"] for f in plan["files"]] == ["domains/plant/plant.llp", "domains/plant/extensions/visitor_waters.llp"]
-    assert "-  %% I wake up." in plan["files"][0]["diff"] and "+  %% I wake up slowly." in plan["files"][0]["diff"]
-    assert plan["files"][1]["new"]
-    with pytest.raises(ValueError, match="changed since"):
-        srv.save_apply({**work, "copy": work["copy"] + "\n"}, plan["token"])   # not the diff the viewer saw
+    text = path.read_text()
+    plan = srv.edit_plan("domains/plant/plant.llp", text, text.replace("%% I wake up.", "%% I wake up slowly."))
+    assert "-  %% I wake up." in plan["diff"] and "+  %% I wake up slowly." in plan["diff"] and plan["ok"]
+    path.write_text(text + "\n")                                   # the file changed on disk after the plan
+    from metis.gate import Refused
+    with pytest.raises((ValueError, Refused)):
+        srv.gate_confirm(plan["token"])
     assert "slowly" not in path.read_text()
-    out = srv.save_apply(work, plan["token"])
-    assert out["written"] == ["domains/plant/plant.llp", "domains/plant/extensions/visitor_waters.llp"]
-    assert "slowly" in path.read_text() and srv.save_plan(work)["files"] == []   # saved: nothing left to save
-    with pytest.raises(ValueError, match="in memory only"):
-        srv.save_plan({"name": "scratch thing", "copy": "x"})
+    path.write_text(text)
+    plan = srv.edit_plan("domains/plant/plant.llp", text, text.replace("%% I wake up.", "%% I wake up slowly."))
+    assert srv.gate_confirm(plan["token"])["written"] == ["domains/plant/plant.llp"]
+    assert "slowly" in path.read_text()
+    assert srv.open_session("s", {"llp": llp})["status"] != "closed"
 
 
 def test_records_listed_newest_first_and_sunk_into_a_session(srv, tmp_path):
@@ -113,16 +113,16 @@ def test_a_domains_extensions_are_opened_with_it(srv, tmp_path):
     assert [p.name for p in srv.checkout_extensions(d / "plant.llp")] == ["visitor.llp"]
     (tmp_path / "loose.llp").write_text(SOIL)
     assert srv.checkout_extensions(tmp_path / "loose.llp") == []
-    # save/apply plans nothing for an unchanged copy + its extensions as opened
-    work = {"name": llp, "copy": SOIL, "extensions": [{"name": "visitor", "source": VISITOR}]}
-    assert srv.save_plan(work)["files"] == []
+    # the EDITOR's files: the program and its extension, as they are on disk
+    assert srv.open_session("s", {"llp": llp})["status"] != "closed"
+    assert [(f["path"], f["role"]) for f in srv.files_of("s")["files"]] == [
+        ("domains/plant/plant.llp", "program"), ("domains/plant/extensions/visitor.llp", "extension")]
 
 
-def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
-    """The architect's A6 finding: a recompile started a fresh session and
-    dropped the sunk records — Claude could not check its candidate against
-    the selected record. Now the records, the selection (its scene) and the
-    loop's text go on across a recompile (keep_loop), not across an open."""
+def test_an_edit_reopen_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
+    """The architect's A6 finding: a re-open started a fresh session and
+    dropped the sunk records. Now the records, the selection (its scene) and the
+    loop's text go on across the re-open after an edit (keep_loop), not across an open."""
     llp = srv.new_domain("plant", "a plant")
     (tmp_path / "domains/plant/plant.llp").write_text(SOIL)
     assert srv.open_session("s", {"llp": llp})["status"] != "closed"
@@ -135,8 +135,10 @@ def test_a_recompile_keeps_the_sunk_records_and_the_selected_one(srv, tmp_path):
     sh = srv.shells["s"]
     assert sh.cmd_record("0")["ok"] and sh.loop.rec_idx == 0
     sh.loop.text = "a visitor waters the plant when it is dry"
-    out = srv.open_session("s", {"source": SOIL, "name": llp, "extensions": [{"name": "visitor", "source": VISITOR}],
-                                 "keep_loop": True})
+    d = tmp_path / "domains/plant"
+    (d / "extensions").mkdir()
+    (d / "extensions/visitor.llp").write_text(VISITOR)           # the edit written: an extension now
+    out = srv.open_session("s", {"llp": llp, "keep_loop": True})
     assert out["status"] != "closed"
     new = srv.shells["s"]
     assert new is not sh and len(new.loop.records) == 1 and new.loop.rec_idx == 0

@@ -90,16 +90,13 @@ class SessionTrace:
     a recompile, or one that changed the state with no row) starts a new segment from the session's own state,
     marked cut: the replay resumes from its checkpoint and never reads across it."""
 
-    def __init__(self, path, shell, member, program=None, extensions=(), source=None):
-        """PROGRAM: the session's checkout .llp; SOURCE: an in-memory session's text, written beside the segments
-        as program.llp (its includes resolve as METIS_HOME's from there); EXTENSIONS: the names merged into the
-        session (the header says so: a replay needs them merged too)."""
+    def __init__(self, path, shell, member, program=None, extensions=()):
+        """PROGRAM: the session's checkout .llp (the workspace owns the file: no in-memory sessions,
+        workspace-files s-9ea4cfa4); EXTENSIONS: the names merged into the session (the header says so: a
+        replay needs them merged too)."""
         self.path, self.member = Path(path), member
         self.w = T.Segments(self.path, every=0)
         self.k = 0
-        if source is not None:
-            program = self.path / "program.llp"
-            program.write_text(source)
         self.program = Path(program) if program else None
         self.extensions = [str(e) for e in extensions]
         self._attach(shell, cut=None)

@@ -73,15 +73,22 @@ def test_gateway_transport_is_flag_gated_and_manifest_driven():
     assert 'type:"stop"' in PAGE and 'id="stopcmd"' in PAGE
 
 
-def test_working_copy_editor_and_panels():
-    """§4a: CodeMirror only from the ONE vendor bundle (two CDN copies of
-    @codemirror/state refuse to run) and only under the gateway; the
-    copy lives in IndexedDB; the right side is tool panels whose state
-    is a per-viewer convenience."""
+def test_the_editor_over_the_files_and_panels():
+    """CodeMirror only from the ONE vendor bundle (two CDN copies of @codemirror/state refuse to run) and only
+    under the gateway; the EDITOR edits the session's files as they are on disk, save is the edit frame (diff +
+    findings, then confirm), a visitor's view reads only (workspace-files s-9ea4cfa4: no copy, no IndexedDB);
+    the right side is tool panels whose state is a per-viewer convenience."""
     assert 'import("/vendor/codemirror.js")' in PAGE
     assert not re.search(r"https?://[^\"']*codemirror", PAGE)
     assert "if(!GW){cmLib=null;return cmLib}" in PAGE
-    assert 'indexedDB.open("loopconsole"' in PAGE
+    for gone in ("indexedDB", "IndexedDB", "working " + "copy", "recompile", "certified", 'type:"work"', 'type:"save"',
+                 "saveWork", "newExtension", "offeredCopy"):
+        assert gone not in PAGE, gone
+    assert 'if(f.type==="files"){if(f.session===sid)onFiles(f);return}' in PAGE
+    assert 'wsSend({ch:"repl",type:"edit",session:sid,path,old:w.base,new:w.get()' in PAGE
+    assert 'type:"edit",op:"confirm"' in PAGE and 'type:"edit",op:"refuse"' in PAGE
+    assert 'const canWrite=()=>!!GW&&!!manifestM&&manifestM.mode==="personal";' in PAGE
+    assert "lib.EditorView.editable.of(false)" in PAGE and "ta.readOnly=ro" in PAGE
     for d in ("catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
     assert 'key:"loopconsole.docks.v5"' in PAGE   # v5: CHAT + SURPRISES (loop-chat step 1; v4: the five workspace docks)

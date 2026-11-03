@@ -63,9 +63,12 @@ gate's memory over a CLI is `.metis/gate.json`; a console keeps it in its proces
 The console holds one `Gate()` in its process. Every write it makes is a plan the person reads in
 the GATE dialog (a modal; apply confirms, refuse and Escape refuse):
 
-- **apply** (the working copy and its extensions; display and line on the dialog), with the
-  since-diff of a refused proposal: `repl/save` → the plan, with its token → the write,
-  `repl/refuse`;
+- **save** of a file in the EDITOR (workspace-files s-9ea4cfa4: the workspace owns the file, there is no
+  copy): ONE exact edit, `repl/edit {session, path, old, new}` → `{op: plan, diff, findings: [{level, code,
+  line, msg}], ok, token?}` (findings = metisc's diagnostics of the edited text, an extension against its
+  program, and the lint rows of a program; an error-level finding makes no token), then `repl/edit {op:
+  confirm, token}` writes it and every session on that file re-opens (epoch + 1, its sunk records kept), or
+  `{op: refuse}` (remembered: the next plan of it shows what changed since); personal mode only;
 - **on disk**, `repl/gate {op: propose, kind}`: **edit** a file (README, domain.yaml,
   intent.yaml, the host, an included file), **README** (title and summary, the rest by the SDK),
   **intents** (the skeleton from the program's `cmd_*` atoms, no model), **take** into the

@@ -47,14 +47,10 @@ def agent_python(root):
 
 
 def domain_of(srv, name):
-    """The open copy's checkout domain: (its directory, its name). Only a
+    """The open session's checkout domain: (its directory, its name). Only a
     domain directory (<name>/<name>.llp with its domain.yaml anywhere under
     the root, or domains/<name>/<name>.llp) carries intents."""
-    try:
-        prog = srv.resolve(name)
-    except ValueError:
-        raise ValueError("intents belong to a checkout domain: this copy is in memory only "
-                         "(start one with `new`, or open a domain from the catalog)")
+    prog = srv.resolve(name)
     d = prog.parent
     if prog.stem != d.name or not (d.parent.name == "domains" or (d / "domain.yaml").is_file()):
         raise ValueError(f"{prog.relative_to(srv.root.resolve())} is not a domain directory's program "

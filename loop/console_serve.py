@@ -74,29 +74,7 @@ stage main {{
 #init idle 1
 """
 
-MAX_SOURCE = 256 * 1024     # an in-memory catalog's byte cap
 README_MAX = 64 * 1024      # the root README the page lands on
-
-
-def _source_repl(path: Path, source: str, seed: int, plugin=None):
-    """A Repl over catalog TEXT, compiled in memory (CONSOLE-WS §4a):
-    no temp file, nothing on disk. `path` only names it and anchors
-    includes (resolved against the checkout); the kernel is untouched —
-    the subclass swaps the one read in `_compile`."""
-    from metis.lang import compile_catalog, parse, resolve_includes
-    from metis.lang.directives import embedded_case
-    from metis.lang.repl import Repl
-
-    class SourceRepl(Repl):
-        def _compile(self):
-            text = self._source
-            ast = parse(text, file=str(self.path))
-            doc = compile_catalog(resolve_includes(ast, self.path.parent))
-            return text, doc, embedded_case(text)
-    r = SourceRepl.__new__(SourceRepl)
-    r._source = source
-    SourceRepl.__init__(r, path, seed=seed, stdout=io.StringIO(), plugin=plugin, host=bool(plugin))
-    return r
 
 
 def _now() -> str:
@@ -225,18 +203,6 @@ class ConsoleServer:
                            "epoch": self.epochs[sid], "ctx": c,
                            "last_ts": _now()})
 
-    def _source_path(self, name: str) -> Path:
-        """Where an in-memory catalog is anchored (names it, resolves its
-        includes): a checkout name keeps that file's directory, anything
-        else a virtual <root>/.metis/scratch/<safe>.llp — never written."""
-        try:
-            return self.resolve(name)
-        except ValueError:
-            safe = "".join(c if c.isalnum() or c in "-_." else "_"
-                           for c in name.split("/")[-1])[:64]
-            return self.root.resolve() / catalog.STATE / "scratch" / (
-                (safe.removesuffix(".llp") or "scratch") + ".llp")
-
     @staticmethod
     def _extension_text(src: str) -> str:
         """A extension's approved text = its leading `%` comment block (the
@@ -250,48 +216,25 @@ class ConsoleServer:
         return "\n".join(head) or "extension"
 
     def build(self, doc: dict):
-        """A Repl for `{llp}` (a checkout catalog) or `{source, name,
-        extensions?}` — catalog TEXT compiled in memory, then each extension
-        (`{source, name}`) gated as an extension against it and merged into
-        THIS session only (the loop's own llp → gate → accept, called
-        here — `accept` stays off the wire; nothing is committed).
-        Returns (repl, llp label, extension reports); raises ValueError with
-        the findings on any failure."""
+        """A Repl for `{llp}` (a checkout catalog: the workspace owns the file, workspace-files s-9ea4cfa4),
+        its domain's extensions merged into THIS session (llp → gate → accept, `accept` off the wire).
+        Returns (repl, llp label, extension reports); raises ValueError with the findings on any failure."""
         from metis.lang.repl import Repl
-        if doc.get("source") is None:
-            path = self.resolve(doc.get("llp", ""))
-            rel = str(path.relative_to(self.root.resolve()).with_suffix(""))
-            # {llp, host: true} — the one-click open of the CATALOG panel:
-            # the host the INDEX names for this checkout file (never a
-            # spec from the wire: D4), attached as an operator's --host
-            spec = None
-            if doc.get("host"):
-                spec = catalog.host_of(rel, self.root)
-            r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
-            # the served program is the program plus its extensions (human-loop
-            # step 1): a domain's extensions/*.llp merged as a session's are
-            extensions = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_extensions(path)]
-            reports = self._merge_extensions(r, extensions)
-            label = rel + (f" + {spec}" if spec else "")
-            if reports:
-                label += f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
-            return r, label, reports
-        src = str(doc["source"])
-        extensions = list(doc.get("extensions") or [])
-        total = len(src.encode()) + sum(len(str(p.get("source", "")).encode())
-                                        for p in extensions)
-        if total > MAX_SOURCE:
-            raise ValueError(f"catalog source over {MAX_SOURCE // 1024} KiB")
-        name = str(doc.get("name") or "scratch").strip() or "scratch"
-        anchor = self._source_path(name)
-        spec = None
-        if doc.get("host") and anchor.is_file():    # a hosted checkout domain recompiled from its copy
-            spec = catalog.host_of(anchor.relative_to(self.root.resolve()).with_suffix("").as_posix(), self.root)
-        r = _source_repl(anchor, src, self.seed, plugin=spec)
+        if doc.get("source") is not None:
+            raise ValueError("a session opens a checkout program ({llp}): the workspace owns the file, "
+                             "edit it in the EDITOR (no in-memory catalogs)")
+        path = self.resolve(doc.get("llp", ""))
+        rel = str(path.relative_to(self.root.resolve()).with_suffix(""))
+        # {llp, host: true} — the one-click open of the CATALOG panel: the host the INDEX names for this
+        # checkout file (never a spec from the wire: D4), attached as an operator's --host
+        spec = catalog.host_of(rel, self.root) if doc.get("host") else None
+        r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
+        # the served program is the program plus its extensions (human-loop step 1)
+        extensions = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_extensions(path)]
         reports = self._merge_extensions(r, extensions)
-        label = name.removesuffix(".llp") + " (in memory" + (
-            f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
-            if reports else "") + ")"
+        label = rel + (f" + {spec}" if spec else "")
+        if reports:
+            label += f" + {len(reports)} extension{'s' if len(reports) != 1 else ''}"
         return r, label, reports
 
     def _merge_extensions(self, r, extensions) -> list:
@@ -326,7 +269,7 @@ class ConsoleServer:
 
     @staticmethod
     def _carry_loop(old, new):
-        """A recompile keeps the session's loop: the sunk records, the
+        """A re-open after an edit keeps the session's loop: the sunk records, the
         selected record (its scene restored by selecting it again) and the
         loop's text — Claude checks a candidate against the record it
         explains (human-loop step 1, the architect's A6 finding)."""
@@ -341,19 +284,16 @@ class ConsoleServer:
             new.loop.text = lo.text
 
     def open_session(self, sid: str, doc: dict) -> dict:
-        """Bind an interpreter to sessions/{sid} from `{llp: name}` (a
-        checkout catalog) or `{source, name, extensions?}` (CONSOLE-WS §4a:
-        a copy and its extensions, compiled in memory — never on
-        the operator's disk). The live interpreter is replaced only
-        when everything compiles and every extension is admitted; a failure
-        comes back as {status: "closed", error} and leaves an existing
-        session as it was."""
+        """Bind an interpreter to sessions/{sid} from `{llp: name}` (a checkout
+        catalog). The live interpreter is replaced only when everything
+        compiles and every extension is admitted; a failure comes back as
+        {status: "closed", error} and leaves an existing session as it was."""
         try:
             r, llp, reports = self.build(doc)
         except Exception as e:                      # noqa: BLE001
             return {"status": "closed", "error": self.scrub(str(e)),
                     "last_ts": _now()}
-        if doc.get("keep_loop") and sid in self.shells:     # a recompile: the loop goes on
+        if doc.get("keep_loop") and sid in self.shells:     # an edit written: the loop goes on
             self._carry_loop(self.shells[sid], r)
         self.shells[sid] = r
         self.epochs[sid] = 1
@@ -466,31 +406,81 @@ class ConsoleServer:
 
     # -- the gate: every write is a plan the person confirms (docs/LOOP.md) ----------
 
-    def save_plan(self, work: dict, display=None, line=None) -> dict:
-        """What `save` would write: the working copy over its checkout program, each
-        extension as <domain>/extensions/<name>.llp — each with its unified diff and,
-        when the person refused an earlier proposal of it, `since_diff` (what changed
-        since). The gate's plan; `token` names exactly it (save checks it)."""
-        domain, text, exts = self._plan_args(work)
-        pl = self.gate.propose("program", domain, self.root, text=text, extensions=exts,
-                               **{k: v for k, v in (("display", display), ("line", line)) if v})
-        return self._shown(pl)
+    def files_of(self, sid: str) -> dict:
+        """The EDITOR's files of a session (workspace-files s-9ea4cfa4): its program and its domain's
+        extensions as they are on disk, {program, files: [{path, text, role}]}, paths relative to the root."""
+        sh = self.shells.get(sid)
+        if sh is None:
+            raise ValueError(f"no open session '{sid}'")
+        root = self.root.resolve()
+        prog = Path(sh.path).resolve()
+        out = [{"path": prog.relative_to(root).as_posix(), "text": prog.read_text(), "role": "program"}]
+        for e in self.checkout_extensions(prog):
+            e = Path(e).resolve()
+            if e.is_relative_to(root):
+                out.append({"path": e.relative_to(root).as_posix(), "text": e.read_text(), "role": "extension"})
+        return {"program": out[0]["path"], "files": out}
 
-    def save_apply(self, work: dict, token: str, display=None, line=None) -> dict:
-        """Write the plan the viewer saw (its token), never anything else; never a git
-        commit (that stays the operator's). The copy as it is now must plan the same
-        token: a copy changed since the diff was shown refuses."""
-        now = self.save_plan(work, display, line)
-        if not token or now["token"] != token:
-            self.gate.store["plans"].pop(now["token"], None)
-            raise ValueError("the copy changed since the diff was shown — review the new diff")
-        out = self.gate_confirm(token)
-        return {"written": out["written"], "token": token}
+    def _domain_file(self, rel: str):
+        """(the domain, the path inside its directory) of a checkout file `rel` (relative to the root)."""
+        p = self._under(rel)
+        for d in catalog.walk("domain.yaml", self.root):
+            dd = Path(d).parent.resolve()
+            if dd in p.parents:
+                return dd.name, p.relative_to(dd).as_posix(), p
+        raise ValueError(f"'{rel}' is not a file of a domain of this catalog")
 
-    def save_refuse(self, token: str) -> dict:
-        """The person said no to the save: the gate remembers what was refused (the next
-        plan of those files shows what changed since)."""
-        return self.gate_refuse(token)
+    def _plan_edit(self, domain: str, path: str, old: str, new: str) -> dict:
+        """The edit's dry run: {path, diff, findings: [{level, code, line, msg}]}: metisc's diagnostics of the
+        edited text (an extension against its program) and metis.lint's rows for a program. Uses metispy's
+        catalog.edit(..., dry_run=True) when it has it (workspace-files step 1), else computes them here."""
+        import inspect
+        if "dry_run" in inspect.signature(catalog.edit).parameters:
+            pl = catalog.edit(domain, path, old, new, r=self.root, dry_run=True)
+            return {"path": path, "diff": pl.get("diff", ""), "findings": list(pl.get("findings") or [])}
+        dom = catalog.get(domain, self.root)
+        d = Path(dom.dir).resolve()
+        p = (d / path).resolve()
+        text = catalog.edited(p.read_text(), old, new, what=f"{domain}/{path}")
+        diff = catalog._diff(p.read_text(), text, path, path)
+        found = []
+        if p.suffix == ".llp":
+            prog = Path(dom.program).resolve() if dom.program else None
+            with catalog._Beside(p, text) as cand:
+                for x in catalog.diagnostics(cand, prog if prog and p != prog else None):
+                    found.append({"level": "error" if x.get("severity") == "error" else "warning",
+                                  "code": x.get("code") or "", "line": x.get("line"), "msg": x.get("text") or ""})
+                if p == prog and not any(f["level"] == "error" for f in found):
+                    try:
+                        from metis.lang import compile_catalog, parse, resolve_includes
+                        from metis.lint import lint
+                        doc = compile_catalog(resolve_includes(parse(text, file=str(p)), p.parent))
+                        for x in lint(doc, text, dom.manifest, cand):
+                            found.append({"level": "lint", "code": x.code, "line": x.loc.line or None, "msg": x.text})
+                    except Exception as e:      # noqa: BLE001 — lint never refuses: say it did not run
+                        found.append({"level": "lint", "code": "lint-not-run", "line": None, "msg": str(e)[:300]})
+        return {"path": path, "diff": diff, "findings": found}
+
+    def edit_plan(self, rel: str, old: str, new: str) -> dict:
+        """The EDITOR's save (workspace-files s-9ea4cfa4): one exact edit of a checkout file `rel`, old → new,
+        planned: {path, diff, findings, ok, token?}. ok = no error-level finding; only then the console's gate
+        holds a plan (its token) that confirm writes (gate_confirm). Lint rows show, never refuse."""
+        domain, path, _ = self._domain_file(rel)
+        try:
+            pl = self._plan_edit(domain, path, old, new)
+        except ValueError as e:
+            raise ValueError(self.scrub(str(e))) from None
+        out = {"path": rel, "domain": domain, "diff": pl["diff"], "findings": pl["findings"],
+               "ok": not any(f.get("level") == "error" for f in pl["findings"])}
+        if out["ok"]:
+            try:
+                g = self.gate.propose("edit", domain, self.root, path=path, old=old, new=new)
+            except Refused as e:
+                out["ok"] = False
+                out["findings"] = out["findings"] + [{"level": "error", "code": "gate", "line": None, "msg": str(e)}]
+            else:
+                out["token"] = g["token"]
+        return self.scrub(out)
 
     def gate_plan(self, kind: str, domain: str, args: dict) -> dict:
         """A plan of one of the console's writes (the loop's kinds, docs/LOOP.md):
@@ -581,35 +571,6 @@ class ConsoleServer:
         line = " ".join((line or "").split())[:160]
         return self._shown(self.gate.propose("program", name, self.root, text=p.read_text(),
                                              **({"line": line} if line else {})))
-
-    def _plan_args(self, work: dict):
-        """(the domain, the copy's text, {extension name: text}) — the domain is the
-        package whose program the copy is."""
-        try:
-            prog = self.resolve(str(work.get("name") or ""))
-        except ValueError:
-            raise ValueError("save writes a checkout domain: this copy is in memory only "
-                             "(start one with `new`, or open a catalog from the list)")
-        domain = self._domain_of(prog)
-        exts = {}
-        for k, pk in enumerate(work.get("extensions") or [], 1):
-            n = "_".join("".join(c if c.isalnum() else " " for c in str(pk.get("name") or "").lower()).split())
-            n = n if n[:1].isalpha() else f"extension{k}" if not n else f"x{n}"
-            exts[n] = str(pk.get("source") or "")
-        return domain, str(work.get("copy") or ""), exts
-
-    def _domain_of(self, prog: Path) -> str:
-        """The domain whose program `prog` is (its package's name: the directory holding
-        the domain.yaml that names it)."""
-        prog = Path(str(prog) + ("" if str(prog).endswith(".llp") else ".llp")).resolve()
-        for d in catalog.walk("domain.yaml", self.root):
-            try:
-                dom = catalog.get(Path(d).parent.name, self.root)
-            except Exception:  # noqa: BLE001 — a manifest the loader refuses is not this program's
-                continue
-            if dom.program and Path(dom.program).resolve() == prog:
-                return dom.name
-        raise ValueError(f"save writes a checkout domain: no package of the catalog serves {prog.name}")
 
     def domains_doc(self) -> dict:
         """The `meta/domains` write (the db transport's CATALOG panel)."""

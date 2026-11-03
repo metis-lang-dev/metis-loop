@@ -22,7 +22,7 @@ workspace already (its `.metis/road/` holds the page's run today).
 |---|---|---|---|
 | the catalog | `DIR/domains/<name>/` (metis.catalog: root, index, plan/confirm/refuse, state = `DIR/.metis/`) | `.metis/records/`, `sessions/`, `seed/` | none: a library |
 | the bundle | `DIR/domains/composition.yaml` + `build/<name>.build` + the image (`metisc build .`, spec/17 §7; the road: `road/domains/`) | `build/`, `image.golden` | none: files |
-| the human loop's backend | `loop/gateway.py` + `console_serve.py`: REPL sessions over the kernel wire, the editor's working copy, records sink, the gate (plan/confirm), the LLM seats formalize/narrate/agent chat on `loop/brain.py` (claude -p, OpenRouter, Ollama) | memory only (D4) | ONE WebSocket `/ws`, channels `repl`, `meta`, `chat`, gate ops |
+| the human loop's backend | `loop/gateway.py` + `console_serve.py`: REPL sessions over the kernel wire, the EDITOR's gated edit of the file on disk (workspace-files), records sink, the gate (plan/confirm), the LLM seats formalize/narrate/agent chat on `loop/brain.py` (claude -p, OpenRouter, Ollama) | memory only (D4) | ONE WebSocket `/ws`, channels `repl`, `meta`, `chat`, gate ops |
 | the console | `console/loop_console.html` + `console/lib/shell.*` + the SDK's catalog widget | browser | the gateway's socket |
 | the pi loop | `pi/loop.sh`: pi (TUI or `--mode rpc`) with `metis-domain.ts` (domain_open/clock/ports/world/episodes) and `metis-repl.ts` (REPL tools, catalog_apply/edit/take at pi's confirm); the brain on Ollama (`pi/ollama/`, `models.json`) | `.metis/seed/`, pi's own session files | pi's RPC mode over stdio, or nothing (the TUI) |
 | the policy driver + the pack verb | `pi/policy/driver.py` (phases, the ask), `propose.sh --pack` (the judge: gate cascade, goldens, cases, fired diff, lint rows, the ruling document) | `RUN/records/`, `RUN/state/journal.jsonl`, `RUN/cost.jsonl`, the ruling .md | none: files and a command line |
@@ -124,7 +124,7 @@ Channels:
 
 | channel | kept / new | frames (as the gateway's docstring lists them) |
 |---|---|---|
-| `repl` | KEPT | open/intent/stop/work/recompile/close/records/sink/new/save/refuse, the gate ops propose/confirm/refuse |
+| `repl` | KEPT | open/intent/stop/close/records/sink/new, `edit` (plan/confirm/refuse: the EDITOR's save, one gated edit of the file on disk; workspace-files s-9ea4cfa4), the gate ops propose/confirm/refuse; the working copy's work/recompile/save/refuse and the open from TEXT are retired |
 | `meta` | KEPT | manifest, catalogs, readme, domains (the CATALOG widget) |
 | `chat` | RETIRED | the agent seat on claude -p (the brain seats go: formalize, narrate, agent chat; `loop/brain.py`, `loop/ollama.py`, `loop/llm.py`, `loop/narrate.py`, `loop/agent_service.py` leave with their console panels) |
 | `trace` | NEW | `{type:"list"}` → the workspace's traces; `{type:"open", run}` → header, checkpoints, k range; `{type:"tick", run, member, k}` → the Tick table (counts, fired, made; `metis.trace.timeline`); `{type:"verb", name, args, req}` → one of the trace verbs as a declared tool (§3.1) |
@@ -207,7 +207,7 @@ The panels, each over one channel:
 | panel | over | shows / does |
 |---|---|---|
 | CATALOG | meta | as today |
-| REPL, EDITOR | repl | as today (sessions, intents, the working copy, save through the gate) |
+| REPL, EDITOR | repl | sessions, intents; the EDITOR edits the file on disk, save = one gated edit (diff + findings, confirm) |
 | BUNDLE | bundle | name, members, image hash, build time, STALE with the reload button |
 | TRACE | trace | the runs; a run's k range with checkpoints; the Tick table at k (counts, fired rules, made atoms), step ±1, jump; the verbs as buttons with their declared args; "mark here" → a surprise draft |
 | SURPRISES | surprise | the records with status open / taken / ruled, the drop dialog (k, window, atoms, words), each ruled one linking its ruling |
@@ -250,6 +250,10 @@ What the road owes the shared frontend (the next subject, road-agent; the road's
   `ollama.py`, the `chat` channel, the console's formalize/narrate/agent panels, `--brain` on `metis-loop`),
   `pi/ollama/`, the Ollama model entries. The formalize step of the human loop (a surprise → a candidate by
   claude -p) is the pi loop's now: the backend drops, the loop formalizes.
+- Retired (workspace-files s-9ea4cfa4, the user 2026-11-03: the workspace owns the file): the console's
+  working copy (IndexedDB, the gateway's memory), the floating editors over it, the open from TEXT
+  (`SourceRepl`, `{source, name, extensions}`, `MAX_SOURCE`), recompile and the copy's save gate, the
+  SessionTrace of an in-memory session. The EDITOR edits the file through one gated edit (§6, LOOP.md).
 - Kept: the gateway, the Session Manager, the modes, the gate (metis.gate, once), the REPL and editor
   panels, the catalog widget, `metis.loop.watch`, `pi/policy` (the driver stays the world-runner's loop; its
   RUN dir may move under `.metis/runs/` later, not in this subject).
