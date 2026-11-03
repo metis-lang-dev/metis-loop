@@ -1,7 +1,7 @@
 // roots — which catalogs the loop's writes go to (the loop's own policy, from
 // loop.sh's environment; the catalog itself is the loop SDK's, ./sdk/catalog.ts).
 // A loop starts in a directory, and that directory is the catalog (cwd-root s-ddac2cbf).
-//   METIS_CATALOG         the catalog the loop writes (catalog_apply): loop.sh sets it to DIR;
+//   METIS_CATALOG         the catalog the loop writes (catalog_new, catalog_edit): loop.sh sets it to DIR;
 //                         unset, the cwd (the SDK's own rule)
 //   METIS_LOOP_TAKE_INTO  the catalog catalog_take takes a finished domain into: named only
 //   METIS_LOOP_RUN        the loop's state (records/, seed/, seed.json): DIR/.metis/, the taken domain's README

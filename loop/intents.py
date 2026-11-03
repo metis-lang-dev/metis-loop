@@ -126,7 +126,8 @@ def propose(srv, name, text):
 def save(srv, pending, token):
     """Write the proposal `token` names, generate its files at their fixed
     names, and name the spec in the manifest (intent: {spec}) so
-    metis-agent reads them: the SDK's catalog.apply (the manifest checked by
+    metis-agent reads them: the catalog's edit of intent.yaml (old: its text now,
+    or "" when the domain has none: workspace-files s-9ea4cfa4; the manifest checked by
     the loader). A manifest whose intent: names another spec is the
     operator's: not touched, reported as manifest_lacks."""
     if not pending or pending.get("token") != token:
@@ -136,7 +137,10 @@ def save(srv, pending, token):
     f = d / "domain.yaml"
     have = (yaml.safe_load(f.read_text()) or {}).get("intent") if f.is_file() else None
     lacking = ["spec"] if isinstance(have, dict) and have.get("spec") != "intent.yaml" else []
-    out = catalog.apply(n, intents=pending["text"], r=srv.root)
+    it = d / "intent.yaml"
+    old = it.read_text() if it.is_file() else ""
+    out = {"written": []} if old == pending["text"] else \
+        catalog.edit(n, "intent.yaml", old, pending["text"], r=srv.root)
     written = [pending["path"]] + [p for p in out["written"] if p != pending["path"]]
     res = {"domain": n, "written": written}
     if lacking:

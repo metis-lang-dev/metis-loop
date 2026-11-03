@@ -7,10 +7,12 @@
 //
 //   import * as catalog from ".../metis_loop_sdk/ts/catalog.ts";   // `python -m metis_loop_sdk.web ts`: where
 //   catalog.get("dog")                       // the domain: manifest, program, serves, host, has, fingerprint
-//   catalog.plan("lamp", { program })        // what apply would write: [{path, new, diff}]
-//   catalog.apply("lamp", { program, manifest, display, line })
-//   catalog.edit("lamp", { path: "lamp.llp", old_string, new_string })   // one exact edit of a file on disk
-//   catalog.take("lamp", from, { readmeFromRun: run }, into)
+//   // the writes (workspace-files s-9ea4cfa4: the workspace owns the file, no copy is written over it); each
+//   // plan is {dry_run, files, diff, findings, ok}, each write {written, diff, fingerprint, findings, ok}
+//   catalog.planEdit("lamp", { path: "lamp.llp", old_string, new_string })   // one exact edit of a file on disk
+//   catalog.edit("lamp", { path: "lamp.llp", old_string, new_string })       // (old_string "": a file it lacks)
+//   catalog.planNew("lamp", { program, display, line }); catalog.new("lamp", { program, … })   // a package it lacks
+//   catalog.planTake("lamp", from, {}, into); catalog.take("lamp", from, { readmeFromRun: run }, into)
 //   catalog.readme("lamp", { from, run, summary, title })   // the README of a loop run's domain
 //
 // The python: $METIS_LOOP_SDK_PY (a python with the SDK installed), else python3. The
@@ -26,18 +28,32 @@ import { join } from "node:path";
 export type Planned = { path: string; new: boolean; diff: string; text: string; since_diff?: string };
 /** A plan's options: since {path: text}, the earlier (refused) proposals to diff each file from. */
 export type PlanOpts = { since?: Record<string, string> };
-/** What a write wrote: the paths, the diff, the domain's fingerprint after it (null: no manifest). */
-export type Applied = { written: string[]; diff: string; fingerprint: string | null };
-/** A write's texts (apply, plan): the program, extensions by name, intent.yaml (or
- *  intentsSkeleton: one drafted from the program), domain.yaml's keys to set (or its whole
- *  text), the README, the host's Python (as the file the manifest's host names, beside
- *  domain.yaml), intent/<name>-corpus.tsv, and the manifest's display and line (one line
- *  each) — py's plan/apply keywords, one for one. */
-export type Write = {
-	program?: string;
+/** One finding of a write's checks (py's _finding): metisc's diagnostics (level error | warning: an added one
+ *  refuses) and the lint's rows with the manifest (level lint: shown, never refusing); `as` says how the file was
+ *  checked: program | extension | included | lint. */
+export type Finding = {
+	file: string;
+	level: "error" | "warning" | "lint";
+	code: string;
+	line: number | null;
+	decl: string | null;
+	msg: string;
+	hint: string | null;
+	as: "program" | "extension" | "included" | "lint";
+	refuses: boolean;
+};
+/** A write's plan (nothing written): its files, their joined diff, the findings, ok (no finding refuses). */
+export type Plan = { dry_run: true; files: Planned[]; diff: string; findings: Finding[]; ok: boolean };
+/** What a write wrote: the paths, the diff, the domain's fingerprint after it (null: no manifest), the findings. */
+export type Applied = { written: string[]; diff: string; fingerprint: string | null; findings: Finding[]; ok: boolean };
+/** A new package's texts (py's new()): the program, extensions by name, intent.yaml, domain.yaml's keys (or its
+ *  whole text; default: program, its host when NAME_host.py is there, clock, records), the README, the host's
+ *  Python (as the file the manifest's host names, beside domain.yaml), intent/<name>-corpus.tsv, and the
+ *  manifest's display and line (one line each). */
+export type New = {
+	program: string;
 	extensions?: Record<string, string>;
 	intents?: string;
-	intentsSkeleton?: boolean;
 	manifest?: Record<string, unknown> | string;
 	readme?: string;
 	host?: string;
@@ -147,8 +163,8 @@ export function fingerprint(name: string, r?: string): string {
 	return cli(["fingerprint", name], undefined, r).fingerprint;
 }
 
-// a write's texts as the CLI takes them: one on stdin, the others in files of a scratch directory
-function writeArgs(w: Write, tmp: string): { args: string[]; input: string } {
+// a new package's texts as the CLI takes them: one on stdin, the others in files of a scratch directory
+function newArgs(w: New, tmp: string): { args: string[]; input: string } {
 	const args: string[] = [];
 	let input = "";
 	let k = 0;
@@ -161,11 +177,10 @@ function writeArgs(w: Write, tmp: string): { args: string[]; input: string } {
 		writeFileSync(f, t);
 		return f;
 	};
-	if (w.program !== undefined) args.push("--program", text(w.program));
+	if (typeof w.program !== "string") throw new CatalogError("new", "a new package has a program (its text)");
+	args.push("--program", text(w.program));
 	for (const [n, t] of Object.entries(w.extensions ?? {})) args.push("--extension", `${n}=${text(t)}`);
-	if (w.intents !== undefined && w.intentsSkeleton) throw new CatalogError("apply", "intents or intentsSkeleton, not both");
-	if (w.intentsSkeleton) args.push("--intents-skeleton");
-	else if (w.intents !== undefined) args.push("--intents", text(w.intents));
+	if (w.intents !== undefined) args.push("--intents", text(w.intents));
 	if (w.manifest !== undefined) args.push("--manifest", JSON.stringify(w.manifest));
 	if (w.readme !== undefined) args.push("--readme", text(w.readme));
 	if (w.host !== undefined) args.push("--host", text(w.host));
@@ -192,22 +207,24 @@ function scratch<T>(f: (tmp: string) => T): T {
 	}
 }
 
-function write(name: string, w: Write, dry: boolean, r?: string, o?: PlanOpts): any {
+/** What new would write: a package the catalog lacks, its files with their diffs, the findings; nothing is written. */
+export function planNew(name: string, w: New, r?: string, o?: PlanOpts): Plan {
 	return scratch((tmp) => {
-		const { args, input } = writeArgs(w, tmp);
-		return cli(["apply", name, ...args, ...(dry ? ["--dry-run", ...sinceArgs(o, tmp)] : [])], input, r);
+		const { args, input } = newArgs(w, tmp);
+		return cli(["new", name, ...args, "--dry-run", ...sinceArgs(o, tmp)], input, r);
 	});
 }
 
-/** What apply would write, with each file's diff; nothing is written. */
-export function plan(name: string, w: Write, r?: string, o?: PlanOpts): Planned[] {
-	return write(name, w, true, r, o).files;
+/** A package the catalog lacks, from a draft once (the loop's formalize path): its program checked (an error
+ *  refuses), domain.yaml through the loader's check, the intent files generated; never a commit. Refused
+ *  (CatalogError) when the catalog has it: an existing package changes by edit. `catalog.new` (an export name). */
+export function newPackage(name: string, w: New, r?: string): Applied {
+	return scratch((tmp) => {
+		const { args, input } = newArgs(w, tmp);
+		return cli(["new", name, ...args], input, r);
+	});
 }
-
-/** The one validated write (domain.yaml through the loader's check, the intent files generated); never a commit. */
-export function apply(name: string, w: Write, r?: string): Applied {
-	return write(name, w, false, r);
-}
+export { newPackage as new };
 
 function editArgs(name: string, e: Edit, tmp: string): { args: string[]; input: string } {
 	const f = join(tmp, "new");
@@ -215,17 +232,19 @@ function editArgs(name: string, e: Edit, tmp: string): { args: string[]; input: 
 	return { args: ["edit", name, e.path, "--old", "-", "--new", f, ...(e.replace_all ? ["--replace-all"] : [])], input: e.old_string };
 }
 
-/** What the edit would write (the file's diff against disk; a program's diagnostics checked):
- *  nothing is written. Refused (CatalogError) when old_string is not there exactly once, the
- *  path leaves the domain, or a .llp edit adds a diagnostic. */
-export function planEdit(name: string, e: Edit, r?: string, o?: PlanOpts): Planned[] {
+/** What the edit would write: the file's diff against disk and the findings (a .llp edit's added metisc
+ *  diagnostics, which make ok false; a program's lint rows with its manifest); nothing is written. Refused
+ *  (CatalogError) when old_string is not there exactly once, the path leaves the domain, or the file is not
+ *  one an edit changes (old_string "" makes README.md, intent.yaml, extensions/<name>.llp, the corpus or the
+ *  host's file when the domain lacks it). */
+export function planEdit(name: string, e: Edit, r?: string, o?: PlanOpts): Plan {
 	return scratch((tmp) => {
 		const { args, input } = editArgs(name, e, tmp);
-		return cli([...args, "--dry-run", ...sinceArgs(o, tmp)], input, r).files;
+		return cli([...args, "--dry-run", ...sinceArgs(o, tmp)], input, r);
 	});
 }
 
-/** One exact edit of a domain's file, through apply's own checks; never formalize, never a commit. */
+/** One exact edit of a domain's file, checked (a finding that refuses: CatalogError); never formalize, never a commit. */
 export function edit(name: string, e: Edit, r?: string): Applied {
 	return scratch((tmp) => {
 		const { args, input } = editArgs(name, e, tmp);
@@ -242,9 +261,9 @@ function takeArgs(name: string, from: string, o: TakeOpts): { args: string[]; in
 }
 
 /** What take would write into `into`: the domain `name` of the catalog `from`. */
-export function planTake(name: string, from: string, o: TakeOpts = {}, into?: string, p?: PlanOpts): Planned[] {
+export function planTake(name: string, from: string, o: TakeOpts = {}, into?: string, p?: PlanOpts): Plan {
 	const { args, input } = takeArgs(name, from, o);
-	return scratch((tmp) => cli([...args, "--dry-run", ...sinceArgs(p, tmp)], input, into).files);
+	return scratch((tmp) => cli([...args, "--dry-run", ...sinceArgs(p, tmp)], input, into));
 }
 
 /** The domain `name` brought over from the catalog `from` into `into`: its domain.yaml, program,

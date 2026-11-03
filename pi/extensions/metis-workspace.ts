@@ -19,7 +19,7 @@
 //                       backend's watch then flips STALE: §2.4)
 //   journal             one line of the loop's own progress, in words, for the UI
 //
-// A ruling is never applied here: catalog_apply / catalog_edit (metis-repl) keep the person's gate.
+// A ruling is never applied here: catalog_edit (metis-repl) keeps the person's gate.
 // The lock: one pi loop per workspace (§2.3). This session takes .metis/loop/pi.json at its start (loop.sh
 // refuses first when a live one holds it) and releases it at its end.
 //
@@ -272,7 +272,7 @@ export default function (pi: ExtensionAPI) {
 		name: "pack_propose",
 		label: "judge a pack",
 		description:
-			"Judge a candidate pack for a taken surprise (propose.sh: the gate cascade, every member's goldens, the cases, the fired diff on the trace's replay, the lint rows; no world). The verdict is the gate's, mechanically; the ruling (rulings/<id>.md) and the pack (packs/<id>.llp) are written as the surprise's, which makes it ruled. Nothing is applied: the person applies an accepted pack through catalog_apply / catalog_edit. Takes minutes.",
+			"Judge a candidate pack for a taken surprise (propose.sh: the gate cascade, every member's goldens, the cases, the fired diff on the trace's replay, the lint rows; no world). The verdict is the gate's, mechanically; the ruling (rulings/<id>.md) and the pack (packs/<id>.llp) are written as the surprise's, which makes it ruled. Nothing is applied: the person applies an accepted pack through catalog_edit. Takes minutes.",
 		parameters: Type.Object({
 			id: Type.String({ description: "the surprise's id (surprise_next)" }),
 			pack: Type.String({ description: "the pack's text: rules in `stage S { }`, `pred` lines, `drop NAME`; or a whole program" }),

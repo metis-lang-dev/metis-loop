@@ -4,9 +4,10 @@
 // — its verb list and the descriptions it declares; a verb it declares
 // without a description gets no words from here (a finding against metispy,
 // marked in the tool's description). No logic of its own, except the one
-// write the wire never makes: catalog_apply, behind pi's tool_call gate (the
-// person approves every write into the catalog); catalog_edit, one exact edit of a
-// domain's file (comments and all), behind the same gate; and catalog_take, which
+// write the wire never makes: catalog_new, a package the catalog lacks, behind pi's
+// tool_call gate (the person approves every write into the catalog); catalog_edit, one
+// exact edit of a domain's file (comments and all; every change to a package it has:
+// workspace-files s-9ea4cfa4), behind the same gate; and catalog_take, which
 // takes a finished domain from the loop's catalog into the person's, behind it too.
 // Their rules are metispy's gate (metis.gate, through ./sdk/gate.ts; metis-loop
 // docs/LOOP.md), the policy the human loop's console follows too: propose, the person
@@ -15,7 +16,7 @@
 //
 // Environment (loop.sh sets them):
 //   METIS_LOOP_METIS   the metis console script (metispy's `metis`)
-//   METIS_CATALOG      the catalog catalog_apply writes into (loop.sh: the directory it starts in)
+//   METIS_CATALOG      the catalog catalog_new and catalog_edit write into (loop.sh: the directory it starts in)
 //   METIS_LOOP_SDK_PY  a python with the loop SDK: the catalog is its (./sdk: its TypeScript face, setup.sh links it)
 //   METIS_CONFIG       the kernel's dot file ([llm]: formalize's endpoint)
 //   METIS_LOOP_LLP     optional: the program the REPL starts on (else a blank world)
@@ -137,9 +138,12 @@ export default function (pi: ExtensionAPI) {
 	// and the take into another catalog are its. Here: what only this host has — the REPL's
 	// candidate and the program it serves, the person at pi's confirm, and serving the program after.
 
-	type Tool = "catalog_apply" | "catalog_edit" | "catalog_take";
+	type Tool = "catalog_new" | "catalog_edit" | "catalog_take";
 	type Plan = gate.Plan & { tool: Tool };
-	type ApplyArgs = { domain: string; what: string; name?: string; text?: string; title?: string; display?: string; line?: string };
+	type NewArgs = {
+		domain: string; program: string; display?: string; line?: string; intents?: boolean;
+		readme_title?: string; readme_summary?: string;
+	};
 	type EditArgs = { domain: string; path: string; old_string: string; new_string: string; replace_all?: boolean };
 
 	// the proposal of a tool call: the REPL's part first (its candidate, what it serves), then the gate's
@@ -151,27 +155,30 @@ export default function (pi: ExtensionAPI) {
 		}
 		if (tool === "catalog_edit") {
 			const p = input as EditArgs;
-			return { ...gate.propose("edit", p.domain, { path: p.path, old: p.old_string, new: p.new_string, replace_all: !!p.replace_all }, o), tool };
+			return { ...gate.propose("edit", p.domain, { path: p.path, old: p.old_string, new: p.new_string, replace_all: !!p.replace_all, who: "pi" }, o), tool };
 		}
-		const p = input as ApplyArgs;
-		const args: Record<string, unknown> = {};
-		for (const k of ["display", "line", "title", "name"] as const) if (p[k] !== undefined) args[k] = p[k];
-		if (p.what === "readme") args.text = p.text ?? "";
-		if (p.what === "served") {
+		const p = input as NewArgs;
+		const args: Record<string, unknown> = { who: "pi" };
+		for (const k of ["display", "line"] as const) if (p[k] !== undefined) args[k] = p[k];
+		if (p.intents) args.intents = true;
+		if (p.readme_summary !== undefined || p.readme_title !== undefined)
+			args.readme = { text: p.readme_summary ?? "", ...(p.readme_title !== undefined ? { title: p.readme_title } : {}) };
+		if (p.program === "served") {
 			// the program the REPL serves, as it is (loop.sh --seed: the seed): no candidate, no rule changed
 			// (a package seed comes whole from the seed's catalog: the gate does not read it)
+			args.served = true;
 			if (served && existsSync(served)) args.text = readFileSync(served, "utf8");
-		} else if (p.what === "program" || p.what === "extension") {
+		} else if (p.program === "candidate") {
 			const st = await op("show");
 			if (!st.candidate) throw new Error("no candidate in the REPL: formalize (or mine + formalize) first");
-			if (!st.gated) throw new Error("the candidate has not passed the gate: run repl_gate (an extension) or repl_revise (a program) until it does");
+			if (!st.gated) throw new Error("the candidate has not passed the gate: run repl_revise until it does");
 			let text = String((await op("show", "llp")).llp ?? "");
 			if (!text.endsWith("\n")) text += "\n";
 			args.text = text;
-		} else if (p.what !== "intents" && p.what !== "readme") {
-			throw new Error(`what: program | served | extension | intents | readme, not ${JSON.stringify(p.what)}`);
+		} else {
+			throw new Error(`program: candidate | served, not ${JSON.stringify(p.program)}`);
 		}
-		return { ...gate.propose(p.what as gate.Kind, p.domain, args, o), tool };
+		return { ...gate.propose("new", p.domain, args, o), tool };
 	}
 
 	const plans = new Map<string, Plan>(); // toolCallId -> the plan the person approved
@@ -194,34 +201,39 @@ export default function (pi: ExtensionAPI) {
 				: ` The REPL now serves ${program}${host ? " with its host" : ""}.`;
 		}
 		return {
-			content: [{ type: "text" as const, text: `applied: ${written.length ? written.join(", ") : "nothing (the catalog has it already)"}.${after}${pl.say ?? ""}` }],
-			details: { written, fingerprint: out.fingerprint },
+			content: [{ type: "text" as const, text: `written: ${written.length ? written.join(", ") : "nothing (the catalog has it already)"}.${lint(out.findings)}${after}${pl.say ?? ""}` }],
+			details: { written, fingerprint: out.fingerprint, findings: out.findings },
 		};
+	}
+
+	// the lint rows a write showed (never refusing): one line for the loop to read
+	function lint(findings: catalog.Finding[] | undefined): string {
+		const rows = (findings ?? []).filter((x) => !x.refuses);
+		return rows.length ? ` Findings (not refusing): ${rows.map((x) => `${x.file}: ${x.code}${x.decl ? ` (${x.decl})` : ""}: ${x.msg}`).join("; ").slice(0, 1200)}.` : "";
 	}
 
 	pi.registerTool({
 		executionMode: "sequential", // the tools share one process: one call at a time
-		name: "catalog_apply",
-		label: "apply to the catalog",
+		name: "catalog_new",
+		label: "a new domain in the catalog",
 		description:
-			"Write into the catalog (the person approves each write): what=program writes the REPL's gated candidate as the domain's program " +
-			"(and a domain.yaml when there is none), then the REPL serves it; what=served writes the program the REPL serves, as it is " +
-			"(a seed: its rules unchanged); what=extension writes the candidate as domains/<domain>/extensions/<name>.llp; " +
-			"what=intents writes a first intent.yaml drafted from the domain's program (its cmd_* atoms and %% lines) and generates its files " +
-			"(a world with no commands may get none); what=readme writes the domain's README.md: you give the title and the summary paragraph, " +
-			"the SDK writes the rest from the files (where it came from, the program's header, how to run it, the intents). " +
-			"A change to a file the catalog has already (a comment, a sentence, a value) is catalog_edit, not this.",
+			"Make a domain the catalog does not have yet (the person approves the write): program=candidate writes the REPL's gated candidate " +
+			"as domains/<domain>/<domain>.llp with its domain.yaml, then the REPL serves it; program=served writes the program the REPL serves, " +
+			"as it is (a seed: its rules unchanged). In the same write: intents=true drafts a first intent.yaml from the program (its cmd_* atoms " +
+			"and %% lines; a world with no commands gets none), and readme_title + readme_summary write its README.md (you give the title and " +
+			"the summary paragraph, the SDK writes the rest from the files). The program is checked: an error refuses. Every change to a domain " +
+			"the catalog has — its program, an extension, its README, intent.yaml, domain.yaml, a new file in it — is catalog_edit, not this.",
 		parameters: Type.Object({
-			domain: Type.String({ description: "the domain's name: lowercase letters, digits, _" }),
-			what: Type.Union([Type.Literal("program"), Type.Literal("served"), Type.Literal("extension"), Type.Literal("intents"), Type.Literal("readme")]),
-			name: Type.Optional(Type.String({ description: "what=extension: the extension's file name, without .llp" })),
-			text: Type.Optional(Type.String({ description: "what=readme: the summary paragraph — what the program tells, each claim from the program (a rule, a header line, a --run output shown here)" })),
-			title: Type.Optional(Type.String({ description: "what=readme: what the world is, for the title line `# <domain> — <title>`" })),
-			display: Type.Optional(Type.String({ description: "what=served|program: domain.yaml's display, this world's short name, from its program (a package seed keeps its own)" })),
-			line: Type.Optional(Type.String({ description: "what=served|program: domain.yaml's line, one line on what this world is (a package seed keeps its own)" })),
+			domain: Type.String({ description: "the new domain's name: lowercase letters, digits, _" }),
+			program: Type.Union([Type.Literal("candidate"), Type.Literal("served")], { description: "the REPL's gated candidate, or the program it serves (a seed)" }),
+			display: Type.Optional(Type.String({ description: "domain.yaml's display, this world's short name, from its program (a package seed keeps its own)" })),
+			line: Type.Optional(Type.String({ description: "domain.yaml's line, one line on what this world is (a package seed keeps its own)" })),
+			intents: Type.Optional(Type.Boolean({ description: "draft a first intent.yaml from the program (no model) in the same write" })),
+			readme_title: Type.Optional(Type.String({ description: "the README's title: what the world is, for `# <domain> — <title>`" })),
+			readme_summary: Type.Optional(Type.String({ description: "the README's summary paragraph — what the program tells, each claim from the program" })),
 		}),
 		async execute(id) {
-			return execute(id, "catalog_apply");
+			return execute(id, "catalog_new");
 		},
 	});
 
@@ -231,14 +243,16 @@ export default function (pi: ExtensionAPI) {
 		label: "edit a catalog file",
 		description:
 			"Edit one file of a domain in the catalog as it is on disk: old_string replaced by new_string, every other byte (comments " +
-			"above all) kept. Never formalize or revise for a small change — a comment, a sentence of the README, a value in domain.yaml " +
-			"or intent.yaml, one rule's text: this is the tool. The person approves the diff. old_string must match the file exactly " +
-			"(whitespace and all) and occur once, unless replace_all; a .llp edit must add no diagnostic. path is relative to the " +
-			"domain's directory: <domain>.llp, extensions/<name>.llp, README.md, intent.yaml, domain.yaml.",
+			"above all) kept. Every change to a domain the catalog has goes through this: a comment, a sentence of the README, a value in " +
+			"domain.yaml or intent.yaml, one rule's text, a revised rule (old_string the rule as the file has it, new_string the revision). " +
+			"old_string empty makes a file the domain lacks: an extension (extensions/<name>.llp, new_string its whole text, e.g. the REPL's " +
+			"gated candidate from repl_show llp), a first README.md or intent.yaml. The person approves the diff. old_string must match the " +
+			"file exactly (whitespace and all) and occur once, unless replace_all; a .llp edit must add no diagnostic (the lint's rows are " +
+			"shown, never refusing). path is relative to the domain's directory: <domain>.llp, extensions/<name>.llp, README.md, intent.yaml, domain.yaml.",
 		parameters: Type.Object({
 			domain: Type.String({ description: "the domain's name: lowercase letters, digits, _" }),
 			path: Type.String({ description: "the file, relative to the domain's directory (e.g. <domain>.llp, README.md)" }),
-			old_string: Type.String({ description: "the exact text to replace (enough of it to occur once)" }),
+			old_string: Type.String({ description: "the exact text to replace (enough of it to occur once); empty: make the file the domain lacks" }),
 			new_string: Type.String({ description: "the text to put in its place" }),
 			replace_all: Type.Optional(Type.Boolean({ description: "replace every occurrence (default: exactly one)" })),
 		}),
@@ -269,12 +283,12 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	// the gate: every catalog_apply, catalog_edit and catalog_take waits for the person's confirmation in pi.
+	// the gate: every catalog_new, catalog_edit and catalog_take waits for the person's confirmation in pi.
 	// The whole diff: pi.sh runs the TUI in regular mode, so a long one stays in the scrollback. A file
 	// refused before shows first what changed since that proposal, then its diff against the disk.
 	pi.on("tool_call", async (event, ctx) => {
 		const tool = event.toolName as Tool;
-		if (tool !== "catalog_apply" && tool !== "catalog_edit" && tool !== "catalog_take") return undefined;
+		if (tool !== "catalog_new" && tool !== "catalog_edit" && tool !== "catalog_take") return undefined;
 		let pl: Plan;
 		try {
 			pl = await propose(tool, event.input);
@@ -293,8 +307,10 @@ export default function (pi: ExtensionAPI) {
 			f.since_diff
 				? `── ${f.path}: since the proposal you refused ──\n${f.since_diff}── ${f.path}: against the file on disk ──\n${f.diff}`
 				: f.diff).join("").replace(/\n$/, "");
-		const verb = pl.tool === "catalog_take" ? "Take into" : pl.tool === "catalog_edit" ? "Edit in" : "Apply to";
-		const ok = await ctx.ui.confirm(`${verb} the catalog ${pl.root}: ${what}?`, body);
+		const verb = pl.tool === "catalog_take" ? "Take into" : pl.tool === "catalog_edit" ? "Edit in" : "New in";
+		const shown = (pl.findings ?? []).filter((x) => !x.refuses);
+		const notes = shown.length ? `\n── findings (not refusing) ──\n${shown.map((x) => `${x.file}${x.line ? `:${x.line}` : ""}: ${x.level} ${x.code}: ${x.msg}`).join("\n")}` : "";
+		const ok = await ctx.ui.confirm(`${verb} the catalog ${pl.root}: ${what}?`, body + notes);
 		if (!ok) {
 			gate.refuse(pl.token, runDir()); // remembered: the next plan of these files shows what changed since
 			return { block: true, reason: "the person did not approve this write" };

@@ -137,8 +137,10 @@ async function main() {
 	say(`\n## 1. read the seed\n`);
 	await call("repl_state", { arg: "" });
 	await call("repl_show", { arg: "base" });
-	say(`\n## 2. the seed, as it is, becomes the domain's program\n`);
-	const applied = await call("catalog_apply", { domain: name, what: "served", display: `the ${name.replace(/_/g, " ")}`, line: `the program ${basename(seed)}, seeded` });
+	say(`\n## 2. the seed, as it is, becomes the domain's program: one write with its intents and README (catalog_new)\n`);
+	const commands = /^pred\s+cmd_\w+/m.test(text);
+	const applied = await call("catalog_new", { domain: name, program: "served", display: `the ${name.replace(/_/g, " ")}`, line: `the program ${basename(seed)}, seeded`,
+		intents: true, readme_title: `the program ${basename(seed)}`, readme_summary: `Seeded from \`${rel}\`.` });
 	const prog = join(cat, "domains", name, progName);
 	check("the domain's program is the seed, byte for byte", existsSync(prog) && readFileSync(prog, "utf8") === text);
 	check("the gate showed the seed's diff", gates.length === 1 && gates[0].includes(`domains/${name}/${progName} (new)`));
@@ -150,17 +152,15 @@ async function main() {
 			existsSync(join(cat, "domains", name, f)) && readFileSync(join(cat, "domains", name, f), "utf8") === readFileSync(join(seed, f), "utf8")));
 		check("the gate showed every file of it", own.every((f) => gates[0].includes(`domains/${name}/${f} (new)`)));
 	}
-	say(`\n## 3. intents\n`);
-	const commands = /^pred\s+cmd_\w+/m.test(text);
+	say(`\n## 3. intents (drafted in the new write)\n`);
 	if (pkg && existsSync(join(seed, "intent.yaml"))) {
 		// a package seed that brought its own intent.yaml keeps it: no draft over its grammar (prompts/seed-task.md step 3)
 		say("  the package brings its own intent.yaml: kept, no draft");
 		check("the package's own intent.yaml is kept", readFileSync(join(cat, "domains", name, "intent.yaml"), "utf8") ===
 			readFileSync(join(seed, "intent.yaml"), "utf8"));
 	} else {
-		const it = await call("catalog_apply", { domain: name, what: "intents" });
-		if (it.startsWith("no intent.yaml")) check("a world with no commands: no intent.yaml", !commands && !existsSync(join(cat, "domains", name, "intent.yaml")));
-		else check("intent.yaml written", it.startsWith("applied:") && existsSync(join(cat, "domains", name, "intent.yaml")));
+		if (applied.includes("no intent.yaml")) check("a world with no commands: no intent.yaml", !commands && !existsSync(join(cat, "domains", name, "intent.yaml")));
+		else check("intent.yaml written", existsSync(join(cat, "domains", name, "intent.yaml")));
 	}
 	if (!commands) say("  (no cmd_* atoms: the person gives this world no commands)");
 	say(`\n## 4. exercise\n`);
@@ -186,7 +186,7 @@ async function main() {
 		const ed = await call("catalog_edit", { domain: name, path: progName, old_string: first, new_string: `${first} (edited in the loop)` });
 		expected = text.replace(first, `${first} (edited in the loop)`);
 		const now = readFileSync(prog, "utf8");
-		check("the edit changed that line only", ed.startsWith("applied:") && now === expected);
+		check("the edit changed that line only", ed.startsWith("written:") && now === expected);
 		const comments = (t: string) => t.split("\n").filter((l) => /^\s*%/.test(l));
 		check("every comment is kept", comments(now).length === comments(text).length && comments(now).filter((l) => !comments(text).includes(l)).length === 1);
 		check("the REPL serves the edited program", ed.includes(`The REPL now serves ${prog}`));
@@ -197,11 +197,10 @@ async function main() {
 		readme = readFileSync(join(cat, "domains", name, "README.md"), "utf8");
 		check("the package's README is kept", readme === readFileSync(join(seed, "README.md"), "utf8"));
 	} else {
-		say(`\n## 6. a README: the model's title and summary, the rest the SDK's (gated)\n`);
-		const rd = await call("catalog_apply", { domain: name, what: "readme", title: `the program ${basename(seed)}`, text: `Seeded from \`${rel}\`.` });
+		say(`\n## 6. the README: the model's title and summary, the rest the SDK's (written with the program, step 2)\n`);
 		readme = readFileSync(join(cat, "domains", name, "README.md"), "utf8");
-		check("the README is written, behind the gate", rd.startsWith("applied:") && readme.startsWith(`# ${name} — the program ${basename(seed)}\n\nSeeded from`));
-		const head = expected.split("\n").filter((l) => /^%/.test(l));
+		check("the README is written, behind the gate", gates[0].includes(`domains/${name}/README.md (new)`) && readme.startsWith(`# ${name} — the program ${basename(seed)}\n\nSeeded from`));
+		const head = text.split("\n").filter((l) => /^%/.test(l));                          // the header as it was then
 		check("the README carries the program's header verbatim", !first || readme.includes(head[0]));
 	}
 	say(`\n## 7. take it into the person's catalog\n`);

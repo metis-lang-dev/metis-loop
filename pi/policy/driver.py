@@ -481,9 +481,26 @@ class Driver:
             raise Disengage("budget", "The %s prompt is past the per-request cap (%s): the base has grown. Refactor now, "
                             "or raise the cap?" % (purpose, e), options=["phase: refactor now", "budget: prompt_chars, a larger cap", "abandon"]) from None
 
+    def _proposal(self, kind, domain, args):
+        """(the gate's kind, its args) of a proposal: a candidate program (kind program, text) is an edit of the
+        domain's program file, old its text now, when the catalog has the domain, else a new package
+        (workspace-files s-9ea4cfa4: no copy of a text is written over a package's file)."""
+        if kind != "program":
+            return kind, args
+        args = dict(args)
+        text = args.pop("text", None)
+        try:
+            from metis import catalog
+            d = catalog.get(domain, self.root)
+        except KeyError:
+            return "new", dict(args, text=text)
+        prog = Path(d.program)
+        return "edit", dict(args, path=prog.relative_to(Path(d.dir)).as_posix(), old=prog.read_text(), new=text)
+
     def _judge_uncounted(self, kind, by, info, cost, domain, call, **args):
         try:
-            v = self.gate.propose(kind, domain or DOMAIN, self.root, phase=self.state["phase"], cost=cost, **args)["verdict"]
+            gk, ga = self._proposal(kind, domain or DOMAIN, args)
+            v = self.gate.propose(gk, domain or DOMAIN, self.root, phase=self.state["phase"], cost=cost, **ga)["verdict"]
         except Exception as e:                      # noqa: BLE001 — the gate's refusal in words
             self.say("proposal", verdict="error", why=str(e), by=by, call=call, domain=domain or DOMAIN, counted=False, **(info or {}))
             v = {"verdict": "error"}
@@ -508,7 +525,8 @@ class Driver:
         self.state["proposals"] += 1
         phase = self.state["phase"] if not (by == "person" and self.state["phase"] == "explore") else "exploit"
         try:
-            pl = self.gate.propose(kind, domain or DOMAIN, self.root, phase=phase, cost=cost, **args)
+            gk, ga = self._proposal(kind, domain or DOMAIN, args)
+            pl = self.gate.propose(gk, domain or DOMAIN, self.root, phase=phase, cost=cost, **ga)
             v = pl["verdict"]
         except Exception as e:                      # noqa: BLE001 — the gate's refusal in words (no plan left waiting)
             self.say("proposal", verdict="error", why=str(e), by=by, call=call, domain=domain or DOMAIN, **(info or {}))

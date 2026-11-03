@@ -456,25 +456,60 @@ class ConsoleServer:
         if d.exists():
             raise ValueError(f"domains/{name} exists already — open it from the list")
         line = " ".join((line or f"the {name} domain").split())[:160]
-        catalog.apply(name, r=self.root,       # the one validated write (the manifest checked by the loader)
-                      manifest=f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
-                               f"program: {name}.llp\nrecords: records/\n",
-                      program=SKELETON.format(name=name, line=line.replace('"', "'"), date=time.strftime("%Y-%m-%d")),
-                      readme=f"# {name} — {line}\n\nA new domain, made in the loop console. "
-                             "Describe what there is, what can happen and what the person can ask.\n")
+        catalog.new(name, SKELETON.format(name=name, line=line.replace('"', "'"), date=time.strftime("%Y-%m-%d")),
+                    r=self.root,       # a package the catalog lacks (its program checked, the manifest by the loader)
+                    manifest=f"display: the {name}\nline: {json.dumps(line)}\nvoice: third\n"
+                             f"program: {name}.llp\nrecords: records/\n",
+                    readme=f"# {name} — {line}\n\nA new domain, made in the loop console. "
+                           "Describe what there is, what can happen and what the person can ask.\n")
         return f"domains/{name}/{name}"
 
     # -- the gate: every write is a plan the person confirms (docs/LOOP.md) ----------
 
+    # -- the bridge (workspace-files s-9ea4cfa4 step 1): the catalog writes are edit / new / take now, so the copy's
+    #    save and the console's old kinds go through edits of the files on disk, one gate plan per file, their
+    #    tokens joined; step 2 (opus) removes the copy and this bridge with it --------------------------------------
+
+    def _whole(self, domain: str, rel: str, text: str):
+        """The gate's edit of the file REL (relative to the domain directory) to TEXT: old its text now, or "" when
+        the domain lacks it; None when it is TEXT already."""
+        f = Path(catalog.get(domain, self.root).dir) / rel
+        old = f.read_text() if f.is_file() else ""
+        if old == text:
+            return None
+        return self.gate.propose("edit", domain, self.root, path=rel, old=old, new=text)
+
+    def _joined(self, plans: list) -> dict:
+        """Several gate plans shown as one: their files, one token naming them all (kept for save_apply)."""
+        plans = [x for x in plans if x is not None]
+        files = [f for x in plans for f in x["files"]]
+        tokens = [x["token"] for x in plans]
+        token = __import__("hashlib").sha256(json.dumps(tokens).encode()).hexdigest()[:16] if tokens else ""
+        self._bridge = getattr(self, "_bridge", {})
+        self._bridge[token] = tokens
+        out = dict(public(plans[0])) if len(plans) == 1 else {"kind": "edit", "domain": plans[0]["domain"] if plans else None,
+                                                               "root": str(self.root), "reopen": any(x["reopen"] for x in plans)}
+        out.update(files=files, token=token, findings=[x for p in plans for x in p.get("findings") or []])
+        return out
+
     def save_plan(self, work: dict, display=None, line=None) -> dict:
         """What `save` would write: the working copy over its checkout program, each
-        extension as <domain>/extensions/<name>.llp — each with its unified diff and,
-        when the person refused an earlier proposal of it, `since_diff` (what changed
-        since). The gate's plan; `token` names exactly it (save checks it)."""
+        extension as <domain>/extensions/<name>.llp, display and line into domain.yaml — each an edit of the file
+        on disk (the bridge above), with its unified diff and, when the person refused an earlier proposal of it,
+        `since_diff` (what changed since). `token` names exactly them (save checks it)."""
         domain, text, exts = self._plan_args(work)
-        pl = self.gate.propose("program", domain, self.root, text=text, extensions=exts,
-                               **{k: v for k, v in (("display", display), ("line", line)) if v})
-        return self._shown(pl)
+        d = catalog.get(domain, self.root)
+        prog = Path(d.program).relative_to(Path(d.dir)).as_posix()
+        shown = {k: v for k, v in (("display", display), ("line", line)) if v}
+        try:
+            plans = [self._whole(domain, prog, text)]
+            plans += [self._whole(domain, f"extensions/{n}.llp", t) for n, t in exts.items()]
+            if shown:
+                mf = Path(d.dir) / "domain.yaml"
+                plans.append(self._whole(domain, "domain.yaml", catalog._manifest_text(mf.read_text(), shown)))
+            return self._shown(self._joined(plans))
+        except Refused as e:
+            raise ValueError(str(e)) from None
 
     def save_apply(self, work: dict, token: str, display=None, line=None) -> dict:
         """Write the plan the viewer saw (its token), never anything else; never a git
@@ -482,15 +517,21 @@ class ConsoleServer:
         token: a copy changed since the diff was shown refuses."""
         now = self.save_plan(work, display, line)
         if not token or now["token"] != token:
-            self.gate.store["plans"].pop(now["token"], None)
+            for t in self._bridge.pop(now["token"], []):
+                self.gate.store["plans"].pop(t, None)
             raise ValueError("the copy changed since the diff was shown — review the new diff")
-        out = self.gate_confirm(token)
-        return {"written": out["written"], "token": token}
+        written = []
+        for t in self._bridge.pop(token, []):
+            written += self.gate_confirm(t)["written"]
+        return {"written": written, "token": token}
 
     def save_refuse(self, token: str) -> dict:
         """The person said no to the save: the gate remembers what was refused (the next
         plan of those files shows what changed since)."""
-        return self.gate_refuse(token)
+        refused = []
+        for t in getattr(self, "_bridge", {}).pop(token, [token]):
+            refused += self.gate_refuse(t)["refused"]
+        return {"refused": refused}
 
     def gate_plan(self, kind: str, domain: str, args: dict) -> dict:
         """A plan of one of the console's writes (the loop's kinds, docs/LOOP.md):
@@ -505,14 +546,41 @@ class ConsoleServer:
             if not self.take_into:
                 raise ValueError("take writes into another catalog: set [console] take_into (a directory)")
             pl = self.gate.propose("take", domain, self.take_into, src=str(self.root))
-        elif kind in ("edit", "readme", "intents", "program", "extension", "ask"):
+        elif kind in ("edit", "ask", "new"):
             try:
                 pl = self.gate.propose(kind, domain, self.root, **a)
             except Refused as e:
                 raise ValueError(str(e)) from None
+        elif kind in ("readme", "intents", "program", "extension"):
+            try:
+                return self._shown(self._joined([self._old_kind(kind, domain, a)]))
+            except Refused as e:
+                raise ValueError(str(e)) from None
+            except KeyError:
+                raise ValueError(f"no domain {domain} in the catalog yet: {kind} follows its program (new)") from None
         else:
             raise ValueError(f"the console's writes: edit, readme, intents, take, program, extension, ask; not {kind!r}")
         return self._shown(pl)
+
+    def _old_kind(self, kind: str, domain: str, a: dict):
+        """The console's old kinds as edits of the files on disk (the bridge): readme {text, title} the SDK's
+        README around the summary; intents {text?} (without text: the program's skeleton, no model); program
+        {text}; extension {name, text}. A plan with nothing to write: None (or the no-commands note)."""
+        d = catalog.get(domain, self.root)
+        if kind == "readme":
+            if not (a.get("text") or "").strip():
+                raise Refused("readme: text is the summary paragraph (what the program tells; the SDK writes the rest)")
+            return self._whole(domain, "README.md", catalog.readme(domain, self.root, None, a["text"], a.get("title")))
+        if kind == "intents":
+            text = a.get("text") if a.get("text") is not None else catalog.skeleton(domain, self.root)
+            if text is None:
+                return {"kind": "intents", "domain": domain, "root": str(self.root), "reopen": False, "files": [],
+                        "token": "", "note": "no intent.yaml: the world takes no commands (its program has no cmd_* atom), "
+                                              "so the agents open it with no verbs"}
+            return self._whole(domain, "intent.yaml", text)
+        if kind == "extension":
+            return self._whole(domain, f"extensions/{a.get('name') or ''}.llp", a.get("text") or "")
+        return self._whole(domain, Path(d.program).relative_to(Path(d.dir)).as_posix(), a.get("text") or "")
 
     def gate_asks(self) -> list:
         """The asks waiting for the person (loop-policy, docs/LOOP.md): the console's own gate's
@@ -540,14 +608,23 @@ class ConsoleServer:
     def gate_confirm(self, token: str) -> dict:
         """Write exactly the plan `token` names (the gate's confirm: a source changed since
         the plan refuses, nothing written)."""
+        token = str(token or "")
         try:
-            return self.gate.confirm(str(token or ""))
+            if token in getattr(self, "_bridge", {}):          # the bridge's joined plan: each of its edits
+                outs = [self.gate.confirm(t) for t in self._bridge.pop(token)]
+                if not outs:
+                    return {"written": [], "fingerprint": None}
+                return dict(outs[-1], written=[w for o in outs for w in o["written"]])
+            return self.gate.confirm(token)
         except Refused as e:
             raise ValueError(str(e)) from None
 
     def gate_refuse(self, token: str) -> dict:
+        token = str(token or "")
         try:
-            return self.gate.refuse(str(token or ""))
+            if token in getattr(self, "_bridge", {}):
+                return {"refused": [f for t in self._bridge.pop(token) for f in self.gate.refuse(t)["refused"]]}
+            return self.gate.refuse(token)
         except Refused as e:
             raise ValueError(str(e)) from None
 
@@ -579,7 +656,7 @@ class ConsoleServer:
         if (self.root / "domains" / name).exists():
             raise ValueError(f"domains/{name} exists already — open it from the list")
         line = " ".join((line or "").split())[:160]
-        return self._shown(self.gate.propose("program", name, self.root, text=p.read_text(),
+        return self._shown(self.gate.propose("new", name, self.root, text=p.read_text(),
                                              **({"line": line} if line else {})))
 
     def _plan_args(self, work: dict):

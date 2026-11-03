@@ -95,18 +95,18 @@ def test_take_then_apply_writes_the_package_byte_for_byte(name, tmp_path):
     for p in (src / _rel(name) / "intent").glob("*"):
         if not p.stat().st_size:
             p.unlink()                      # an empty generated file (plant-spoken.txt): take writes none
-    kw = catalog.take(name, src, dst)
-    out = catalog.apply(name, r=dst, **kw)
+    kw = catalog._take_spec(name, src, dst)
+    out = catalog.take(name, src, dst)
     assert out["fingerprint"] == catalog.fingerprint(name, src)
-    a, b = _tree(src / _rel(name)), _tree(dst / "domains" / name)      # apply writes a new package at domains/<name>
+    a, b = _tree(src / _rel(name)), _tree(dst / "domains" / name)      # take writes a new package at domains/<name>
     carried = {f for f in a if f in b}
     assert {f: b[f] for f in carried} == {f: a[f] for f in carried}
-    # what take leaves behind is only what its docstring says it does not carry: intent/ (apply generates
+    # what take leaves behind is only what its docstring says it does not carry: intent/ (take generates
     # it again), the package's own cases/ (its hand-written tests) and documents beside its README
     left = sorted(set(a) - set(b))
     assert all(not f.endswith((".llp", ".py", ".yaml", ".json")) or f.startswith(("intent/", "cases/")) for f in left), left
     # the same write again changes nothing
-    assert catalog.plan(name, r=dst, **kw) == []
+    assert catalog._plan(name, r=dst, **kw) == []
 
 
 def test_a_plan_of_the_package_as_it_is_writes_nothing(name, tmp_path):
@@ -114,7 +114,7 @@ def test_a_plan_of_the_package_as_it_is_writes_nothing(name, tmp_path):
     d = catalog.get(name, r)
     prog = Path(d.program).read_text()
     exts = {Path(e).stem: Path(e).read_text() for e in d.extensions()}
-    assert catalog.plan(name, program=prog, extensions=exts or None, r=r) == []
+    assert catalog._plan(name, program=prog, extensions=exts or None, r=r) == []
 
 
 @needs_metisc
@@ -126,9 +126,9 @@ def test_an_edit_and_its_reverse_give_back_the_files_bytes(name, tmp_path):
     before = _tree(r / _rel(name))
     text = p.read_text()
     line = next(l for l in reversed(text.splitlines()) if l.strip() and text.count(l) == 1)
-    catalog.apply(name, **catalog.edit(name, rel, line, line + "\n% catalog-packages: an edit", r=r), r=r)
+    catalog.edit(name, rel, line, line + "\n% catalog-packages: an edit", r=r)
     assert "% catalog-packages: an edit" in p.read_text()
-    catalog.apply(name, **catalog.edit(name, rel, line + "\n% catalog-packages: an edit", line, r=r), r=r)
+    catalog.edit(name, rel, line + "\n% catalog-packages: an edit", line, r=r)
     assert _tree(r / _rel(name)) == before
 
 

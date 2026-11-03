@@ -46,7 +46,7 @@ def test_save_is_a_plan_refused_then_shown_with_what_changed_since(tmp_path):
 def test_save_carries_the_extensions_and_display_line(tmp_path):
     srv = server(tmp_path)
     w = work(srv)
-    w["extensions"] = [{"name": "Tired Plant", "source": "% an extension\n"}]
+    w["extensions"] = [{"name": "Tired Plant", "source": "% an extension\ncatalog plant_tired 1.\nextends plant.\n"}]   # checked (metisc)
     pl = srv.save_plan(w, display="the plant", line="a plant that wilts and recovers")
     paths = sorted(f["path"] for f in pl["files"])
     assert paths == ["domains/plant/domain.yaml", "domains/plant/extensions/tired_plant.llp"]
@@ -101,7 +101,7 @@ def test_a_new_domain_from_a_seed(tmp_path):
     seed.write_text((srv.root / "domains/plant/plant.llp").read_text().replace("catalog plant 1.", "catalog lamp 1.")
                     .replace(": plant.", ": lamp.").replace("namespace plant", "namespace lamp"))
     pl = srv.seed_plan("", str(seed), "a lamp")
-    assert pl["kind"] == "program" and pl["domain"] == "lamp"
+    assert pl["kind"] == "new" and pl["domain"] == "lamp"
     assert sorted(f["path"] for f in pl["files"]) == ["domains/lamp/domain.yaml", "domains/lamp/lamp.llp"]
     srv.gate_confirm(pl["token"])
     assert (srv.root / "domains/lamp/lamp.llp").is_file()

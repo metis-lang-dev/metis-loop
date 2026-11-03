@@ -35,7 +35,7 @@ def test_save_shows_the_diff_and_writes_only_what_was_shown(srv, tmp_path):
     llp = srv.new_domain("plant", "a plant")
     path = tmp_path / "domains/plant/plant.llp"
     work = {"name": llp, "copy": path.read_text().replace("%% I wake up.", "%% I wake up slowly."),
-            "extensions": [{"name": "Visitor Waters", "source": "% an extension\n"}]}
+            "extensions": [{"name": "Visitor Waters", "source": "% an extension\ncatalog plant_visitor 1.\nextends plant.\n"}]}   # checked (metisc)
     plan = srv.save_plan(work)
     assert [f["path"] for f in plan["files"]] == ["domains/plant/plant.llp", "domains/plant/extensions/visitor_waters.llp"]
     assert "-  %% I wake up." in plan["files"][0]["diff"] and "+  %% I wake up slowly." in plan["files"][0]["diff"]
