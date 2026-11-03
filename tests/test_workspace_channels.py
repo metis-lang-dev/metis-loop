@@ -289,3 +289,16 @@ def test_a_failed_start_keeps_the_page_and_the_channel(gw, tmp_path):
     assert any(r["kind"] == "pi_start_failed" and "--budget" in r["error"] for r in rows)
     ex = [r for r in rows if r["kind"] == "rpc_exit" and r.get("stderr_tail")]
     assert ex and ex[-1]["stderr_tail"] == "loop.sh: gone\nbye"
+
+
+def test_a_ruling_is_read_with_its_pack(gw, tmp_path):
+    """RULINGS reads the ruling, its document and its pack in one get (step 4)."""
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        w = W.workspace(tmp_path)
+        sid = w.drop_surprise({"member": "three_pigs", "atoms": ["+x"]})
+        w.rule(sid, "# ruling", "accepted", pack="stage main { }\n", first_enabled={"k": 2, "rule": "x"},
+               firings={"count": 49, "rows": 28, "of_rows": 35, "first": 2, "last": 1541})
+        g = ask(ws, "surprise", "get", id=sid)
+        assert g["pack"] == "stage main { }\n" and g["md"] == "# ruling"
+        assert g["surprise"]["ruling"]["firings"]["count"] == 49 and g["surprise"]["ruling"]["first_enabled"]["k"] == 2

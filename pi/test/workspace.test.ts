@@ -13,7 +13,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { schema, tracePath } from "../extensions/metis-workspace.ts";
+import workspace, { firings, schema, tracePath } from "../extensions/metis-workspace.ts";
 import * as ws from "../extensions/sdk/workspace.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -392,4 +392,18 @@ test("loop.sh: its own option after pi's arguments is refused, not handed to pi"
 	assert.equal(a.status, 2);
 	assert.match(a.stderr, /--budget after pi's arguments: give loop.sh's options first/);
 	assert.equal(spawnSync(join(HERE, "..", "loop.sh"), ["--budget", "1", "--mode", "rpc", "--name", "s"], { encoding: "utf8", cwd: r, env: e as any }).status, 0);   // pi's own --name passes
+});
+
+test("metis-workspace: the ruling counts the candidate's firings beside its verdict (step 4, the brake_late lesson)", () => {
+	// the shape of the judge's evidence.json: round 3's rule-target-2 (two rows, brake_target where the record kept the limit)
+	const e = {
+		rules: ["accel", "brake_target", "keep_limit"],
+		rows: [
+			{ k: 401, fired: { record: ["decide", "keep_limit", "back"], candidate: ["decide", "brake_target[R=brake_min_correct]", "back"] } },
+			{ k: 481, fired: { record: ["decide", "keep_limit", "back"], candidate: ["decide", "brake_target[R=brake_min_correct]", "back"] } },
+			{ k: 500, fired: { record: ["decide", "back"], candidate: ["decide", "back", "decide"] } },
+		],
+	};
+	assert.deepEqual(firings(e), { count: 2, rows: 2, of_rows: 3, first: 401, last: 481 });
+	assert.deepEqual(firings({}), { count: 0, rows: 0, of_rows: 0, first: null, last: null });
 });

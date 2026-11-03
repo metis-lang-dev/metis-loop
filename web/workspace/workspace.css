@@ -1,0 +1,46 @@
+/* The workspace widgets' styles (loop-workspace step 4: BUNDLE, TRACE, SURPRISES, RULINGS, LOOP). The host's shell gives
+   the colour tokens (--bg --panel --line --fg --dim --green --yellow --red --cyan --purple --mono) and .btn .chip
+   .empty; this adds only what the widgets draw. Copy with the widgets. */
+.mw{display:flex;flex-direction:column;gap:6px;min-height:0;font-size:12.5px}
+.mw .mono{font-family:var(--mono)}
+.mw .warn{color:var(--yellow)}.mw .bad{color:var(--red)}
+.mw-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mw-grow{flex:1}
+.mw-acts{display:flex;gap:6px;flex-wrap:wrap}
+.mw-kv{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px}
+.mw-kv>span:nth-child(odd){color:var(--dim)}
+.mw-sub{color:var(--dim);font-size:11px;letter-spacing:.04em}
+.mw-badge{font-size:10.5px;padding:0 6px;border:1px solid var(--line);text-transform:uppercase}
+.mw-badge.ok{color:var(--green);border-color:#2a4d33}.mw-badge.warn{color:var(--yellow);border-color:#4d3f1f}
+.mw-badge.bad{color:var(--red);border-color:#5a2a2a}.mw-badge.info{color:var(--cyan);border-color:currentColor}
+.mw input,.mw select,.mw textarea{background:var(--bg);color:var(--fg);border:1px solid var(--line);font:inherit;padding:1px 4px}
+.mw textarea{width:100%;resize:vertical;font-family:var(--mono)}
+.mw .mw-num{width:5.5em}
+.mw-form{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--line);padding:6px}
+.mw-form label{display:flex;gap:4px;align-items:center;color:var(--dim)}
+.mw-form label.mw-wide{flex-basis:100%;flex-direction:column;align-items:stretch}
+.mw-out,.mw-doc{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px;max-height:22em;overflow:auto;
+  background:var(--bg);border:1px solid var(--line);padding:4px 6px}
+.mw-out.err{color:var(--red)}
+.mw-doc{max-height:32em}
+.mw-tick{display:flex;flex-direction:column;gap:4px}
+.mw-rule{display:inline-block;margin-right:6px;color:var(--purple)}
+.mw-counts{border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+.mw-counts td{padding:0 8px 0 0}.mw-counts td:last-child{color:var(--dim);text-align:right}
+.mw-counts tr.made td:first-child{color:var(--green)}
+.mw-verbs summary{cursor:pointer;color:var(--dim)}
+.mw-mark{border-color:var(--cyan);color:var(--cyan)}
+.mw-list{display:flex;flex-direction:column;gap:4px;overflow:auto}
+.mw-srow{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;border-top:1px solid var(--line);padding-top:4px}
+.mw-words{flex-basis:100%;white-space:pre-wrap}
+.mw-lesson{border-left:2px solid var(--yellow);padding-left:6px}
+.mw-gate{border:1px solid var(--yellow);padding:6px;display:flex;flex-direction:column;gap:4px}
+.mw-chat{display:flex;flex-direction:column;gap:4px;min-height:0;flex:1}
+.mw-log{overflow:auto;max-height:28em;min-height:6em;border:1px solid var(--line);padding:4px 6px;font-size:12px}
+.mw-msg{white-space:pre-wrap;word-break:break-word;margin:0 0 3px}
+.mw-msg .mw-who{color:var(--dim);margin-right:6px}
+.mw-msg.me .mw-who{color:var(--cyan)}.mw-msg.pi .mw-who{color:var(--purple)}
+.mw-msg.tool{color:var(--dim);font-size:11.5px}.mw-msg.err{color:var(--red)}.mw-msg.note{color:var(--dim);font-style:italic}
+.mw-journal{font-family:var(--mono);font-size:11px}
+.mw-jrow.who-pi b{color:var(--purple)}.mw-jrow.who-backend b{color:var(--cyan)}.mw-jrow.who-judge b{color:var(--yellow)}
+.mw-budget{font-family:var(--mono)}

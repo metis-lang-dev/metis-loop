@@ -14,7 +14,8 @@ the REPL session's trace writer (§3: `open` with `trace: true`).
                  {ch:"surprise", type:"drop", run, member, k?, window?, atoms?, reading?, words?, req}
                                                                     from a trace: the run's window
                                                                     -> {type:"dropped", id}, and to every page {type:"dropped", id}
-                 {ch:"surprise", type:"get", id, req}               -> {type:"get", surprise, md?}: the record, its ruling's document
+                 {ch:"surprise", type:"get", id, req}               -> {type:"get", surprise, md?, pack?}: the record, its ruling's
+                                                                       document and pack
                  {ch:"bundle", type:"state", req}                   -> {type:"state", bundle}: ws.bundle() (None: no composition)
                  {ch:"bundle", type:"reload", session, req}         -> the session re-opened from its catalog (epoch + 1)
                  {ch:"loop", type:"state", req}                     -> {type:"state", loops, cost, child}
@@ -262,11 +263,13 @@ class WorkspaceChannels:
             return {"surprises": await self._run(self.ws.surprises, msg.get("status"))}
         if typ == "get":
             rec = await self._run(self.ws.surprise, str(msg.get("id") or ""))
-            md = None
-            if rec.get("ruling") and rec["ruling"].get("md"):
-                f = self.ws.state / rec["ruling"]["md"]
-                md = f.read_text() if f.is_file() else None
-            return {"surprise": rec, "md": md}
+            md = pack = None
+            r = rec.get("ruling") or {}
+            if r.get("md") and (self.ws.state / r["md"]).is_file():
+                md = (self.ws.state / r["md"]).read_text()
+            if r.get("pack") and (self.ws.state / r["pack"]).is_file():
+                pack = (self.ws.state / r["pack"]).read_text()
+            return {"surprise": rec, "md": md, "pack": pack}
         if typ == "drop":
             sid = await self._run(self.ws.drop_surprise, self.surprise_of(msg))
             await self.gw._send_all({"ch": "surprise", "type": "dropped", "id": sid})

@@ -40,7 +40,7 @@ include = ["metis_loop_sdk*"]
 # setuptools builds from the checkout (pip install ./sdk, the git URL's
 # #subdirectory=sdk, or python -m build: its sdist copies the files the link
 # points at) holds the files themselves; tools/smoke_wheel.sh checks them.
-metis_loop_sdk = ["widget/*", "ts/*"]   # ts/: the TypeScript face (catalog.ts, gate.ts, workspace.ts), files of its own
+metis_loop_sdk = ["widget/*", "workspace/*", "ts/*"]   # workspace/: the five workspace widgets (a link to web/workspace/, as widget/)   # ts/: the TypeScript face (catalog.ts, gate.ts, workspace.ts), files of its own
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

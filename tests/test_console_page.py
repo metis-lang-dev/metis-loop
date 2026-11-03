@@ -12,9 +12,13 @@ PAGE = (Path(__file__).resolve().parents[1]
 def test_skeleton_free_title_style_first_one_script():
     assert PAGE.lstrip().startswith("<title>")
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
-    # one inline script; the shell (console/lib/) and the SDK's CATALOG widget
-    # (sdk/catalog/) linked relative, before the page's own
-    assert PAGE.count("<script") == 3 and PAGE.count("<script>") == 1
+    # one inline script; the shell (console/lib/), the SDK's CATALOG widget
+    # (sdk/catalog/) and its five workspace widgets with their wire (sdk/workspace/)
+    # linked relative, before the page's own
+    assert PAGE.count("<script") == 9 and PAGE.count("<script>") == 1
+    for w in ("io", "bundle", "trace", "surprises", "rulings", "loop"):
+        assert PAGE.index(f'<script src="sdk/workspace/{w}.js"></script>') < PAGE.index("<script>")
+    assert PAGE.index('<link rel="stylesheet" href="sdk/workspace/workspace.css">') < PAGE.index("<style>")
     assert PAGE.index('<link rel="stylesheet" href="lib/shell.css">') < PAGE.index("<style>")
     assert PAGE.index('<link rel="stylesheet" href="sdk/catalog/catalog.css">') < PAGE.index("<style>")
     assert PAGE.index('<script src="lib/shell.js"></script>') < PAGE.index("<script>")
@@ -80,7 +84,7 @@ def test_working_copy_editor_and_panels():
     assert 'indexedDB.open("loopconsole"' in PAGE
     for d in ("catalog", "candidates", "records"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'key:"loopconsole.docks.v3"' in PAGE   # v3: the CLAUDE dock went (loop-workspace)
+    assert 'key:"loopconsole.docks.v4"' in PAGE   # v4: the workspace docks (loop-workspace step 4; v3: the CLAUDE dock went)
     assert 'data-cmd="step ${esc(e.name)}"' in PAGE         # events step
 
 
@@ -144,3 +148,18 @@ def test_no_voice_navigation_on_the_page():
                  "navHook", "consolePage", "flip_key", "data-w=", "data-role=", "lib/panel.css"):
         assert gone not in PAGE, gone
     assert '<dialog id="savewin"' in PAGE
+
+
+def test_the_workspace_docks_mount_the_sdk_widgets():
+    """loop-workspace step 4 (WORKSPACE.md §6): LOOP, SURPRISES, RULINGS, TRACE, BUNDLE are docks whose bodies the
+    SDK's widgets fill, mounted when the manifest serves the loop channel; their frames go to the widgets' wire;
+    TRACE's mark and SURPRISES' ruled row hand over to the next widget; a session opened here writes its trace."""
+    for d in ("loop", "surprises", "rulings", "trace", "bundle"):
+        assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE and f'id="w-{d}"' in PAGE
+    assert 'key:"loopconsole.docks.v4"' in PAGE
+    assert '(m.channels||[]).includes("loop")&&!wsW)mountWorkspace()' in PAGE
+    assert "if(wsIO&&WS_CH.includes(f.ch)){wsIO.feed(f);return}" in PAGE
+    for g in ("MetisBundle", "MetisRulings", "MetisSurprises", "MetisTrace", "MetisLoop"):
+        assert f"{g}.mount(" in PAGE
+    assert "onMark:d=>" in PAGE and "W.surprises.draft(d)" in PAGE and "W.rulings.show(id)" in PAGE
+    assert "...(wsW?{trace:true}:{})" in PAGE

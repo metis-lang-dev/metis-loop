@@ -419,3 +419,18 @@ def test_pkg_names_the_packages_a_page_opens_at_the_start(tmp_path, monkeypatch)
     page = Gateway(dict(DEFAULTS, pkg=rows)).page()
     assert '"pkg": [{"name": "lamp", "path": "domains/lamp/lamp", "host": false}' in page
     assert "openCatalog(GW.pkg[0])" in page
+
+
+def test_the_workspace_widgets_served_from_the_sdk(personal):
+    """loop-workspace step 4: /sdk/workspace/<file> serves the SDK's widget files byte for byte (public code, as
+    /sdk/catalog/), and nothing else under it."""
+    from metis_loop_sdk import web
+    base = f"http://{personal.url}/sdk/workspace/"
+    for f in web.WS_WIDGET_FILES:
+        got = urllib.request.urlopen(base + f, timeout=5)
+        assert got.read() == (web.WS_WIDGET_DIR / f).read_bytes(), f
+        assert got.headers["Content-Type"].startswith("text/javascript" if f.endswith(".js") else "text/css")
+    for bad in ("../web.py", "catalog.js", "nope.js"):
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base + bad, timeout=5)
+        assert e.value.code == 404

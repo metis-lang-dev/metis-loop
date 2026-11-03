@@ -132,6 +132,23 @@ export function primer(ex: { path: string; rule: string } | null): string {
 }
 const json = (o: unknown) => JSON.stringify(o, null, 1);
 
+/** The candidate's firings on the trace, from the judge's fired-diff rows: how many of its rules' firings (by base name)
+ * the candidate rows carry, in how many rows, from which tick to which. */
+export function firings(e: any): { count: number; rows: number; of_rows: number; first: number | null; last: number | null } {
+	const mine = new Set(((e?.rules ?? []) as string[]).map((r) => String(r).split("[")[0]));
+	const rows = (e?.rows ?? []) as any[];
+	let count = 0, hit = 0, first: number | null = null, last: number | null = null;
+	for (const row of rows) {
+		const n = ((row?.fired?.candidate ?? []) as string[]).filter((x) => mine.has(String(x).split("[")[0])).length;
+		if (!n) continue;
+		count += n;
+		hit++;
+		if (first === null) first = row.k;
+		last = row.k;
+	}
+	return { count, rows: hit, of_rows: rows.length, first, last };
+}
+
 export default function (pi: ExtensionAPI) {
 	const root = () => resolve(writeRoot());
 	let locked = false;
@@ -306,7 +323,10 @@ export default function (pi: ExtensionAPI) {
 					release(p.id, `not judged: ${(e.reasons ?? []).join("; ") || "the time budget ran out"}`, r);
 					return text(`not judged (the time budget ran out): surprise ${p.id} is released, open again; judge it again with a longer budget\n\n${doc}`, { verdict: e.verdict, ruling: null, code: res.code, spent });
 				}
-				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace };
+				// beside the verdict, for the person (the brake_late lesson, step 4): when the candidate is first enabled and how
+				// often its rules fire where the fired rows differ from the record
+				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace,
+					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e) };
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
 				return text(`${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });

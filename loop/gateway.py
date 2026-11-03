@@ -7,6 +7,8 @@ on ONE port (D1), grown from console/dev_serve.py.
     GET /lib/<name>  the console's shell, console/lib/ (shell_lib; no token: public code)
     GET /sdk/catalog/<name>  the CATALOG widget (catalog.js, catalog.css) from the installed
                      loop SDK (metis_loop_sdk.web.WIDGET_DIR; no token: public code)
+    GET /sdk/workspace/<name>  the workspace widgets (io.js, workspace.css, bundle/trace/surprises/
+                     rulings/loop.js: metis_loop_sdk.web.WS_WIDGET_DIR; public code)
     WS  /ws          one multiplexed socket per browser window
 
 Frames (JSON, one per message):
@@ -78,7 +80,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
-from metis_loop_sdk.web import WIDGET_URL, widget_file
+from metis_loop_sdk.web import WIDGET_URL, WS_WIDGET_URL, widget_file, ws_widget_file
 
 from . import shell_lib
 from .console_serve import ConsoleServer
@@ -818,6 +820,11 @@ class Gateway:
             return respond(HTTPStatus.OK, "ok\n")
         if route.startswith("/lib/"):                   # the shell: the page's own code, no token
             got = shell_lib.get(route[len("/lib/"):])
+            if got is None:
+                return respond(HTTPStatus.NOT_FOUND, "not found\n")
+            return respond(HTTPStatus.OK, *got)
+        if route.startswith(WS_WIDGET_URL):             # the workspace widgets, from the installed SDK: public code
+            got = ws_widget_file(route[len(WS_WIDGET_URL):])
             if got is None:
                 return respond(HTTPStatus.NOT_FOUND, "not found\n")
             return respond(HTTPStatus.OK, *got)

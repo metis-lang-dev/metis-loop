@@ -1,6 +1,7 @@
 <title>Loop Console</title>
 <link rel="stylesheet" href="lib/shell.css">
 <link rel="stylesheet" href="sdk/catalog/catalog.css">
+<link rel="stylesheet" href="sdk/workspace/workspace.css">
 <style>
 .dots{color:var(--cyan);letter-spacing:1px}
 .st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
@@ -187,17 +188,48 @@ details summary{cursor:pointer;color:var(--dim)}
       <header><span class="tw">▾</span><span class="tt">SURPRISE RECORDS</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="records"><div class="empty">No surprise records.</div></div></div>
     </section>
+    <section class="dock ws-dock" id="dock-loop" data-dock="loop" aria-label="the pi loop" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">LOOP · the pi loop</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-loop"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    </section>
+    <section class="dock ws-dock" id="dock-surprises" data-dock="surprises" aria-label="surprises" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">SURPRISES</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-surprises"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    </section>
+    <section class="dock ws-dock" id="dock-rulings" data-dock="rulings" aria-label="rulings" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">RULINGS</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-rulings"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    </section>
+    <section class="dock ws-dock" id="dock-trace" data-dock="trace" aria-label="traces" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">TRACE</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-trace"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    </section>
+    <section class="dock ws-dock" id="dock-bundle" data-dock="bundle" aria-label="the bundle" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">BUNDLE</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="w-bundle"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
+    </section>
   </aside>
   <nav id="strip" aria-label="tool windows">
     <button data-strip="catalog" title="working copy and extensions">Catalog</button>
     <button data-strip="candidates" title="candidates">Candidates</button>
     <button data-strip="records" title="surprise records">Records</button>
+    <button data-strip="loop" class="ws-strip" title="the pi loop" hidden>Loop</button>
+    <button data-strip="surprises" class="ws-strip" title="surprises" hidden>Surprises</button>
+    <button data-strip="rulings" class="ws-strip" title="rulings" hidden>Rulings</button>
+    <button data-strip="trace" class="ws-strip" title="traces" hidden>Trace</button>
+    <button data-strip="bundle" class="ws-strip" title="the bundle" hidden>Bundle</button>
   </nav>
 </main>
 </div>
 
 <script src="lib/shell.js"></script>
 <script src="sdk/catalog/catalog.js"></script>
+<script src="sdk/workspace/io.js"></script>
+<script src="sdk/workspace/bundle.js"></script>
+<script src="sdk/workspace/trace.js"></script>
+<script src="sdk/workspace/surprises.js"></script>
+<script src="sdk/workspace/rulings.js"></script>
+<script src="sdk/workspace/loop.js"></script>
 <script>
 "use strict";
 /* The Loop Console (metis-loop docs/CONSOLE.md): a state inspector over
@@ -550,7 +582,7 @@ async function openCatalog(pick){
   if(GW){
     if(!wsUp){banner("Not connected to the console backend — reconnecting…",4000);return}
     pendingReq="r"+Math.random().toString(36).slice(2,8);
-    wsSend({ch:"repl",type:"open",llp,host,req:pendingReq});return}
+    wsSend({ch:"repl",type:"open",llp,host,req:pendingReq,...(wsW?{trace:true}:{})});return}   // the session's trace: a surprise from it replays
   if(!db){banner("No backend in this view — sessions need the db capability.",5000);return}
   const id="s"+Math.random().toString(36).slice(2,8);
   try{await db.doc("sessions/"+id).set({llp,host,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
@@ -564,7 +596,7 @@ function wsConnect(){
   const proto=location.protocol==="https:"?"wss://":"ws://";
   const q=GW.token?"?token="+encodeURIComponent(GW.token):"";
   try{wsock=new WebSocket(proto+location.host+GW.ws+q)}catch(e){wsRetryLater();return}
-  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");if(sid)wsSend({ch:"repl",type:"open",session:sid});
+  wsock.onopen=()=>{wsUp=true;wsRetry=500;banner("");workspaceAgain();if(sid)wsSend({ch:"repl",type:"open",session:sid});
     else if(GW.pkg&&GW.pkg.length&&!pkgOpened){pkgOpened=true;openCatalog(GW.pkg[0])}
     wsSend({ch:"repl",type:"gate",op:"asks"})};
   wsock.onclose=()=>{const was=wsUp;wsUp=false;
@@ -572,6 +604,7 @@ function wsConnect(){
   wsock.onmessage=e=>{let f;try{f=JSON.parse(e.data)}catch(x){return}wsHandle(f)}}
 function wsRetryLater(){setTimeout(wsConnect,wsRetry);wsRetry=Math.min(wsRetry*2,8000)}
 function wsHandle(f){
+  if(wsIO&&WS_CH.includes(f.ch)){wsIO.feed(f);return}   // the workspace widgets' channels
   if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
   if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];domainsSeen=true;renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="readme"){rootReadme=f.readme||null;renderCatalogDock();return}
@@ -621,7 +654,29 @@ function applyManifest(){
   const vb=m.verbs||{};   // a declared verb's chip says the model's line
   document.querySelectorAll("#chips [data-cmd]").forEach(c=>{const v=vb[c.dataset.cmd.split(" ")[0]];if(v)c.title=v});
   $("#b-mode").title=(m.policy||"")+"\nno brain here: the pi loop formalizes and rules (the workspace's .metis/)";
-  renderRecords();wsSend({ch:"repl",type:"records"})}   // the file-backed Records dock
+  renderRecords();wsSend({ch:"repl",type:"records"});   // the file-backed Records dock
+  if((m.channels||[]).includes("loop")&&!wsW)mountWorkspace()}
+
+/* ---- the workspace (loop-workspace step 4, WORKSPACE.md §6): the loop SDK's five widgets over the backend's
+   trace / surprise / bundle / loop channels, mounted when the manifest serves them (personal mode). TRACE's
+   "mark here" and SURPRISES' "drop from the session" open the drop dialog; a ruled surprise opens its RULING. */
+const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["loop","surprises","rulings","trace","bundle"];
+let wsIO=null,wsW=null;
+function mountWorkspace(){
+  if(!window.MetisIO)return;
+  wsIO=MetisIO.make(wsSend);
+  document.querySelectorAll(".ws-dock,.ws-strip").forEach(e=>e.hidden=false);
+  const W={};
+  W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
+  W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
+  W.surprises=MetisSurprises.mount($("#w-surprises"),wsIO,{session:()=>sid,
+    onRuling:id=>{dockUI.set("rulings",{shown:true,open:true});W.rulings.show(id)}});
+  W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
+  W.loop=MetisLoop.mount($("#w-loop"),wsIO,{});
+  wsW=W;applyDocks()}
+function workspaceAgain(){   // a reconnect: the backend forgot this page's journal tail
+  if(!wsW)return;
+  wsW.loop.refresh();wsW.loop.tail();wsW.surprises.refresh();wsW.bundle.refresh();wsW.trace.refresh();wsW.rulings.refresh()}
 
 /* ---- the working copy + floating editors (CONSOLE-WS §4a, the user's
    simple model): open → the catalog's text is copied into IndexedDB
@@ -773,9 +828,10 @@ function downloadWork(){if(!work){banner("nothing to save — open a catalog fir
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: lib/shell.js, this console's copy) ---- */
-const DOCKS=["catalog","candidates","records"];
-const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v3",store,defaults:{catalog:{shown:true,open:true},
-  candidates:{shown:!GW,open:false},records:{shown:true,open:true}}});
+const DOCKS=["catalog","candidates","records","loop","surprises","rulings","trace","bundle"];
+const dockUI=MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v4",store,defaults:{catalog:{shown:true,open:true},
+  candidates:{shown:!GW,open:false},records:{shown:true,open:false},
+  loop:{shown:!!GW,open:true},surprises:{shown:!!GW,open:true},rulings:{shown:!!GW,open:false},trace:{shown:!!GW,open:false},bundle:{shown:!!GW,open:false}}});
 const applyDocks=dockUI.apply;
 
 /* the CATALOG panel: the catalogs of metis-catalog (the domains first, one
