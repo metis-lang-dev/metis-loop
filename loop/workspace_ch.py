@@ -184,7 +184,7 @@ class WorkspaceChannels:
             out = await getattr(self, "_" + ch)(page, typ, msg)
             if out is not None:
                 await self.gw._send(page, {"ch": ch, "type": typ, "req": req, **out})
-        except (ValueError, KeyError, T.TraceError, FileNotFoundError) as e:
+        except (ValueError, KeyError, T.TraceError, OSError) as e:      # OSError: a full disk, a permission (FileNotFoundError too)
             await self.gw._send(page, {"ch": ch, "type": "error", "req": req,
                                        "error": str(e.args[0] if e.args else e)})
         except PiRpcError as e:         # the child is gone or never answered: the page stays, the channel too

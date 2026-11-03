@@ -74,8 +74,10 @@
         s.marks.map(m => el('span', { class: 'mw-mark-chip' },
           el('button', { class: 'chip', title: 'go to the mark\'s start', onclick: () => go(m.k0) }, `${m.mark}: k ${m.k0}..${m.k1 ?? '…'}`),
           el('button', {
-            class: 'btn mw-mark', disabled: m.k1 === null || m.k1 === undefined,
-            title: m.k1 === null || m.k1 === undefined ? 'the mark is not ended yet' : 'draft a surprise over the mark\'s window (kept past the ring when dropped)',
+            class: 'btn mw-mark', disabled: m.k1 === null || m.k1 === undefined || m.k0 < s.trace.k0,
+            title: m.k1 === null || m.k1 === undefined ? 'the mark is not ended yet'
+              : m.k0 < s.trace.k0 ? `the trace's ring dropped it: the trace holds k ${s.trace.k0}..${s.trace.k1}`
+                : 'draft a surprise over the mark\'s window (kept past the ring when dropped)',
             onclick: () => o.onMark && o.onMark({ run: s.run, member: s.member, k: m.k1, window: [m.k0, m.k1], mark: m.mark, fired: [] }),
           }, 'mark here'))));
     }
