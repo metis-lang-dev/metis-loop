@@ -165,6 +165,9 @@ class ConsoleServer:
                     return Path(d.program).resolve()
             raise ValueError(f"no catalog '{llp}' in {self.root}" + (f" nor METIS_HOME ({catalog.home()})"
                                                                    if hasattr(catalog, "home") else ""))
+        if len(hits) > 1:                       # a package's program wins over any other .llp (a goldens case
+            progs = {d["path"] for d in self.domains() if d.get("kind") == "domain"}     # is not a package)
+            hits = [n for n in hits if n in progs] or hits
         if len(hits) > 1:
             raise ValueError(f"'{llp}' is ambiguous: {', '.join(hits)}")
         path = (self.root / (hits[0] + ".llp")).resolve()

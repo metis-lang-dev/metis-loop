@@ -247,3 +247,15 @@ def test_the_gateways_ask_frames(tmp_path):
             assert len(seen[-2]) == 1 and seen[-1] == []
     finally:
         r.close()
+
+
+def test_a_bare_name_is_the_package_not_a_goldens_case(tmp_path):
+    """The architect's F3 (loop-chat, dog): 'plant' in the open field is the package's program even when a goldens
+    case of the same name is under the root; two packages of one name stay ambiguous."""
+    srv = server(tmp_path)
+    case = srv.root / "goldens/cases/plant.llp"
+    case.parent.mkdir(parents=True)
+    case.write_text("catalog plant 1.\n")
+    assert srv.resolve("plant") == (srv.root / PROG).resolve()
+    assert srv.resolve("goldens/cases/plant") == case.resolve()        # the full name still opens the case file
+
