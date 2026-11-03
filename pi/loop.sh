@@ -75,6 +75,11 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
+for a in "$@"; do                                    # loop.sh's own options come first: one after pi's would reach pi
+  case "$a" in --seed|--episodes|--into|--budget)     # (--name is pi's too)
+    echo "loop.sh: $a after pi's arguments: give loop.sh's options first (loop.sh $a … --mode rpc)" >&2; exit 2 ;;
+  esac
+done
 DIR="${METIS_CATALOG:-$PWD}"
 [ -d "$DIR" ] || { echo "loop.sh: no directory $DIR (METIS_CATALOG)" >&2; exit 1; }
 DIR="$(cd "$DIR" && pwd)"

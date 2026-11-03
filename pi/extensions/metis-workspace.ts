@@ -85,7 +85,51 @@ function run(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = 
 	});
 }
 
-const text = (s: string, details: any = {}) => ({ content: [{ type: "text" as const, text: cap(s) }], details });
+const text = (s: string, details: any = {}, n = 4000) => ({ content: [{ type: "text" as const, text: cap(s, n) }], details });
+
+/** The units a member's program includes, the program first, transitively, each resolved by the compiler's own rule
+ *  (metispy's `python -m metis.catalog units NAME`: own = in the domain dir, shared = the family's under METIS_HOME,
+ *  std = iface/). An include found nowhere throws with the catalog's words. */
+export function units(name: string, root: string): { path: string; kind: "own" | "shared" | "std" }[] {
+	const out = catalog.cli(["units", name], undefined, root);
+	if (out && typeof out === "object" && "error" in out) throw new Error(String(out.error));
+	return Object.entries(out as Record<string, "own" | "shared" | "std">).map(([path, kind]) => ({ path, kind }));
+}
+
+/** One real rule of the member's units, to show a rule's shape: a safety-stage rule that reads ($), spends now and
+ *  names its layer; else the first rule that names its layer. With its %% line. Never invented: null when none. */
+export function exampleRule(files: { path: string; text: string }[]): { path: string; rule: string } | null {
+	const RULE = /^\s*[a-z][a-z0-9_]*\s*\[[a-z0-9_]+\]\s*:.*-o.*\.\s*(%.*)?$/;
+	let best: { path: string; rule: string } | null = null;
+	let first: { path: string; rule: string } | null = null;
+	for (const f of files) {
+		let stage = "";
+		const lines = f.text.split("\n");
+		for (let i = 0; i < lines.length && !best; i++) {
+			const l = lines[i];
+			const st = l.match(/^\s*stage\s+([a-z0-9_]+)\s*\{/);
+			if (st) stage = st[1];
+			if (!RULE.test(l)) continue;
+			const doc = i > 0 && /^\s*%%/.test(lines[i - 1]) ? lines[i - 1].trim() + "\n" : "";
+			const hit = { path: f.path, rule: doc + l.trim() };
+			first ??= hit;
+			if (stage === "safety" && l.includes("$") && /\bnow\b/.test(l)) best = hit;
+		}
+		if (best) break;
+	}
+	return best ?? first;
+}
+
+/** The rule shape, by one of the member's own rules, and the three faults a model made writing one (round 1). */
+export function primer(ex: { path: string; rule: string } | null): string {
+	return [
+		"## how a rule is written (one of the member's own, and the three faults to avoid)",
+		ex ? `One of this member's rules, as written in ${ex.path}:\n\n    ${ex.rule.replace(/\n/g, "\n    ")}\n` : "(no rule of this member's units to show)",
+		"- every rule names its layer in brackets after its name: `name [dyn] : premises -o effects.`",
+		"- a premise read and kept is `$atom`, a bare atom is consumed, and premises are joined by `*` (never commas)",
+		"- a command rule spends this period's `now`: `... * now -o ().`; its name is the command the host gives",
+	].join("\n");
+}
 const json = (o: unknown) => JSON.stringify(o, null, 1);
 
 export default function (pi: ExtensionAPI) {
@@ -148,6 +192,19 @@ export default function (pi: ExtensionAPI) {
 			} catch {
 				// a member the catalog does not list: the record alone
 			}
+			// the units it includes, resolved as the compiler does: a family's under METIS_HOME are the member's rules too
+			let inc: ReturnType<typeof units> = [];
+			let incErr = "";
+			if (program && source) {
+				try {
+					inc = units(s.member, r).filter((u) => resolve(u.path) !== resolve(program!));
+				} catch (e: any) {
+					incErr = e.message;
+				}
+			}
+			const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
+			const files = [...(program && source ? [{ path: program, text: source }] : []),
+				...inc.filter((u) => u.kind !== "std").map((u) => ({ path: u.path, text: read(u.path) }))];
 			const earlier = ws.rulings(r).filter((x: any) => x.id !== s.id && ws.surprise(x.id, r)?.member === s.member);
 			const body = [
 				`## surprise ${s.id} (taken)`,
@@ -155,11 +212,17 @@ export default function (pi: ExtensionAPI) {
 				"",
 				`## the member's program${program ? ` (${program})` : ""}`,
 				source || "(not found in the catalog)",
+				...inc.flatMap((u) => u.kind === "std"
+					? ["", `## included (the language's standard unit): ${u.path}`]
+					: ["", `## included (${u.kind === "shared" ? "the family's, under METIS_HOME: a pack that amends it gives unit=<this path>" : "the member's own"}): ${u.path}`, read(u.path)]),
+				...(incErr ? ["", `## its includes could not be resolved: ${incErr}`] : []),
+				"",
+				primer(exampleRule(files)),
 				"",
 				"## earlier rulings on this member",
 				earlier.length ? json(earlier.map((x: any) => ({ id: x.id, verdict: x.verdict, md: x.md }))) : "(none)",
 			].join("\n");
-			return text(body, { surprise: s, program, earlier: earlier.map((x: any) => x.id) });
+			return text(body, { surprise: s, program, units: inc, earlier: earlier.map((x: any) => x.id) }, 40000);
 		},
 	});
 
@@ -343,13 +406,14 @@ export default function (pi: ExtensionAPI) {
 	// aborted), a `budget` journal row with the spend, and the lock released. pi is not killed.
 	const budget = Number(process.env.METIS_LOOP_BUDGET || 0) || 0;
 	let spent = 0;
+	let requests = 0;
 	let over = false;
 	const refusal = () => `the session's budget is spent: ${spent.toFixed(4)} of ${budget} USD (loop.sh --budget); no further model turns`;
-	pi.on("message_end", async (e: any, ctx: any) => {
-		const m = e.message;
-		const cost = Number(m?.role === "assistant" ? m?.usage?.cost?.total : 0) || 0;
+	// one log, one cap: a paid row of this session, pi's own or the kernel's formalize (its SDK face logs each call to
+	// $METIS_LOOP_RECORDS/formalize-calls.jsonl; the new rows are picked up here as who: formalize)
+	const charge = (r: string, row: Record<string, unknown>, ctx: any) => {
+		const cost = Number(row.cost) || 0;
 		if (cost <= 0) return;
-		const r = root();
 		let before = 0;
 		try {
 			before = ws.cost(r).total;
@@ -357,7 +421,7 @@ export default function (pi: ExtensionAPI) {
 			// no workspace state yet: the first row starts it
 		}
 		spent += cost;
-		appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ts: new Date().toISOString(), who: "pi", model: m.model ?? process.env.MODEL ?? null, cost, usage_before: before, session_spent: spent }) + "\n");
+		appendFileSync(ws.path("cost", {}, r), JSON.stringify({ ts: new Date().toISOString(), ...row, cost, usage_before: before, session_spent: spent }) + "\n");
 		if (budget > 0 && spent >= budget && !over) {
 			over = true;
 			ws.journal("pi", "budget", { spent, budget }, r);
@@ -365,11 +429,54 @@ export default function (pi: ExtensionAPI) {
 			unlockSession();
 			ctx?.abort?.();
 		}
+	};
+	let formalizeSeen = -1; // lines of formalize-calls.jsonl already charged (-1: not yet read: what was there is not this session's)
+	const formalizeLog = () => (process.env.METIS_LOOP_RECORDS ? join(process.env.METIS_LOOP_RECORDS, "formalize-calls.jsonl") : null);
+	const syncFormalize = (ctx: any) => {
+		const f = formalizeLog();
+		if (!f) return;
+		const lines = existsSync(f) ? readFileSync(f, "utf8").split("\n").filter((l) => l.trim()) : [];
+		if (formalizeSeen < 0) {
+			formalizeSeen = lines.length;
+			return;
+		}
+		const fresh = lines.slice(formalizeSeen);
+		formalizeSeen = lines.length;
+		const r = root();
+		for (const l of fresh) {
+			let x: any = {};
+			try {
+				x = JSON.parse(l);
+			} catch {
+				continue; // a bad line is the face's to explain, never a reason to lose the session
+			}
+			charge(r, { who: "formalize", model: x.model ?? null, cost: x.cost }, ctx);
+		}
+	};
+	pi.on("session_start", async () => syncFormalize(null)); // the log's lines before this session are not its spend
+	pi.on("message_end", async (e: any, ctx: any) => {
+		const m = e.message;
+		if (m?.role === "assistant") requests++;
+		syncFormalize(ctx);
+		const cost = Number(m?.role === "assistant" ? m?.usage?.cost?.total : 0) || 0;
+		if (cost > 0) charge(root(), { who: "pi", model: m.model ?? process.env.MODEL ?? null, cost }, ctx);
 	});
 	pi.on("input", async (_e: any, ctx: any) => {
 		if (!over) return { action: "continue" };
 		ctx?.ui?.notify?.(`metis-workspace: ${refusal()}`, "error");
 		return { action: "handled" };
 	});
-	pi.on("tool_call", async () => (over ? { block: true, reason: refusal(), terminate: true } : undefined));
+	let calls = 0;
+	pi.on("tool_call", async () => {
+		if (over) return { block: true, reason: refusal(), terminate: true };
+		calls++;
+		return undefined;
+	});
+	// past half the budget every tool reply carries the spend, so wandering has a price the model can see
+	pi.on("tool_result", async (e: any, ctx: any) => {
+		syncFormalize(ctx); // a repl_formalize just spent: charged before the reply says the spend
+		if (!(budget > 0) || spent < budget / 2) return undefined;
+		const line = `[budget: ${spent.toFixed(4)} of ${budget} USD spent; ${calls} tool calls, ${requests} model requests in this session. Finish the surprise, or stop.]`;
+		return { content: [...(e.content ?? []), { type: "text", text: line }] };
+	});
 }

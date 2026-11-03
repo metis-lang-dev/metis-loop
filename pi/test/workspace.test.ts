@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -317,4 +317,79 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	assert.match(run(["--budget", "lots"]).stderr, /a positive number of USD/);
 	const free = run([], { MODEL: "stub/script" });
 	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
+});
+
+test("metis-workspace: surprise_next shows the family's units resolved by the compiler's rule, and the rule shape by one of the member's own", async () => {
+	const { r } = scratch();
+	const home = mkdtempSync(join(tmpdir(), "ws-pi-home-"));
+	writeFileSync(join(home, "fam.llp"), "pred late : lamp.\nstage progress {\n  go_on [dyn] : $busy * go -o ().\n}\nstage safety {\n  %% Too late to stop: I stop.\n  stop_late [dyn] : $busy * $late * now -o ().\n}\n");
+	writeFileSync(join(r, "domains", "lamp", "lamp.llp"), "catalog lamp 1.\ninclude \"fam.llp\".\n");
+	process.env.METIS_HOME = home;
+	try {
+		const p = fakePi();
+		workspace(p.api);
+		await p.emit("session_start", {}, ctx);
+		ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 2, atoms: ["late"], config: "service.yaml" }, "backend", r);
+		const out = await p.tools.get("surprise_next").execute("n", {});
+		const t = out.content[0].text;
+		assert.ok(t.includes(`## included (the family's, under METIS_HOME: a pack that amends it gives unit=<this path>): ${join(home, "fam.llp")}`), t);
+		assert.ok(t.includes("stop_late [dyn] : $busy * $late * now -o ()."));             // the family's text itself
+		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }]);
+		assert.ok(t.includes(`One of this member's rules, as written in ${join(home, "fam.llp")}:\n\n    %% Too late to stop: I stop.\n    stop_late [dyn] : $busy * $late * now -o ().`));   // a real safety rule, never invented
+		assert.match(t, /every rule names its layer in brackets after its name/);
+		assert.match(t, /a premise read and kept is `\$atom`/);
+		assert.match(t, /a command rule spends this period's `now`/);
+		await p.emit("session_shutdown", {}, {});
+	} finally {
+		delete process.env.METIS_HOME;
+	}
+});
+
+test("the system prompt: a workspace surprise is ruled only through pack_propose, never the person's own loop", () => {
+	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
+	assert.match(t, /A surprise in a workspace is ruled only through `pack_propose`\*\*: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_apply` for it/);
+	assert.match(t, /Once it is ruled you are done with that surprise/);
+});
+
+test("metis-workspace: past half the budget each tool reply carries the spend; the kernel's formalize spend is charged too", async () => {
+	const { r } = scratch();
+	const recs = mkdtempSync(join(tmpdir(), "ws-pi-recs-"));
+	const flog = join(recs, "formalize-calls.jsonl");
+	writeFileSync(flog, JSON.stringify({ model: "deepseek/deepseek-v4-pro", cost: 0.5 }) + "\n");       // before this session: not its spend
+	Object.assign(process.env, { METIS_LOOP_BUDGET: "0.10", METIS_LOOP_RECORDS: recs });
+	try {
+		const p = fakePi();
+		workspace(p.api);
+		const c = { ...ctx, abort: () => {} };
+		await p.emit("session_start", {}, c);
+		const msg = (cost: number) => ({ message: { role: "assistant", model: "deepseek/deepseek-v4-pro", usage: { cost: { total: cost } } } });
+		const reply = { content: [{ type: "text", text: "the tool's own" }] };
+		await p.emit("message_end", msg(0.03), c);
+		assert.equal(await p.emit("tool_call", { toolName: "journal", input: {} }, c), undefined);
+		assert.equal(await p.emit("tool_result", reply, c), undefined);                    // 0.03 < 0.05: nothing said
+		appendFileSync(flog, JSON.stringify({ model: "deepseek/deepseek-v4-pro", cost: 0.025, tokens: 300 }) + "\n");   // a repl_formalize
+		const said = await p.emit("tool_result", reply, c);
+		assert.equal(said.content[0].text, "the tool's own");
+		assert.match(said.content[1].text, /^\[budget: 0\.0550 of 0\.1 USD spent; 1 tool calls, 1 model requests in this session\. Finish the surprise, or stop\.\]$/);
+		const rows = readFileSync(ws.path("cost", {}, r), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+		assert.deepEqual(rows.map((x) => [x.who, x.cost]), [["pi", 0.03], ["formalize", 0.025]]);   // one log: the old 0.5 is not charged
+		assert.equal(ws.cost(r).total, 0.055);
+		appendFileSync(flog, JSON.stringify({ model: "deepseek/deepseek-v4-pro", cost: 0.05 }) + "\n");
+		await p.emit("message_end", { message: { role: "user" } }, c);                       // picked up at the next message: 0.105 >= 0.10
+		assert.equal(ws.events(0, r).filter((x) => x.kind === "budget").length, 1);
+		assert.equal(ws.loops(r).pi, null);
+		await p.emit("session_shutdown", {}, {});
+	} finally {
+		delete process.env.METIS_LOOP_BUDGET;
+		delete process.env.METIS_LOOP_RECORDS;
+	}
+});
+
+test("loop.sh: its own option after pi's arguments is refused, not handed to pi", () => {
+	const { r } = scratch();
+	const e = { ...process.env, METIS_LOOP_PI: join(HERE, "stub", "pi"), METIS_CONFIG: "", METIS_LOOP_SDK_PY: PY, MODEL: "stub/script" };
+	const a = spawnSync(join(HERE, "..", "loop.sh"), ["--mode", "rpc", "--budget", "1"], { encoding: "utf8", cwd: r, env: e as any });
+	assert.equal(a.status, 2);
+	assert.match(a.stderr, /--budget after pi's arguments: give loop.sh's options first/);
+	assert.equal(spawnSync(join(HERE, "..", "loop.sh"), ["--budget", "1", "--mode", "rpc", "--name", "s"], { encoding: "utf8", cwd: r, env: e as any }).status, 0);   // pi's own --name passes
 });
