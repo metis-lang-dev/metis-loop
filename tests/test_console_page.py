@@ -214,6 +214,7 @@ def test_the_chat_widget_carries_the_cards():
         assert part in js, part
     assert "row.kind === 'ruling'" in js                      # a ruling journalled opens its card
     assert "if (ev.empty) push('err', 'pi', ev.note" in js                  # step 3: an empty turn says so
+    assert "of ${of} USD (pi's estimate)" in js                              # the header's spend is pi's count, said so
     assert "disabled: !!held" not in js                                     # step 3: /commands answer under a TUI
     rjs = (Path(__file__).resolve().parents[1] / "web/workspace/rulings.js").read_text()
     assert "window.MetisRulings = { mount, card };" in rjs

@@ -351,6 +351,21 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	const loose = run([], nokey);
 	assert.equal(loose.status, 1);
 	assert.match(loose.stderr, /is not private \(chmod 600 it\): not read[\s\S]*needs OPENROUTER_API_KEY/);
+	// nina's review: the file is PARSED, never sourced: a bare key, a spaced line, a trailing command: nothing runs, no
+	// key in any output, and only a clean OPENROUTER_API_KEY= line (export, quotes, spaces around =) is read
+	const fake = "sk-or-v1-" + "2".repeat(64);
+	const ran = join(kd, "ran");
+	for (const [body, ok] of [[fake + "\n", false], [`OPENROUTER_API_KEY = ${fake}\n`, true], [`OPENROUTER_API_KEY=${fake} touch ${ran}\n`, true],
+		[`touch ${ran}\nexport OPENROUTER_API_KEY="${fake}"\n`, true], [`# no key here\n$(touch ${ran})\n`, false]] as [string, boolean][]) {
+		writeFileSync(kf, body);
+		chmodSync(kf, 0o600);
+		const o = run([], nokey);
+		assert.ok(!existsSync(ran), `nothing in the file runs: ${JSON.stringify(body)}`);
+		assert.ok(!o.stderr.includes(fake) && !o.stdout.includes(fake), `no key in the output: ${JSON.stringify(body)}`);
+		assert.equal(o.status, ok ? 0 : 1, `${JSON.stringify(body)}: ${o.stderr}`);
+		if (ok) assert.match(o.stderr, /OPENROUTER_API_KEY from /);
+		else assert.match(o.stderr, /has no OPENROUTER_API_KEY= line: not read[\s\S]*needs OPENROUTER_API_KEY/);
+	}
 	const none = run([], { OPENROUTER_API_KEY: "", METIS_OPENROUTER_ENV: "" });
 	assert.equal(none.status, 1);
 	assert.match(none.stderr, /needs OPENROUTER_API_KEY: the environment, or a key file/);

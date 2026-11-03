@@ -157,7 +157,17 @@ case "$MODEL${FORMALIZE_MODEL:-}" in
   *openrouter/*)
     if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -n "$KEYFILE" ] && [ -f "$KEYFILE" ] && [ -O "$KEYFILE" ]; then
       case "$(stat -c %a "$KEYFILE" 2>/dev/null)" in
-        600|400) set -a; . "$KEYFILE"; set +a; echo "loop.sh: OPENROUTER_API_KEY from $KEYFILE" >&2 ;;
+        600|400)
+          # PARSED, never sourced (nina's review: sourcing runs the file, and bash's error for a bare-key line
+          # prints the key, which the backend journals): the last OPENROUTER_API_KEY= line only (export and
+          # spaces around = allowed), quotes stripped, the value's first word; nothing else of the file is read
+          { set +x; } 2>/dev/null
+          _k="$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}OPENROUTER_API_KEY[[:space:]]*=[[:space:]]*//p' "$KEYFILE" | tail -n 1 | tr -d '\r')"
+          case "$_k" in \"*) _k="${_k#\"}"; _k="${_k%%\"*}" ;; \'*) _k="${_k#\'}"; _k="${_k%%\'*}" ;; esac
+          _k="${_k%%[[:space:]]*}"
+          if [ -n "$_k" ]; then export OPENROUTER_API_KEY="$_k"; echo "loop.sh: OPENROUTER_API_KEY from $KEYFILE" >&2
+          else echo "loop.sh: $KEYFILE has no OPENROUTER_API_KEY= line: not read" >&2; fi
+          unset _k ;;
         *) echo "loop.sh: $KEYFILE is not private (chmod 600 it): not read" >&2 ;;
       esac
     fi ;;

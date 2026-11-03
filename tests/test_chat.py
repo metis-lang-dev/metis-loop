@@ -158,7 +158,7 @@ def test_status(root):
     ch = channels(root)
     surprise(root)
     t = say(ch, "/status")["text"]
-    assert t.startswith("no bundle · pi: none · 0.0000 USD spent (0 calls)")
+    assert t.startswith("no bundle · pi: none · 0.0000 USD spent by pi's estimate (0 calls; the key's bill runs higher)")
     assert "surprises: 1 open, 0 taken, 0 ruled" in t
 
 

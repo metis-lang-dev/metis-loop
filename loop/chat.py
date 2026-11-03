@@ -323,7 +323,7 @@ def status_text(ws, child, budget_next=None):
     c = ws.cost()
     n = {k: len(ws.surprises(k)) for k in W.STATUS}
     nxt = f" · next start {budget_next} USD" if budget_next is not None else ""
-    return (f"{bl} · {pl} · {c['total']:.4f} USD spent ({c['calls']} calls){nxt}\n"
+    return (f"{bl} · {pl} · {c['total']:.4f} USD spent by pi's estimate ({c['calls']} calls; the key's bill runs higher){nxt}\n"
             f"surprises: {n['open']} open, {n['taken']} taken, {n['ruled']} ruled")
 
 

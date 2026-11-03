@@ -76,10 +76,10 @@
       const of = s.budget ? Number(s.budget.budget) : c && c.budget ? Number(c.budget) : DEFAULT_BUDGET;
       const spent = Math.max(s.spent, s.budget ? Number(s.budget.spent) : 0);
       const total = s.state && s.state.cost ? s.state.cost : {};
-      const tip = `the session: ${spent.toFixed(4)} USD (pi's own count; the bill can be higher)` +
+      const tip = `the session: ${spent.toFixed(4)} USD by pi's estimate (the key's real bill ran ~3x higher on deepseek v4 pro: loop-chat step 3's round, 0.4477 USD billed vs 0.149 counted)` +
         (s.budget ? `, ${s.budget.calls} tool calls, ${s.budget.requests} model requests` : '') +
         `\nthe workspace: ${Number(total.total || 0).toFixed(4)} USD in ${total.calls || 0} paid calls (.metis/cost.jsonl)`;
-      return el('span', { class: s.over ? 'bad' : s.budget ? 'warn' : '', title: tip }, `${spent.toFixed(2)} of ${of} USD`);
+      return el('span', { class: s.over ? 'bad' : s.budget ? 'warn' : '', title: tip }, `${spent.toFixed(2)} of ${of} USD (pi's estimate)`);
     }
     function header() {
       const run = running(), held = !!elsewhere();
