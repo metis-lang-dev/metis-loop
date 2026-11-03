@@ -85,6 +85,44 @@ def test_a_session_trace_replays_with_no_divergence(gw, tmp_path):
         assert ask(ws, "trace", "verb", name="sh", args={})["type"] == "error"
 
 
+def test_a_do_is_a_take_the_verbs_see(tmp_path):
+    """loop-chat F2 (the architect's dog drive): `do +cmd_go(door)` then `run 4` on dog. The intervention is the
+    session's input: a take tick (not a cut), so metis.trace replay counts it as an input and fires go at the tick
+    after it, and trace_fired finds go; a dropped surprise points at that trace."""
+    src = next(installed_catalog().glob("domains/**/dog/dog.llp"), None)
+    if src is None:
+        pytest.skip("no dog domain in the installed catalog")
+    shutil.copytree(src.parent, tmp_path / "domains" / "dog",
+                    ignore=shutil.ignore_patterns("records", "build", "__pycache__", "extensions", "goldens", "cases"))
+    r = Running(ConsoleServer(tmp_path), mode="personal")
+    try:
+        with r.ws() as ws:
+            frames(ws, lambda f: f.get("type") == "catalogs")
+            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "domains/dog/dog", "trace": True, "req": "r1"}))
+            f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
+            assert f["type"] == "session", f
+            sid = f["session"]
+            for k, cmd in enumerate(("do +cmd_go(door)", "run 4")):
+                assert send(ws, sid, cmd, f"c{k}")[-1]["status"] in ("done", "ok"), cmd
+            d = tmp_path / ".metis" / "traces" / sid
+            segs = T.read(d)
+            assert [s.header.get("cut") for s in segs] == [None], "a do is a take, not a cut"
+            ticks = [t for s in segs for t in s.ticks]
+            assert ticks[0]["members"]["dog"]["seq"] == [{"take": ["+cmd_go(door)"], "by": "person"}]
+            assert any("go" in x.split("[")[0] for x in ticks[1]["members"]["dog"]["seq"][0]["step"])
+            prog = segs[0].header["members"]["dog"]["program"]
+            rep = T.replay(d, "dog", prog)
+            assert rep.divergence is None and rep.inputs == 1, rep               # the do is the replay's input
+            assert any(x.startswith("go[") for x in rep.fired.get(2, [])), rep.fired   # go at the tick after it
+            v = ask(ws, "trace", "verb", name="trace_fired",
+                    args={"trace": "traces/" + sid, "rule": "go", "seeds": 1, "program": prog, "member": "dog"})
+            assert v["code"] == 0 and "go fired on 1 of 1 seeds" in v["out"], v
+            drop = ask(ws, "surprise", "drop", session=sid, reading="it went to the door", words="as asked")
+            assert W.workspace(tmp_path).surprise(drop["id"])["trace"] == "traces/" + sid
+    finally:
+        r.close()
+
+
 def test_a_surprise_dropped_from_a_session_and_from_a_trace(gw, tmp_path):
     with gw.ws() as ws:
         sid = opened(ws)["session"]
