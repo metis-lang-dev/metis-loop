@@ -187,7 +187,7 @@ def test_the_loop_channel_bridges_a_pi_child_and_tails_the_journal(gw, tmp_path)
         assert gate["token"] == "g1" and gate["plan"]["files"][0]["path"] == "domains/x.llp"
         assert ask(ws, "loop", "confirm", token="nope")["type"] == "error"
         ask(ws, "loop", "confirm", token="g1")
-        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        exited(ws)
         assert pi.said == ["take the next surprise"] and pi.answers == [("g1", True)]
         asyncio.run_coroutine_threadsafe(gw.gw.wsc.poll(), gw.loop).result(10)
         pushed = frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "event"
@@ -234,11 +234,22 @@ def test_the_loop_channel_through_loop_sh_and_pi_rpc(gw, tmp_path, monkeypatch):
         res = [f["event"] for f in got if f.get("type") == "pi" and f["event"]["kind"] == "tool_result"]
         assert res and res[-1]["ok"], res
         ask(ws, "loop", "stop")
-        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        exited(ws)
     rows = W.workspace(tmp_path).events()
     kinds = [r["kind"] for r in rows if r["who"] == "pi"]
     assert {"rpc_text", "rpc_gate", "rpc_tool_result", "rpc_exit"} <= set(kinds), kinds
     assert [r["kind"] for r in rows if r["who"] == "backend"][:2] == ["pi_start", "say"]
+
+
+def exited(ws, secs=15):
+    """Until the backend says its child exited: by asking (the `child` push may come before a reply and be read past)."""
+    end = time.time() + secs
+    while time.time() < end:
+        c = ask(ws, "loop", "state")["child"]
+        if c is None or c["state"] == "exited":
+            return c
+        time.sleep(0.1)
+    raise AssertionError("the child did not exit")
 
 
 class FailsFirst(StubPi):
@@ -277,11 +288,11 @@ def test_a_failed_start_keeps_the_page_and_the_channel(gw, tmp_path):
         good = ask(ws, "loop", "start", mode="rpc", model="openrouter/x", budget=1)
         assert good["child"]["state"] == "running"
         ask(ws, "loop", "stop")
-        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        exited(ws)
         assert ask(ws, "loop", "say", text="hi")["type"] == "error"              # exited: no say
         gw.gw.wsc.pi_factory = GoneAfterStart
         ask(ws, "loop", "start", mode="rpc")
-        frames(ws, lambda f: f.get("ch") == "loop" and f.get("type") == "child")
+        exited(ws)
         e = ask(ws, "loop", "say", text="hi")
         assert e["type"] == "error"
         assert ask(ws, "loop", "state")["type"] == "state"                       # the page still talks
