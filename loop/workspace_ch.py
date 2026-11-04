@@ -529,9 +529,10 @@ class WorkspaceChannels:
         env = dict(os.environ, METIS_CATALOG=str(self.ws.root))
         if msg.get("model"):
             env["MODEL"] = str(msg["model"])
-        # the chat's model thinks only when asked (the alf drive's L1: v4 pro's thinking ate the 2048-token cap: turns
-        # with no words and no tool call); loop.sh appends :off to a MODEL without a thinking suffix
-        env["METIS_LOOP_THINKING"] = "on" if msg.get("thinking") else "off"
+        # reasoning stays on (loop-prompt, PROMPT.md §2: the cap is 8192 now); the chat's options turn it off, and
+        # loop.sh appends :off to a MODEL without a thinking suffix. Unasked, the operator's METIS_LOOP_THINKING stays
+        if msg.get("no_thinking"):
+            env["METIS_LOOP_THINKING"] = "off"
         if budget is not None:
             env["METIS_LOOP_BUDGET"] = str(budget)
         rpc = self.pi_factory(_scope() + [str(LOOP_SH), "--mode", "rpc"], str(self.ws.root), env)

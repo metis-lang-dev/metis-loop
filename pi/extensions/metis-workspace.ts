@@ -8,7 +8,9 @@
 //   surprise_list       the surprises (open | taken | ruled)
 //   surprise_next       the oldest open surprise, TAKEN by this loop (its pid in surprises/<id>.taken), with what
 //                       it needs: the record (member, trace, k or window, the person's words), the member's
-//                       program, the earlier rulings on the same member
+//                       program, each unit it includes as its signature (declarations, rule names with their %%
+//                       lines: loop-prompt, PROMPT.md §2), the earlier rulings on the same member
+//   rule_text           named rules whole, with path:line, from the member's units
 //   trace_* / lint      every declared verb of metis.trace and metis.lint, one tool each, generated at load
 //                       from the declaration table (nothing written here that the verbs do not declare)
 //   pack_propose        the pack verb (propose.sh: the gate cascade, the goldens, the cases, the fired diff on the
@@ -27,17 +29,22 @@
 //   METIS_CATALOG      the workspace (DIR; unset: the cwd)
 //   METIS_LOOP_SDK_PY  a python with the loop SDK and metispy (the face runs `python -m metis.catalog.workspace`)
 //   METIS_LOOP_MODE    tui | rpc (the lock's mode)          MODEL   the pi model (the lock's model)
+//   METIS_LOOP_TOOLS   workspace | seed | all: the tool set (lib/toolset.ts; seed registers none of these)
 //   METISC             metisc for bundle_build (else metisc on PATH)
 //   METIS_LOOP_PROPOSE propose.sh for pack_propose (else ../propose.sh beside this file)
 import { execFile, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap } from "./lib/jsonl.ts";
+// pi's own path resolution for read (not exported by the package: imported by its file, so the guard resolves a path
+// exactly as the read tool will: a leading @ stripped, ~ expanded, file:// converted, the macOS variants tried)
+import { resolveReadPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/path-utils.js";
 import { writeRoot } from "./lib/roots.ts";
+import { scoped, toolset } from "./lib/toolset.ts";
 import * as catalog from "./sdk/catalog.ts";
 import * as ws from "./sdk/workspace.ts";
 
@@ -110,40 +117,135 @@ export function units(name: string, root: string): { path: string; kind: "own" |
 	return Object.entries(out as Record<string, "own" | "shared" | "std">).map(([path, kind]) => ({ path, kind }));
 }
 
-/** One real rule of the member's units, to show a rule's shape: a safety-stage rule that reads ($), spends now and
- *  names its layer; else the first rule that names its layer. With its %% line. Never invented: null when none. */
-export function exampleRule(files: { path: string; text: string }[]): { path: string; rule: string } | null {
-	const RULE = /^\s*[a-z][a-z0-9_]*\s*\[[a-z0-9_]+\]\s*:.*-o.*\.\s*(%.*)?$/;
-	let best: { path: string; rule: string } | null = null;
-	let first: { path: string; rule: string } | null = null;
-	for (const f of files) {
-		let stage = "";
-		const lines = f.text.split("\n");
-		for (let i = 0; i < lines.length && !best; i++) {
-			const l = lines[i];
-			const st = l.match(/^\s*stage\s+([a-z0-9_]+)\s*\{/);
-			if (st) stage = st[1];
-			if (!RULE.test(l)) continue;
-			const doc = i > 0 && /^\s*%%/.test(lines[i - 1]) ? lines[i - 1].trim() + "\n" : "";
-			const hit = { path: f.path, rule: doc + l.trim() };
-			first ??= hit;
-			if (stage === "safety" && l.includes("$") && /\bnow\b/.test(l)) best = hit;
-		}
-		if (best) break;
-	}
-	return best ?? first;
+const RULE_HEAD = /^\s*([a-z][a-z0-9_]*)\s*\[([a-z0-9_,\s]+)\]\s*:/;
+const DECL = /^\s*(catalog|extends|include|layers|stages|types|type|pred|bwd|weight|namespace)\b/;
+const nocomment = (l: string) => l.replace(/\s+%(?!%).*$/, "").trimEnd();
+
+/** The file a generated unit is made from ("% DERIVED from SRC by …" on its first line), absolute; else null. */
+export function derivedFrom(path: string, text: string): string | null {
+	const m = text.match(/^% DERIVED from (\S+)/);
+	return m ? resolve(dirname(path), m[1]) : null;
 }
 
-/** The rule shape, by one of the member's own rules, and the three faults a model made writing one (round 1). */
-export function primer(ex: { path: string; rule: string } | null): string {
-	return [
-		"## how a rule is written (one of the member's own, and the three faults to avoid)",
-		ex ? `One of this member's rules, as written in ${ex.path}:\n\n    ${ex.rule.replace(/\n/g, "\n    ")}\n` : "(no rule of this member's units to show)",
-		"- every rule names its layer in brackets after its name: `name [dyn] : premises -o effects.`",
-		"- a premise read and kept is `$atom`, a bare atom is consumed, and premises are joined by `*` (never commas)",
-		"- a command rule spends this period's `now`: `... * now -o ().`; its name is the command the host gives",
-	].join("\n");
+const SKILLS = resolve(HERE, "..", "skills");           // pi.sh's --skill directories (loop-prompt, PROMPT.md §2)
+
+/** The person's key file (loop.sh's METIS_OPENROUTER_ENV, default ~/.config/metis/openrouter.env), as a real path. */
+function keyFile(): string {
+	const k = process.env.METIS_OPENROUTER_ENV || join(homedir(), ".config", "metis", "openrouter.env");
+	try {
+		return realpathSync(k);
+	} catch {
+		return resolve(k);
+	}
 }
+
+/** pi's built-in read (pi.sh --tools +read, for the skills' SKILL.md and their files) is kept to the skills and the
+ *  workspace. PATH is resolved as the read tool resolves it (pi's resolveReadPath against CWD, pi's cwd), then to its
+ *  real path (a symlink is judged by what it points at): refused when it is the key file (whatever its name), any
+ *  `.env`, or outside both the skills and the workspace ROOT (nina's review of step 2). → the refusal, or null. */
+export function readRefusal(path: string, root: string, cwd: string = process.cwd(), skills = SKILLS, key = keyFile()): string | null {
+	const raw = String(path || "");
+	let real = resolveReadPath(raw, cwd);
+	try {
+		real = realpathSync(real);
+	} catch {
+		// a path that does not exist: judged as resolved (read says it is missing)
+	}
+	const realOf = (d: string) => { try { return realpathSync(d); } catch { return resolve(d); } };
+	const under = (d: string) => { const rd = realOf(d); return real === rd || real.startsWith(rd + "/"); };
+	if (real === realOf(key)) return `read ${raw}: the key file is never read here`;
+	if (/(^|\/)[^/]*\.env$/.test(real)) return `read ${raw}: an .env file is never read here (a key lives in it)`;
+	if (under(skills) || under(root)) return null;
+	return `read ${raw}: outside the skills (${skills}) and the workspace (${root}); this loop reads only those`;
+}
+
+/** The rule names of a unit's text (the rule heads, in order). */
+export function ruleNames(text: string): string[] {
+	return text.split("\n").map((l) => l.match(RULE_HEAD)?.[1]).filter((x): x is string => !!x);
+}
+
+/** A unit's signature (loop-prompt, PROMPT.md §2): its declarations (catalog, layers, stages, types, pred, bwd,
+ *  weight, include … one line each, the comment dropped; a type over several lines as `type T {…} (N names)`) and
+ *  every rule's name and layer under its stage, with its %% line; no rule bodies (rule_text gives a rule whole).
+ *  `generated`: the names make writes into a generated unit that its source has no rule for, marked "(generated)". */
+export function signature(text: string, generated: Set<string> = new Set()): string {
+	const out: string[] = [];
+	const lines = text.split("\n");
+	for (let i = 0; i < lines.length; i++) {
+		const l = lines[i];
+		const st = l.match(/^\s*stage\s+([a-z0-9_]+)\s*\{/);
+		if (st) { out.push(`stage ${st[1]}:`); continue; }
+		const r = l.match(RULE_HEAD);
+		if (r) {
+			const doc = i > 0 && /^\s*%%/.test(lines[i - 1]) ? "  " + lines[i - 1].trim() : "";
+			out.push(`  ${r[1]} [${r[2].replace(/\s+/g, "")}]${generated.has(r[1]) ? " (generated)" : ""}${doc}`);
+			continue;
+		}
+		if (!DECL.test(l)) continue;
+		const d = nocomment(l).trim();
+		if (d.includes("{") && !d.includes("}")) {          // nina: a type over several lines, never printed open
+			let body = d.slice(d.indexOf("{") + 1);
+			let j = i;
+			while (!body.includes("}") && j < lines.length - 1) body += " " + nocomment(lines[++j]);
+			const names = body.split("}")[0].split(/[\s,]+/).filter(Boolean);
+			out.push(`${d.slice(0, d.indexOf("{")).trim()} {…} (${names.length} names)`);
+			i = j;
+			continue;
+		}
+		out.push(d);
+	}
+	return out.join("\n");
+}
+
+/** One rule whole at line i of `lines` (its %% line, its text to the line ending in "."): [doc?, …lines]. */
+function ruleAt(lines: string[], i: number): string[] {
+	let j = i;
+	while (j < lines.length - 1 && !nocomment(lines[j]).endsWith(".")) j++;
+	const doc = i > 0 && /^\s*%%/.test(lines[i - 1]) ? [lines[i - 1].trim()] : [];
+	return [...doc, ...lines.slice(i, j + 1).map((x) => x.trim())];
+}
+
+/** The rules named, whole, from the files given: each as "path:line" then its text; a name found nowhere is listed
+ *  as such. A rule ends at the first line (comment dropped) ending in ".". A generated unit (`src` given: its
+ *  % DERIVED source) gives the SOURCE's rule at the source's path:line, the text an edit takes, with the line it runs
+ *  as in the generated file; a rule only make writes says so (nina's review of step 1). */
+export function ruleText(files: { path: string; text: string; src?: { path: string; text: string } }[], names: string[]): string {
+	const want = new Set(names.map((n) => String(n).split("[")[0].trim()).filter(Boolean));
+	const found = new Set<string>();
+	const out: string[] = [];
+	for (const f of files) {
+		const lines = f.text.split("\n");
+		const sl = f.src ? f.src.text.split("\n") : [];
+		for (let i = 0; i < lines.length; i++) {
+			const m = lines[i].match(RULE_HEAD);
+			if (!m || !want.has(m[1])) continue;
+			found.add(m[1]);
+			if (!f.src) {
+				out.push(`${f.path}:${i + 1}`, ...ruleAt(lines, i), "");
+				continue;
+			}
+			const k = sl.findIndex((x) => x.match(RULE_HEAD)?.[1] === m[1]);
+			if (k < 0) {
+				out.push(`${f.path}:${i + 1} (generated by make, no rule in ${f.src.path}: amend the generator's input, not this rule)`, ...ruleAt(lines, i), "");
+				continue;
+			}
+			out.push(`${f.src.path}:${k + 1}`, ...ruleAt(sl, k), `(runs as generated in ${f.path}:${i + 1}: ${ruleAt(lines, i).filter((x) => !x.startsWith("%%")).join(" ")})`, "");
+		}
+	}
+	const missing = [...want].filter((n) => !found.has(n));
+	if (missing.length) out.push(`not a rule of these units: ${missing.join(", ")}`);
+	return out.join("\n").trim();
+}
+
+/** Whose a shared unit is, from its path (nina's review of step 1): under $METIS_HOME the family's, inside the
+ *  bundle's directory the bundle's, else shared. */
+export function whoseUnit(path: string, home: string | undefined, bundleDir: string | null): string {
+	const under = (p: string, d: string) => { const rp = resolve(p), rd = resolve(d); return rp === rd || rp.startsWith(rd + "/"); };
+	if (home && under(path, home)) return "the family's, under METIS_HOME";
+	if (bundleDir && under(path, bundleDir)) return "the bundle's";
+	return "shared";
+}
+
 const json = (o: unknown) => JSON.stringify(o, null, 1);
 
 /** The candidate's firings on the trace, from the judge's fired-diff rows: how many of its rules' firings (by base name)
@@ -163,10 +265,14 @@ export function firings(e: any): { count: number; rows: number; of_rows: number;
 	return { count, rows: hit, of_rows: rows.length, first, last };
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (host: ExtensionAPI) {
+	// the tool set by mode (lib/toolset.ts): none in the standalone catalog loop (--seed); the lock is taken either way
+	const set = toolset();
+	const pi = scoped(host, () => set !== "seed");
 	const root = () => resolve(writeRoot());
 	let locked = false;
 	const held = new Set<string>();                    // the surprises this session took (surprise_next)
+	let lastMember = "";                              // the member of the surprise taken last (rule_text's default)
 	// the writes (take, rule, build) are the lock holder's only: a loop that did not get the lock reads and no more
 	const mustHold = (r: string) => {
 		if (locked) return;
@@ -206,7 +312,7 @@ export default function (pi: ExtensionAPI) {
 		name: "surprise_next",
 		label: "take the next surprise",
 		description:
-			"Take the oldest open surprise (this loop's, until its ruling) and get what it needs: the record (member, trace, tick k or window, the atoms or reading, the person's words), the member's program, and the rulings of earlier surprises on the same member. None open: says so. Then draft a case (trace_case) and a pack, and judge it with pack_propose.",
+			"Take the oldest open surprise (this loop's, until its ruling) and get what it needs: the record (member, trace, tick k or window, the atoms or reading, the person's words), the member's program, each unit it includes as its signature (declarations, rule names with their %% lines; rule_text gives a rule whole), and the rulings of earlier surprises on the same member. None open: says so. Then draft a case (trace_case) and a pack, and judge it with pack_propose.",
 		parameters: Type.Object({}),
 		async execute() {
 			const r = root();
@@ -236,26 +342,64 @@ export default function (pi: ExtensionAPI) {
 				}
 			}
 			const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
-			const files = [...(program && source ? [{ path: program, text: source }] : []),
-				...inc.filter((u) => u.kind !== "std").map((u) => ({ path: u.path, text: read(u.path) }))];
+			lastMember = s.member;
 			const earlier = ws.rulings(r).filter((x: any) => x.id !== s.id && ws.surprise(x.id, r)?.member === s.member);
+			let bdir: string | null = null;
+			try {
+				const b = ws.bundle(undefined, r);
+				bdir = b?.composition ? dirname(resolve(r, b.composition)) : null;
+			} catch {
+				// no bundle: no unit is the bundle's
+			}
+			const unitView = (u: { path: string; kind: string }) => {
+				if (u.kind === "std") return ["", `## included (the language's standard unit): ${u.path}`];
+				const t = read(u.path);
+				const src = derivedFrom(u.path, t);
+				const whose = u.kind === "shared" ? whoseUnit(u.path, process.env.METIS_HOME, bdir) : "the member's own";
+				const mine = src ? new Set(ruleNames(read(src))) : null;
+				const gen = mine ? new Set(ruleNames(t).filter((n) => !mine.has(n))) : new Set<string>();
+				return ["", `## included (${whose}): ${u.path}`,
+					src ? `(generated from ${src} by make: a pack that amends it gives unit=${src}, never this file. rule_text reads a rule there; (generated) marks a rule only make writes)`
+						: "(a pack that amends it gives unit=<this path>)",
+					signature(t, gen)];
+			};
 			const body = [
 				`## surprise ${s.id} (taken)`,
 				json(s),
 				"",
 				`## the member's program${program ? ` (${program})` : ""}`,
 				source || "(not found in the catalog)",
-				...inc.flatMap((u) => u.kind === "std"
-					? ["", `## included (the language's standard unit): ${u.path}`]
-					: ["", `## included (${u.kind === "shared" ? "the family's, under METIS_HOME: a pack that amends it gives unit=<this path>" : "the member's own"}): ${u.path}`, read(u.path)]),
+				...(inc.some((u) => u.kind !== "std") ? ["", "(each included unit as its signature: declarations, and every rule's name with its %% line; rule_text gives rules whole)"] : []),
+				...inc.flatMap(unitView),
 				...(incErr ? ["", `## its includes could not be resolved: ${incErr}`] : []),
-				"",
-				primer(exampleRule(files)),
 				"",
 				"## earlier rulings on this member",
 				earlier.length ? json(earlier.map((x: any) => ({ id: x.id, verdict: x.verdict, md: x.md }))) : "(none)",
 			].join("\n");
 			return text(body, { surprise: s, program, units: inc, earlier: earlier.map((x: any) => x.id) }, 40000);
+		},
+	});
+
+	pi.registerTool({
+		name: "rule_text",
+		label: "rules, whole",
+		description:
+			"The named rules whole (their %% line, every premise and effect), each with its path:line, from the member's program and the units it includes, as the compiler resolves them. Default member: the one of the surprise taken last. Read before a pack that amends a rule.",
+		parameters: Type.Object({
+			names: Type.Array(Type.String(), { description: "rule names, as the signature or a blame row gives them" }),
+			member: Type.Optional(Type.String({ description: "the member (default: the surprise taken last)" })),
+		}),
+		async execute(_id, p: any) {
+			const r = root();
+			const m = String(p.member || lastMember || "");
+			if (!m) throw new Error("rule_text: name the member (no surprise taken yet)");
+			const read = (x: string) => (existsSync(x) ? readFileSync(x, "utf8") : "");
+			const files = units(m, r).filter((u) => u.kind !== "std").map((u) => {
+				const t = read(u.path);
+				const src = derivedFrom(u.path, t);
+				return { path: u.path, text: t, ...(src && existsSync(src) ? { src: { path: src, text: read(src) } } : {}) };
+			});
+			return text(ruleText(files, (p.names || []) as string[]) || "(no rules named)", { member: m }, 8000);
 		},
 	});
 
@@ -344,7 +488,12 @@ export default function (pi: ExtensionAPI) {
 				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
 				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run")];
 				if (b) argv.push("--composition", dirname(b.composition));
-				if (p.unit) argv.push("--unit", p.unit);
+				if (p.unit) {
+					const u = resolve(r, String(p.unit));
+					const gen = existsSync(u) ? derivedFrom(u, readFileSync(u, "utf8")) : null;
+					if (gen) throw new Error(`unit=${p.unit} is generated from ${gen} by make: give unit=${gen}, never the generated file`);
+					argv.push("--unit", p.unit);
+				}
 				for (const c of p.cases ?? []) argv.push("--case", resolve(r, c));
 				if (p.brain) argv.push("--brain", p.brain);
 				if (p.budget) argv.push("--budget", String(p.budget));
@@ -543,8 +692,12 @@ export default function (pi: ExtensionAPI) {
 		return { action: "handled" };
 	});
 	let calls = 0;
-	pi.on("tool_call", async () => {
+	pi.on("tool_call", async (e: any, ctx: any) => {
 		if (over) return { block: true, reason: refusal(), terminate: true };
+		if (e?.toolName === "read") {
+			const no = readRefusal(String(e?.input?.path ?? ""), root(), ctx?.cwd || process.cwd());
+			if (no) return { block: true, reason: no };
+		}
 		calls++;
 		return undefined;
 	});

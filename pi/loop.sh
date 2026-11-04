@@ -48,6 +48,7 @@
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
 #   --help (first): this text; nothing starts, no key read
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
+#   METIS_LOOP_TOOLS=workspace|seed|all  the tool set (default: seed with --seed or no bundle in DIR, else workspace)
 set -euo pipefail
 case "${1:-}" in                      # loop.sh's own help: the header above (pascal, loop-test); pi's is pi.sh --help
   -h|--help) sed -n '2,/^set -euo/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;;
@@ -152,13 +153,19 @@ export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
 MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
-# METIS_LOOP_THINKING=off (the console's chat sets it unless its options ask for thinking): pi's :off suffix on a MODEL
-# without a thinking suffix of its own (the alf drive: v4 pro's thinking ate its 2048-token cap, turns with no words)
-case "${METIS_LOOP_THINKING:-}:$MODEL" in
-  off:*:off|off:*:minimal|off:*:low|off:*:medium|off:*:high|off:*:xhigh|off:*:max) ;;
-  off:*) MODEL="$MODEL:off" ;;
+# METIS_LOOP_THINKING=off|minimal|low|medium|high|xhigh|max: pi's thinking suffix on a MODEL without one of its own
+# (the console's chat sets off when its options say "no thinking"); unset or on: pi's default level for the model.
+# Reasoning stays on by default (loop-prompt, PROMPT.md §2: the output cap is 8192, agent/models.json)
+case "${METIS_LOOP_THINKING:-}" in
+  ""|on) ;;
+  off|minimal|low|medium|high|xhigh|max)
+    case "$MODEL" in
+      *:off|*:minimal|*:low|*:medium|*:high|*:xhigh|*:max) ;;
+      *) MODEL="$MODEL:$METIS_LOOP_THINKING" ;;
+    esac ;;
+  *) echo "loop.sh: METIS_LOOP_THINKING=$METIS_LOOP_THINKING: off | minimal | low | medium | high | xhigh | max (unset: pi's default)" >&2; exit 2 ;;
 esac
-# a paid model runs with a budget (1 USD by default: a session of v4 pro at 2048 tokens a request spends
+# a paid model runs with a budget (1 USD by default: a session of v4 pro at 8192 tokens a request spends
 # cents a turn, so 1 USD bounds a runaway session well inside a paid round's limit); empty: refused
 # the key: the environment's; unset, the person's key file (the architect's F5: a start from the chat got no key),
 # read only when it is the person's own and private (mode 600 or 400), into the environment, never printed
@@ -237,5 +244,13 @@ p = json.load(sys.stdin).get("pi")
 print("" if not p or p.get("alive") is False else "pid %s, started %s, mode %s" % (p.get("pid"), p.get("started"), p.get("mode")), end="")')"
 [ -z "$held" ] || { echo "loop.sh: a pi loop runs in $DIR already ($held): one per workspace" >&2; exit 1; }
 case " $* " in *" --mode rpc "*) export METIS_LOOP_MODE=rpc ;; *) export METIS_LOOP_MODE=tui ;; esac
+# the tool set (loop-prompt, PROMPT.md §3; extensions/lib/toolset.ts): seed with --seed or a DIR without a bundle (the
+# standalone catalog loop), workspace when DIR has one (the surprise loop); METIS_LOOP_TOOLS given is kept
+if [ -z "${METIS_LOOP_TOOLS:-}" ]; then
+  if [ -n "$SEED" ]; then METIS_LOOP_TOOLS=seed
+  elif [ "$("$SDK_PY" -m metis.catalog.workspace --root "$DIR" bundle --json 2>/dev/null | head -c 4)" = null ]; then METIS_LOOP_TOOLS=seed
+  else METIS_LOOP_TOOLS=workspace; fi
+fi
+export METIS_LOOP_TOOLS
 export MODEL
 exec "${METIS_LOOP_PI:-$HERE/pi.sh}" --model "$MODEL" --system-prompt "$HERE/prompts/loop-system.md" "$@" "${TASK[@]}"
