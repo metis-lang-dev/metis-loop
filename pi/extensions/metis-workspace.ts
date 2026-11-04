@@ -40,6 +40,9 @@ import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap } from "./lib/jsonl.ts";
+// pi's own path resolution for read (not exported by the package: imported by its file, so the guard resolves a path
+// exactly as the read tool will: a leading @ stripped, ~ expanded, file:// converted, the macOS variants tried)
+import { resolveReadPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/path-utils.js";
 import { writeRoot } from "./lib/roots.ts";
 import { scoped, toolset } from "./lib/toolset.ts";
 import * as catalog from "./sdk/catalog.ts";
@@ -126,19 +129,31 @@ export function derivedFrom(path: string, text: string): string | null {
 
 const SKILLS = resolve(HERE, "..", "skills");           // pi.sh's --skill directories (loop-prompt, PROMPT.md §2)
 
-/** pi's built-in read (pi.sh --tools +read, for the skills' SKILL.md and their files) is kept to the skills and the
- *  workspace: a path elsewhere (the key file under ~/.config, another checkout) is refused in words, and so is a
- *  `.env` file anywhere. → the refusal, or null when the read may go. */
-export function readRefusal(path: string, root: string, skills = SKILLS): string | null {
-	const raw = String(path || "");
-	const abs = raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : resolve(root, raw);
-	let real = abs;
+/** The person's key file (loop.sh's METIS_OPENROUTER_ENV, default ~/.config/metis/openrouter.env), as a real path. */
+function keyFile(): string {
+	const k = process.env.METIS_OPENROUTER_ENV || join(homedir(), ".config", "metis", "openrouter.env");
 	try {
-		real = realpathSync(abs);
+		return realpathSync(k);
 	} catch {
-		// a path that does not exist: judged as written (read says it is missing)
+		return resolve(k);
 	}
-	const under = (d: string) => { let rd = d; try { rd = realpathSync(d); } catch { /* as written */ } return real === rd || real.startsWith(rd + "/"); };
+}
+
+/** pi's built-in read (pi.sh --tools +read, for the skills' SKILL.md and their files) is kept to the skills and the
+ *  workspace. PATH is resolved as the read tool resolves it (pi's resolveReadPath against CWD, pi's cwd), then to its
+ *  real path (a symlink is judged by what it points at): refused when it is the key file (whatever its name), any
+ *  `.env`, or outside both the skills and the workspace ROOT (nina's review of step 2). → the refusal, or null. */
+export function readRefusal(path: string, root: string, cwd: string = process.cwd(), skills = SKILLS, key = keyFile()): string | null {
+	const raw = String(path || "");
+	let real = resolveReadPath(raw, cwd);
+	try {
+		real = realpathSync(real);
+	} catch {
+		// a path that does not exist: judged as resolved (read says it is missing)
+	}
+	const realOf = (d: string) => { try { return realpathSync(d); } catch { return resolve(d); } };
+	const under = (d: string) => { const rd = realOf(d); return real === rd || real.startsWith(rd + "/"); };
+	if (real === realOf(key)) return `read ${raw}: the key file is never read here`;
 	if (/(^|\/)[^/]*\.env$/.test(real)) return `read ${raw}: an .env file is never read here (a key lives in it)`;
 	if (under(skills) || under(root)) return null;
 	return `read ${raw}: outside the skills (${skills}) and the workspace (${root}); this loop reads only those`;
@@ -344,7 +359,7 @@ export default function (host: ExtensionAPI) {
 				const mine = src ? new Set(ruleNames(read(src))) : null;
 				const gen = mine ? new Set(ruleNames(t).filter((n) => !mine.has(n))) : new Set<string>();
 				return ["", `## included (${whose}): ${u.path}`,
-					src ? `(generated from ${src} by make: a pack that amends it gives unit=${src}, never this file; the judge remakes this one from it. rule_text reads a rule there; (generated) marks a rule only make writes)`
+					src ? `(generated from ${src} by make: a pack that amends it gives unit=${src}, never this file. rule_text reads a rule there; (generated) marks a rule only make writes)`
 						: "(a pack that amends it gives unit=<this path>)",
 					signature(t, gen)];
 			};
@@ -476,7 +491,7 @@ export default function (host: ExtensionAPI) {
 				if (p.unit) {
 					const u = resolve(r, String(p.unit));
 					const gen = existsSync(u) ? derivedFrom(u, readFileSync(u, "utf8")) : null;
-					if (gen) throw new Error(`unit=${p.unit} is generated from ${gen} by make: give unit=${gen} (the judge remakes the generated file from it)`);
+					if (gen) throw new Error(`unit=${p.unit} is generated from ${gen} by make: give unit=${gen}, never the generated file`);
 					argv.push("--unit", p.unit);
 				}
 				for (const c of p.cases ?? []) argv.push("--case", resolve(r, c));
@@ -677,10 +692,10 @@ export default function (host: ExtensionAPI) {
 		return { action: "handled" };
 	});
 	let calls = 0;
-	pi.on("tool_call", async (e: any) => {
+	pi.on("tool_call", async (e: any, ctx: any) => {
 		if (over) return { block: true, reason: refusal(), terminate: true };
 		if (e?.toolName === "read") {
-			const no = readRefusal(String(e?.input?.path ?? ""), root());
+			const no = readRefusal(String(e?.input?.path ?? ""), root(), ctx?.cwd || process.cwd());
 			if (no) return { block: true, reason: no };
 		}
 		calls++;

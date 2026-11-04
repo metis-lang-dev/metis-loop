@@ -37,7 +37,7 @@ A pack is a unit of rules with no `catalog` line: `stage S { rules }`, optionall
       fetch_onion [dyn] : $order * hand_free * $pot_space * $self(S) * $calm(S) -o held_onion.
     }
 
-(`../surprise-ruling/rulings/kitchen-missing-premise/pack.llp`). It amends the member's program, or one unit the member includes: `unit=` the path `surprise_next` gives for it. A unit make generates (`% DERIVED from SRC`) is never the unit: SRC is, and the judge remakes the generated file. Copy every atom and constant exactly as the program and the trace print them.
+(`../surprise-ruling/rulings/kitchen-missing-premise/pack.llp`). It amends the member's program, or one unit the member includes: `unit=` the path `surprise_next` gives for it. A unit make generates (`% DERIVED from SRC`) is never the unit: `unit=` SRC, never the generated file. Copy every atom and constant exactly as the program and the trace print them.
 
 ## A member of a composition (the tick protocol)
 
@@ -61,4 +61,4 @@ Each is a shape the gate or a later record refused; the catalog's words are quot
 - **The clock in the rule.** `take [dyn] : $here(R) * connected(T1, T2) -o holds.` (metis-lang `corpus/budget/budget.llp`) is refused: "take grounds more than 1000 events over its variables (R: room 2, T1: term 40, T2: term 40); bind them on the left with a bwd guard". Every variable is bound on the left by a `bwd` table; a turn or time variable grounds the rule once per value.
 - **Twin bodies, weight as priority.** Two rules with one body and different heads are one choice site; "a tiny weight is a price, not a guarantee" (`2-rules.md`, Choice site): `keep_lead … go -o ()  @w 0.01` (`planner_domain.llp`) is ranked only against rules enabled with it, never across steps.
 - **A static that merely holds in the record.** "a static that merely holds in the record (`$notopenable(R)`, `$otype(O, _)`) decorates the rule and fails the next record" (`hierarchy.md` 3). A static goes on the left only when the world refuses the action without it.
-- **A premise guessed, not read.** `$calm(S)` added to `fetch_onion` (the pack above) reads true at tick 0, but `ask_pot` consumes `calm(S)`: after the first onion the cook can fetch no more, and the gate refused it on the golden `whole_order.yaml` (`../surprise-ruling/rulings/kitchen-missing-premise/ruling.md`). Read the premise from the trace (`trace_blame`) and the member's other rules (`rule_text`) before writing it.
+- **A premise guessed, not read.** `$calm(S)` added to `fetch_onion` (the pack above, on `cook_domain.llp`, the unit both cooks include: so cook_b moved too) reads true at tick 0, but `ask_pot` consumes `calm(S)`: after the first onion the cook can fetch no more, and the gate refused it on the golden `whole_order.yaml` (`../surprise-ruling/rulings/kitchen-missing-premise/ruling.md`). Read the premise from the trace (`trace_blame`) and the member's other rules (`rule_text`) before writing it.

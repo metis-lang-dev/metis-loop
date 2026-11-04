@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -690,25 +690,38 @@ test("the prompt and the skills (loop-prompt step 2, PROMPT.md §2-3): sizes, ev
 	const sh = readFileSync(join(HERE, "..", "pi.sh"), "utf8");
 	assert.match(sh, /--no-builtin-tools --tools \+read /);                // +read adds read; a bare `read` would be an allowlist dropping the extensions' tools
 	assert.match(sh, /SKILLS\+=\(--skill /);
-	// pi's read: the skills and the workspace, never elsewhere, never an .env
+	// pi's read: the skills and the workspace, never elsewhere, never an .env, never the key file; a path resolved as pi's
+	// read resolves it (nina's review of step 2: @, ~, file:// and a symlink)
 	const r = mkdtempSync(join(tmpdir(), "ws-read-"));
+	const kd = mkdtempSync(join(tmpdir(), "ws-key-"));
+	const key = join(kd, "my-openrouter-key");                         // any name: refused by its real path
+	writeFileSync(key, "OPENROUTER_API_KEY=x\n");
 	writeFileSync(join(r, "README.md"), "x\n");
-	assert.equal(readRefusal(join(HERE, "..", "skills", "metis-language", "SKILL.md"), r), null);
-	assert.equal(readRefusal("README.md", r), null);
-	assert.match(readRefusal("~/.config/metis/openrouter.env", r)!, /an \.env file is never read here/);
-	assert.match(readRefusal("/etc/passwd", r)!, /outside the skills .* and the workspace/);
-	assert.match(readRefusal("../elsewhere/x.llp", r)!, /outside/);
+	const no = (p: string) => readRefusal(p, r, r, undefined, key);
+	assert.equal(no(join(HERE, "..", "skills", "metis-language", "SKILL.md")), null);
+	assert.equal(no("README.md"), null);
+	assert.equal(no("@README.md"), null);
+	assert.equal(no(`file://${join(r, "README.md")}`), null);
+	for (const p of ["@~/.ssh/id_ed25519", "@/etc/passwd", "file:///etc/passwd", "~/.bashrc", "/etc/passwd", "../elsewhere/x.llp"])
+		assert.match(no(p) ?? "", /outside the skills .* and the workspace/, p);
+	assert.match(no("~/.config/metis/openrouter.env") ?? "", /\.env file|key file|outside/);
+	assert.match(no(key) ?? "", /the key file is never read here/);
+	assert.match(no(`@${key}`) ?? "", /the key file/);
+	symlinkSync(key, join(r, "notes.txt"));                            // a symlink in the workspace to the key file
+	assert.match(no("notes.txt") ?? "", /the key file is never read here/);
+	symlinkSync("/etc/passwd", join(r, "pw.txt"));                     // … or to anything outside
+	assert.match(no("pw.txt") ?? "", /outside/);
 	writeFileSync(join(r, "service.env"), "K=1\n");
-	assert.match(readRefusal("service.env", r)!, /\.env file/);
+	assert.match(no("service.env") ?? "", /\.env file/);
 });
 
 test("metis-workspace: pi's read is blocked outside the skills and the workspace, at the tool call", async () => {
 	const { r } = scratch();
 	const p = fakePi();
 	workspace(p.api);
-	const no = await p.emit("tool_call", { toolName: "read", input: { path: "/etc/hostname" } }, ctx);
+	const no = await p.emit("tool_call", { toolName: "read", input: { path: "@/etc/hostname" } }, { ...ctx, cwd: r });
 	assert.equal(no.block, true);
 	assert.match(no.reason, /outside the skills/);
-	assert.equal(await p.emit("tool_call", { toolName: "read", input: { path: join(r, "README.md") } }, ctx), undefined);
+	assert.equal(await p.emit("tool_call", { toolName: "read", input: { path: "README.md" } }, { ...ctx, cwd: r }), undefined);   // pi's cwd
 	assert.equal(await p.emit("tool_call", { toolName: "surprise_list", input: {} }, ctx), undefined);
 });
