@@ -13,7 +13,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirS
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { chatLine, derivedFrom, firings, readRefusal, ruleNames, ruleText, schema, signature, tracePath, whoseUnit } from "../extensions/metis-workspace.ts";
+import workspace, { chatLine, derivedFrom, firings, readRefusal, ruleNames, ruleText, schema, signature, tracePath, whoseUnit, withTraceDir } from "../extensions/metis-workspace.ts";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
@@ -121,6 +121,8 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 		const next = await p.tools.get("surprise_next").execute("n1", {});
 		assert.equal(next.details.surprise.id, id);
 		assert.match(next.content[0].text, /it should have stayed dark/);
+		assert.match(next.content[0].text, /"trace_dir": ".metis\/traces\/s1"/);             // the run as pi's read opens it
+		assert.match((await p.tools.get("surprise_list").execute("l", {})).content[0].text, /"trace_dir": ".metis\/traces\/s1"/);
 		assert.match(next.content[0].text, /% the lamp's rules/);                         // the member's program
 		assert.equal(ws.surprise(id, r).status, "taken");
 		assert.equal(ws.surprise(id, r).taken.pid, process.pid);
@@ -280,6 +282,8 @@ test("metis-workspace: a trace argument is a path, a workspace run resolved unde
 	assert.equal(tracePath("traces/s1", r), join(r, ".metis", "traces", "s1"));
 	assert.equal(tracePath("s1", r), join(r, ".metis", "traces", "s1"));
 	assert.equal(tracePath("/abs/t", r), "/abs/t");
+	assert.equal(withTraceDir({ trace: "traces/s1" }, r).trace_dir, join(".metis", "traces", "s1"));
+	assert.ok(!("trace_dir" in withTraceDir({ id: "x" } as { id: string; trace?: string }, r)));
 });
 
 test("loop.sh: one pi loop per workspace: a live holder refuses a second start, a dead one's lock is taken over", async () => {
