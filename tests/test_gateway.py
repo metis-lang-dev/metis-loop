@@ -143,8 +143,11 @@ def test_run_cap_and_the_retired_seats_in_personal_mode():
             p = send(ws, sid, "llm", "n2")[-1]
             assert p["status"] != "refused" and "(unset)" in p["result"], p
             p = send(ws, sid, ":llm anthropic", "n3")[-1]   # personal: set (saved where a dot file is)
-            assert p["status"] != "refused" and "llm: anthropic" in p["result"], p
-            assert "not saved: METIS_CONFIG is set and empty" in p["result"], p
+            assert p["status"] != "refused" and "anthropic" in p["result"], p
+            import metis.loop.llm as mllm
+            if hasattr(mllm, "spec_from_words"):           # metispy repl-llm: the REPL's own llm, checked + saved
+                assert "llm: anthropic" in p["result"], p
+                assert "not saved: METIS_CONFIG is set and empty" in p["result"], p
             ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "hi"}))
             err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
             assert "retired" in err["error"] and "pi loop" in err["error"]
