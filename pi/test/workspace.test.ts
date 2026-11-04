@@ -141,7 +141,8 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 		assert.equal(ruled.ruling.verdict, "accepted");
 		assert.match(readFileSync(join(r, ".metis", "rulings", `${id}.md`), "utf8"), /^# Ruling: accepted/);
 		assert.match(readFileSync(join(r, ".metis", "packs", `${id}.llp`), "utf8"), /dark \[dyn\]/);
-		await assert.rejects(p.tools.get("pack_propose").execute("j2", { id, pack: "% again" }), /ruled already/);
+		await assert.rejects(p.tools.get("pack_propose").execute("j2", { id, pack: "% again" }),
+			/ruled already: ACCEPTED \(rulings\/[^)]+\.md\); this call judged nothing and applied nothing/);   // qwen-loop F4
 		// the bundle rebuilt: the image moves, STALE clears
 		const b1 = await p.tools.get("bundle_build").execute("b1", {});
 		assert.equal(b1.details.code, 0);
@@ -368,7 +369,7 @@ test("loop.sh: no default model (llm-config); a paid model has a budget, one wit
 	const out = JSON.parse(a.stdout);
 	assert.equal(out.args[out.args.indexOf("--model") + 1], "openrouter/deepseek/deepseek-v4-pro");
 	assert.equal(out.env.METIS_LOOP_BUDGET, "1.00");
-	assert.equal(a.stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
+	assert.equal(a.stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
 	assert.match(readFileSync(out.env.METIS_CONFIG, "utf8"), /openai-command --base-url https:\/\/openrouter.ai\/api\/v1 --model deepseek\/deepseek-v4-pro/);  // formalize follows it
 	assert.equal(JSON.parse(run(["--budget", "0.3"]).stdout).env.METIS_LOOP_BUDGET, "0.3");
 	assert.equal(JSON.parse(run([], { METIS_LOOP_BUDGET: "2" }).stdout).env.METIS_LOOP_BUDGET, "2");
@@ -415,14 +416,23 @@ test("loop.sh: no default model (llm-config); a paid model has a budget, one wit
 	assert.equal(none.status, 1);
 	assert.match(none.stderr, /needs OPENROUTER_API_KEY: the environment, or a key file/);
 	// loop-prompt: reasoning on by default (pi's level); METIS_LOOP_THINKING=off|low|… is pi's suffix on a model without one
-	assert.equal(run([], { METIS_LOOP_THINKING: "off" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:off budget=1.00 USD");
-	assert.equal(run([], { METIS_LOOP_THINKING: "low" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:low budget=1.00 USD");
-	assert.equal(run([], { METIS_LOOP_THINKING: "off", MODEL: "openrouter/x:high" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/x:high budget=1.00 USD");
-	assert.equal(run([], { METIS_LOOP_THINKING: "on" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
-	assert.equal(run([], { METIS_LOOP_THINKING: "" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
+	assert.equal(run([], { METIS_LOOP_THINKING: "off" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:off budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
+	assert.equal(run([], { METIS_LOOP_THINKING: "low" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:low budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
+	assert.equal(run([], { METIS_LOOP_THINKING: "off", MODEL: "openrouter/x:high" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/x:high budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
+	assert.equal(run([], { METIS_LOOP_THINKING: "on" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
+	assert.equal(run([], { METIS_LOOP_THINKING: "" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD skills=metis-language,seed-domain,surprise-ruling");
 	assert.match(run([], { METIS_LOOP_THINKING: "lots" }).stderr, /METIS_LOOP_THINKING=lots: off \| minimal/);
 	const free = run([], { MODEL: "stub/script" });
-	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
+	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD skills=metis-language,seed-domain,surprise-ruling");
+	// qwen-loop F3: the skills a start lists, in its first line; --no-skills among pi's args is none; a typo is refused
+	const first = (o: ReturnType<typeof run>) => o.stderr.split("\n")[0];
+	assert.equal(first(run([], { MODEL: "stub/script", METIS_LOOP_SKILLS: "none" })), "loop.sh: MODEL=stub/script budget=none USD skills=none");
+	assert.equal(first(run(["--no-skills"], { MODEL: "stub/script" })), "loop.sh: MODEL=stub/script budget=none USD skills=none");
+	assert.equal(first(run([], { MODEL: "stub/script", METIS_LOOP_SKILLS: "surprise-ruling,metis-language" })),
+		"loop.sh: MODEL=stub/script budget=none USD skills=surprise-ruling,metis-language");
+	const typo = run([], { MODEL: "stub/script", METIS_LOOP_SKILLS: "surprise" });
+	assert.equal(typo.status, 2);
+	assert.match(typo.stderr, /METIS_LOOP_SKILLS=surprise: no skill 'surprise' \(all \| none \| of metis-language,seed-domain,surprise-ruling\)/);
 });
 
 test("metis-workspace: surprise_next shows the member's program whole and each unit it includes as its signature; rule_text gives a rule whole; no primer", async () => {
@@ -662,6 +672,34 @@ test("pi.sh: a checkout without pi installed says the fix (the architect's F4: e
 	const r = spawnSync(join(d, "pi.sh"), ["--mode", "rpc"], { encoding: "utf8" });
 	assert.equal(r.status, 127);
 	assert.match(r.stderr, new RegExp(`pi.sh: pi is not installed in ${d} .*run ${d}/setup.sh once`));
+});
+
+test("pi.sh: METIS_LOOP_SKILLS picks the --skill directories; none adds none and says so after the system prompt (qwen-loop F3)", () => {
+	const d = mkdtempSync(join(tmpdir(), "pi-sh-"));
+	writeFileSync(join(d, "pi.sh"), readFileSync(join(HERE, "..", "pi.sh"), "utf8"));
+	chmodSync(join(d, "pi.sh"), 0o755);
+	for (const [f, body] of [["node_modules/.bin/pi", '#!/bin/sh\nprintf "%s\\n" "$@"\n'], ["node/bin/node", "#!/bin/sh\n"], ["setup.sh", "#!/bin/sh\n"]]) {
+		mkdirSync(dirname(join(d, f)), { recursive: true });
+		writeFileSync(join(d, f), body);
+		chmodSync(join(d, f), 0o755);
+	}
+	for (const n of ["alpha", "beta"]) { mkdirSync(join(d, "skills", n), { recursive: true }); writeFileSync(join(d, "skills", n, "SKILL.md"), `---\nname: ${n}\n---\n`); }
+	const argv = (skills?: string) => {
+		const env: Record<string, string | undefined> = { ...process.env };
+		if (skills === undefined) delete env.METIS_LOOP_SKILLS; else env.METIS_LOOP_SKILLS = skills;
+		const o = spawnSync(join(d, "pi.sh"), [], { encoding: "utf8", env: env as any });
+		assert.equal(o.status, 0, o.stderr);
+		return o.stdout.split("\n");
+	};
+	const skillArgs = (a: string[]) => a.flatMap((x, i) => (x === "--skill" ? [a[i + 1].split("/").pop()] : []));
+	assert.deepEqual(skillArgs(argv()), ["alpha", "beta"]);
+	assert.deepEqual(skillArgs(argv("all")), ["alpha", "beta"]);
+	assert.deepEqual(skillArgs(argv("beta")), ["beta"]);
+	const none = argv("none");
+	assert.deepEqual(skillArgs(none), []);
+	assert.ok(none.includes("--no-skills"));
+	assert.match(none[none.indexOf("--append-system-prompt") + 1], /^No skills are loaded in this session/);
+	assert.equal(argv().indexOf("--append-system-prompt"), -1);
 });
 
 test("loop.sh: its own option after pi's arguments is refused, not handed to pi", () => {

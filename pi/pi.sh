@@ -19,9 +19,18 @@ export PATH="$HERE/node/bin:$PATH" PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$
 # their name, description and path in the system prompt, and the model reads a SKILL.md with read when its task
 # matches). --tools +read adds pi's read and nothing else of its own (bash, edit, write stay off); metis-workspace
 # keeps read to the skills and the workspace (readRefusal)
-SKILLS=()
-for d in "$HERE"/skills/*/; do [ -f "$d/SKILL.md" ] && SKILLS+=(--skill "${d%/}"); done
-exec "$HERE/node_modules/.bin/pi" --no-builtin-tools --tools +read --no-context-files --no-skills "${SKILLS[@]}" \
+# METIS_LOOP_SKILLS (qwen-loop s-75ecbab5, the user: "start pi loop without skills" for a small model): unset or all,
+# every skill; none, no skill and a line saying so after the system prompt; NAME,NAME, those only (loop.sh checks
+# the names and says which in its start line)
+SKILLS=() NOSKILL=()
+for d in "$HERE"/skills/*/; do
+  [ -f "$d/SKILL.md" ] || continue
+  n="$(basename "$d")"
+  case "${METIS_LOOP_SKILLS:-all}" in all) ;; none) continue ;; *) case ",$METIS_LOOP_SKILLS," in *",$n,"*) ;; *) continue ;; esac ;; esac
+  SKILLS+=(--skill "${d%/}")
+done
+[ ${#SKILLS[@]} -gt 0 ] || NOSKILL=(--append-system-prompt "No skills are loaded in this session (METIS_LOOP_SKILLS=none): work from your tools and their descriptions; there is no SKILL.md to read.")
+exec "$HERE/node_modules/.bin/pi" --no-builtin-tools --tools +read --no-context-files --no-skills "${SKILLS[@]}" "${NOSKILL[@]}" \
   --no-prompt-templates --no-mcp --no-approve --no-extensions --tui-mode regular \
   -e "$HERE/extensions/metis-repl.ts" -e "$HERE/extensions/metis-domain.ts" -e "$HERE/extensions/metis-workspace.ts" \
   --session-dir "${PI_LOOP_SESSIONS:-$HERE/agent/sessions}" "$@"

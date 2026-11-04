@@ -53,6 +53,10 @@
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
 #   --help (first): this text; nothing starts, no key read
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
+#   METIS_LOOP_SKILLS=all|none|NAME,NAME  the skills pi lists (default all: metis-language, seed-domain,
+#         surprise-ruling; pi lists each one's name and description, and the model reads a SKILL.md when its step
+#         needs one); none (or --no-skills among pi's args): no skill, said after the system prompt; the start
+#         line says which (qwen-loop s-75ecbab5: a small local model's first turn)
 #   METIS_LOOP_TOOLS=workspace|seed|all  the tool set (default: seed with --seed or no bundle in DIR, else workspace)
 set -euo pipefail
 case "${1:-}" in                      # loop.sh's own help: the header above (pascal, loop-test); pi's is pi.sh --help
@@ -244,7 +248,21 @@ case "$MODEL" in
   *) METIS_LOOP_BUDGET="${METIS_LOOP_BUDGET-}" ;;
 esac
 export METIS_LOOP_BUDGET
-echo "loop.sh: MODEL=$MODEL budget=${METIS_LOOP_BUDGET:-none} USD${FORMALIZE_SPEC:+ formalize=$FORMALIZE_SPEC}" >&2   # the first line (stderr: stdout is pi's, the rpc protocol in rpc mode)
+# the skills (pi.sh lists them): --no-skills among pi's args is none (pi.sh adds its own --skill under pi's own
+# --no-skills, so pi's flag alone changed nothing); names are checked here, so a typo is refused, not silently none
+case " $* " in *" --no-skills "*|*" -ns "*) METIS_LOOP_SKILLS=none ;; esac
+ALLSK=""; for d in "$HERE"/skills/*/; do [ -f "$d/SKILL.md" ] && ALLSK="$ALLSK${ALLSK:+,}$(basename "$d")"; done
+case "${METIS_LOOP_SKILLS:-all}" in
+  all) SKN="$ALLSK" ;;
+  none) SKN="none" ;;
+  *) SKN="$METIS_LOOP_SKILLS"
+     IFS=, read -r -a _want <<< "$METIS_LOOP_SKILLS"
+     for n in "${_want[@]}"; do
+       case ",$ALLSK," in *",$n,"*) ;; *) echo "loop.sh: METIS_LOOP_SKILLS=$METIS_LOOP_SKILLS: no skill '$n' (all | none | of $ALLSK)" >&2; exit 2 ;; esac
+     done ;;
+esac
+export METIS_LOOP_SKILLS="${METIS_LOOP_SKILLS:-all}"
+echo "loop.sh: MODEL=$MODEL budget=${METIS_LOOP_BUDGET:-none} USD${FORMALIZE_SPEC:+ formalize=$FORMALIZE_SPEC} skills=$SKN" >&2   # the first line (stderr: stdout is pi's, the rpc protocol in rpc mode)
 case "$MODEL" in
   openrouter/*) [ -n "$FORMALIZE_SPEC" ] || FORMALIZE_MODEL="${FORMALIZE_MODEL:-$MODEL}" ;;
 esac

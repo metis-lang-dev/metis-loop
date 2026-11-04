@@ -538,7 +538,13 @@ export default function (host: ExtensionAPI) {
 			const r = root();
 			mustHold(r);
 			const s = ws.surprise(p.id, r);
-			if (s.status === "ruled") throw new Error(`surprise ${p.id} is ruled already`);
+			// qwen-loop F4: the bare "ruled already" read as success to qwen3:4b, which told the person "Fix applied" over a
+			// refusal: the verdict as it stands, and that this call judged nothing
+			if (s.status === "ruled") {
+				const v = (s as any).ruling?.verdict;
+				throw new Error(`surprise ${p.id} is ruled already${v ? `: ${String(v).toUpperCase()} (${(s as any).ruling?.md ?? "rulings/" + p.id + ".md"})` : ""}; ` +
+					`this call judged nothing and applied nothing. Tell the person that verdict as it stands`);
+			}
 			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
 			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay (the ruling would have no fired diff)`);
 			if (p.brain?.startsWith("openrouter/") && !(p.budget && p.budget > 0)) throw new Error("a paid brain needs a budget (USD)");
