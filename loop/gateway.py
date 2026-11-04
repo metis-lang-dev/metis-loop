@@ -103,15 +103,51 @@ DEFAULTS = {
     # loop-policy: a loop's state directory (pi's --state) whose asks the GATE shows and answers; "" = the console's own
     "loop_state": "",
 }
-# the retired LLM seats (loop-workspace): the REPL's verbs that would call a model, refused in every mode
-LLM_VERBS = frozenset(["narrate", "formalize", "llm"])
+# the retired formalizer (loop-workspace): formalize moved to the pi loop; narrate and llm STAY with the REPL
+# (the user, 2026-11-04: "dropping ollama was mistake… people working on single llp file loosing this feature"):
+# the REPL's own model (metispy metis.loop.llm: ollama | openrouter | anthropic | command, set with `llm`, saved in
+# the dot file; the OpenRouter key from the environment only)
+LLM_VERBS = frozenset(["formalize"])
 RETIRED = {     # [console] keys of the retired seats: a dot file that still has one is told, not failed
     "agent", "agent_model", "agent_tool_calls", "agent_cmd_timeout", "agent_max_turns", "agent_gate_timeout",
     "narrate", "narrate_model", "narrate_thinking", "narrate_reasoning", "formalize_model",
     "formalize_thinking", "brain", "openrouter_model", "openrouter_narrate_model", "max_usd", "artifact_url"}
-SEATS_GONE = ("the console has no brain (loop-workspace, docs/WORKSPACE.md §3): drop a surprise to the "
-              "workspace (the SURPRISES panel) and the pi loop formalizes and rules it (pi/loop.sh); "
-              "narration is the agent's")
+SEATS_GONE = ("formalize moved to the pi loop (loop-workspace, docs/WORKSPACE.md §3): drop a surprise to the "
+              "workspace (the SURPRISES panel) and the pi loop formalizes and rules it (pi/loop.sh), or type "
+              "in the CHAT; narrate and llm are the REPL's own (`llm` sets the model)")
+
+
+def load_key_file(env=None):
+    """The OpenRouter key into the environment for the REPLs' narrate, when it is not there: the person's own
+    private key file (METIS_OPENROUTER_ENV, default ~/.config/metis/openrouter.env; owner, mode 600 or 400),
+    PARSED for its last OPENROUTER_API_KEY= line (as pi/loop.sh does), never sourced, never printed. → a note
+    for the start line, or None."""
+    import re
+    import stat
+    env = os.environ if env is None else env
+    if env.get("OPENROUTER_API_KEY"):
+        return None
+    f = env.get("METIS_OPENROUTER_ENV", os.path.expanduser("~/.config/metis/openrouter.env"))
+    if not f or not os.path.isfile(f):
+        return None
+    try:
+        st = os.stat(f)
+    except OSError:
+        return None
+    if st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) not in (0o600, 0o400):
+        return f"{f} is not private (mode 600 or 400, yours): not read"
+    key = None
+    for line in open(f, encoding="utf-8", errors="replace"):
+        m = re.match(r"^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=\s*(.*)$", line.rstrip("\r\n"))
+        if m:
+            v = m.group(1).strip()
+            if v[:1] in ("'", '"'):
+                v = v[1:].split(v[0], 1)[0]
+            key = v.split()[0] if v.split() else ""
+    if not key:
+        return f"{f} has no OPENROUTER_API_KEY= line: not read"
+    env["OPENROUTER_API_KEY"] = key
+    return f"OPENROUTER_API_KEY from {f}"
 
 
 def load_config(**overrides) -> dict:
@@ -902,6 +938,9 @@ def main(argv=None) -> int:
     ns = ap.parse_args(argv)
     cfg = load_config(port=ns.port, bind=ns.bind, mode=ns.mode,
                       token=ns.token, metis_agent=ns.metis_agent)
+    key_note = load_key_file()           # the REPLs' narrate over openrouter: the key into this process, never printed
+    if key_note:
+        print(f"[console] {key_note}", file=sys.stderr)
     if cfg["mode"] == "shared" and cfg["bind"] not in ("127.0.0.1",
                                                        "localhost") \
             and not cfg["token"]:
