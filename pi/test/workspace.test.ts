@@ -872,7 +872,8 @@ test("catalog_edit in a workspace is the apply of an ACCEPTED ruling, or refused
 	}
 });
 
-test("catalog_apply and /apply: the judge's merge of the accepted pack onto its unit, at the person's gate, F1's row; refused once applied (loop-ui 2.3)", async () => {
+test("catalog_apply and /apply: the judge's merge of the accepted pack onto its unit, at the person's gate, F1's row; refused once applied (loop-ui 2.3)", async (t) => {
+	if (!ws.layout().face.includes("apply_plan")) return t.skip("metispy before loop-ui 2.3: no Workspace.apply_plan");
 	const { r } = scratch();
 	process.env.METIS_LOOP_TOOLS = "workspace";
 	const p = fakePi();
