@@ -57,11 +57,16 @@ command at a time, on the session's own worker thread), busy/stop
 `[console]` caps. Mode manifest (§4): `personal` (own host) and `shared`
 (an optional URL token (D2), per-IP session caps and a rate limit).
 
-No brain (loop-workspace s-5b4be5fa, docs/WORKSPACE.md §3, §7): the LLM
-seats are retired, the agent chat, narrate and formalize with loop/brain.py.
-The REPL's `narrate`, `formalize` and `llm` are refused in every mode:
-a surprise is dropped to the workspace and the pi loop formalizes and
-rules it; narration is the agent's (metis-agent's gemma4).
+No brain (loop-workspace s-5b4be5fa, docs/WORKSPACE.md §3, §7): the agent
+chat and the console's own seats are retired with loop/brain.py, and the
+REPL's `formalize` is refused in every mode: a surprise is dropped to the
+workspace and the pi loop formalizes and rules it. `narrate` and `llm` are
+the REPL's own again (the user, 2026-11-04): the REPL's model (metispy
+metis.loop.llm), set with `llm` and saved in the dot file in personal mode;
+in shared mode `llm` only shows it (the model and its key are the
+operator's, and nothing a visitor types is written to disk, D4). The
+OpenRouter key comes from the environment, or the person's private key
+file loaded at start (load_key_file), never printed.
 
 Privacy (D4): sessions and postings live in MEMORY only; nothing a
 visitor types or runs is written to the operator's disk."""
@@ -498,11 +503,14 @@ class Gateway:
             await self._send(ws, frame)
 
     def _gate(self, cmd: str) -> Optional[str]:
-        """Gateway-side policy beyond run_intent's whitelist: the retired
-        LLM seats' verbs are refused in every mode. Returns the refusal, or None."""
-        verb = cmd.strip().lstrip(":").split(" ", 1)[0]
+        """Gateway-side policy beyond run_intent's whitelist: formalize (the pi loop's) is refused in every
+        mode, setting the model (`llm WORDS`) in shared mode. Returns the refusal, or None."""
+        verb, _, rest = cmd.strip().lstrip(":").partition(" ")
         if verb in LLM_VERBS:
             return f"'{verb}' is not served here: {SEATS_GONE}"
+        if verb == "llm" and rest.strip() and self.cfg.get("mode") == "shared":
+            return ("'llm WORDS' is not served in shared mode: the model is the operator's "
+                    "(`llm` alone shows it)")
         return None
 
     def _cap_run(self, cmd: str):

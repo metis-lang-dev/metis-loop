@@ -123,8 +123,9 @@ def test_round_trip_queue_posting_and_reattach(personal):
 
 
 def test_run_cap_and_the_retired_seats_in_personal_mode():
-    """The run cap; and in PERSONAL mode too the LLM verbs and the chat are refused,
-    naming where they went (loop-workspace, WORKSPACE.md §3): no seat in the manifest."""
+    """The run cap; in PERSONAL mode formalize and the chat are refused, naming where they went
+    (loop-workspace, WORKSPACE.md §3): no seat in the manifest. narrate and llm are the REPL's own
+    (the user, 2026-11-04): served, on the REPL's model (none set here: the dot file is pinned empty)."""
     r = Running(mode="personal", max_run_steps=2)
     try:
         with r.ws() as ws:
@@ -135,9 +136,15 @@ def test_run_cap_and_the_retired_seats_in_personal_mode():
             post = send(ws, sid, "run 50", "i1")[-1]
             assert len(post["json"]["fired"]) == 2
             assert post["result"].startswith("(run capped at 2 steps)")
-            for k, verb in enumerate(("narrate", "formalize x", "llm", ":llm anthropic")):
-                p = send(ws, sid, verb, f"n{k}")[-1]
-                assert p["status"] == "refused" and "pi loop" in p["result"], p
+            p = send(ws, sid, "formalize x", "n0")[-1]
+            assert p["status"] == "refused" and "pi loop" in p["result"], p
+            p = send(ws, sid, "narrate", "n1")[-1]          # 2 steps ran: material, then no model named
+            assert p["status"] != "refused" and "no LLM endpoint" in p["result"], p
+            p = send(ws, sid, "llm", "n2")[-1]
+            assert p["status"] != "refused" and "(unset)" in p["result"], p
+            p = send(ws, sid, ":llm anthropic", "n3")[-1]   # personal: set (saved where a dot file is)
+            assert p["status"] != "refused" and "llm: anthropic" in p["result"], p
+            assert "not saved: METIS_CONFIG is set and empty" in p["result"], p
             ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "hi"}))
             err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
             assert "retired" in err["error"] and "pi loop" in err["error"]
@@ -184,7 +191,7 @@ def test_stop_interrupts_the_running_command_and_drops_the_queue():
 
 def test_shared_mode_token_llm_seats_chat_caps_and_rate():
     r = Running(mode="shared", token="s3cret", max_sessions_per_ip=1,
-                rate_per_min=6)
+                rate_per_min=7)
     try:
         base = f"http://{r.url}/"
         with pytest.raises(urllib.error.HTTPError) as e:
@@ -199,10 +206,14 @@ def test_shared_mode_token_llm_seats_chat_caps_and_rate():
             man = json.loads(ws.recv(timeout=5))
             assert man["seats"] == {"repl": True}
             sid = open3(ws)["session"]
-            for k, verb in enumerate(("narrate", "formalize x", "llm")):
-                p = send(ws, sid, verb, f"n{k}")[-1]
-                assert p["status"] == "refused" and "not served" in \
-                    p["result"]
+            p = send(ws, sid, "formalize x", "n0")[-1]
+            assert p["status"] == "refused" and "not served" in p["result"] and "pi loop" in p["result"]
+            p = send(ws, sid, "narrate", "n1")[-1]          # served: on the REPL's model, none named here
+            assert p["status"] != "refused" and "no LLM endpoint" in p["result"], p
+            p = send(ws, sid, "llm", "n2")[-1]              # shown
+            assert p["status"] != "refused" and "(unset)" in p["result"], p
+            p = send(ws, sid, "llm ollama phi3", "n3")[-1]  # set: the operator's, never a visitor's
+            assert p["status"] == "refused" and "shared mode" in p["result"], p
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "x"}))
             assert "retired" in frames(
                 ws, lambda f: f.get("ch") == "chat")[-1]["error"]
@@ -210,8 +221,8 @@ def test_shared_mode_token_llm_seats_chat_caps_and_rate():
                                 "req": "r2"}))
             err = frames(ws, lambda f: f.get("type") == "error")[-1]
             assert "session cap" in err["error"]
-            # 6/min: open, 3 LLM-verb intents, the refused 2nd open = 5
-            # counted; q0 is the 6th, q1 trips the limit
+            # 7/min: open, 4 LLM-verb intents, the refused 2nd open = 6
+            # counted; q0 is the 7th, q1 trips the limit
             for k in range(2):
                 ws.send(json.dumps({"ch": "repl", "type": "intent",
                                     "session": sid, "id": f"q{k}",

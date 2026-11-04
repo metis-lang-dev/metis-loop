@@ -17,3 +17,6 @@ def installed_catalog() -> Path:
 
 
 os.environ["METIS_CATALOG"] = str(installed_catalog())
+# hermetic: the developer's metis dot file ([llm] endpoint) never reaches a test, and a REPL's `llm WORDS`
+# (it saves the model) writes nowhere: a set-but-empty METIS_CONFIG pins metispy's config search to nothing
+os.environ["METIS_CONFIG"] = ""

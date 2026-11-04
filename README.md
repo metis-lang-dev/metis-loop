@@ -22,12 +22,14 @@ domains. Nothing is found "beside this checkout".
 ## No brain in the console
 
 The console is the REPL, the editor and the gate over the workspace; it runs no
-model (loop-workspace, docs/WORKSPACE.md). Its LLM seats (the agent chat, narrate,
-formalize, `--brain`) are retired: the REPL's `narrate`, `formalize` and `llm`
-are refused, naming where they went. A surprise is dropped to the workspace
+model of its own (loop-workspace, docs/WORKSPACE.md). Its LLM seats (the agent chat, narrate,
+formalize, `--brain`) are retired: the REPL's `formalize` is refused, naming
+where it went. `narrate` and `llm` are the REPL's own (the user, 2026-11-04):
+the REPL's model, `llm ollama phi3` or `llm openrouter MODEL`, saved in the
+config dot file; the gateway loads the private OpenRouter key file into its
+environment, never printed (docs/WORKSPACE.md §3). A surprise is dropped to the workspace
 (`DIR/.metis/surprises/`), and the pi loop takes it, judges a pack and rules it
-(`pi/loop.sh`, in the same DIR; its model and spend are its own). Narration is
-the agent's (metis-agent's gemma4). The console's new channels `trace`,
+(`pi/loop.sh`, in the same DIR; its model and spend are its own). The console's new channels `trace`,
 `surprise`, `bundle` and `loop` read and write that same `.metis/`
 (docs/WORKSPACE.md §3); a session opened with `trace: true` writes
 `DIR/.metis/traces/<session>/`, which `python -m metis.trace replay` reproduces.

@@ -132,6 +132,19 @@ Channels:
 | `bundle` | NEW | `{type:"state"}` → `ws.bundle()`; `{type:"reload", session}` → the session re-opened on the rebuilt image (the gate's STALE → reload) ; a `{ch:"bundle", type:"stale"}` push when the watch flips |
 | `loop` | NEW | `{type:"state"}` → `ws.loops()`, cost; `{type:"events", since}` → journal rows, then pushed as they come; `{type:"start", mode:"rpc", model, budget}` / `{type:"stop"}` → the pi loop as the backend's child in rpc mode (§5.2), refused when a lock holds; `{type:"say", text}` → the person's turn to the rpc child; `{type:"confirm"|"refuse", token}` → the child's pending gate (the same plan/confirm the gate already has) |
 
+**narrate and llm RETURNED to the REPL (the user, 2026-11-04: "dropping ollama was mistake… people working on
+single llp file losing this feature"; repl-llm s-7311fa1b).** The `chat` row stays retired and `formalize` alone
+stays the pi loop's (the gateway refuses it in every mode). `narrate` and `llm` are the REPL's own again, in the
+console and in the terminal, on the REPL's model (metispy `metis.loop.llm`): `llm ollama phi3 [URL]`, `llm
+openrouter deepseek/deepseek-v4.1-flash-1017`, `llm URL MODEL`, `llm anthropic [MODEL]`, saved as `[llm] endpoint`
+in the config dot file, so the next REPL starts on it; no default. Every paid request carries the token cap
+(`[llm] max_tokens`, 1024), and each OpenRouter call appends a row to `~/.config/metis/cost.jsonl`. The key is
+read from `OPENROUTER_API_KEY` only; `metis FILE.llp` says on its intro line whether it is set, never its value.
+The gateway loads the person's private key file (`METIS_OPENROUTER_ENV`, default
+`~/.config/metis/openrouter.env`, mode 600/400) into its own environment at start, parsed, never sourced, never
+printed. In `shared` mode `llm` only shows the model (it is the operator's, and D4 writes nothing a visitor
+types).
+
 The REPL session gains a trace writer: `open` with `trace: true` writes `.metis/traces/<session>/` through
 the Segments writer (the py Live's code path from trace-replay), so a surprise dropped from a session points
 at a trace the pi loop can replay. Without it, a dropped surprise carries the session's atoms only and the
@@ -276,8 +289,8 @@ CI green, the architect merges (metispy first, then metis-loop); one file per ag
 
 1. Files and a watch between the backend and the pi loop, never a socket (§2.4).
 2. pi's own RPC mode is the socket adaptor, bridged by the backend; no second server for the loop (§5.2).
-3. The human loop's formalize/narrate/chat seats are retired with Ollama; formalize is the pi loop's,
-   narration the agent's (§4.5, §7).
+3. The human loop's formalize/narrate/chat seats are retired; formalize is the pi loop's (§4.5, §7).
+   narrate and llm returned to the REPL on the user's word, 2026-11-04, Ollama with them (§3).
 4. The policy driver stays as it is (the world-runner's loop); only the pack verb's output moves into the
    workspace. Unifying the driver's RUN dir with `.metis/` is a later step.
 5. Widgets live in the loop SDK for this console alone (§6.1): the frontend is shared, not copied.
