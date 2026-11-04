@@ -55,7 +55,7 @@ The declarations of what the pack's rules read (a premise's meaning is here: jud
 
 def brief(e, rows=12):
     """The evidence, as the model and a person read it: the diff's first rows, no paths."""
-    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "moved", "moved_diff", "lint", "reads_absent", "inert", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {}, False)}
+    keep = {k: e.get(k) for k in ("member", "unit", "rules", "pack", "duplicates", "gate_error", "consumers", "moved", "moved_diff", "lint", "reads_absent", "inert", "unjudged", "first_enabled", "first_fired_diff", "first_out_diff", "open_loop_after", "members", "goldens", "cases") if e.get(k) not in (None, [], {}, False)}
     r = e.get("receipt") or {}
     keep["receipt"] = {k: r.get(k) for k in ("moved", "ei_holds", "errors") if r.get(k) is not None}
     if e.get("rows"):
@@ -118,6 +118,9 @@ def document(e, comments, closed, spent):
     if e.get("inert"):
         out += ["**Inert:** no candidate rule was enabled on this trace, so this acceptance says nothing of the rule's effect: find a world or a seed where it fires (Search the seeds for a firing).", ""]
     out += ["**%s**, %s; the program unit %s." % (e.get("member"), ", ".join(e.get("rules") or ()) or "no rule", e.get("unit")), ""]
+    if e.get("unjudged"):                      # loop-prompt judge-session: a weight port the trace does not carry
+        out += ["**Unjudged:** %s declare%s weight ports the trace does not carry: %s choices are the record's, stood in, so %s rows are not this ruling's evidence." % (
+            ", ".join(e["unjudged"]), "s" if len(e["unjudged"]) == 1 else "", "its" if len(e["unjudged"]) == 1 else "their", "its" if len(e["unjudged"]) == 1 else "their"), ""]
     if e["reasons"]:
         out += ["## Why it is %s" % e["verdict"]] + ["- %s" % r for r in e["reasons"]] + [""]
     if e.get("times"):

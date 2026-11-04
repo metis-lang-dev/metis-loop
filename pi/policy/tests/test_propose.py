@@ -148,3 +148,12 @@ def test_a_bad_config_is_refused_in_words_not_a_traceback(tmp_path):
         assert p.returncode != 0 and want in p.stderr, (body, p.stderr[-400:])
         assert "Traceback" not in p.stderr, p.stderr[-400:]
 
+
+
+def test_a_member_with_a_weight_port_the_trace_lacks_is_named_unjudged():
+    """loop-prompt judge-session: the judge stands the port in and replays the member's recorded choices; the ruling
+    says that member's rows are not its evidence, and the brain's evidence keeps the name."""
+    t = P.document(dict(ACCEPTED, unjudged=["task"]), None, None, 0)
+    assert "**Unjudged:** task declares weight ports the trace does not carry: its choices are the record's" in t
+    assert "Unjudged" not in P.document(ACCEPTED, None, None, 0)
+    assert P.brief(dict(ACCEPTED, unjudged=["task"]))["unjudged"] == ["task"]
