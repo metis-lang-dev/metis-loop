@@ -13,7 +13,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFile
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { chatLine, derivedFrom, firings, ruleText, schema, signature, tracePath } from "../extensions/metis-workspace.ts";
+import workspace, { chatLine, derivedFrom, firings, ruleNames, ruleText, schema, signature, tracePath, whoseUnit } from "../extensions/metis-workspace.ts";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
@@ -411,7 +411,8 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 	const { r } = scratch();
 	const home = mkdtempSync(join(tmpdir(), "ws-pi-home-"));
 	writeFileSync(join(home, "fam.llp"), "pred late : lamp.   % the clock's\nstage progress {\n  go_on [dyn] : $busy * go -o ().\n}\nstage safety {\n  %% Too late to stop: I stop.\n  stop_late [dyn] : $busy * $late\n      * now -o ().\n}\n");
-	writeFileSync(join(r, "domains", "lamp", "lamp.llp"), "catalog lamp 1.\ninclude \"fam.llp\".\n% the lamp's own words\n");
+	writeFileSync(join(r, "domains", "bund.llp"), "pred dim : lamp.\n");                   // a file of the bundle's directory
+	writeFileSync(join(r, "domains", "lamp", "lamp.llp"), "catalog lamp 1.\ninclude \"fam.llp\".\ninclude \"../bund.llp\".\n% the lamp's own words\n");
 	process.env.METIS_HOME = home;
 	try {
 		const p = fakePi();
@@ -421,17 +422,36 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		const out = await p.tools.get("surprise_next").execute("n", {});
 		const t = out.content[0].text;
 		assert.ok(t.includes("% the lamp's own words"), t);                                 // the program itself, whole
-		assert.ok(t.includes(`## included (the family's, under METIS_HOME: a pack that amends it gives unit=<this path>): ${join(home, "fam.llp")}`), t);
+		assert.ok(t.includes(`## included (the family's, under METIS_HOME): ${join(home, "fam.llp")}\n(a pack that amends it gives unit=<this path>)`), t);
 		assert.ok(t.includes("pred late : lamp.\nstage progress:\n  go_on [dyn]\nstage safety:\n  stop_late [dyn]  %% Too late to stop: I stop."), t);
 		assert.ok(!t.includes("$busy * $late"), t);                                         // no bodies
 		assert.ok(!t.includes("the clock's"), t);                                           // nor comments
 		assert.doesNotMatch(t, /how a rule is written|every rule names its layer/);         // the primer is the prompt's (PROMPT.md §2)
-		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }]);
+		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it gives unit=<this path>)\npred dim : lamp.`), t);
+		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }, { path: join(r, "domains", "bund.llp"), kind: "shared" }]);
 		const whole = (await p.tools.get("rule_text").execute("w", { names: ["stop_late", "nope"] })).content[0].text;
 		assert.equal(whole, `${join(home, "fam.llp")}:7\n%% Too late to stop: I stop.\nstop_late [dyn] : $busy * $late\n* now -o ().\n\nnot a rule of these units: nope`);
 		await p.emit("session_shutdown", {}, {});
 	} finally {
 		delete process.env.METIS_HOME;
+	}
+});
+
+test("pack_propose: a pack's unit= names the source, never a file make generates (the architect, nina's review of step 1)", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		mkdirSync(join(r, "domains", "lamp", "tree"));
+		writeFileSync(join(r, "domains", "lamp", "tree", "lamp_domain.llp"), "% DERIVED from ../lamp_domain.llp by gen (make): edit that file, never this one.\n");
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 1, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x", unit: "domains/lamp/tree/lamp_domain.llp" }),
+			new RegExp(`unit=domains/lamp/tree/lamp_domain.llp is generated from ${join(r, "domains", "lamp", "lamp_domain.llp")} by make: give unit=`));
+		assert.equal(ws.surprise(id, r).status, "taken");                                 // nothing judged, nothing ruled
+	} finally {
+		await p.emit("session_shutdown", {}, {});
 	}
 });
 
@@ -465,6 +485,29 @@ test("signature of an alfworld unit (the tree's nav, generated): declarations an
 	assert.equal(derivedFrom("/w/hier/tree/nav_domain.llp", nav), "/w/hier/nav_domain.llp");
 	assert.equal(derivedFrom("/w/hier/nav_domain.llp", "% nav_domain\n"), null);
 	assert.match(ruleText([{ path: "t.llp", text: nav }], ["go[dyn]"]), /^t\.llp:15\n%% I go to \{R\}\.\n {0}go \[dyn\] : goto\(R\)/);
+	// nina's review of step 1: a generated unit's rules come from its source (the text an edit takes), and a rule only
+	// make writes says so; the signature marks those
+	const src = ["catalog nav_domain 1.", "stage act {", "  %% I go to {R}.", "  go [dyn] : goto(R) * at(L) * $recat(R, L2) * L <> L2 -o at(L2) * reached(R).", "}"].join("\n");
+	const gen = new Set(ruleNames(nav).filter((n) => !ruleNames(src).includes(n)));
+	assert.deepEqual([...gen], ["begin", "here"]);
+	assert.match(signature(nav, gen), /  begin \[dyn\] \(generated\)\n  go \[dyn\]  %% I go to \{R\}\.\n  here \[dyn\] \(generated\)  %% \{R\} is right here\./);
+	const both = ruleText([{ path: "/w/hier/tree/nav_domain.llp", text: nav, src: { path: "/w/hier/nav_domain.llp", text: src } }], ["go", "begin"]);
+	assert.equal(both, [
+		"/w/hier/tree/nav_domain.llp:13 (generated by make, no rule in /w/hier/nav_domain.llp: amend the generator's input, not this rule)",
+		"begin [dyn] : $goto(X0) * idle -o busy * tick__active(nav).",
+		"",
+		"/w/hier/nav_domain.llp:4",
+		"%% I go to {R}.",
+		"go [dyn] : goto(R) * at(L) * $recat(R, L2) * L <> L2 -o at(L2) * reached(R).",
+		"(runs as generated in /w/hier/tree/nav_domain.llp:15: go [dyn] : goto(R) * at(L) * $recat(R, L2) * L <> L2 * busy * $tick__grant(nav, motion) -o at(L2) * reached(R) * idle * tick__done(nav).)",
+	].join("\n"));
+	// a type over several lines is never printed open
+	assert.equal(signature("type alfkind {\n  apple bowl\n  cup }.\npred x : y."), "type alfkind {…} (3 names)\npred x : y.");
+	// whose a shared unit is: by its path
+	assert.equal(whoseUnit("/c/domains/fam.llp", "/c/domains", "/w/hier"), "the family's, under METIS_HOME");
+	assert.equal(whoseUnit("/w/hier/capacity.llp", "/c/domains", "/w/hier"), "the bundle's");
+	assert.equal(whoseUnit("/w/director_domain.llp", "/c/domains", "/w/hier"), "shared");
+	assert.equal(whoseUnit("/w/hier2/x.llp", undefined, "/w/hier"), "shared");
 });
 
 test("the tool sets by mode (loop-prompt, PROMPT.md §3): workspace = the surprise loop's tools and catalog_edit; seed = none of the workspace's", () => {
