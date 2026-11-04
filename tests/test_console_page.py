@@ -13,11 +13,13 @@ def test_skeleton_free_title_style_first_one_script():
     assert PAGE.lstrip().startswith("<title>")
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
     # one inline script; the shell (console/lib/), the SDK's CATALOG widget
-    # (sdk/catalog/) and its five workspace widgets with their wire (sdk/workspace/)
-    # linked relative, before the page's own
+    # (sdk/catalog/) and its four workspace widgets with their wire (sdk/workspace/)
+    # linked relative, before the page's own; after it the voice's module (console-voice)
     assert PAGE.count("<script") == 9 and PAGE.count("<script>") == 1
-    for w in ("io", "bundle", "trace", "surprises", "rulings", "loop"):
+    assert PAGE.count('<script type="module">') == 1 and PAGE.index("<script>") < PAGE.index('<script type="module">')
+    for w in ("io", "bundle", "trace", "rulings", "loop"):
         assert PAGE.index(f'<script src="sdk/workspace/{w}.js"></script>') < PAGE.index("<script>")
+    assert "sdk/workspace/surprises.js" not in PAGE        # console-voice step 1: the SURPRISES dock went
     assert PAGE.index('<link rel="stylesheet" href="sdk/workspace/workspace.css">') < PAGE.index("<style>")
     assert PAGE.index('<link rel="stylesheet" href="lib/shell.css">') < PAGE.index("<style>")
     assert PAGE.index('<link rel="stylesheet" href="sdk/catalog/catalog.css">') < PAGE.index("<style>")
@@ -92,9 +94,8 @@ def test_the_editor_over_the_files_and_panels():
     assert 'id="newext"' in PAGE and "function newExtension(name)" in PAGE         # + extension: an edit of a new file
     assert 'const canWrite=()=>!!GW&&!!manifestM&&manifestM.mode==="personal";' in PAGE
     assert "lib.EditorView.editable.of(false)" in PAGE and "ta.readOnly=ro" in PAGE
-    for d in ("catalog", "candidates", "records"):
-        assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE
-    assert 'key:"loopconsole.docks.v5"' in PAGE   # v5: CHAT + SURPRISES (loop-chat step 1; v4: the five workspace docks)
+    assert 'data-dock="catalog"' in PAGE and 'data-strip="catalog"' in PAGE
+    assert 'key:"loopconsole.docks.v5"' in PAGE   # v5: CHAT (loop-chat step 1; v4: the five workspace docks)
     assert 'data-cmd="step ${esc(e.name)}"' in PAGE         # events step
 
 
@@ -151,55 +152,75 @@ LIB = Path(__file__).resolve().parents[1] / "console" / "lib"
 def test_no_voice_navigation_on_the_page():
     """voice-nav-removal s-90621b2c (the user, 2026-10-24: one voice paradigm, the dialog with the
     agent and the game; the web UI stays web): the console has no TALK dock, no navigation agent,
-    no flip key and no widget tags (and, since loop-workspace, no chat at all). console/lib is the shell alone — the
-    fsttm-web copies went with TALK (copies, not a dependency: none is left to keep equal)."""
+    no flip key and no widget tags. console/lib is the shell alone — the fsttm-web copies went with TALK; the
+    voice of console-voice is fsttm-web served from its installed package (no copy, no import map)."""
     assert sorted(p.name for p in LIB.iterdir()) == ["shell.css", "shell.js"]
     for gone in ("dock-talk", 'data-strip="talk"', "nav.js", "ui-port", "importmap", "fsttm-web/",
-                 "navHook", "consolePage", "flip_key", "data-w=", "data-role=", "lib/panel.css"):
+                 "navHook", "consolePage", "flip_key", "data-w=", "data-role="):
         assert gone not in PAGE, gone
     assert '<dialog id="savewin"' in PAGE
 
 
+def test_the_voice_in_the_band_and_the_dialog_dock():
+    """console-voice s-dc1f184c (the user, 2026-11-05: "add fsttm-web widget into top bar and fsttm-web tool panel
+    last after catalog and chat ... stt output goes to chat windows"): the voice widget fills #voice in the band,
+    the dialog's own part (dialogIn) is the DIALOG dock, the last dock; the panel's own chat is not shown; a heard
+    line is said in the CHAT as the person's (via heard); pi's words go to the dialog to be spoken."""
+    assert '<span id="voice" hidden></span>' in PAGE[PAGE.index('<header id="band"'):PAGE.index("</header>")]
+    docks = re.findall(r'data-dock="(\w+)"', PAGE)
+    assert docks[-1] == "dialog" and docks.index("chat") < docks.index("dialog") and docks.index("catalog") < docks.index("dialog")
+    assert 'const DOCKS=["catalog","chat","rulings","trace","bundle","dialog"];' in PAGE
+    mod = PAGE[PAGE.index('<script type="module">'):]
+    for imp in ("import('./lib/panel.js')", "import('./lib/switch.js')", "import('./lib/narrator.js')"):
+        assert imp in mod, imp
+    assert "dialogIn: $('#dialogpart')" in mod and "micButton: false" in mod and "#voicepanel{display:none}" in PAGE
+    assert "c.say(text, 'heard')" in mod and "voiceWidget(panel" in mod
+    assert "speak: text => panel.core.frame({ ev: 'chat', who: 'system', text })" in mod
+    assert "onWords:t=>window.MetisVoice&&MetisVoice.speak(t)" in PAGE
+    assert "onChange:st=>window.MetisVoice&&MetisVoice.showDialog(st)" in PAGE
+
+
 def test_the_workspace_docks_mount_the_sdk_widgets():
-    """loop-workspace step 4 (WORKSPACE.md §6), reduced by loop-chat step 1 (CHAT.md §1): CHAT, SURPRISES, RULINGS,
-    TRACE, BUNDLE are docks whose bodies the SDK's widgets fill, mounted when the manifest serves the loop channel;
-    their frames go to the widgets' wire; TRACE's mark hands over to SURPRISES, a ruled surprise opens its card in the
-    CHAT; a session opened here writes its trace."""
-    for d in ("chat", "surprises", "rulings", "trace", "bundle"):
+    """loop-workspace step 4 (WORKSPACE.md §6), reduced by loop-chat step 1 (CHAT.md §1) and console-voice step 1:
+    CHAT, RULINGS, TRACE, BUNDLE are docks whose bodies the SDK's widgets fill, mounted when the manifest serves the
+    loop channel; their frames go to the widgets' wire; TRACE's mark puts the /mark line in the CHAT's input; a
+    session opened here writes its trace."""
+    for d in ("chat", "rulings", "trace", "bundle"):
         assert f'data-dock="{d}"' in PAGE and f'data-strip="{d}"' in PAGE and f'id="w-{d}"' in PAGE
     assert 'data-dock="loop"' not in PAGE and 'id="w-loop"' not in PAGE
     assert 'key:"loopconsole.docks.v5"' in PAGE and "docks.v4" not in PAGE
     assert '(m.channels||[]).includes("loop")&&!wsW)mountWorkspace()' in PAGE
     assert "if(wsIO&&WS_CH.includes(f.ch)){wsIO.feed(f);return}" in PAGE
-    for g in ("MetisBundle", "MetisRulings", "MetisSurprises", "MetisTrace", "MetisLoop"):
+    for g in ("MetisBundle", "MetisRulings", "MetisTrace", "MetisLoop"):
         assert f"{g}.mount(" in PAGE
-    assert "onMark:d=>" in PAGE and "W.surprises.draft(d)" in PAGE and "W.chat.ruling(id)" in PAGE
+    assert "MetisSurprises" not in PAGE and "W.surprises" not in PAGE
+    assert 'W.chat.fill(`/mark ${d.run} ${d.window?d.window[0]+".."+d.window[1]:d.k} `)' in PAGE
     assert "...(wsW?{trace:true}:{})" in PAGE
 
 
-def test_chat_and_surprises_by_default_the_rest_behind_developer():
-    """loop-chat step 1 (CHAT.md §1): on a workspace CHAT and SURPRISES are open; TRACE, RULINGS, BUNDLE are hidden,
-    their docks and strip buttons behind the band's developer switch (kept per viewer)."""
+def test_chat_by_default_the_rest_behind_developer():
+    """loop-chat step 1 (CHAT.md §1), console-voice step 1: on a workspace CHAT is open; TRACE, RULINGS, BUNDLE are
+    hidden, their docks and strip buttons behind the band's developer switch (kept per viewer)."""
     i = PAGE.index('key:"loopconsole.docks.v5",')
     dflt = PAGE[i:PAGE.index("}}});", i) + 2]
-    assert "chat:{shown:!!GW,open:true}" in dflt and "surprises:{shown:!!GW,open:true}" in dflt
+    assert "chat:{shown:!!GW,open:true}" in dflt and "surprises:" not in dflt
     for d in ("rulings", "trace", "bundle"):
         assert f"{d}:{{shown:false,open:false}}" in dflt
         assert f'class="dock ws-dock dev-dock" id="dock-{d}"' in PAGE
         assert f'data-strip="{d}" class="ws-strip dev-strip"' in PAGE
     assert 'id="devbtn" hidden aria-pressed="false"' in PAGE
     assert 'DEV_DOCKS=["rulings","trace","bundle"]' in PAGE and 'store.get("loopconsole.dev",false)' in PAGE
-    assert PAGE.index('id="dock-chat"') < PAGE.index('id="dock-surprises"') < PAGE.index('id="dock-rulings"')
+    assert PAGE.index('id="dock-chat"') < PAGE.index('id="dock-rulings"')
 
 
 def test_panels_query_mounts_only_those():
-    """loop-chat step 1 (CHAT.md §1, the embedding): ?panels=chat,surprises mounts the named widgets only, with a
+    """loop-chat step 1 (CHAT.md §1, the embedding): ?panels=chat mounts the named widgets only, with a
     layout key of its own, no band, REPL or strip, and no package opened."""
     assert 'new URLSearchParams(location.search).get("panels")' in PAGE
     assert 'if(PANELS)$("#root").classList.add("panels")' in PAGE
     assert "#root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}" in PAGE
     assert 'key:"loopconsole.docks.v5.panels"' in PAGE
-    for w in ("bundle", "rulings", "chat", "surprises", "trace"):
+    for w in ("bundle", "rulings", "chat", "trace"):
         assert f'if(wsOn("{w}"))W.{w}=' in PAGE
     assert "&&!PANELS){pkgOpened=true;openCatalog" in PAGE
 
@@ -220,3 +241,17 @@ def test_the_chat_widget_carries_the_cards():
     rjs = (Path(__file__).resolve().parents[1] / "web/workspace/rulings.js").read_text()
     assert "window.MetisRulings = { mount, card };" in rjs
     assert rjs.count("(r.inert ? ' (inert)' : '')") == 2                     # the card and the dock: accepted (inert)
+
+
+def test_candidates_records_and_surprises_docks_are_gone():
+    """console-voice step 1 (the user, 2026-11-05: "remove candidates, records, surprise panels ... we have
+    /surprises for same info"): the three docks, their strips, scripts and renderers are out; the debugger, CATALOG,
+    CHAT (and the developer's three, the DIALOG) stay. /surprises lists, /mark and /drop drop (the CHAT drops a /mark
+    draft itself)."""
+    for d in ("candidates", "records", "surprises"):
+        assert f'data-dock="{d}"' not in PAGE and f'data-strip="{d}"' not in PAGE and f'id="dock-{d}"' not in PAGE
+    for gone in ('id="cands"', 'id="records"', "w-surprises", "renderRight", "renderRecords", "pickRecord", "afterSink",
+                 "fileRecs", "pendingRec", "canDecide", 'db.collection("candidates")', 'db.collection("surprise")',
+                 "data-dec", '{ch:"repl",type:"records"}'):
+        assert gone not in PAGE, gone
+    assert re.findall(r'data-dock="(\w+)"', PAGE) == ["catalog", "chat", "rulings", "trace", "bundle", "dialog"]

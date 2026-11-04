@@ -13,10 +13,16 @@
      c.refresh()        the child, the locks, the bundle
      c.tail()           the journal (the "journal" chip)
      c.ruling(id)       the ruling of surprise ID as a card in the chat
+     c.say(text, via)   a line said as the person's: via 'heard' is the voice widget's (the band's mic, console-voice
+                        s-dc1f184c): the chat shows it as heard, and it goes on as a typed line would
+     c.fill(text)       TEXT in the input, focused, not said (the host's "mark here": the /mark line to finish)
 
    A line starting with "/" is the backend's command (loop-chat step 2, CHAT.md §2: loop/chat_tools.json, 0 USD): it never
-   starts pi; its answer shows as a block, a ruling as its card, a /mark draft in SURPRISES (opts.onMark). The input
-   completes the commands on "/" (the table, `loop commands`). opts.onMark(draft): the host's SURPRISES dialog.
+   starts pi; its answer shows as a block, a ruling as its card, a /mark draft dropped as it is (its words, the reading
+   their first sentence: the terminal's /mark does the same; console-voice step 1 took the SURPRISES dock and its
+   dialog out), or handed to the host when it has opts.onMark(draft). The input completes the commands on "/" (the
+   table, `loop commands`).
+   opts.onWords(text): pi's words as they come (the host speaks them: the band's voice, console-voice s-dc1f184c).
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
   'use strict';
@@ -180,7 +186,7 @@
     // ---- pi's events ----
     function onPi(ev) {
       const k = ev.kind;
-      if (k === 'text') push('pi', 'pi', ev.text || '');
+      if (k === 'text') { push('pi', 'pi', ev.text || ''); if (o.onWords && ev.text) o.onWords(String(ev.text)); }
       else if (k === 'tool_call') push('tool', '⚙', `${ev.name} ${ev.args && Object.keys(ev.args).length ? JSON.stringify(ev.args) : ''}`);
       else if (k === 'tool_result') {
         const t = String(ev.text || '');
@@ -255,14 +261,14 @@
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
         if (r.text) push('cmd', '/' + (r.command || ''), r.text);
         if (r.ruling) await ruling(r.ruling);
-        if (r.draft && o.onMark) o.onMark(r.draft);
+        if (r.draft) { if (o.onMark) o.onMark(r.draft); else await drop(r.draft); }
         if (r.child !== undefined || ['take', 'stop', 'budget', 'rebuild', 'reload'].includes(r.command)) await refresh();
       } catch (e) { push('err', 'error', e.message); }
       render();
     }
-    async function sendLine(text) {
+    async function sendLine(text, via) {
       if (!text) return;
-      push('me', 'you', text);
+      push('me', via === 'heard' ? 'you · heard' : 'you', text);
       render();
       if (text.startsWith('/')) return command(text);       // the backend's, never a model turn
       if (!running()) {
@@ -270,6 +276,28 @@
         if (!(await start())) return;
       }
       try { await io.ask('loop', 'say', { text }); } catch (e) { push('err', 'error', e.message); render(); }
+    }
+    function firstSentence(words) {   // loop/chat.py first_sentence: the reading a drop carries
+      const one = String(words || '').split(/\s+/).filter(Boolean).join(' ');
+      const m = one.match(/^(.+?[.!?])(\s|$)/);
+      return (m ? m[1] : one).slice(0, 200);
+    }
+    async function drop(d) {
+      const msg = { words: d.words, reading: firstSentence(d.words) };
+      if (d.session) msg.session = d.session;
+      else { msg.run = d.run; if (d.member) msg.member = d.member; if (d.mark !== undefined && d.mark !== null) msg.mark = d.mark; }
+      if (d.k !== undefined && d.k !== null) msg.k = d.k;
+      if (d.window) msg.window = d.window;
+      try {
+        const r = await io.ask('surprise', 'drop', msg);
+        push('cmd', '/mark', `dropped ${r.id}: /surprises lists it, /take rules it`);
+      } catch (e) { push('err', 'error', e.message); }
+    }
+    function fill(text) {
+      const i = box.querySelector('.mw-row [name=text]');
+      if (!i) return;
+      i.value = text;
+      i.focus();
     }
     function say(form) {
       const i = form.querySelector('[name=text]');
@@ -328,7 +356,7 @@
     refresh();
     tail();
     commands();
-    return { refresh, tail, ruling, say: sendLine };
+    return { refresh, tail, ruling, say: sendLine, fill };
   }
   window.MetisLoop = { mount };
 })();

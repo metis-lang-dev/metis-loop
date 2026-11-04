@@ -2,6 +2,10 @@
 <link rel="stylesheet" href="lib/shell.css">
 <link rel="stylesheet" href="sdk/catalog/catalog.css">
 <link rel="stylesheet" href="sdk/workspace/workspace.css">
+<!-- fsttm-web (console-voice s-dc1f184c): the voice widget in the band, the DIALOG dock; served at /lib/ from the
+     installed fsttm_web package, behind this console's own shell (loop/shell_lib.py) -->
+<link rel="stylesheet" href="lib/panel.css">
+<link rel="stylesheet" href="lib/switch.css">
 <style>
 .dots{color:var(--cyan);letter-spacing:1px}
 .st-running{color:var(--green)}.st-quiescent{color:var(--yellow)}
@@ -56,11 +60,6 @@ pre.err{color:var(--red)}
 #promptrow{display:flex;gap:6px;padding:6px 12px 8px;border-top:1px solid var(--line);flex:none}
 #promptrow .p{color:var(--cyan)}
 #prompt{flex:1;background:transparent;border:none;outline:none}
-.cand{border-top:1px solid var(--line);padding:5px 0}
-/* e2e step 1: file-backed records, new, save; human-loop: the copy not applied */
-.rec{border-top:1px solid var(--line);padding:4px 0;cursor:pointer}.rec:hover{background:var(--sel)}
-.rec .hd{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}.rec .mt{color:var(--dim);white-space:pre-wrap;margin-top:2px;max-height:5.5em;overflow:hidden}
-.rec.esc .st{color:var(--red);border-color:#5a2a2a}.rec .st{font-size:10.5px;padding:0 5px;border:1px solid var(--line)}
 .newdom{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}.newdom input{background:var(--bg);border:1px solid var(--line);padding:1px 6px}
 .newdom input.nm{width:9em}.newdom input.ln{flex:1;min-width:12em}.newdom input.sd{flex:1;min-width:14em}
 .rootrd{margin:0 0 10px;border:1px solid var(--line);border-radius:4px;padding:4px 8px}.rootrd>summary{cursor:pointer;color:var(--dim);font-size:11.5px}
@@ -78,7 +77,6 @@ pre.err{color:var(--red)}
 #savewin .ask .q{font-size:14px;margin:8px 0 4px}#savewin .ask ul{margin:2px 0 6px 18px;padding:0}#savewin .ask .opts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 #savewin .ask form{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;margin-top:6px}#savewin .ask textarea{flex:1 1 100%;min-height:4em;font:inherit;color:inherit;background:var(--bg,#111);border:1px solid var(--line)}
 #savewin pre{margin:4px 0 10px;white-space:pre;font-size:11.5px}#savewin .add{color:var(--green)}#savewin .del{color:var(--red)}#savewin .hunk{color:var(--cyan)}
-.cand .row{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .ok{color:var(--green)}.bad{color:var(--red)}
 details summary{cursor:pointer;color:var(--dim)}
 .sect{border:1px solid var(--line);margin:4px 0 8px;padding:4px 8px}
@@ -114,11 +112,19 @@ details summary{cursor:pointer;color:var(--dim)}
 #root{flex:1;display:flex;flex-direction:column;min-height:0;outline:none}
 #savewin:not([open]){display:none}#savewin[open]{width:auto;height:auto;margin:0;max-width:none;max-height:none;padding:0;color:var(--fg)}
 #savewin::backdrop{background:rgba(0,0,0,.45)}
-/* ?panels=chat,surprises (CHAT.md §1, the embedding): the named docks only, the whole width; no band, REPL or strip */
+/* ?panels=chat (CHAT.md §1, the embedding): the named docks only, the whole width; no band, REPL or strip */
 #root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}
 #root.panels #right{flex:1 1 auto;min-width:0}
 /* the CHAT fills its dock: the log scrolls, the line to say stays in view */
 #dock-chat>.dbody{display:flex;flex-direction:column;overflow:hidden}#w-chat{flex:1;min-height:0}
+/* fsttm-web in the shell's look (as the world page's): the voice in the band, the dialog's own part in DIALOG */
+#band,#right{--fw-accent:var(--fg);--fw-side:var(--yellow)}
+#band .fw-voicebar{border-color:var(--line);border-radius:0}
+#voicepanel{display:none}
+#dialogpart>.fw-bar{padding:0 0 6px;border-bottom:1px solid var(--line)}
+#dialogpart .fw-sec{border:1px solid var(--line);padding:2px 8px;background:var(--panel)}
+#dialogpart .fw-sec>summary{color:var(--dim);font-weight:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+#dialogpart .fw-sec[open]>summary{color:var(--fg)}
 </style>
 
 <div id="root" tabindex="-1">
@@ -141,6 +147,7 @@ details summary{cursor:pointer;color:var(--dim)}
       <button class="btn" id="editbtn" title="the open program, as it is on disk (floating editor; save = one gated edit)" hidden>edit</button>
       <button class="btn" id="asksbtn" title="the loop stopped and asks you: read its question, answer with an instruction" hidden>ASKS <span id="asksn"></span></button>
       <span id="b-sid" class="empty"></span>
+      <span id="voice" hidden></span>
     </span>
   </div>
   <div class="l">
@@ -185,21 +192,9 @@ details summary{cursor:pointer;color:var(--dim)}
       <header><span class="tw">▾</span><span class="tt">CATALOG · the domains and their files</span><button class="x" title="hide">✕</button></header>
       <div class="dbody" id="catdock"><div class="empty">Open a catalog — its files, as they are on disk, show here.</div></div>
     </section>
-    <section class="dock" id="dock-candidates" data-dock="candidates" aria-label="candidates" tabindex="-1">
-      <header><span class="tw">▾</span><span class="tt">CANDIDATES</span><button class="x" title="hide">✕</button></header>
-      <div class="dbody"><div id="cands"><div class="empty">No candidates.</div></div></div>
-    </section>
-    <section class="dock" id="dock-records" data-dock="records" aria-label="surprise records" tabindex="-1">
-      <header><span class="tw">▾</span><span class="tt">SURPRISE RECORDS</span><button class="x" title="hide">✕</button></header>
-      <div class="dbody"><div id="records"><div class="empty">No surprise records.</div></div></div>
-    </section>
     <section class="dock ws-dock" id="dock-chat" data-dock="chat" aria-label="the chat with the pi loop" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">CHAT · the pi loop</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-chat"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
-    </section>
-    <section class="dock ws-dock" id="dock-surprises" data-dock="surprises" aria-label="surprises" tabindex="-1" hidden>
-      <header><span class="tw">▾</span><span class="tt">SURPRISES</span><button class="x" title="hide">✕</button></header>
-      <div class="dbody"><div id="w-surprises"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
     <section class="dock ws-dock dev-dock" id="dock-rulings" data-dock="rulings" aria-label="rulings" tabindex="-1" hidden>
       <header><span class="tw">▾</span><span class="tt">RULINGS</span><button class="x" title="hide">✕</button></header>
@@ -213,16 +208,18 @@ details summary{cursor:pointer;color:var(--dim)}
       <header><span class="tw">▾</span><span class="tt">BUNDLE</span><button class="x" title="hide">✕</button></header>
       <div class="dbody"><div id="w-bundle"><div class="empty">The workspace panels are served by a personal backend (metis-loop in the workspace).</div></div></div>
     </section>
+    <section class="dock" id="dock-dialog" data-dock="dialog" aria-label="the dialog: the floor, barge-in, attention, the numbers" tabindex="-1" hidden>
+      <header><span class="tw">▾</span><span class="tt">DIALOG · fsttm-web</span><button class="x" title="hide">✕</button></header>
+      <div class="dbody"><div id="dialogpart"></div><div id="voicepanel"></div></div>
+    </section>
   </aside>
   <nav id="strip" aria-label="tool windows">
     <button data-strip="catalog" title="the domains and their files">Catalog</button>
-    <button data-strip="candidates" title="candidates">Candidates</button>
-    <button data-strip="records" title="surprise records">Records</button>
     <button data-strip="chat" class="ws-strip" title="the chat with the pi loop" hidden>Chat</button>
-    <button data-strip="surprises" class="ws-strip" title="surprises" hidden>Surprises</button>
     <button data-strip="rulings" class="ws-strip dev-strip" title="rulings" hidden>Rulings</button>
     <button data-strip="trace" class="ws-strip dev-strip" title="traces" hidden>Trace</button>
     <button data-strip="bundle" class="ws-strip dev-strip" title="the bundle" hidden>Bundle</button>
+    <button data-strip="dialog" class="voice-strip" title="the dialog (fsttm-web): the floor, barge-in, attention, the numbers" hidden>Dialog</button>
   </nav>
 </main>
 </div>
@@ -232,7 +229,6 @@ details summary{cursor:pointer;color:var(--dim)}
 <script src="sdk/workspace/io.js"></script>
 <script src="sdk/workspace/bundle.js"></script>
 <script src="sdk/workspace/trace.js"></script>
-<script src="sdk/workspace/surprises.js"></script>
 <script src="sdk/workspace/rulings.js"></script>
 <script src="sdk/workspace/loop.js"></script>
 <script>
@@ -249,20 +245,20 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON
 const sstore={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
 
-let db=null,user=null,uid=null,canDecide=false,downloadsNs=null;
+let db=null,user=null,uid=null,downloadsNs=null;
 /* Transport (CONSOLE-WS §5): served by `metis-loop console-serve` the
    page talks to the gateway over ONE WebSocket (window.LOOP_GATEWAY is
    its flag); published as an artifact it keeps the db/sample shims.
    Both feed the same `intents`/`sess` state — the renderers are one. */
 const GW=window.LOOP_GATEWAY||null;
-/* ?panels=chat,surprises: an embedding host's iframe of this served page mounts these docks only (CHAT.md §1) */
+/* ?panels=chat: an embedding host's iframe of this served page mounts these docks only (CHAT.md §1) */
 const PANELS=(()=>{const q=new URLSearchParams(location.search).get("panels");if(q===null)return null;
-  const p=q.split(",").map(x=>x.trim()).filter(x=>["chat","surprises","rulings","trace","bundle"].includes(x));return p.length?p:null})();
+  const p=q.split(",").map(x=>x.trim()).filter(x=>["chat","rulings","trace","bundle"].includes(x));return p.length?p:null})();
 if(PANELS)$("#root").classList.add("panels");
 let pkgOpened=false;   // --pkg NAME: a page with no session opens the first package's domain once (GW.pkg: the panel's rows)
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
-let intents=new Map(),cands=new Map(),records=new Map(),catNames=[],domainList=[],domainsSeen=false,rootReadme=null,fileRecs=null,pendingRec=null;
+let intents=new Map(),catNames=[],domainList=[],domainsSeen=false,rootReadme=null;
 let unsubSess=null,unsubInt=null,openInsp=null;
 let lenses=new Set(store.get("loopconsole.lenses",["rules","measure"]));
 let hist=store.get("loopconsole.hist",[]),hpos=hist.length;
@@ -498,24 +494,6 @@ function renderStream(){
   if(atEnd)el.scrollTop=el.scrollHeight;
   if(el.querySelector("[data-graph]"))renderGraphs().then(()=>{if(atEnd)el.scrollTop=el.scrollHeight})}
 
-/* ---- the right panel: candidates (the only approve path) + records ---- */
-async function decide(cid,status){
-  if(!db)return;
-  try{await db.doc("candidates/"+cid).update({status,decided_by:uid||"viewer",decided_ts:new Date().toISOString()})}
-  catch(e){banner("Decision not saved: "+(e&&e.message||e),6000)}}
-function renderRight(){
-  const cs=[...cands.values()].sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,30);
-  $("#cands").innerHTML=cs.length?cs.map(c=>{
-    const open=c.status==="pending"||c.status==="regate";
-    return `<div class="cand"><div class="row"><span class="${c.ok?"ok":"bad"}">${c.ok?"✓ gates":"✗ "+(c.findings||[]).length+" finding(s)"}</span>
-      <span>${esc(c.record_id||c.id)}</span><span class="pill">${esc(c.status||"?")}</span>
-      ${open&&canDecide?`<button class="btn" data-dec="approved" data-cid="${esc(c.id)}">approve</button><button class="btn" data-dec="rejected" data-cid="${esc(c.id)}">reject</button>`:""}</div>
-      ${(c.findings||[]).slice(0,3).map(f=>`<div class="bad">${esc(f)}</div>`).join("")}
-      ${c.llp?`<details><summary>candidate LLP</summary><pre class="out">${esc(c.llp)}</pre></details>`:""}</div>`}).join(""):'<div class="empty">No candidates.</div>';
-  if(GW){renderRecords();return}
-  const rs=[...records.values()].sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,30);
-  $("#records").innerHTML=rs.length?rs.map(r=>`<div class="cand"><span class="pill">${esc(r.kind||"?")}</span> ${esc(r.id)} <span class="empty">${esc(Object.keys(r.observed||{}).join(" "))}</span></div>`).join(""):'<div class="empty">No surprise records.</div>'}
-
 /* ---- actions: every one is an intents doc ---- */
 async function queue(cmd,actor,quiet){
   /* returns the intent id, or null; `quiet` callers
@@ -617,9 +595,7 @@ function wsHandle(f){
   if(f.ch==="meta"&&f.type==="manifest"){manifestM=f;applyManifest();return}
   if(f.ch==="meta"&&f.type==="domains"){domainList=f.domains||[];domainsSeen=true;renderCatalogDock();return}
   if(f.ch==="meta"&&f.type==="readme"){rootReadme=f.readme||null;renderCatalogDock();return}
-  if(f.ch==="meta"&&f.type==="records"){fileRecs=f.records||[];renderRecords();return}
   if(f.ch==="meta"&&f.type==="agent"){agentM=f;renderAgent();return}
-  if(f.ch==="repl"&&f.type==="sink"){if(f.session===sid)afterSink(f);return}
   if(f.ch==="repl"&&f.type==="edit"){if(f.session===sid)showEdit(f);return}
   if(f.ch==="repl"&&f.type==="gate"){showGatePlan(f);return}
   if(f.ch==="meta"&&f.type==="catalogs"){catNames=f.names||[];
@@ -639,13 +615,12 @@ function wsHandle(f){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
       intents=new Map();seenEpoch=null;$("#stream").innerHTML="";
       const file=f.ctx&&f.ctx.file;if(file)$("#catin").value=String(file).replace(/\.llp$/,"");
-      if(pendingRec)wsSend({ch:"repl",type:"sink",session:sid,file:pendingRec.file});   // a record picked before its domain was open
     }
     if(f.session!==sid)return;
     if(seenEpoch!==null&&f.epoch!==seenEpoch){openInsp=null;intents=new Map();
       banner(`epoch ${f.epoch}: the stream restarts — ${f.recycled?"recycled after idling":"key "+String(f.key||"").slice(0,12)+"…, stage "+f.stage}`,6000)}
     seenEpoch=f.epoch;sess=f;renderBand();renderBusy();renderStream();
-    if(wsW){for(const k of ["surprises","bundle"])if(wsW[k])wsW[k].render()}   // their session buttons follow the open session
+    if(wsW&&wsW.bundle)wsW.bundle.render()   // its session button follows the open session
     return}
   if((f.type==="queued"||f.type==="posting")&&f.session===sid){
     const old=intents.get(f.id);
@@ -664,15 +639,15 @@ function applyManifest(){
   const vb=m.verbs||{};   // a declared verb's chip says the model's line
   document.querySelectorAll("#chips [data-cmd]").forEach(c=>{const v=vb[c.dataset.cmd.split(" ")[0]];if(v)c.title=v});
   $("#b-mode").title=(m.policy||"")+"\nno brain here: the pi loop formalizes and rules (the workspace's .metis/)";
-  renderRecords();wsSend({ch:"repl",type:"records"});   // the file-backed Records dock
   if((m.channels||[]).includes("loop")&&!wsW)mountWorkspace()}
 
 /* ---- the workspace (loop-workspace step 4, WORKSPACE.md §6; loop-chat step 1, CHAT.md §1): the loop SDK's widgets
    over the backend's trace / surprise / bundle / loop channels, mounted when the manifest serves them (personal
-   mode). The tester's two: CHAT and SURPRISES; the developer's three (TRACE, RULINGS, BUNDLE) behind the band's
-   "developer" switch. A ruled surprise opens its card in the CHAT; TRACE's "mark here" and SURPRISES' "drop from
-   the session" open the drop dialog. ?panels=chat,surprises mounts only those (an embedding host's iframe). */
-const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["chat","surprises","rulings","trace","bundle"],DEV_DOCKS=["rulings","trace","bundle"];
+   mode). The tester's one: CHAT (console-voice step 1: SURPRISES went, /surprises lists them, /mark and /drop drop
+   one); the developer's three (TRACE, RULINGS, BUNDLE) behind the band's "developer" switch. TRACE's "mark here"
+   puts the /mark line in the CHAT's input, the person's words to finish it. ?panels=chat mounts only the named
+   docks (an embedding host's iframe). */
+const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["chat","rulings","trace","bundle"],DEV_DOCKS=["rulings","trace","bundle"];
 let wsIO=null,wsW=null;
 const wsOn=d=>!PANELS||PANELS.includes(d);
 function mountWorkspace(){
@@ -682,12 +657,9 @@ function mountWorkspace(){
   const W={};
   if(wsOn("bundle"))W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
   if(wsOn("rulings"))W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
-  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,
-    onMark:d=>{if(!W.surprises)return;dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
-  if(wsOn("surprises"))W.surprises=MetisSurprises.mount($("#w-surprises"),wsIO,{session:()=>sid,
-    onRuling:id=>{if(W.chat){dockUI.set("chat",{shown:true,open:true});W.chat.ruling(id)}
-      else if(W.rulings){dockUI.set("rulings",{shown:true,open:true});W.rulings.show(id)}}});
-  if(wsOn("trace"))W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{if(!W.surprises)return;dockUI.set("surprises",{shown:true,open:true});W.surprises.draft(d)}});
+  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});
+  if(wsOn("trace"))W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{if(!W.chat)return;dockUI.set("chat",{shown:true,open:true});
+    W.chat.fill(`/mark ${d.run} ${d.window?d.window[0]+".."+d.window[1]:d.k} `)}});
   wsW=W;
   if(!PANELS){$("#devbtn").hidden=false;applyDev()}
   applyDocks()}
@@ -839,49 +811,21 @@ function saveBlob(name,text){
 
 /* ---- tool panels: shown/collapsed per panel, remembered per viewer (the
    shell: lib/shell.js, this console's copy) ---- */
-/* v5 (loop-chat step 1, CHAT.md §1): on a workspace (personal mode) CHAT and SURPRISES open, CATALOG folded, the rest
-   hidden (the strip shows them; the developer's three behind the band's switch). ?panels= keeps a layout of its own. */
-const DOCKS=["catalog","candidates","records","chat","surprises","rulings","trace","bundle"];
+/* v5 (loop-chat step 1, CHAT.md §1; console-voice step 1: CANDIDATES, RECORDS and SURPRISES went): on a workspace
+   (personal mode) CHAT open, CATALOG folded, the rest hidden (the strip shows them; the developer's three behind the
+   band's switch). ?panels= keeps a layout of its own. */
+const DOCKS=["catalog","chat","rulings","trace","bundle","dialog"];
 const WSP=!!GW&&GW.mode==="personal";
-const dockUI=PANELS?MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5.panels",store,
+const dockUI=PANELS?MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5.panels",store,onChange:st=>window.MetisVoice&&MetisVoice.showDialog(st),
     defaults:Object.fromEntries(DOCKS.map(d=>[d,{shown:PANELS.includes(d),open:true}]))})
-  :MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5",store,defaults:{catalog:{shown:true,open:!WSP},
-  candidates:{shown:!GW,open:false},records:{shown:!WSP,open:false},
-  chat:{shown:!!GW,open:true},surprises:{shown:!!GW,open:true},rulings:{shown:false,open:false},trace:{shown:false,open:false},bundle:{shown:false,open:false}}});
+  :MetisShell.docks({names:DOCKS,key:"loopconsole.docks.v5",store,onChange:st=>window.MetisVoice&&MetisVoice.showDialog(st),defaults:{catalog:{shown:true,open:!WSP},
+  chat:{shown:!!GW,open:true},rulings:{shown:false,open:false},trace:{shown:false,open:false},bundle:{shown:false,open:false},
+  dialog:{shown:false,open:true}}});
 if(PANELS)for(const d of DOCKS)dockUI.state[d]={...(dockUI.state[d]||{}),shown:PANELS.includes(d)};   // the query decides what shows
 const applyDocks=dockUI.apply;
 
 /* the CATALOG panel: the catalogs of metis-catalog (the domains first, one
    click opens program + host + notch), then the open copy's state and extensions */
-/* ---- e2e step 1: records from the checkout, new, save ---- */
-function renderRecords(){
-  const el=$("#records");if(!GW)return;
-  if(fileRecs===null){el.innerHTML='<div class="empty">reading the records…</div>';return}
-  const head=`<div class="wrow"><span class="ph">${fileRecs.length} record(s) in domains/*/records/ — newest first</span><button class="btn" id="recref">refresh</button></div>`;
-  el.innerHTML=head+(fileRecs.length?fileRecs.slice(0,60).map((r,k)=>`<div class="rec${r.escalated?" esc":""}" data-rec="${k}" tabindex="0" role="button"
-      title="load ${esc(r.file)} into the session and select record ${r.i}; mine is pre-filled from its mined text">
-    <div class="hd"><span class="st">${esc(r.status)}</span><b>${esc(r.domain.split("/").pop())}</b><span>#${r.i}${r.record!=null?" · record "+esc(r.record):""}</span>
-      <span class="empty">${esc(r.session)}${r.beat!=null?" · beat "+esc(r.beat):""}${r.ts?" · "+esc(String(r.ts).slice(0,19)):""}</span></div>
-    ${r.mined_text?`<div class="mt">${esc(r.mined_text)}</div>`:`<div class="mt">${esc(Object.entries(r.observed||{}).map(([a,n])=>a+" "+n).join(", "))}</div>`}</div>`).join("")
-    :'<div class="empty">No records yet: a domain agent sinks every surprise and its close into domains/&lt;name&gt;/records/&lt;session&gt;.jsonl.</div>')}
-function pickRecord(r){
-  // the record's domain must be the open session's: open it first (with its host), then sink + record
-  const dom=domainList.find(d=>d.path.startsWith(r.domain+"/"));
-  // on it: the session runs the catalog's program and extensions, as they are on disk
-  const onIt=sess&&sess.status!=="closed"&&dom&&String((sess.ctx&&sess.ctx.file)||"").replace(/\.llp$/,"")===dom.path
-    &&edFiles&&edFiles.program===dom.path+".llp";
-  pendingRec=r;
-  if(!onIt){if(!dom){banner("no catalog for "+r.domain+" in the list",5000);pendingRec=null;return}
-    openCatalog({path:dom.path,host:!!dom.host});return}
-  wsSend({ch:"repl",type:"sink",session:sid,file:r.file})}
-function afterSink(f){
-  const r=pendingRec;pendingRec=null;if(!r)return;
-  banner(`${(f.records||[]).length} record(s) from ${r.file} loaded`,3000);
-  // the record by its identity (number and time), never by its line in the file
-  const ids=f.ids||[];let k=ids.findIndex(([n,ts])=>String(n)===String(r.record)&&String(ts)===String(r.ts||""));
-  if(k<0)k=ids.length?ids.length-1:r.i;
-  queue("record "+k);
-  const p=$("#prompt");p.value="mine "+String(r.mined_text||"").replace(/\s*\n\s*/g," ").trim();p.focus()}
 /* the GATE (loop-parity step 2, docs/LOOP.md): every write into the catalog is a plan the
    person confirms — the console's apply, the agent seat's apply (it waits for you), and the
    catalog actions (edit a file, README, intents, take, a seed). The dialog is a modal
@@ -970,9 +914,6 @@ $("#savego").addEventListener("click",()=>{const g=gateCur;if(!g)return;
 function domainOfWork(){const p=String(edFiles&&edFiles.program||"").replace(/\.llp$/,"").split("/");return p.length>1?p[p.length-2]:p[0]}
 function gatePropose(kind,args){if(!wsUp){banner("Not connected to the console backend",4000);return}
   wsSend({ch:"repl",type:"gate",op:"propose",kind,domain:domainOfWork(),args:args||{},req:"g"+Math.random().toString(36).slice(2,8)})}
-$("#records").addEventListener("click",e=>{
-  if(e.target.closest("#recref")){wsSend({ch:"repl",type:"records"});return}
-  const r=e.target.closest("[data-rec]");if(r&&fileRecs)pickRecord(fileRecs[+r.dataset.rec])});
 $("#catdock").addEventListener("submit",e=>{
   const x=e.target.closest("#newext");if(x){e.preventDefault();newExtension(x.nm.value.trim());return}
   const g=e.target.closest("#gedit,#greadme");
@@ -1070,7 +1011,7 @@ function syncLenses(){document.querySelectorAll("[data-lens]").forEach(b=>b.setA
 function flashOcc(i){const el=document.getElementById("occ-"+i);if(!el){banner("#"+i+" is not in the current stream",3000);return}
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1400)}
 document.addEventListener("click",e=>{
-  const t=e.target.closest("[data-fu],[data-gfit],[data-cmd],[data-lens],[data-occ],[data-rule],[data-dec],[data-dl]");if(!t)return;
+  const t=e.target.closest("[data-fu],[data-gfit],[data-cmd],[data-lens],[data-occ],[data-rule],[data-dl]");if(!t)return;
   if(t.dataset.fu){e.preventDefault();followUp(t,e.shiftKey||e.altKey);return}
   if(t.dataset.gfit){const g=document.querySelector(`[data-graph="${CSS.escape(t.dataset.gfit)}"]`);if(g)g.classList.toggle("fit");return}
   if(t.dataset.dl){download(t.dataset.iid,t.dataset.dl);return}
@@ -1078,8 +1019,7 @@ document.addEventListener("click",e=>{
   else if(t.dataset.lens){lenses.has(t.dataset.lens)?lenses.delete(t.dataset.lens):lenses.add(t.dataset.lens);
     store.set("loopconsole.lenses",[...lenses]);syncLenses();renderStream()}
   else if(t.dataset.occ){e.stopPropagation();flashOcc(t.dataset.occ)}
-  else if(t.dataset.rule){openInsp=openInsp===t.dataset.rule?null:t.dataset.rule;renderStream()}
-  else if(t.dataset.dec)decide(t.dataset.cid,t.dataset.dec)});
+  else if(t.dataset.rule){openInsp=openInsp===t.dataset.rule?null:t.dataset.rule;renderStream()}});
 document.addEventListener("keydown",e=>{const t=e.target.closest&&e.target.closest("[data-rule]");
   if(t&&(e.key==="Enter"||e.key===" ")){e.preventDefault();t.click()}});
 $("#open").addEventListener("click",()=>openCatalog());
@@ -1096,23 +1036,70 @@ $("#prompt").addEventListener("keydown",e=>{
   else if(e.key==="ArrowUp"&&hpos>0){e.preventDefault();p.value=hist[--hpos]}
   else if(e.key==="ArrowDown"){e.preventDefault();hpos=Math.min(hist.length,hpos+1);p.value=hist[hpos]||""}});
 MetisShell.splitter();
-syncLenses();renderBand();renderRight();applyDocks();renderCatalogDock();
+syncLenses();renderBand();applyDocks();renderCatalogDock();
 
 claude.use("downloads").then(ns=>{downloadsNs=ns});
 (async()=>{
   user=await claude.use("user");
   if(user){try{uid=await user.id()}catch(e){}
-    try{canDecide=(await user.isOwner())||(await user.canEdit())}catch(e){}}
+}
   if(GW){wsConnect();return}
   db=await claude.use("db");
   if(!db){banner("No backend in this view (db unavailable) — the console renders, but nothing can be queued.");return}
   db.doc("meta/domains").onSnapshot(s=>{domainList=(s.exists&&s.data().domains)||[];renderCatalogDock()},()=>{});
   db.doc("meta/catalogs").onSnapshot(s=>{catNames=(s.exists&&s.data().names)||[];
     $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("")},()=>{});
-  db.collection("candidates").orderBy("ts","desc").limit(100).onSnapshot(s=>{
-    cands=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderRight()},e=>banner("Candidates lost: "+e.message));
-  db.collection("surprise").orderBy("ts","desc").limit(100).onSnapshot(s=>{
-    records=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderRight()},e=>banner("Records lost: "+e.message));
-  renderRight();subscribeSession();
+  subscribeSession();
 })();
+</script>
+<script type="module">
+/* The voice (console-voice s-dc1f184c): fsttm-web's widget in the band ([● mic ⟦switch⟧ narrator] and speak), the
+   dialog's own part (the floor, barge-in, attention, the floor / state / events cards) in the DIALOG dock, last of the
+   docks. What the mic hears goes to the CHAT as the person's line (shown "you · heard"), as a typed line would: a "/"
+   line is the backend's, anything else pi's. pi's words are spoken on the dialog's floor (speak: on/off, per viewer).
+   The panel's own chat is not shown: the CHAT is the console's. fsttm-web is served at /lib/ from the installed
+   fsttm_web package; without it the page has no voice and says so in the console. */
+let fw = null;
+try {
+  fw = await Promise.all([import('./lib/panel.js'), import('./lib/switch.js'), import('./lib/narrator.js')]);
+} catch (e) { console.warn('the console has no voice: fsttm-web is not served at /lib/ (pip install fsttm-web)', e); }
+if (fw) {
+  const [{ Panel }, { voiceWidget, toggleSwitch }, { Narrator, attachSelection, attachKey }] = fw;
+  const $ = s => document.querySelector(s);
+  const KEY = 'loopconsole.voice.speak';
+  const chat = () => (typeof wsW !== 'undefined' && wsW && wsW.chat) || null;
+  const backend = {                       // the dialog's turn: the heard line said in the CHAT; the reply comes as pi's words
+    onFrame: null,
+    async *turn(id, text) {
+      const c = chat();
+      if (!c) throw new Error('no CHAT on this page (a workspace in personal mode): nothing to say it to');
+      c.say(text, 'heard');
+    },
+  };
+  let speak = true;
+  try { speak = JSON.parse(localStorage.getItem(KEY) ?? 'true') !== false; } catch { /* the default */ }
+  const panel = new Panel($('#voicepanel'), {
+    backend, table: await (await fetch('lib/fsttm.json')).json(), title: '', voice: speak,
+    sections: ['floor', 'state', 'events'], dialogIn: $('#dialogpart'), micButton: false, storeKey: 'loopconsole',
+  });
+  const narrator = new Narrator({ tts: panel.core.tts });      // the page's selected text read aloud on F8
+  attachSelection(narrator, document);
+  attachKey(narrator, document, { key: 'F8' });
+  const vw = voiceWidget(panel, { narrator, key: 'F8' });      // the mic on F9
+  const sp = toggleSwitch({ label: 'speak', title: "pi's words spoken on the dialog's floor",
+    onChange: on => { panel.core.setVoice(on); sp.set(on ? 'on' : 'off'); try { localStorage.setItem(KEY, JSON.stringify(on)); } catch { /* kept for this page */ } } });
+  sp.set(speak ? 'on' : 'off');
+  vw.el.append(sp.el);
+  $('#voice').replaceWith(Object.assign(vw.el, { id: 'voice' }));
+  const strip = $('[data-strip=dialog]');
+  if (strip) strip.hidden = false;
+  const shown = st => !!(st && st.dialog && st.dialog.shown && st.dialog.open);
+  window.MetisVoice = {
+    panel, narrator,
+    speak: text => panel.core.frame({ ev: 'chat', who: 'system', text }),
+    showDialog: st => panel.showDialog(shown(st)),
+  };
+  if (!dockUI.state.dialog) dockUI.set('dialog', { shown: true, open: false });   // a layout kept before the dock: shown, folded
+  else panel.showDialog(shown(dockUI.state));
+}
 </script>

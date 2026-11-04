@@ -313,14 +313,20 @@ def test_budget_take_and_stop(root):
 
 def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     """The chat widget (web/workspace/loop.js): a "/" line asks the backend and never starts pi; the input's
-    completion is the table; a /mark draft opens the host's SURPRISES dialog (the console wires onMark)."""
+    completion is the table; a /mark draft is dropped as it is, or handed to the host's opts.onMark (console-voice
+    step 1: the console has no SURPRISES dialog to hand it to)."""
     js = (HERE.parent / "web" / "workspace" / "loop.js").read_text()
     assert "if (text.startsWith('/')) return command(text);" in js
     assert js.index("if (text.startsWith('/')) return command(text);") < js.index("if (!running()) {\n        if (elsewhere())")
     assert "list: listId" in js and "el('datalist', { id: listId }" in js and "io.ask('loop', 'commands')" in js
-    assert "o.onMark(r.draft)" in js
+    assert "if (r.draft) { if (o.onMark) o.onMark(r.draft); else await drop(r.draft); }" in js
+    assert "const msg = { words: d.words, reading: firstSentence(d.words) };" in js and "io.ask('surprise', 'drop', msg)" in js
+    assert "return { refresh, tail, ruling, say: sendLine, fill };" in js
     page = (HERE.parent / "console" / "loop_console.html").read_text()
-    assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,\n    onMark:' in page
+    assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page
+    # console-voice: a heard line is said as a typed one, shown as heard; pi's words go to the host's voice
+    assert "push('me', via === 'heard' ? 'you · heard' : 'you', text);" in js
+    assert "if (o.onWords && ev.text) o.onWords(String(ev.text));" in js
     assert "d.words || ''" in (HERE.parent / "web" / "workspace" / "surprises.js").read_text()   # the draft's words filled in
 
 

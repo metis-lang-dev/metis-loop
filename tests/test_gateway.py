@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -445,3 +446,17 @@ def test_the_workspace_widgets_served_from_the_sdk(personal):
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + bad, timeout=5)
         assert e.value.code == 404
+
+
+def test_fsttm_web_served_behind_the_shell():
+    """console-voice s-dc1f184c: /lib/ serves fsttm-web's library from the installed fsttm_web package behind the
+    console's own shell (the voice widget, the DIALOG dock): never a copy in console/lib, the shell's names first."""
+    fw = pytest.importorskip("fsttm_web")
+    from loop import shell_lib
+    assert shell_lib.fsttm_lib() == Path(fw.LIB)
+    for name, ctype in (("panel.js", "javascript"), ("switch.css", "text/css"), ("fsttm.json", "application/json")):
+        text, t = shell_lib.get(name)
+        assert ctype in t and text == (Path(fw.LIB) / name).read_text()
+    assert "MetisShell" in shell_lib.get("shell.js")[0]
+    for bad in ("fixtures/fsttm-cases.json", "../panel.js", ".x.js", "nope.js"):
+        assert shell_lib.get(bad) is None

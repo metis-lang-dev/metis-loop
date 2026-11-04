@@ -17,7 +17,7 @@ TRACE, RULINGS and BUNDLE do not go away: they are the developer's docks, hidden
 tools, personal mode). The dock key becomes v5 (the person's v4 layout is not kept).
 
 **Embedding** (the road catalog, later): the two-panel console is the gateway's page; a host page embeds it
-as an iframe of the served URL with `?panels=chat,surprises`, never a copy of its code (§6.1). The
+as an iframe of the served URL with `?panels=chat` (SURPRISES went: console-voice step 1), never a copy of its code (§6.1). The
 workspace is the host page's root; the gateway serves it there. Nothing of the loop moves.
 
 ## 2. Two kinds of lines in the chat
