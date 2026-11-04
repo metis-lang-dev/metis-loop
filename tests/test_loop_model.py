@@ -100,11 +100,22 @@ def test_model_on_the_command_line_wins_and_there_is_no_default(tmp_path):
     assert p.returncode == 2 and "a command has no pi model" in p.stderr
 
 
-def test_the_ollama_entry(tmp_path):
+def test_the_ollama_entry(tmp_path, monkeypatch):
+    """contextWindow is the SERVED context (qwen-loop s-75ecbab5: qwen3:4b's trained 262144 is served 32768): the
+    model's num_ctx, else OLLAMA_CONTEXT_LENGTH as the environment names it, else 32768; never over the trained."""
     from loop import pi_models
-    info = {"capabilities": ["completion", "tools", "thinking"], "model_info": {"gemma4.context_length": 131072}}
+    monkeypatch.delenv("OLLAMA_CONTEXT_LENGTH", raising=False)
+    info = {"capabilities": ["completion", "tools", "thinking"], "model_info": {"gemma4.context_length": 131072},
+            "parameters": "num_ctx                        16384\nstop \"<eos>\""}
     e = pi_models.entry("metis-gemma4-e4b", info)
-    assert (e["reasoning"], e["contextWindow"], e["maxTokens"]) == (True, 131072, 8192)
+    assert (e["reasoning"], e["contextWindow"], e["maxTokens"]) == (True, 16384, 8192)
+    assert e["compat"] == {"supportsDeveloperRole": False}            # Ollama's templates drop role developer
+    qwen = {"capabilities": ["completion", "tools", "thinking"], "model_info": {"qwen3.context_length": 262144}}
+    assert pi_models.entry("qwen3:4b", qwen)["contextWindow"] == pi_models.CONTEXT == 32768
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "65536")
+    assert pi_models.entry("qwen3:4b", qwen)["contextWindow"] == 65536
+    assert pi_models.entry("small", {"model_info": {"x.context_length": 8192}})["contextWindow"] == 8192
+    monkeypatch.delenv("OLLAMA_CONTEXT_LENGTH")
     assert pi_models.entry("phi4-mini", {})["contextWindow"] == pi_models.CONTEXT
     d = pi_models.ollama_agent(tmp_path / ".metis", "phi4-mini", "http://box:11434/v1", info={})
     assert [p.name for p in d.iterdir()] == ["models.json"]           # never pi's auth.json into a workspace

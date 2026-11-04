@@ -8,10 +8,21 @@ every host; why .metis/: the workspace's own state, git-ignored, rewritten at ev
         -> prints the agent directory (PI_CODING_AGENT_DIR for pi.sh)
 
 The entry: api openai-completions, a dummy apiKey (Ollama ignores it; pi needs one to list the model), cost 0,
-maxTokens 8192 (the loop's cap, as the openrouter entries), contextWindow and reasoning from Ollama's /api/show (its
-context length; "thinking" in its capabilities), input text."""
+maxTokens 8192 (the loop's cap, as the openrouter entries), reasoning from Ollama's /api/show ("thinking" in its
+capabilities), input text, compat supportsDeveloperRole false (the system prompt as role system: Ollama's
+templates drop a `developer` message, which pi sends for a thinking model). contextWindow is what the server SERVES, not the model's trained length (qwen-loop
+s-75ecbab5: qwen3:4b says 262144 and is served 32768; pi then never compacts before the server cuts the prompt):
+the model's own num_ctx, else the server's OLLAMA_CONTEXT_LENGTH as this environment names it, else 32768 (the
+setting WORKSPACE.md §10 asks for), never over the trained length.
+
+Thinking: a thinking model's reasoning comes back in /v1's own `reasoning` field (pi's thinking blocks, never the
+answer text), and pi's levels go as `reasoning_effort`; there is no off: pi sends no field for off, and Ollama
+then thinks at its default (qwen3:4b is a thinking model; `reasoning_effort: none` makes it think in the answer
+text instead), so the loop's local default is pi's own level and METIS_LOOP_THINKING=off changes nothing here."""
 import argparse
 import json
+import os
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -33,15 +44,32 @@ def show(base_url, model_id, timeout=3):
         return {}
 
 
+def served_context(info, env=None):
+    """The context the server gives the model: its own num_ctx (it wins), else OLLAMA_CONTEXT_LENGTH as this
+    environment names it; None when neither says (the caller's default)."""
+    env = os.environ if env is None else env
+    m = re.search(r"(?m)^\s*num_ctx\s+(\d+)", str((info or {}).get("parameters") or ""))
+    if m:
+        return int(m.group(1))
+    v = str(env.get("OLLAMA_CONTEXT_LENGTH") or "")
+    return int(v) if v.isdigit() and int(v) > 0 else None
+
+
 def entry(model_id, info=None):
     """pi's models.json model entry for an Ollama model."""
     info = info or {}
     mi = info.get("model_info") or {}
-    ctx = next((v for k, v in mi.items() if k.endswith(".context_length") and isinstance(v, int)), None) or CONTEXT
+    trained = next((v for k, v in mi.items() if k.endswith(".context_length") and isinstance(v, int)), None)
+    ctx = served_context(info) or CONTEXT
+    ctx = min(ctx, trained) if trained else ctx
     caps = info.get("capabilities") or []
     return {"id": model_id, "name": f"{model_id} (Ollama)", "reasoning": "thinking" in caps, "input": ["text"],
             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-            "contextWindow": ctx, "maxTokens": MAX_TOKENS}
+            "contextWindow": ctx, "maxTokens": MAX_TOKENS,
+            # the instructions as role system (qwen-loop F4): pi sends a thinking model's system prompt as role
+            # `developer`, and Ollama's chat templates (qwen3, gemma4) DROP that role: the model never saw
+            # loop-system.md, its skills or its tools' rules (3925 prompt tokens with or without it)
+            "compat": {"supportsDeveloperRole": False}}
 
 
 def models_json(base, model_id, base_url, info=None):
