@@ -530,7 +530,7 @@ export default function (host: ExtensionAPI) {
 			id: Type.String({ description: "the surprise's id (surprise_next)" }),
 			pack: Type.String({ description: "the pack's text: rules in `stage S { }`, `pred` lines, `drop NAME`; or a whole program" }),
 			cases: Type.Optional(Type.Array(Type.String(), { description: "case files (trace_case --into) the pack must pass" })),
-			unit: Type.Optional(Type.String({ description: "the file the pack amends (default: the member's program)" })),
+			unit: Type.Optional(Type.String({ description: "the file the pack amends (default: the surprise's unit, the file the person had open; else the member's program)" })),
 			brain: Type.Optional(Type.String({ description: "who writes the ruling's words: script:FILE (0 USD) or openrouter/<id> (needs budget); none: the evidence alone" })),
 			budget: Type.Optional(Type.Number({ description: "a paid brain's cap, USD" })),
 		}),
@@ -563,8 +563,12 @@ export default function (host: ExtensionAPI) {
 				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run")];
 				if (b) argv.push("--composition", dirname(b.composition));
 				let unitNote = "";
-				if (p.unit) {
-					const given = String(p.unit);
+				// loop-ui I1: no unit given → the surprise's own (the file the person had open: `metis grasp_domain.llp`
+				// serves grasp/grasp.llp, and the rule is in the unit); the member's program only when neither names one
+				const unit = p.unit ?? (s as any).unit;
+				if (!p.unit && unit) unitNote = `unit ${unit}: the surprise's (the file the person had open)\n`;
+				if (unit) {
+					const given = String(unit);
 					let u = resolve(r, given);
 					if (!existsSync(u)) {
 						// F3 (loop-prompt step 5): a bare name crashed the judge and released the take; the file is found under the

@@ -337,8 +337,15 @@ llp> surprises    llp> status                        /rebuild  /lint  /budget US
   does; `/budget USD` sets this session's budget; `/stop` releases the lock and ends pi. `/drop` and `/reload` are
   the REPL's (the CLI says so; pi's built-in `/reload` keeps its name). The `chat_*` tools the model has are
   unchanged.
-- **The console** is a wrapper over the same functions: its REPL session's trace is the same class; nothing else in
-  it changed.
+- **The console** is a wrapper over the same functions: its REPL session's trace is the same class. In personal mode
+  its REPL pane is the REPL's own command line (loop-ui s-bb07923c): the gateway attaches the workspace and the
+  session's trace to the session's shell, so `drop`, `mark`, `surprises` and `status` answer as terminal 1's do (a
+  shared-mode visitor's shell has none attached and keeps the wire's whitelist). Opening a member's unit serves its
+  includer, as `metis UNIT` does, and the session frame says so (`served`).
+- **A drop records the unit** the person had open (`unit: domains/hier/grasp_domain.llp` when `metis
+  domains/hier/grasp_domain.llp` serves grasp/grasp.llp), and `pack_propose` amends the surprise's unit when the model
+  names none: the rule is in the unit, and the member's program alone refused the right pack ("the pack drops begin,
+  which this unit does not have", loop-ui I1).
 
 **The model setting (llm-config s-07a070ad; the user, 2026-11-05: "harmonize config for narration and formalization.
 both path can be configured to ollama or openroute. thus we can test whenever we want on local models").** One

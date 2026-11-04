@@ -471,3 +471,52 @@ def test_the_consoles_start_takes_the_dot_files_loop_model(gw, tmp_path, monkeyp
     assert workspace_ch.dot_model() == "ollama/phi4-mini"
     monkeypatch.setenv("METIS_CONFIG", "")
     assert workspace_ch.dot_model() is None                        # unset: loop.sh refuses, saying how
+
+
+def unit_split(tmp_path):
+    """three_pigs' rules moved into a unit beside the package (domains/pigs_rules.llp), the program including it: the
+    shape of a bundle member's unit (alfworld's grasp_domain.llp)."""
+    d = tmp_path / "domains" / "three_pigs"
+    lines = (d / "three_pigs.llp").read_text().splitlines(keepends=True)
+    head = [x for x in lines if x.startswith(("catalog ", "provenance ", "layers ", "stages "))]
+    rest = [x for x in lines if x not in head]
+    (tmp_path / "domains" / "pigs_rules.llp").write_text("catalog pigs_rules 1.\n" + "".join(rest))
+    (d / "three_pigs.llp").write_text("".join(head) + 'include "../pigs_rules.llp".\n')
+
+
+def test_the_repl_pane_is_the_repls_own_on_a_unit(tmp_path):
+    """loop-ui I5 + I6 + I1: the console opens a unit as the terminal does (its includer served, and said), and in
+    personal mode the REPL pane answers drop / status / surprises with the REPL's own verbs, on the session's trace,
+    the drop recording the unit; a shared-mode visitor's pane keeps the whitelist."""
+    import metis.lang.repl as R
+    import inspect
+    if "trace" not in inspect.signature(R.Repl.attach_workspace).parameters:
+        pytest.skip("metispy before loop-ui (attach_workspace has no trace=)")
+    unit_split(scratch(tmp_path))
+    r = Running(ConsoleServer(tmp_path), mode="personal")
+    try:
+        with r.ws() as ws:
+            frames(ws, lambda f: f.get("type") == "catalogs")
+            ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "domains/pigs_rules", "trace": True, "req": "r1"}))
+            f = frames(ws, lambda f: f.get("type") in ("session", "error"))[-1]
+            assert f["type"] == "session", f
+            assert f["llp"] == "domains/three_pigs/three_pigs" and "is a unit" in f["served"]
+            sid = f["session"]
+            send(ws, sid, "run 2", "a")
+            post = send(ws, sid, "drop the wolf should wait. Then blow.", "b")[-1]
+            assert post["status"] == "done" and "dropped " in post["result"], post
+            (rec,) = W.workspace(tmp_path).surprises("open")
+            assert rec["trace"] == "traces/" + sid and rec["unit"] == "domains/pigs_rules.llp"
+            assert rec["reading"] == "the wolf should wait."
+            assert "surprises: 1 open" in send(ws, sid, "status", "c")[-1]["result"]
+            assert "the wolf should wait" in send(ws, sid, "surprises", "d")[-1]["result"]
+    finally:
+        r.close()
+    shared = Running(ConsoleServer(tmp_path), mode="shared")
+    try:
+        with shared.ws() as ws:
+            f = opened(ws, trace=False)
+            post = send(ws, f["session"], "drop words", "e")[-1]
+            assert post["status"] == "refused" and " drop " not in post["result"]
+    finally:
+        shared.close()

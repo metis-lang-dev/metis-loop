@@ -197,6 +197,27 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	await p.emit("session_shutdown", {}, {});
 });
 
+test("metis-workspace: pack_propose amends the surprise's unit when none is given (loop-ui I1)", async () => {
+	const { r, bin } = scratch();
+	writeFileSync(join(r, "domains", "lamp_rules.llp"), "% the lamp's unit, beside the composition\n");
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml", unit: "domains/lamp_rules.llp" }, "backend", r);
+	await p.tools.get("surprise_next").execute("n", {});
+	process.env.STUB_VERDICT = "accepted";
+	const j = await p.tools.get("pack_propose").execute("j", { id, pack: "% x" });
+	const args = readFileSync(join(bin, "propose.args"), "utf8").split("\n");
+	assert.equal(args[args.indexOf("--unit") + 1], "domains/lamp_rules.llp");
+	assert.match(j.content[0].text, /^unit domains\/lamp_rules.llp: the surprise's \(the file the person had open\)/);
+	const id2 = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 4, atoms: ["lit"], config: "service.yaml", unit: "domains/lamp_rules.llp" }, "backend", r);
+	await p.tools.get("surprise_next").execute("n2", {});
+	await p.tools.get("pack_propose").execute("j2", { id: id2, pack: "% x", unit: "domains/lamp/lamp.llp" });   // given: it wins
+	const args2 = readFileSync(join(bin, "propose.args"), "utf8").split("\n");
+	assert.equal(args2[args2.indexOf("--unit") + 1], "domains/lamp/lamp.llp");
+	await p.emit("session_shutdown", {}, {});
+});
+
 test("metis-workspace: a paid brain's spend reaches cost.jsonl, ruled or not; a take without a ruling releases itself", async () => {
 	const { r } = scratch();
 	const p = fakePi();

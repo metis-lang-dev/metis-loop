@@ -270,7 +270,8 @@ class Gateway:
                 "running": s.running and s.running["cmd"],
                 "queued": s.queue.qsize(),
                 "trace": ("traces/" + s.sid) if getattr(s, "trace", None) is not None else None,
-                **({"trace_error": s.trace_error} if getattr(s, "trace_error", None) else {}), **extra}
+                **({"trace_error": s.trace_error} if getattr(s, "trace_error", None) else {}),
+                **({"served": s.served} if getattr(s, "served", None) else {}), **extra}
 
     # -- session manager -------------------------------------------------
 
@@ -322,6 +323,7 @@ class Gateway:
                                                              "cannot open")})
         s = Sess(sid, fields.get("llp", llp), ip, cap["history"])
         s.spec = spec                    # what idle recycling re-opens
+        s.served = fields.get("served")  # a unit opened: its includer is served (loop-ui I5)
         if msg.get("trace"):             # the session's trace (WORKSPACE.md §3): .metis/traces/<session>/
             try:
                 s.trace = self.session_trace(s, fields)
@@ -613,6 +615,7 @@ class Gateway:
                     with s.lock:
                         s.tid = threading.get_ident()
                     try:
+                        self._attach(s)
                         self._traced(s, "before")
                         out = self.srv.serve_one(s.sid, cmd)
                         self._traced(s, "after", cmd)
@@ -642,6 +645,21 @@ class Gateway:
             self._resolve(s, item["id"], posting)
             await self._after_run(s)
             await self._broadcast(s, self._session_frame(s))
+
+    def _attach(self, s: "Sess"):
+        """The session's shell with the workspace and the session's own trace attached (loop-ui I6): its REPL then
+        serves the workspace verbs (drop, mark, surprises, status) as the terminal's does, pointing at this trace.
+        Personal mode only: a session has a trace only there (session_trace), so a shared-mode visitor's shell
+        keeps the wire's whitelist. Again after a reopen or a reload (a new shell); a metispy without the
+        attach's trace= (before loop-ui) is left as it was."""
+        tr = getattr(s, "trace", None)
+        sh = self.srv.shells.get(s.sid)
+        if tr is None or sh is None or sh.__dict__.get("_ws") is not None:
+            return
+        try:
+            sh.attach_workspace(self.wsc.ws, trace=tr)
+        except TypeError:                                # metispy before loop-ui: no trace= (the verbs stay off)
+            pass
 
     def _traced(self, s: "Sess", when: str, cmd: str = ""):
         """The session trace's hook around one command; a writer that fails stops writing (the session goes on)."""

@@ -226,11 +226,23 @@ class ConsoleServer:
             raise ValueError("a session opens a checkout program ({llp}): the workspace owns the file, "
                              "edit it in the EDITOR (no in-memory catalogs)")
         path = self.resolve(doc.get("llp", ""))
+        # a member's unit (grasp_domain.llp, which alone lacks the tick protocol its member includes) serves the
+        # program that includes it, as the terminal's `metis UNIT` does (two-terminals; loop-ui I5); the unit is
+        # the session's, so a drop records the file the person opened (I1)
+        unit, note = None, None
+        target, note = catalog.serve_target(str(path), root=self.root)
+        if target is not None and Path(target).resolve() != path.resolve():
+            unit, path = path, Path(target).resolve()
         rel = str(path.relative_to(self.root.resolve()).with_suffix(""))
         # {llp, host: true} — the one-click open of the CATALOG panel: the host the INDEX names for this
         # checkout file (never a spec from the wire: D4), attached as an operator's --host
         spec = catalog.host_of(rel, self.root) if doc.get("host") else None
-        r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
+        try:
+            r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec),
+                     **({"unit": unit} if unit is not None else {}))
+        except TypeError:                                 # a metispy before loop-ui: no unit= (the drop lacks it)
+            r = Repl(path, seed=self.seed, stdout=io.StringIO(), plugin=spec, host=bool(spec))
+        r._served_note = note if unit is not None else None
         # the served program is the program plus its extensions (human-loop step 1)
         extensions = [{"name": p.stem, "source": p.read_text()} for p in self.checkout_extensions(path)]
         reports = self._merge_extensions(r, extensions)
@@ -301,6 +313,8 @@ class ConsoleServer:
         self.epochs[sid] = 1
         out = self._fields(sid)
         out["llp"] = llp
+        if getattr(r, "_served_note", None):          # a unit opened: its includer served, and why (loop-ui I5)
+            out["served"] = r._served_note
         if reports:
             out["extensions"] = reports
         return out
