@@ -349,6 +349,13 @@ llp> surprises    llp> status                        /rebuild  /lint  /budget US
   `usage` row per model call (paid or local, TUI or rpc), and every face's line is metispy's `Workspace.spend()`:
   `0 USD, local (11 calls)` on a local model, else `0.0123 USD spent by pi's estimate (12 calls; …)`; the page's
   header reads the same.
+- **`/apply [ID]`** (loop-ui 2.3, the user: "the apply writes exactly what was judged"): an accepted ruling's pack
+  merged onto its unit by the judge's own code (metispy `Workspace.apply_plan`: `metis.trace.apply_pack`; the unit the
+  ruling records, else the surprise's, else the member's program), shown as the diff of that one file, written when the
+  person confirms at the face's gate: pi's TUI dialog (`/apply`, no model turn), the console's CHAT card (confirm /
+  refuse). The model's tool is `catalog_apply` (it decides when, never how), the same plan and gate; each writes F1's
+  `applied` journal row. Refused unless accepted, and once applied. `catalog_edit` names a member's file as the loop
+  prints it (root-relative, or a bare name its image.lock includes) and reaches the includes its last build names.
 - **A drop records the unit** the person had open (`unit: domains/hier/grasp_domain.llp` when `metis
   domains/hier/grasp_domain.llp` serves grasp/grasp.llp), and `pack_propose` amends the surprise's unit when the model
   names none: the rule is in the unit, and the member's program alone refused the right pack ("the pack drops begin,

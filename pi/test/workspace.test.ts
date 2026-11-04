@@ -581,7 +581,7 @@ test("the tool sets by mode (loop-prompt, PROMPT.md §3): workspace = the surpri
 	};
 	const mine = names(null, true);                                   // metis-workspace's own
 	const all = names(null), w = names("workspace"), s = names("seed");
-	assert.deepEqual(w, [...mine, "catalog_edit"].sort());
+	assert.deepEqual(w, [...mine, "catalog_apply", "catalog_edit"].sort());   // loop-ui 2.3: the apply is the judge's merge
 	assert.ok(w.length <= 30, `${w.length} tools in a workspace`);
 	assert.ok(!s.some((n) => mine.includes(n)), s.join(" "));
 	for (const n of ["catalog_new", "catalog_edit", "catalog_take", "domain_open"]) assert.ok(s.includes(n), n);
@@ -615,7 +615,7 @@ test("metis-workspace: the chat's slash table is pi's own commands (two-terminal
 	const p = fakePi();
 	workspace(p.api);
 	const decl = JSON.parse(readFileSync(join(HERE, "..", "..", "loop", "chat_tools.json"), "utf8")).tools.map((t: any) => t.name);
-	assert.deepEqual([...p.commands.keys()].sort(), decl.filter((n: string) => n !== "reload").sort());   // pi's own /reload stays
+	assert.deepEqual([...p.commands.keys()].sort(), decl.filter((n: string) => n !== "reload" && n !== "apply").sort());   // pi's own /reload stays; /apply is metis-repl's (the gate's)
 	const said: [string, string][] = [];
 	let down = 0;
 	const c = { ui: { notify: (m: string, k: string) => said.push([m, k]) }, shutdown: () => down++ };
@@ -866,6 +866,48 @@ test("catalog_edit in a workspace is the apply of an ACCEPTED ruling, or refused
 		assert.equal(un.applied!.undo, true);
 		// not a .llp, or not a workspace: no tie
 		assert.equal(changedRules("a [dyn] : x -o y.", "%% doc\na [dyn] :  x -o y .").length, 0);
+	} finally {
+		await p.emit("session_shutdown", {}, {});
+		delete process.env.METIS_LOOP_TOOLS;
+	}
+});
+
+test("catalog_apply and /apply: the judge's merge of the accepted pack onto its unit, at the person's gate, F1's row; refused once applied (loop-ui 2.3)", async () => {
+	const { r } = scratch();
+	process.env.METIS_LOOP_TOOLS = "workspace";
+	const p = fakePi();
+	workspace(p.api);
+	repl(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		assert.ok(p.tools.has("catalog_apply") && p.commands.has("apply"));
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 7, atoms: ["lit"], words: "w", config: "service.yaml" }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		const call = (input: any, tid = "a" + Math.random()) => p.emit("tool_call", { toolName: "catalog_apply", toolCallId: tid, input }, ctx).then((x: any) => [tid, x]);
+		const [, early] = await call({ id });
+		assert.equal(early.block, true);
+		assert.match(early.reason, /not ruled: nothing to apply/);
+		process.env.STUB_VERDICT = "accepted";
+		await p.tools.get("pack_propose").execute("j", { id, pack: "stage go {\n  %% I go dark late.\n  dark [dyn] : $late * now -o ().\n}" });
+		assert.equal(ws.surprise(id, r).ruling.unit ?? null, null);                         // the stub judge names none: the program
+		const lamp = join(r, "domains", "lamp", "lamp.llp");
+		const before = readFileSync(lamp, "utf8");
+		const [tid, gated] = await call({});                                                  // no id: the last accepted
+		assert.equal(gated, undefined);                                                       // the person approved (ctx.ui.confirm)
+		const out = await p.tools.get("catalog_apply").execute(tid, {});
+		assert.match(out.content[0].text, /^written: domains\/lamp\/lamp\.llp/);
+		assert.match(out.content[0].text, new RegExp(`Applies ruling ${id} to domains/lamp/lamp.llp \\(\\+ dark\\): the judge's merge, as judged`));
+		const after = readFileSync(lamp, "utf8");
+		assert.ok(after.startsWith(before.trimEnd()) && after.includes("dark [dyn] : $late * now -o ()."), after);   // the pack, appended as judged
+		const row = ws.events(0, r).filter((e) => e.kind === "applied").at(-1)!;
+		assert.equal(row.surprise, id);
+		assert.equal(row.who, "pi");
+		const [, again] = await call({ id });
+		assert.equal(again.block, true);
+		assert.match(again.reason, /applied already/);
+		notes.length = 0;
+		await p.commands.get("apply").handler(id, ctx);                                       // the person's /apply: the same plan
+		assert.match(notes.join("\n"), /\/apply: .*applied already/);
 	} finally {
 		await p.emit("session_shutdown", {}, {});
 		delete process.env.METIS_LOOP_TOOLS;

@@ -25,7 +25,7 @@ export function packText(rel: string, r: string): string {
 export function applied(p: EditLike, r: string): { say: string; applied?: Applied } {
 	const old_sha = sha(p.old_string), new_sha = sha(p.new_string);
 	if (p.ruling === "undo") {
-		const rows = ws.events(0, r).filter((e: any) => e.who === "pi" && e.kind === "applied" && e.new_sha === old_sha && e.old_sha === new_sha);
+		const rows = ws.events(0, r).filter((e: any) => (e.who === "pi" || e.who === "backend") && e.kind === "applied" && e.new_sha === old_sha && e.old_sha === new_sha);   // pi's or the console's /apply
 		if (!rows.length) throw new Error("undo: no applied edit is reversed by this one (old_string must be the text an applied edit wrote, new_string the text it replaced)");
 		const ids = [...new Set<string>(rows.flatMap((e: any) => (Array.isArray(e.surprise) ? e.surprise : [e.surprise]).map(String)))];
 		return { say: ` Reverses the applied edit of ruling ${ids.join(", ")}.`, applied: { ids, domain: p.domain, path: p.path, old_sha, new_sha, undo: true } };

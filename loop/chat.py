@@ -12,6 +12,7 @@ trace verbs (tools/gen_chat_tools.py; a test checks the file equals the argparse
     /ruling [ID]                the ruling card (default: the last)
     /mark [RUN] [K | K0..K1] WORDS   a tick of the session's trace as a surprise (its REPL's mark), or RUN's
     /drop WORDS                 the session's last tick as a surprise with these words
+    /apply [ID]                 an accepted ruling applied (the judge's merge of its pack onto its unit), at the gate
     /rebuild                    make (or metisc build .) of the bundle
     /reload                     the session re-opened from the rebuilt catalog
     /lint [MEMBER]              metis.lint with the member's manifest
@@ -62,6 +63,8 @@ COMMANDS = (
     ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's, dropped at once",
      (("words", {"nargs": "+", "help": "[RUN] [K | K0..K1] WORDS"}),)),
     ("drop", "the open session's last tick as a surprise with these words", (("words", {"nargs": "+", "help": "the words"}),)),
+    ("apply", "an accepted ruling applied: the judge's merge of its pack onto its unit, the diff shown, then confirm or refuse (default: the last ruling)",
+     (("id", {"nargs": "?", "help": "a surprise id"}),)),
     ("rebuild", "make (or metisc build .) of the bundle, where its composition is", ()),
     ("reload", "the open session re-opened from the rebuilt catalog (epoch + 1)", ()),
     ("lint", "metis.lint of a member with its manifest (default: every member of the bundle)",
@@ -463,7 +466,7 @@ def answer(ws, name, a, child=None, budget_next=None):
 # the commands the pi loop's TUI answers itself through this CLI (two-terminals s-065d46d5: pi.registerCommand in
 # pi/extensions/metis-workspace.ts): READ, and these, with no page and no REPL session in this process — the REPL
 # is the other terminal. take, budget and stop are the pi session's own (the extension answers them).
-TERMINAL = ("help", "mark", "drop", "rebuild", "reload", "lint")
+TERMINAL = ("help", "mark", "drop", "apply", "rebuild", "reload", "lint")
 
 
 def drop_draft(ws, draft):
@@ -496,6 +499,24 @@ def marks_a_run(words):
     return len(w) >= 2 and window(w[0]) is None and window(w[1]) is not None
 
 
+def apply_plan(ws, sid=None):
+    """/apply [ID]: the plan of the accepted ruling ID (default: the last ruling): metispy's Workspace.apply_plan, the
+    judge's merge of its pack onto its unit (loop-ui 2.3, the user: the apply writes exactly what was judged), with
+    the gate card's title and its message (the unified diff). Written only through a face's gate (pi's TUI, the
+    console's CHAT): here, nothing is."""
+    import difflib
+    if not sid:
+        s = last_surprise(ws, ruled=True)
+        if s is None:
+            raise ValueError("no ruling yet in this workspace (.metis/rulings/): nothing to apply")
+        sid = s["id"]
+    pl = ws.apply_plan(sid)
+    diff = "".join(difflib.unified_diff(pl["old"].splitlines(keepends=True), pl["new"].splitlines(keepends=True),
+                                        fromfile=pl["unit"], tofile=pl["unit"], n=2))
+    what = ", ".join(([f"drop {x}" for x in pl["dropped"]] + [f"+ {x}" for x in pl["added"]])) or "the pack"
+    return pl, {"title": f"apply ruling {sid} to {pl['unit']} ({what}): the judge's merge, as judged", "message": diff}
+
+
 def terminal(ws, name, a):
     """The answer of a TERMINAL command: {text}."""
     if name == "help":
@@ -511,6 +532,10 @@ def terminal(ws, name, a):
         raise ValueError("/drop is the REPL's: `drop WORDS` in its terminal drops its last tick (here: /mark RUN K WORDS)")
     if name == "reload":
         raise ValueError("/reload is the REPL's: `reload` in its terminal re-reads the files (after /rebuild)")
+    if name == "apply":                   # the CLI shows the plan; a face's gate writes it (pi's /apply, the CHAT's)
+        pl, card = apply_plan(ws, a.id)
+        return {"text": f"{card['title']}\n{card['message']}(nothing written here: /apply in pi's TUI or the console's "
+                        "CHAT asks you to confirm it)"}
     if name == "rebuild":
         from .workspace_ch import _scope
         return rebuild(ws, _scope(), who="pi" if os.environ.get("METIS_LOOP_PI_SELF") else "backend")

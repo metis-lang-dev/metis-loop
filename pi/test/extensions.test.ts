@@ -88,7 +88,7 @@ test("metis-repl: the wire's verbs become tools, its words or the finding's mark
 	await p.emit("session_start", {}, ui(true));
 	try {
 		assert.deepEqual([...p.tools.keys()].sort(),
-			["catalog_edit", "catalog_new", "catalog_take", "repl_formalize", "repl_gate", "repl_show", "repl_state", "repl_text"]);
+			["catalog_apply", "catalog_edit", "catalog_new", "catalog_take", "repl_formalize", "repl_gate", "repl_show", "repl_state", "repl_text"]);
 		assert.match(p.tools.get("repl_state").description, /the domain's current state/);
 		assert.match(p.tools.get("repl_text").description, /finding: metispy/);
 		const r = await p.tools.get("repl_text").execute("c1", { arg: "a desk lamp" });

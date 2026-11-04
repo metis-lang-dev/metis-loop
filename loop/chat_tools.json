@@ -157,6 +157,22 @@
    }
   },
   {
+   "name": "apply",
+   "verb": "apply",
+   "description": "an accepted ruling applied: the judge's merge of its pack onto its unit, the diff shown, then confirm or refuse (default: the last ruling)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "id": {
+      "type": "STRING",
+      "description": "a surprise id",
+      "positional": 0
+     }
+    },
+    "required": []
+   }
+  },
+  {
    "name": "rebuild",
    "verb": "rebuild",
    "description": "make (or metisc build .) of the bundle, where its composition is",

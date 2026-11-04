@@ -125,8 +125,8 @@ def test_the_table_is_the_argparse_and_help_reads_it():
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     names = [t["name"] for t in chat.tools()["tools"]]
-    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "drop", "rebuild",
-                     "reload", "lint", "budget", "stop", "help"]
+    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "drop", "apply",
+                     "rebuild", "reload", "lint", "budget", "stop", "help"]
     h = chat.help_text()
     for n in names:
         assert f"/{n}" in h, n

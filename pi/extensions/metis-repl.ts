@@ -43,7 +43,7 @@ const NAME = /^[a-z][a-z0-9_]*$/;
 export default function (host: ExtensionAPI) {
 	// the tool set by mode (lib/toolset.ts): in a workspace only catalog_edit, the person's gate for an accepted pack
 	const set = toolset();
-	const pi = scoped(host, (n) => set !== "workspace" || n === "catalog_edit");
+	const pi = scoped(host, (n) => set !== "workspace" || n === "catalog_edit" || n === "catalog_apply");
 	let repl: JsonlChild | null = null;
 	let served: string | null = null; // the program file the REPL serves (null: a blank world)
 	let servedHost: string | null = null; // the host it was started with (--host: the operator's argv, D4)
@@ -144,7 +144,7 @@ export default function (host: ExtensionAPI) {
 	// and the take into another catalog are its. Here: what only this host has — the REPL's
 	// candidate and the program it serves, the person at pi's confirm, and serving the program after.
 
-	type Tool = "catalog_new" | "catalog_edit" | "catalog_take";
+	type Tool = "catalog_new" | "catalog_edit" | "catalog_take" | "catalog_apply";
 	type Plan = gate.Plan & { tool: Tool; applied?: Applied };
 	type NewArgs = {
 		domain: string; program: string; display?: string; line?: string; intents?: boolean;
@@ -158,6 +158,23 @@ export default function (host: ExtensionAPI) {
 		if (tool === "catalog_take") {
 			const into = takeRoot();
 			return { ...gate.propose("take", input.domain, { src: o.root }, { ...o, root: into }), tool };
+		}
+		if (tool === "catalog_apply") {
+			// loop-ui 2.3 (the user): the apply of an accepted ruling is the judge's merge of its pack onto its unit
+			// (metispy Workspace.apply_plan: metis.trace.apply_pack), as ONE edit of that file at the same gate as
+			// catalog_edit, F1's tie and journal row included: the model decides when, never how
+			const id = String(input?.id ?? "").trim() || lastAccepted(o.root);
+			let ap;
+			try {
+				ap = ws.apply_plan(id, o.root);
+			} catch (e) {
+				throw new Error(String((e as Error).message).replace(/^workspace apply-plan: /, ""));
+			}
+			const p: EditArgs = { domain: ap.domain, path: ap.path, old_string: ap.old, new_string: ap.new };
+			const tie = applied(p, o.root);
+			const plan = gate.propose("edit", p.domain, { path: p.path, old: p.old_string, new: p.new_string, who: "pi" }, o);
+			const what = [...ap.dropped.map((x: string) => `drop ${x}`), ...ap.added.map((x: string) => `+ ${x}`)].join(", ");
+			return { ...plan, tool, say: ` Applies ruling ${id} to ${ap.unit} (${what}): the judge's merge, as judged.${(plan.say ?? "")}${tie.say}`, applied: tie.applied };
 		}
 		if (tool === "catalog_edit") {
 			const p = input as EditArgs;
@@ -193,11 +210,23 @@ export default function (host: ExtensionAPI) {
 
 	const plans = new Map<string, Plan>(); // toolCallId -> the plan the person approved
 
+	// the accepted ruling /apply means without an ID: the last ruled (by its ts)
+	function lastAccepted(r: string): string {
+		const acc = ws.rulings(r).filter((x: any) => String(x.verdict).startsWith("accepted"));
+		if (!acc.length) throw new Error("no accepted ruling in this workspace: nothing to apply (pack_propose judges a pack)");
+		return String(acc[acc.length - 1].id);
+	}
+
 	// an approved plan's write (the gate's confirm), the REPL serving the program again when it was written
 	async function execute(id: string, tool: Tool) {
 		const pl = plans.get(id);
 		plans.delete(id);
 		if (!pl || pl.tool !== tool) throw new Error("not approved");
+		return write(pl);
+	}
+
+	// an approved plan written: the gate's confirm, F1's journal row, the REPL serving the program again
+	async function write(pl: Plan) {
 		const out = gate.confirm(pl.token, runDir());
 		if (out.note) return { content: [{ type: "text" as const, text: out.note + "." }], details: { written: [], note: out.note } };
 		if (pl.applied) {                           // the journal's row: which ruling the written edit applied (or undid); hashes, never texts
@@ -280,6 +309,21 @@ export default function (host: ExtensionAPI) {
 
 	pi.registerTool({
 		executionMode: "sequential",
+		name: "catalog_apply",
+		label: "apply an accepted ruling",
+		description:
+			"Apply an accepted ruling to the catalog: its pack merged onto its unit by the judge's own code (exactly what was judged), " +
+			"shown to the person as the diff of that one file, written when they approve. You decide WHEN (after an accepted " +
+			"ruling, when the person asks to apply it); HOW is the judge's: never retype the rules through catalog_edit for this. " +
+			"Refused unless the ruling is accepted, and once applied. Then bundle_build.",
+		parameters: Type.Object({ id: Type.Optional(Type.String({ description: "the surprise id of the accepted ruling (default: the last accepted)" })) }),
+		async execute(id) {
+			return execute(id, "catalog_apply");
+		},
+	});
+
+	pi.registerTool({
+		executionMode: "sequential",
 		name: "catalog_take",
 		label: "take into the person's catalog",
 		description:
@@ -305,7 +349,7 @@ export default function (host: ExtensionAPI) {
 	// refused before shows first what changed since that proposal, then its diff against the disk.
 	pi.on("tool_call", async (event, ctx) => {
 		const tool = event.toolName as Tool;
-		if (tool !== "catalog_new" && tool !== "catalog_edit" && tool !== "catalog_take") return undefined;
+		if (tool !== "catalog_new" && tool !== "catalog_edit" && tool !== "catalog_take" && tool !== "catalog_apply") return undefined;
 		let pl: Plan;
 		try {
 			pl = await propose(tool, event.input);
@@ -317,6 +361,14 @@ export default function (host: ExtensionAPI) {
 			return undefined;
 		}
 		if (!ctx.hasUI) return { block: true, reason: "no person to approve the write (no UI)" };
+		if (!(await ask(pl, ctx))) return { block: true, reason: "the person did not approve this write" };
+		plans.set(event.toolCallId, pl);
+		return undefined;
+	});
+
+	// the person's confirm of a plan: the whole diff (pi.sh runs the TUI in regular mode: a long one stays in the
+	// scrollback); refused, the gate remembers it (the next plan of these files shows what changed since)
+	async function ask(pl: Plan, ctx: any): Promise<boolean> {
 		const mark = (f: catalog.Planned) =>
 			`${f.path}${f.new ? " (new)" : ""}${f.since_diff === undefined ? "" : f.since_diff ? " (changed since you refused it)" : " (as you refused it)"}`;
 		const what = pl.files.map(mark).join(", ") || "nothing changes";
@@ -324,16 +376,32 @@ export default function (host: ExtensionAPI) {
 			f.since_diff
 				? `── ${f.path}: since the proposal you refused ──\n${f.since_diff}── ${f.path}: against the file on disk ──\n${f.diff}`
 				: f.diff).join("").replace(/\n$/, "");
-		const verb = pl.tool === "catalog_take" ? "Take into" : pl.tool === "catalog_edit" ? "Edit in" : "New in";
+		const verb = pl.tool === "catalog_take" ? "Take into" : pl.tool === "catalog_edit" ? "Edit in" : pl.tool === "catalog_apply" ? "Apply in" : "New in";
 		const shown = (pl.findings ?? []).filter((x) => !x.refuses);
 		const notes = shown.length ? `\n── findings (not refusing) ──\n${shown.map((x) => `${x.file}${x.line ? `:${x.line}` : ""}: ${x.level} ${x.code}: ${x.msg}`).join("\n")}` : "";
-		const ok = await ctx.ui.confirm(`${verb} the catalog ${pl.root}: ${what}?`, body + notes);
-		if (!ok) {
-			gate.refuse(pl.token, runDir()); // remembered: the next plan of these files shows what changed since
-			return { block: true, reason: "the person did not approve this write" };
-		}
-		plans.set(event.toolCallId, pl);
-		return undefined;
+		const ok = await ctx.ui.confirm(`${verb} the catalog ${pl.root}: ${what}?${pl.tool === "catalog_apply" ? pl.say ?? "" : ""}`, body + notes);
+		if (!ok) gate.refuse(pl.token, runDir()); // remembered: the next plan of these files shows what changed since
+		return !!ok;
+	}
+
+	// /apply [ID] (the chat's table, loop-ui 2.3): the person's own apply in the TUI, no model turn: the same plan as
+	// catalog_apply, the same confirm, the same write and journal row
+	host.registerCommand("apply", {
+		description: "an accepted ruling applied: the judge's merge of its pack onto its unit, the diff shown, then confirm or refuse (0 USD; default: the last accepted ruling)",
+		handler: async (args: string, ctx: any) => {
+			const say = (t: string, level = "info") => ctx?.ui?.notify ? ctx.ui.notify(t, level) : console.log(t);
+			let pl: Plan;
+			try {
+				pl = await propose("catalog_apply", { id: String(args || "").trim() });
+			} catch (e) {
+				return say(`/apply: ${(e as Error).message}`, "error");
+			}
+			if (pl.note) return say(`/apply: ${pl.note}`);
+			if (!ctx?.hasUI) return say("/apply: no person to approve the write (no UI)", "error");
+			if (!(await ask(pl, ctx))) return say("/apply: not applied (nothing written)");
+			const out = await write(pl);
+			say(`/apply: ${out.content[0].text}`);
+		},
 	});
 
 	// a package seed's program is served with its host (its weight ports, its world), as the seed catalog names it

@@ -211,6 +211,12 @@ export function rulings(r?: string): any[] {
 	return cli(["rulings"], undefined, r);
 }
 
+/** An accepted ruling's apply as an edit (loop-ui 2.3: the judge's merge of its pack onto its unit): {id, domain,
+ *  unit, path (the domain directory's), old, new, added, dropped}; a WorkspaceError says why not. */
+export function apply_plan(id: string, r?: string): { id: string; domain: string; unit: string; path: string; old: string; new: string; added: string[]; dropped: string[] } {
+	return cli(["apply-plan", id], undefined, r);
+}
+
 /** Append one row {ts, who, kind, ...PTRS} to the journal (pointers, never bodies). → the row. */
 export function journal(who: Who, kind: string, ptrs: Record<string, unknown> = {}, r?: string): Row {
 	return cli(["journal", "--who", who, "--kind", kind, "--fields", JSON.stringify(ptrs)], undefined, r);

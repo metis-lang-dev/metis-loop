@@ -262,6 +262,7 @@
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
         if (r.text) push('cmd', '/' + (r.command || ''), r.text);
         if (r.ruling) await ruling(r.ruling);
+        if (r.gate) pushCard({ gate: true, token: r.gate.token, plan: r.gate.plan, card() { return gateCard(this); } });   // /apply's plan (loop-ui 2.3)
         if (r.child !== undefined || ['take', 'stop', 'budget', 'rebuild', 'reload'].includes(r.command)) await refresh();
       } catch (e) { push('err', 'error', e.message); }
       render();
@@ -294,7 +295,10 @@
       m.answered = how === 'confirm' ? 'confirmed' : 'refused: nothing written';
       m.node = null;
       render();
-      try { await io.ask('loop', how, { token: m.token }); } catch (e) { m.answered = `${how}: ${e.message}`; m.node = null; render(); }
+      try {
+        const r = await io.ask('loop', how, { token: m.token });
+        if (r && r.text) { push('cmd', '/apply', r.text); refresh(); render(); }     // the console's own gate answers in words
+      } catch (e) { m.answered = `${how}: ${e.message}`; m.node = null; render(); }
     }
     async function ruling(id) {
       try {

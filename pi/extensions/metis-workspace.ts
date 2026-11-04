@@ -21,7 +21,7 @@
 //                       backend's watch then flips STALE: §2.4)
 //   journal             one line of the loop's own progress, in words, for the UI
 //
-// A ruling is never applied here: catalog_edit (metis-repl) keeps the person's gate.
+// A ruling is never applied here: catalog_apply / catalog_edit (metis-repl) keep the person's gate.
 // The lock: one pi loop per workspace (§2.3). This session takes .metis/loop/pi.json at its start (loop.sh
 // refuses first when a live one holds it) and releases it at its end.
 //
@@ -488,7 +488,8 @@ export default function (host: ExtensionAPI) {
 		const res = await run(process.env.METIS_LOOP_SDK_PY || "python3", ["-m", "loop.chat", "--root", r, line], r, env);
 		return { ok: res.code === 0, out: `${res.out}${res.err ? `${res.out ? "\n" : ""}${res.err}` : ""}`.trim() || "(no output)" };
 	};
-	const PI_OWN = new Set(["reload"]);   // pi's built-in /reload (its extensions) wins; the REPL's reload is its own verb
+	// pi's built-in /reload (its extensions) wins, the REPL's reload is its own verb; /apply is metis-repl's (the gate's)
+	const PI_OWN = new Set(["reload", "apply"]);
 	for (const t of chatDecl.filter((x: any) => !PI_OWN.has(x.name))) {
 		pi.registerCommand(t.name, {
 			description: `${t.description} (0 USD${t.name === "take" ? "; then the model's turn" : ""})`,
@@ -525,7 +526,7 @@ export default function (host: ExtensionAPI) {
 		name: "pack_propose",
 		label: "judge a pack",
 		description:
-			"Judge a candidate pack for a taken surprise (propose.sh: the gate cascade, every member's goldens, the cases, the fired diff on the trace's replay, the lint rows; no world). The verdict is the gate's, mechanically; the ruling (rulings/<id>.md) and the pack (packs/<id>.llp) are written as the surprise's, which makes it ruled. Nothing is applied: the person applies an accepted pack through catalog_edit. Takes minutes.",
+			"Judge a candidate pack for a taken surprise (propose.sh: the gate cascade, every member's goldens, the cases, the fired diff on the trace's replay, the lint rows; no world). The verdict is the gate's, mechanically; the ruling (rulings/<id>.md) and the pack (packs/<id>.llp) are written as the surprise's, which makes it ruled. Nothing is applied: an accepted pack is applied by catalog_apply (or the person's /apply), at the person's gate. Takes minutes.",
 		parameters: Type.Object({
 			id: Type.String({ description: "the surprise's id (surprise_next)" }),
 			pack: Type.String({ description: "the pack's text: rules in `stage S { }`, `pred` lines, `drop NAME`; or a whole program" }),
@@ -608,7 +609,9 @@ export default function (host: ExtensionAPI) {
 				}
 				// beside the verdict, for the person (the brake_late lesson, step 4): when the candidate is first enabled and how
 				// often its rules fire where the fired rows differ from the record
+				// unit: the file the pack amends, recorded so /apply merges onto it (loop-ui 2.3)
 				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace,
+					unit: e.unit ?? (s as any).unit ?? null,
 					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e) };
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);

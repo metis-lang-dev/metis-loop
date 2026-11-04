@@ -119,6 +119,7 @@ class WorkspaceChannels:
         self.stale = None             # the bundle's last stale flag
         self._cache = {}
         self.budget_next = None       # /budget USD: the next start's, when the start names none
+        self.applies = {}             # /apply cards waiting for the person: token -> the plan (loop-ui 2.3)
 
     # -- the socket's side -------------------------------------------------
 
@@ -331,6 +332,8 @@ class WorkspaceChannels:
         if typ == "commands":                           # the chat's completion: the table as committed
             from . import chat
             return {"commands": [{"name": t["name"], "description": t["description"]} for t in chat.tools()["tools"]]}
+        if typ in ("confirm", "refuse") and str(msg.get("token") or "") in self.applies:
+            return await self._apply_answer(str(msg["token"]), typ == "confirm")
         if typ in ("confirm", "refuse"):
             rpc, tok = self._rpc(), str(msg.get("token") or "")
             if tok not in self.child["gates"]:
@@ -371,6 +374,14 @@ class WorkspaceChannels:
             if post.get("status") != "done":
                 raise ValueError(str(post.get("result") or post.get("status")))
             out["text"] = post.get("result") or ""
+        elif name == "apply":
+            # loop-ui 2.3 (the user): the judge's merge of the ruling's pack onto its unit (chat.apply_plan, metispy's
+            # Workspace.apply_plan), at this console's gate: the card's confirm writes exactly that plan, refuse nothing
+            pl, card = await self._run(chat.apply_plan, self.ws, a.id)
+            plan = await self._run(lambda: self.gw.srv.gate.propose("edit", pl["domain"], self.ws.root, path=pl["path"],
+                                                                    old=pl["old"], new=pl["new"], who="backend"))
+            self.applies[plan["token"]] = pl
+            out.update(text=card["title"], gate={"token": plan["token"], "plan": card})
         elif name in ("rebuild", "lint"):                # the terminal's answer (pi's /rebuild, /lint): one code
             out.update(await self._run(chat.terminal, self.ws, name, a))
         elif name == "reload":
@@ -402,6 +413,23 @@ class WorkspaceChannels:
             out.update(text=f"{started}said to pi: {words}", child=self.child_state())
         await self._run(lambda: self.ws.journal("backend", "command", command=name))
         return out
+
+    async def _apply_answer(self, tok, ok):
+        """The person's answer to an /apply card: confirm writes the plan (the gate's: a unit changed since refuses,
+        nothing written) and journals F1's row, `applied` {surprise, domain, path, old_sha, new_sha}, as pi's apply
+        does; refuse writes nothing."""
+        import hashlib
+        pl = self.applies.pop(tok)
+        srv = self.gw.srv
+        if not ok:
+            await self._run(srv.gate_refuse, tok)
+            return {"token": tok, "text": f"not applied: ruling {pl['id']} (nothing written)"}
+        out = await self._run(srv.gate_confirm, tok)
+        sha = lambda t: hashlib.sha256(t.encode()).hexdigest()   # noqa: E731
+        await self._run(lambda: self.ws.journal("backend", "applied", surprise=pl["id"], domain=pl["domain"],
+                                                path=pl["path"], old_sha=sha(pl["old"]), new_sha=sha(pl["new"])))
+        return {"token": tok, "text": f"applied ruling {pl['id']}: written {', '.join(out.get('written') or []) or 'nothing'}; "
+                                      "the bundle is STALE until /rebuild"}
 
     def _rpc(self):
         if not self.child or self.child["state"] != "running":

@@ -520,3 +520,40 @@ def test_the_repl_pane_is_the_repls_own_on_a_unit(tmp_path):
             assert post["status"] == "refused" and " drop " not in post["result"]
     finally:
         shared.close()
+
+
+def test_the_chats_apply_is_the_judges_merge_at_the_consoles_gate(tmp_path):
+    """loop-ui 2.3 (the user's /apply): an accepted ruling's pack merged onto its unit by the judge's code, the diff in
+    a gate card, confirm writes exactly it and journals F1's `applied`; refuse writes nothing; the CLI only shows it."""
+    ws_ = W.workspace(scratch(tmp_path))
+    if not hasattr(ws_, "apply_plan"):
+        pytest.skip("metispy before loop-ui 2.3: no Workspace.apply_plan")
+    from loop import chat
+    prog = tmp_path / "domains" / "three_pigs" / "three_pigs.llp"
+    pack = "stage go {\n  %% The wolf rests.\n  wolf_rests [story] : $wolf -o ().\n}\n"
+    ids = []
+    for _ in range(2):
+        sid = ws_.drop_surprise({"member": "three_pigs", "reading": "the wolf never rests"})
+        ws_.rule(sid, "# Ruling: accepted\n", "accepted", pack=pack, member="three_pigs")
+        ids.append(sid)
+    before = prog.read_text()
+    assert chat.main(["--root", str(tmp_path), f"/apply {ids[0]}"]) == 0 and prog.read_text() == before   # shown only
+    r = Running(ConsoleServer(tmp_path), mode="personal")
+    try:
+        with r.ws() as ws:
+            frames(ws, lambda f: f.get("type") == "catalogs")
+            f = ask(ws, "loop", "say", text=f"/apply {ids[0]}")
+            assert f["gate"]["plan"]["title"].startswith(f"apply ruling {ids[0]} to domains/three_pigs/three_pigs.llp (+ wolf_rests)")
+            assert "+  wolf_rests [story] : $wolf -o ()." in f["gate"]["plan"]["message"]
+            assert prog.read_text() == before                                       # nothing before the confirm
+            no = ask(ws, "loop", "refuse", token=f["gate"]["token"])
+            assert "not applied" in no["text"] and prog.read_text() == before
+            f = ask(ws, "loop", "say", text=f"/apply {ids[0]}")
+            ok = ask(ws, "loop", "confirm", token=f["gate"]["token"])
+            assert ok["text"].startswith(f"applied ruling {ids[0]}: written domains/three_pigs/three_pigs.llp")
+            assert "wolf_rests [story] : $wolf -o ()." in prog.read_text()
+            row = [e for e in W.workspace(tmp_path).events() if e.get("kind") == "applied"][-1]
+            assert (row["who"], row["surprise"]) == ("backend", ids[0])
+            assert "applied already" in ask(ws, "loop", "say", text=f"/apply {ids[1]}")["error"]   # the same pack: written
+    finally:
+        r.close()
