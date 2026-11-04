@@ -1,6 +1,6 @@
 """The console gateway (docs/CONSOLE-WS.md §1, §2, §4, §7): a standing
 backend for the Loop Console — plain `websockets` + stdlib-shaped HTTP
-on ONE port (D1), grown from console/dev_serve.py.
+on ONE port (D1), grown from console/dev_serve.py (removed with the db mode, loop-ui 2.4).
 
     GET /            the page (loop_console.html) with the gateway flag
     GET /healthz     liveness
@@ -807,8 +807,6 @@ class Gateway:
         return ("<!doctype html><html><head><meta charset=utf-8><meta "
                 "name=viewport content=\"width=device-width,initial-scale=1\">"
                 f"<script>window.LOOP_GATEWAY={flag};"
-                # no artifact capabilities here: every use() resolves null
-                "window.claude=Object.freeze({use:async()=>null});"
                 "</script></head><body>" + PAGE.read_text() +
                 "</body></html>")
 

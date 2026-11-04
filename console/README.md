@@ -1,17 +1,12 @@
 # The Loop Console — page source
 
-`loop_console.html` is the web console (SPEC §8): a wrapper over
-`metis-loop repl`, published as a claude.ai artifact. The artifact URL
-lives in the operator's notes; capabilities are `db` + `user` (no model
-in the page, nor behind it: the console's LLM seats are retired,
-loop-workspace; the pi loop formalizes in the same workspace).
+`loop_console.html` is the web console (SPEC §8): a wrapper over the two terminals (the REPL and the pi loop,
+loop-ui s-bb07923c), served by the gateway, `metis-loop console-serve`, its ONLY backend (loop-ui 2.4, the
+user, 2026-11-05: the claude.ai artifact published and drained by a Claude session, its db and
+`dev_serve.py` are gone). No model in the page, nor behind it: the pi loop formalizes in the same workspace.
 
-The page is written for the Artifact publish skeleton: no
-doctype/html/head of its own — `<title>` and `<style>` first, content,
-one `<script>`. Publish with the Artifact tool against the existing
-URL so the db (collections `surprise`, `candidates`, `intents`,
-`sessions`, and the `meta/catalogs` doc — CONSOLE.md §5; the old
-`catalogs` mirror is retired) and open views carry over.
+The page has no doctype/html/head of its own — `<title>` and `<style>` first, content, its scripts: the
+gateway wraps it (`loop/gateway.py` page(), with `window.LOOP_GATEWAY`).
 
 The shell — the top bar (`#band`), the tool panels (`.dock`) with the
 strip that toggles them, the splitter and the colour tokens — is not in
@@ -19,9 +14,7 @@ this file: it is `console/lib/shell.css` + `console/lib/shell.js`, this
 repo's own copy (shell-copy s-7c739dd7: independent repos keep copies,
 never a dependency for look and feel; the metis-agent console keeps its
 own copy of the same files). The page links them relative (`lib/…`): the
-gateway and `dev_serve.py` serve them at `/lib/` (`loop/shell_lib.py`);
-an artifact publish passes them as files
-(`files: {"lib/shell.css": "console/lib/shell.css", "lib/shell.js": "console/lib/shell.js"}`).
+gateway serves them at `/lib/` (`loop/shell_lib.py`).
 
 **No voice navigation** (voice-nav-removal s-90621b2c; the user, 2026-10-24: one voice
 paradigm, the dialog with the agent and the game; the web UI stays web). console-nav's TALK
@@ -37,34 +30,27 @@ else pi's; pi's words are spoken on the dialog's floor. fsttm-web is served at `
 installed `fsttm_web` package, behind the shell (`loop/shell_lib.py`), never copied; without the
 package the page has no voice and says so in the browser's console.
 
-Contract with the loop (SPEC §6): the page renders the catalogs read-only and writes ONLY `intents` docs
-(viewer-typed REPL lines); a loop session drains intents exclusively through `loop.repl.run_intent` and posts
-results. **No CANDIDATES, RECORDS or SURPRISES docks** (console-voice step 1; the user, 2026-11-05: "too many useless
+Contract with the loop (SPEC §6): the page renders the catalogs read-only and sends ONLY REPL lines (`repl
+intent` frames, viewer-typed); the gateway runs them exclusively through `run_intent` (the whitelist; in personal
+mode with the workspace verbs, loop-ui 2.1) and posts results. **No CANDIDATES, RECORDS or SURPRISES docks** (console-voice step 1; the user, 2026-11-05: "too many useless
 panels ... we have /surprises for same info"): the candidates' approve/reject (formalize left the console), the
 JSONL sink records (the pre-workspace loop's) and the surprises list with its drop dialog are gone. In the CHAT:
 - `/surprises [open|taken|ruled]` lists the workspace's surprises (`.metis/surprises/`);
-- `/drop WORDS` drops the open session's last tick as a surprise with these words (the reading their first sentence);
-- `/mark [RUN] [K | K0..K1] WORDS` drops a tick or a window, of the open session or of a trace named; the CHAT drops
-  it as it is, as the terminal's `/mark` does. TRACE's "mark here" (developer) puts `/mark RUN K ` in the CHAT's
+- `/drop WORDS` drops the open session's last tick as a surprise with these words: its REPL's `drop` (loop-ui 2.2);
+- `/mark [K | K0..K1] WORDS` its REPL's `mark`; `/mark RUN K WORDS` a trace's tick, dropped at once as the
+  terminal's `/mark` does. TRACE's "mark here" (developer) puts `/mark RUN K ` in the CHAT's
   input for the words.
 
 Layout and contract: docs/CONSOLE.md (two dialogs over one REPL — the
 state debugger left; the chat it describes is retired). The page renders
-ONLY from structured postings: the band from `sessions/{sid}.ctx`,
-the stream from each intent's `json` (beats from `run`/`step`
+ONLY from structured postings: the band from the session frame's ctx,
+the stream from each posting's `json` (beats from `run`/`step`
 `fired`, rules/measure/proof from ctx). The serving side is
-`loop/console_serve.py`, drained by a Claude session (skills/
-metis-loop, "Serving the console").
-
-Local testing: `python console/dev_serve.py --demo` serves the page
-behind a dev shim (`claude.use("db"/"user")` over fetch to an
-in-memory store, drained in-process by console_serve — the real
-kernel). `?nodb` / `?guest` open it with that capability absent. The shim is
-dev-only and never part of the published page.
+`loop/console_serve.py`, called by the gateway.
 
 ## The standing backend: `metis-loop console-serve` (CONSOLE-WS.md)
 
-For live work run the gateway on your host — no drain, no db:
+Run the gateway on your host:
 
     pip install -e '.[console]'          # websockets
     metis-loop console-serve             # personal: http://127.0.0.1:8770/
@@ -87,7 +73,7 @@ the session's program and extensions as they are on disk, and **save**
 is one gated edit — the diff and the gate's findings (metisc's
 diagnostics, the lint) in the dialog, then confirm writes the file and
 the session re-opens (epoch + 1). Nothing is kept in the browser. A
-visitor's view (shared mode, the artifact) reads only.
+visitor's view (shared mode) reads only.
 
 **The workspace panels** (loop-workspace step 4, docs/WORKSPACE.md §6; reduced by loop-chat step 1,
 docs/CHAT.md §1): in personal mode the page mounts the loop SDK's widgets as docks, each over the backend's
@@ -135,6 +121,4 @@ The retired seats' keys (`agent*`, `narrate*`, `formalize_*`, `brain`,
 `openrouter_*`, `max_usd`, `artifact_url`) are ignored, and the start line
 names any your dot file still has.
 
-The artifact (same page, published) stays the SHARED window — demos and
-approvals from any device — over its db drain; that is the secondary
-transport.
+A shared window (demos, visitors) is the same gateway in `--mode shared`.

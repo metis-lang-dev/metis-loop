@@ -245,11 +245,11 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON
 const sstore={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{v?sessionStorage.setItem(k,v):sessionStorage.removeItem(k)}catch(e){}}};
 
-let db=null,user=null,uid=null,downloadsNs=null;
+let uid=null;
 /* Transport (CONSOLE-WS §5): served by `metis-loop console-serve` the
    page talks to the gateway over ONE WebSocket (window.LOOP_GATEWAY is
-   its flag); published as an artifact it keeps the db/sample shims.
-   Both feed the same `intents`/`sess` state — the renderers are one. */
+   its flag). The gateway is the only backend (loop-ui 2.4, the user: the
+   artifact-era db transport, drained by a Claude session, is gone). */
 const GW=window.LOOP_GATEWAY||null;
 /* ?panels=chat: an embedding host's iframe of this served page mounts these docks only (CHAT.md §1) */
 const PANELS=(()=>{const q=new URLSearchParams(location.search).get("panels");if(q===null)return null;
@@ -259,7 +259,7 @@ let pkgOpened=false;   // --pkg NAME: a page with no session opens the first pac
 let wsock=null,wsUp=false,wsRetry=500,manifestM=null,pendingReq=null;
 let sid=sstore.get("loopconsole.sid"),sess=null,seenEpoch=null;
 let intents=new Map(),catNames=[],domainList=[],domainsSeen=false,rootReadme=null;
-let unsubSess=null,unsubInt=null,openInsp=null;
+let openInsp=null;
 let lenses=new Set(store.get("loopconsole.lenses",["rules","measure"]));
 let hist=store.get("loopconsole.hist",[]),hpos=hist.length;
 
@@ -417,14 +417,9 @@ async function download(iid,kind){
   if(kind==="dot"){text=i.json.dot||"";filename="causality.dot.txt"}
   else{const o={};for(const k of ["nodes","edges","frontier","stage","key"])o[k]=i.json[k];
     text=JSON.stringify(o,null,1)+"\n";filename="causality.json"}
-  if(!downloadsNs&&GW){            // a plain page (gateway): blob saves work
-    const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));const a=document.createElement("a");
-    a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000);return}
-  if(!downloadsNs){banner("Downloads unavailable in this view — open “DOT source” and copy it.",6000);return}
-  try{await downloadsNs.save({filename,data:text})}
-  catch(e){if(e&&e.code==="declined")return;
-    banner("Not saved ("+((e&&e.code)||e&&e.message||e)+") — open “DOT source” and copy it.",6000)}}
+  const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));const a=document.createElement("a");   // a blob save
+  a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000)}
 const STOPS=new Set(["run","step","undo","reset","do","fork","back"]);
 function verbOf(cmd){return String(cmd||"").replace(/^:/,"").trim().split(/\s+/)[0]}
 function bodyHtml(i,isLastStop,seenMax){
@@ -469,9 +464,8 @@ function linkify(text){
 function followUp(t,toPrompt){
   if(!toPrompt){queue(t.dataset.fu);return}
   const q=$("#prompt"),cur=q.value.trim();q.value=cur?cur+" "+t.dataset.word:t.dataset.fu;q.focus()}
-setInterval(()=>{let stale=false;
-  for(const i of intents.values())if(i.status==="queued"){stale=true;
-    if(Date.now()-Date.parse(i.ts)>6000)refreshIntent(i.id)}
+setInterval(()=>{let stale=false;                 // a queued line's age shown fresh (the gateway posts it)
+  for(const i of intents.values())if(i.status==="queued")stale=true;
   if(stale)renderStream()},5000);
 function renderStream(){
   const el=$("#stream");
@@ -513,53 +507,11 @@ async function queue(cmd,actor,quiet){
     renderStream();
     wsSend({ch:"repl",type:"intent",session:sid,id,cmd:":"+cmd,actor:actor||uid||"viewer"});
     return id}
-  if(!db)return fail("No backend in this view — nothing can be queued.");
-  if(!sid||!sess||sess.status==="closed")return fail("No open session — open a catalog first.");
-  const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  try{await db.doc("intents/"+id).set({session:sid,cmd:":"+cmd,actor:actor||uid||"anon",status:"queued",ts:new Date().toISOString()})}
-  catch(e){return fail("Not queued: "+(e&&e.message||e))}
-  return id}
-const waiters=new Map();   /* intent id -> resolve(posting) */
-function settle(){for(const [id,res] of waiters){const i=intents.get(id);
-  if(i&&i.status&&i.status!=="queued"){waiters.delete(id);res(i)}}}
-/* The live db's filtered onSnapshot (where+orderBy+limit) was seen to
-   miss MODIFY events: postings committed in seconds never reached the
-   page. A direct read heals both consumers — the stream and a waiting
-   tool call — whatever the subscription delivers. */
-const refreshing=new Set();
-async function refreshIntent(id){
-  if(!db||refreshing.has(id))return;refreshing.add(id);
-  try{const s=await db.doc("intents/"+id).get();
-    if(!s.exists)return;
-    const fresh={id,...s.data()},old=intents.get(id);
-    if(!old||old.status!==fresh.status){
-      if(old&&old.status==="queued"&&fresh.status!=="queued")
-        console.warn("[loopconsole] snapshot missed the posting of intents/"+id+" ("+fresh.status+") — healed by a direct read");
-      intents.set(id,fresh);renderStream();settle()}}
-  catch(e){}finally{refreshing.delete(id)}}
-function awaitPosting(id,signal,ms){return new Promise((res,rej)=>{
-  /* resolved by the snapshot (settle) OR by a direct read every 4 s */
-  const poll=setInterval(()=>refreshIntent(id),4000);
-  const t=setTimeout(()=>{done();waiters.delete(id);rej(new Error("no posting within "+(ms||60000)/1000+"s — is the serving session running?"))},ms||60000);
-  function done(){clearInterval(poll);clearTimeout(t)}
-  if(signal)signal.addEventListener("abort",()=>{done();waiters.delete(id);rej(new Error("cancelled"))},{once:true});
-  waiters.set(id,v=>{done();res(v)});settle()})}
+  return fail("No backend in this view: the gateway serves this page (metis-loop console-serve)")}
 function subscribeSession(){
-  if(unsubSess)unsubSess();if(unsubInt)unsubInt();
   intents=new Map();sess=null;seenEpoch=null;renderBand();
   if(GW){renderBusy();renderStream();if(sid&&wsUp)wsSend({ch:"repl",type:"open",session:sid});return}
-  if(!db||!sid){renderStream();return}
-  unsubSess=db.doc("sessions/"+sid).onSnapshot(s=>{
-    sess=s.exists?s.data():null;
-    if(!sess){banner("Session "+sid+" is gone — open a catalog.",6000);sid=null;sstore.set("loopconsole.sid",null)}
-    else if(seenEpoch!==null&&sess.epoch!==seenEpoch){
-      openInsp=null;banner(`epoch ${sess.epoch}: the stream restarts — ${sess.ctx?("key "+sess.ctx.key.slice(0,12)+"…, stage "+sess.ctx.stage):"reloaded"}`,6000)}
-    if(sess&&sess.status==="closed"&&sess.error)banner("Session closed: "+sess.error,8000);
-    if(sess)seenEpoch=sess.epoch??null;
-    renderBand();renderStream()},e=>banner("Session subscription lost: "+e.message));
-  unsubInt=db.collection("intents").where("session","==",sid).orderBy("ts","desc").limit(50).onSnapshot(s=>{
-    intents=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderStream();settle()},
-    e=>banner("Intent subscription lost: "+e.message))}
+  renderStream()}
 async function openCatalog(pick){
   // pick: a CATALOG panel row {path, host} — one click opens the program with
   // the host the server's index names (never a spec from here: D4)
@@ -570,12 +522,7 @@ async function openCatalog(pick){
     if(!wsUp){banner("Not connected to the console backend — reconnecting…",4000);return}
     pendingReq="r"+Math.random().toString(36).slice(2,8);
     wsSend({ch:"repl",type:"open",llp,host,req:pendingReq,...(wsW?{trace:true}:{})});return}   // the session's trace: a surprise from it replays
-  if(!db){banner("No backend in this view — sessions need the db capability.",5000);return}
-  const id="s"+Math.random().toString(36).slice(2,8);
-  try{await db.doc("sessions/"+id).set({llp,host,opened_by:uid||"anon",status:"opening",ts:new Date().toISOString()})}
-  catch(e){banner("Session not opened: "+(e&&e.message||e),6000);return}
-  sid=id;sstore.set("loopconsole.sid",sid);$("#stream").innerHTML="";
-  subscribeSession()}
+  banner("No backend in this view: the gateway serves this page (metis-loop console-serve)",5000)}
 
 /* ---- the gateway transport (CONSOLE-WS §1/§5) ---- */
 function wsSend(f){try{wsock&&wsock.readyState===1&&wsock.send(JSON.stringify(f))}catch(e){}}
@@ -607,7 +554,7 @@ function wsHandle(f){
       intents=new Map();renderBand();renderBusy();
       $("#stream").innerHTML='<div class="empty">'+esc(f.detail||"session gone")+'</div>';return}
     if(f.id&&intents.has(f.id)){const i=intents.get(f.id);
-      intents.set(f.id,{...i,status:"error",result:f.error,json:{ok:false,error:f.error}});renderStream();settle()}
+      intents.set(f.id,{...i,status:"error",result:f.error,json:{ok:false,error:f.error}});renderStream()}
     banner(f.error+(f.detail?" — "+f.detail:""),6000);return}
   if(f.type==="files"){if(f.session===sid)onFiles(f);return}
   if(f.type==="notice"){if(f.session===sid)banner(f.text,8000);return}
@@ -626,7 +573,7 @@ function wsHandle(f){
     const old=intents.get(f.id);
     if(f.type==="queued"&&old&&old.status!=="queued")return;
     intents.set(f.id,{...(old||{}),...f,status:f.type==="queued"?"queued":f.status});
-    renderStream();settle()}}
+    renderStream()}}
 function renderBusy(){
   const b=!!(GW&&sess&&sess.busy);
   $("#busy").hidden=!b;
@@ -1038,19 +985,8 @@ $("#prompt").addEventListener("keydown",e=>{
 MetisShell.splitter();
 syncLenses();renderBand();applyDocks();renderCatalogDock();
 
-claude.use("downloads").then(ns=>{downloadsNs=ns});
-(async()=>{
-  user=await claude.use("user");
-  if(user){try{uid=await user.id()}catch(e){}
-}
-  if(GW){wsConnect();return}
-  db=await claude.use("db");
-  if(!db){banner("No backend in this view (db unavailable) — the console renders, but nothing can be queued.");return}
-  db.doc("meta/domains").onSnapshot(s=>{domainList=(s.exists&&s.data().domains)||[];renderCatalogDock()},()=>{});
-  db.doc("meta/catalogs").onSnapshot(s=>{catNames=(s.exists&&s.data().names)||[];
-    $("#catlist").innerHTML=catNames.map(n=>`<option value="${esc(n)}">`).join("")},()=>{});
-  subscribeSession();
-})();
+if(GW)wsConnect();
+else banner("No backend in this view: the gateway serves this page (metis-loop console-serve)");
 </script>
 <script type="module">
 /* The voice (console-voice s-dc1f184c): fsttm-web's widget in the band ([● mic ⟦switch⟧ narrator] and speak), the

@@ -3,8 +3,8 @@ name: metis-loop
 description: >
   Drive the metis formalization loop conversationally: read surprise
   records, mine the text description, write the candidate LLP pack,
-  run it through the gate cascade, repair on findings, sync the
-  console artifact, and turn approvals into metis-catalog commits.
+  run it through the gate cascade, repair on findings, and turn
+  approvals into metis-catalog commits.
   Use when the user mentions surprise records, formalizing observed
   behavior into rules, the loop console, or /metis-loop.
 ---
@@ -146,11 +146,10 @@ also their window into the loop.
    re-run the cascade on it exactly as in step 4 (the text stays
    the approved unit), push the fresh report, set
    `status: pending`. Console REPL intents (`intents` docs) are
-   drained ONLY through `run_intent` — the whitelist; never
-   `accept`, file paths, or arbitrary backend commands (see
-   "Serving the console" below). The console artifact URL is in the
-   project memory; sync with the ArtifactData tool (collections
-   `surprise`, `candidates`; approvals arrive as `status: approved`).
+   run ONLY through `run_intent` — the whitelist; never
+   `accept`, file paths, or arbitrary backend commands. The console's
+   only backend is the gateway (`metis-loop console-serve`, below;
+   loop-ui 2.4: the artifact and its ArtifactData sync are gone).
 6. **Approval**: never approve yourself. The human approves in the
    console (or in chat). On `status: approved`: commit text + the
    extension to its domain package in metis-catalog
@@ -234,39 +233,5 @@ babysit:
 - **shared** (`--mode shared --bind 0.0.0.0 --token T`): REPL only;
   per-IP caps, rate limit; nothing a visitor does is written to disk.
 
-The published artifact stays the SHARED window — demos, approvals from
-any device; serve its db only when
-someone is using that surface, as below.
-
-## Serving the console (docs/CONSOLE.md §5a) — the artifact surface (secondary transport)
-
-The console's db is reachable only by the page or by THIS session's
-ArtifactData tool, so you are the backend: a drain loop over
-`loop/console_serve.py`, one interpreter per open console window,
-working directly on the catalog in the session's directory (no catalog mirror).
-
-    from loop.console_serve import ConsoleServer
-    srv = ConsoleServer()          # $METIS_CATALOG, else the cwd (cd metis-catalog first for its domains)
-
-The whole drain is ONE pure call — you are glue, not logic:
-
-1. At start (and after every catalog commit): write
-   `srv.catalogs_doc()` (`{path: "meta/catalogs", data}`) with
-   ArtifactData `set`.
-2. Each pass: `list` the `sessions` collection and the `intents`
-   collection (query `status == "queued"` is enough for intents), then
-   `writes = srv.drain(sessions_rows, intents_rows)` and apply every
-   `{path, data}` as an `update`, in order, as ONE `batch`. That pass
-   binds `opening` sessions, re-binds live sessions this process has
-   no interpreter for (after a restart, epoch + 1 so pages reset),
-   and serves queued intents oldest first — each intent doc gets its
-   posting (status done|refused|error, result, json, epoch, done_ts),
-   each session doc its fresh `ctx` (what the band renders).
-3. Repeat while windows are open; a quiet pass returns `[]`.
-4. A session the page marks `closed` → `srv.close_session(sid)`.
-
-The whitelist lives in `run_intent`: never execute an intent any
-other way, never `accept`, never approve — `actor: "claude"` lines
-(the page's chat, step 3) get exactly the same treatment as the
-viewer's. Local dev without claude.ai: `python console/dev_serve.py
---demo` runs this same loop in-process behind a capability shim.
+The gateway is the console's only backend (loop-ui 2.4, the user, 2026-11-05): the claude.ai artifact
+published and drained by a Claude session ("Serving the console") is gone, with its db and dev_serve.py.

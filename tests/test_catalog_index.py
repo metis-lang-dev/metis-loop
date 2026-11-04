@@ -74,6 +74,6 @@ def test_the_wire_never_names_the_host(srv):
 
 
 def test_page_lists_and_opens_from_the_panel():
-    assert 'f.type==="domains"' in PAGE and 'db.doc("meta/domains")' in PAGE
+    assert 'f.type==="domains"' in PAGE and 'db.doc("meta/domains")' not in PAGE   # the gateway's frame only (loop-ui 2.4)
     assert re.search(r'wsSend\(\{ch:"repl",type:"open",llp,host,req', PAGE)
     assert "catalog:{shown:true" in PAGE                                  # the panel shows in both transports

@@ -2,23 +2,15 @@
 console window, over the catalog root — the directory the console was
 started in (cd DIR && metis-loop), or $METIS_CATALOG.
 
-The artifact db is reachable only by the page's capability or by a
-Claude session's ArtifactData tool, so the drain is a Claude session
-(skills/metis-loop "Serving the console"); this module is the python
-it calls — no db access of its own, no threads, import-light:
+The gateway (loop/gateway.py, `metis-loop console-serve`) is its only caller since loop-ui 2.4: the
+artifact-era db transport (a claude.ai artifact's db drained by a Claude session) is gone. The calls:
 
   - `catalogs()`           names for meta/catalogs (load chips);
-  - `open_session(sid, doc)` binds an interpreter to a sessions doc
-                            and returns the fields to write back;
+  - `open_session(sid, doc)` binds an interpreter to a session and returns its fields;
   - `serve_one(sid, cmd)`  runs ONE queued intent line through the
                             run_intent whitelist (`intent_posting`) and
-                            returns {posting, session}: the intent
-                            doc's update and the session doc's update;
-  - `close_session(sid)`;
-  - `drain(sessions, intents)` — ALL of the above as one pure
-    mapping: db rows in, [{path, data}] update-writes out (and
-    `catalogs_doc()` for meta/catalogs). The serving session is glue:
-    list, call, batch-apply.
+                            returns {posting, session};
+  - `close_session(sid)`.
 
 v1 keeps the interpreters in-process (`Repl` instances); the fifo bus
 of N `metis --json` processes (SPEC §6) is a v2 swap behind the same
@@ -342,8 +334,6 @@ class ConsoleServer:
         posting.update({"epoch": self.epochs[sid], "done_ts": _now()})
         return {"posting": self.scrub(posting), "session": session}
 
-    # -- the drain as one pure mapping (the serving session is glue) ----
-
     # -- e2e-workflow step 1: new, save (the records listing and the sink went with their docks, loop-ui 2.4) --
 
     def _under(self, rel: str, must: str = "") -> Path:
@@ -578,63 +568,6 @@ class ConsoleServer:
         line = " ".join((line or "").split())[:160]
         return self._shown(self.gate.propose("new", name, self.root, text=p.read_text(),
                                              **({"line": line} if line else {})))
-
-    def domains_doc(self) -> dict:
-        """The `meta/domains` write (the db transport's CATALOG panel)."""
-        return {"path": "meta/domains", "data": {"domains": self.domains(), "ts": _now()}}
-
-    def catalogs_doc(self) -> dict:
-        """The `meta/catalogs` write: {path, data: {names, ts}}."""
-        return {"path": "meta/catalogs",
-                "data": {"names": self.catalogs(), "ts": _now()}}
-
-    def drain(self, sessions, intents) -> list:
-        """One drain pass: db rows in, writes out — the serving session
-        lists `sessions` and `intents` (ArtifactData rows, either
-        {id, data: {...}} or flat {id, ...}), calls this, and applies
-        each returned {path, data} as an `update` (one batch). Order:
-        bind `opening` sessions; re-bind live sessions this process
-        has no interpreter for (a restarted server — epoch + 1 so the
-        page resets cleanly); then serve `queued` intents oldest
-        first. Writes to one doc are merged, in order; values are
-        JSON-plain."""
-        import json
-
-        def rows(xs):
-            for x in xs or []:
-                if isinstance(x, (tuple, list)):
-                    yield x[0], dict(x[1])
-                else:
-                    d = x.get("data")
-                    yield x["id"], dict(d if isinstance(d, dict) else
-                                        {k: v for k, v in x.items()
-                                         if k != "id"})
-        out: Dict[str, dict] = {}
-
-        def put(path, data):
-            out.setdefault(path, {}).update(
-                json.loads(json.dumps(data, default=str)))
-        for sid, doc in rows(sessions):
-            st = doc.get("status")
-            if st == "opening":
-                put(f"sessions/{sid}", self.open_session(sid, doc))
-            elif st in ("running", "quiescent", "done") and \
-                    sid not in self.shells:
-                fields = self.open_session(sid, doc)
-                if fields.get("status") != "closed":
-                    self.epochs[sid] = int(doc.get("epoch") or 0) + 1
-                    fields = dict(self._fields(sid), llp=fields["llp"],
-                                  reopened=_now())
-                put(f"sessions/{sid}", fields)
-        queued = sorted(((iid, d) for iid, d in rows(intents)
-                         if d.get("status") == "queued"),
-                        key=lambda r: str(r[1].get("ts")))
-        for iid, d in queued:
-            res = self.serve_one(d.get("session", ""), d.get("cmd", ""))
-            put(f"intents/{iid}", res["posting"])
-            if res["session"] is not None:
-                put(f"sessions/{d.get('session')}", res["session"])
-        return [{"path": p, "data": v} for p, v in out.items()]
 
     def close_session(self, sid: str) -> dict:
         self.shells.pop(sid, None)

@@ -2,7 +2,7 @@
 console/lib/shell.css + console/lib/shell.js, this repo's own copy (shell-copy
 s-7c739dd7: independent repos keep copies, never a dependency for look and
 feel; the metis-agent console keeps its own). The page loads them relative
-(lib/…); the gateway and dev_serve serve them at /lib/ from console/lib/.
+(lib/…); the gateway serves them at /lib/ from console/lib/.
 
 Behind them, at the same /lib/, fsttm-web's library from the installed fsttm_web package (console-voice
 s-dc1f184c: the voice widget in the band and the DIALOG dock, served as metis-agent's console serves it, never

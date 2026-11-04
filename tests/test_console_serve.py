@@ -57,31 +57,6 @@ def test_bad_llp_closes_the_session(srv):
     assert s["status"] == "closed" and "no catalog" in s["error"]
 
 
-def test_drain_is_a_pure_rows_to_writes_mapping(srv):
-    """The serving session's whole job: rows in, update-writes out.
-    Opening binds, queued intents serve oldest first, writes to one
-    doc merge; a live session without an interpreter (server restart)
-    re-binds with epoch + 1."""
-    w = srv.drain([{"id": "s1", "data": {"llp": "three_pigs", "status": "opening"}}],
-                  [{"id": "i2", "session": "s1", "cmd": ":step",
-                    "status": "queued", "ts": "2"},
-                   {"id": "i1", "session": "s1", "cmd": ":run 2",
-                    "status": "queued", "ts": "1"},
-                   {"id": "i0", "session": "s1", "cmd": ":ctx",
-                    "status": "done", "ts": "0"}])
-    by = {x["path"]: x["data"] for x in w}
-    assert list(by) == ["sessions/s1", "intents/i1", "intents/i2"]
-    assert by["intents/i1"]["json"]["fired"][0]["i"] == 1
-    assert by["intents/i2"]["json"]["fired"][0]["i"] == 3   # after i1
-    assert by["sessions/s1"]["ctx"]["fired"] == 3            # merged
-    fresh = ConsoleServer(srv.root)                          # "restart"
-    w2 = fresh.drain([("s1", {"llp": "domains/ceptre/three_pigs/three_pigs",
-                              "status": "running", "epoch": 4})], [])
-    s = w2[0]["data"]
-    assert s["epoch"] == 5 and s["ctx"]["fired"] == 0 and "reopened" in s
-    assert fresh.catalogs_doc()["path"] == "meta/catalogs"
-
-
 def test_an_open_from_source_is_refused(srv, tmp_path, monkeypatch):
     """workspace-files s-9ea4cfa4: the workspace owns the file, no in-memory catalogs (the old CONSOLE-WS §4a
     open from TEXT): a {source} open closes with the reason and writes nothing."""

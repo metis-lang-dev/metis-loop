@@ -1,7 +1,7 @@
 """Static guards on the published page (console/loop_console.html):
 the artifact skeleton contract and capability discipline; the chat and
 the narrator are retired with the brain (loop-workspace, WORKSPACE.md §7).
-The behavior itself is driven in Chrome through console/dev_serve.py."""
+The behavior itself is driven through the gateway (loop/gateway.py; dev_serve.py went with the db mode, loop-ui 2.4)."""
 import re
 from pathlib import Path
 
@@ -49,12 +49,14 @@ def test_the_band_has_the_agents_field():
     assert "renderAgent();" in PAGE[PAGE.index("function renderBand(){"):]
 
 
-def test_capabilities_only_through_use_and_no_dev_shim():
-    assert not re.search(r"window\.claude\.", PAGE)
-    for cap in ('"db"', '"user"'):
-        assert f"claude.use({cap})" in PAGE
-    assert 'claude.use("sample")' not in PAGE          # no model in the page: the chat is retired
+def test_the_gateway_is_the_only_backend():
+    """loop-ui 2.4 (the user, 2026-11-05: remove the artifact-era console mode): no claude.ai capability, no db
+    transport (intents/sessions docs, their snapshots, the waiters a drain answered), no downloads capability."""
+    assert "claude.use(" not in PAGE and "window.claude" not in PAGE
+    for gone in ("db.doc(", "db.collection(", "awaitPosting", "waiters", "refreshIntent", "downloadsNs", "onSnapshot"):
+        assert gone not in PAGE, gone
     assert "mockSample" not in PAGE and "/db" not in PAGE
+    assert 'if(GW)wsConnect();' in PAGE and "the gateway serves this page (metis-loop console-serve)" in PAGE
 
 
 def test_no_brain_on_the_page():
@@ -67,9 +69,9 @@ def test_no_brain_on_the_page():
 
 def test_gateway_transport_is_flag_gated_and_manifest_driven():
     """CONSOLE-WS §5: the WS client only switches on under the gateway's
-    flag; the artifact build keeps its capability shims; stop is wired."""
+    flag (the only backend, loop-ui 2.4); stop is wired."""
     assert "const GW=window.LOOP_GATEWAY||null" in PAGE
-    assert "if(GW){wsConnect();return}" in PAGE            # skips the db
+    assert "if(GW)wsConnect();" in PAGE
     assert "new WebSocket(" in PAGE and "GW.ws" in PAGE
     assert "function applyManifest()" in PAGE
     assert 'type:"stop"' in PAGE and 'id="stopcmd"' in PAGE
