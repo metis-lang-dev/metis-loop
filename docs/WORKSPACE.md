@@ -306,8 +306,10 @@ bundle):
 
 ```
 terminal 1 — the REPL                              terminal 2 — the pi loop
-cd WS && metis domains/hier/grasp_domain.llp       cd WS && pi/loop.sh --budget 0.08
+cd WS && metis domains/hier/grasp_domain.llp       cd WS && pi/loop.sh        (MODEL: the dot file's [llm] loop)
   (a member's unit: serves grasp/grasp.llp)          /status   /surprises      (0 USD, printed in the TUI)
+llp> llm loop ollama qwen3:4b                        loop.sh: MODEL=ollama/qwen3:4b budget=none USD
+                                                       formalize=ollama:qwen3:4b skills=metis-language,…
 llp> do +take(other)                                 /take                    (the model's turn)
 llp> run 4                                           /ruling   /replay   /why ATOM at K   /diff
 llp> drop begin should not start a take …            /mark RUN K WORDS        (a trace's tick, dropped)
@@ -362,10 +364,38 @@ loop.sh refuses and says how to set it: there is no default anywhere. The consol
 unless the page names one, so it starts the same model from the same file, and says which (`dot_model`). pi's own
 `/model` is not the setting: the dot file is, so both terminals and the console agree.
 
-A local model under pi needs two things of the Ollama server (found on taycann, 2026-11-04): **a context that holds
-pi's prompt** (about 6k tokens with the tools): Ollama's `/v1` takes no `num_ctx`, and an 8 GB GPU's default is 4096,
-so the prompt is cut and the model never sees its tools; run the server with `OLLAMA_CONTEXT_LENGTH=32768` (or a
-model whose own `num_ctx` is large; `llm loop` says so); and **a model that makes tool calls**: gemma3:4b cannot
-(Ollama: completion, vision); phi4-mini is listed with tools but wrote its call as text; metis-gemma4-e4b called
-`surprise_next`, `trace_blame` and `pack_propose` (its pack refused at the link: the interworking held, the
-language is the model's).
+A local model under pi needs, of the Ollama server and the model (taycann, 2026-11-04; qwen-loop s-75ecbab5 and
+s-fae78b2f):
+
+- **A context that holds pi's prompt**: a take's first call is ~5.8k tokens (the system prompt 1.4k, the 26 tools'
+  schemas ~3.9k, the skills' listing 0.5k), ~20k by its eleventh. Ollama's `/v1` takes no `num_ctx` from pi, so it
+  is the model's own `num_ctx`, else the server's `OLLAMA_CONTEXT_LENGTH` (an 8 GB GPU's default is 4096: the prompt
+  is cut and the model never sees its tools). Run the server with `OLLAMA_CONTEXT_LENGTH=32768`. `llm loop` says what
+  Ollama says, in one clause: `context 16384 (the model's num_ctx)`, `context 32768 (served now)` when the model is
+  loaded, else the condition (`context: the server's OLLAMA_CONTEXT_LENGTH, pi needs 16384+`); the server's
+  environment is not visible over HTTP. pi's contextWindow (`.metis/pi-agent/models.json`) is the served context,
+  not the model's trained one (qwen3:4b: 262144 trained, 32768 served).
+- **The system prompt as role `system`**: pi sends a thinking model's instructions as role `developer`, and Ollama's
+  templates (qwen3, gemma4) drop that role, so the model never saw `loop-system.md` or its skills (3925 prompt
+  tokens with or without them). The generated entry sets `compat.supportsDeveloperRole: false` (as
+  pi/agent/models.json does for OpenRouter).
+- **Thinking**: a thinking model's reasoning comes back in `/v1`'s own `reasoning` field: pi keeps it as thinking
+  blocks, never the answer (its TUI shows them dim and italic, which reads like answer text: it is not). pi has no
+  off for Ollama: `METIS_LOOP_THINKING=off` sends no `reasoning_effort` and the server thinks at its default
+  (qwen3:4b's first call 3928 in / 287 out, against 408 at pi's `medium`); `reasoning_effort: none` makes qwen3:4b
+  think in the answer text instead. The default for a local model is pi's own level.
+- **Skills**: `METIS_LOOP_SKILLS=none` (or `loop.sh --no-skills`, or `NAME,NAME`) starts without them; the start
+  line says which (`skills=none`). Their listing is 477 tokens of the first call (5765 against 5288); a SKILL.md
+  costs only when read.
+- **A model that makes tool calls**, and what each did on the same surprise (grasp, k 2: "begin should not start a
+  take while the hand is full"):
+
+| model (Ollama capabilities) | what it did under pi |
+|---|---|
+| gemma3:4b (completion, vision) | no go: it cannot call tools; `llm loop` says so before any start |
+| phi4-mini 3.8B (completion, tools) | named `surprise_next` but wrote the call as JSON in its text: no tool call |
+| **qwen3:4b** Q4_K_M (completion, tools, thinking) | one `/take`, no "go on": `workspace_context`, `surprise_next`, `trace_blame` (handsfree: nothing ever moved it), `trace_case` ×5 (the trace has no beat to make a case of), `pack_propose`: refused at the link (`begin [dyn] requires handsfree.` is not the language); its second pack got "ruled already: REFUSED", which it told the person as it stands. 11 calls in about 3.5 minutes on an 8 GB GPU, 0 USD |
+| metis-gemma4-e4b 7.5B (completion, tools, thinking) | no go (the user, 2026-11-04): with its system prompt it wrote `call:surprise_next{}` as text; use qwen3:4b |
+
+The interworking holds on a local model; the language is beyond a 4B one: its packs are refused at the link, never
+accepted wrongly.
