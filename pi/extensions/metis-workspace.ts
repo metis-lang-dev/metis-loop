@@ -87,6 +87,12 @@ export function tracePath(v: string, root: string): string {
 	return join(st, v);
 }
 
+/** A surprise as pi sees it: its trace also as trace_dir, the path from the workspace root (a directory of seg-*.jsonl).
+ * The record's trace is relative to .metis/; pi's read resolved it against the workspace and failed (loop-chat F3). */
+export function withTraceDir<T extends { trace?: string }>(s: T, root: string): T & { trace_dir?: string } {
+	return s.trace ? { ...s, trace_dir: relative(root, tracePath(s.trace, root)) } : s;
+}
+
 // every child in the 6G scope (the subject's rule), as propose.sh caps itself: systemd-run when it can start a
 // user scope here (probed once; a host or CI runner without a user session runs the child plain)
 const CAP = ["systemd-run", "--user", "--scope", "-q", "-p", "MemoryMax=6G", "-p", "MemorySwapMax=0"];
@@ -319,8 +325,9 @@ export default function (host: ExtensionAPI) {
 		description: "The surprises dropped to the loop (oldest first), each with its status: open (waiting), taken (a loop is on it), ruled (its ruling written).",
 		parameters: Type.Object({ status: Type.Optional(Type.Union([Type.Literal("open"), Type.Literal("taken"), Type.Literal("ruled")])) }),
 		async execute(_id, p) {
-			const s = ws.surprises(p.status as ws.Status | undefined, root());
-			return text(s.length ? json(s.map((x) => ({ id: x.id, ts: x.ts, member: x.member, trace: x.trace, k: x.k, window: x.window, status: x.status, words: x.words }))) : "(none)", { surprises: s });
+			const r = root();
+			const s = ws.surprises(p.status as ws.Status | undefined, r);
+			return text(s.length ? json(s.map((x) => withTraceDir({ id: x.id, ts: x.ts, member: x.member, trace: x.trace, k: x.k, window: x.window, status: x.status, words: x.words }, r))) : "(none)", { surprises: s });
 		},
 	});
 
@@ -381,7 +388,8 @@ export default function (host: ExtensionAPI) {
 			};
 			const body = [
 				`## surprise ${s.id} (taken)`,
-				json(s),
+				json(withTraceDir(s, r)),
+				"(trace: what the trace_* tools and chat_replay take; trace_dir: the same run from the workspace root, a directory of seg-*.jsonl)",
 				"",
 				`## the member's program${program ? ` (${program})` : ""}`,
 				source || "(not found in the catalog)",
