@@ -24,6 +24,7 @@ here reaches a model. A reply is {command, text, …}: text the chat shows; ruli
 draft: the SURPRISES dialog's fields; child: the pi child's state."""
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -35,6 +36,7 @@ from metis.catalog import workspace as W
 
 TOOLS_FILE = Path(__file__).resolve().parent / "chat_tools.json"
 SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN] [K | K0..K1] WORDS"}   # /help's argument shapes
+FREE = ("mark", "drop")       # commands whose words are the person's text: an apostrophe is a word's, not a quote
 WINDOW = re.compile(r"^(-?\d+)(?:\.\.(-?\d+))?$")
 ROWS = 60                     # a /replay's rows at most (the window's first; the rest are counted)
 BUILD_SECS = 600
@@ -114,10 +116,12 @@ def parse(line):
     text = line.strip()
     if not text.startswith("/"):
         raise ValueError("a command starts with /")
-    try:
-        words = shlex.split(text[1:])
-    except ValueError as e:
-        raise ValueError(f"{text}: {e}") from None
+    words = text[1:].split()
+    if not words or words[0].lower() not in FREE:        # a person's words are not shell words: "it didn't stop"
+        try:
+            words = shlex.split(text[1:])
+        except ValueError as e:
+            raise ValueError(f"{text}: {e}") from None
     if not words:
         raise ValueError("/ alone: /help lists the commands")
     name = words[0].lower()
@@ -334,6 +338,8 @@ def status_text(ws, child, budget_next=None):
     pi = loops.get("pi")
     if child and child.get("state") == "running":
         pl = f"pi: running pid {child.get('pid')} ({child.get('model') or 'loop.sh default'})"
+    elif pi and pi.get("alive") and str(pi.get("pid")) == os.environ.get("METIS_LOOP_PI_SELF"):
+        pl = f"pi: this session, pid {pi.get('pid')} ({pi.get('mode') or '?'}, {pi.get('model') or 'loop.sh default'})"
     elif pi and pi.get("alive"):
         pl = f"pi: held elsewhere, pid {pi.get('pid')} ({pi.get('mode') or '?'})"
     else:

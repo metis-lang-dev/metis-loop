@@ -295,3 +295,45 @@ CI green, the architect merges (metispy first, then metis-loop); one file per ag
 4. The policy driver stays as it is (the world-runner's loop); only the pack verb's output moves into the
    workspace. Unifying the driver's RUN dir with `.metis/` is a later step.
 5. Widgets live in the loop SDK for this console alone (§6.1): the frontend is shared, not copied.
+
+## 10. Two terminals: the REPL in one, the pi loop in another (two-terminals s-065d46d5)
+
+The user, 2026-11-05: "generally, i can run repl in one terminal and pi loop in another and do same flow like an
+ui. then ui is just wrapper which we can attach to domain demo world for tester to assess and interrogate." The
+console's flow is the two terminals' flow, over the same functions (metispy `metis.catalog.workspace`,
+`metis.session_trace`; metis-loop `loop.chat`), in the same workspace directory (the one holding `.metis/` or a
+bundle):
+
+```
+terminal 1 — the REPL                              terminal 2 — the pi loop
+cd WS && metis domains/hier/grasp_domain.llp       cd WS && pi/loop.sh --budget 0.08
+  (a member's unit: serves grasp/grasp.llp)          /status   /surprises      (0 USD, printed in the TUI)
+llp> do +take(other)                                 /take                    (the model's turn)
+llp> run 4                                           /ruling   /replay   /why ATOM at K   /diff
+llp> drop begin should not start a take …            /mark RUN K WORDS        (a trace's tick, dropped)
+llp> surprises    llp> status                        /rebuild  /lint  /budget USD  /stop  /help
+```
+
+- **The REPL finds the workspace** (`metis.catalog.workspace.find`: `$METIS_CATALOG`, else the nearest of the cwd and
+  its parents holding `.metis/` or a bundle; never the home, the temp directory or `/`). In one it writes its trace
+  to `.metis/traces/repl-<id>/` with the console's writer (`metis.session_trace.SessionTrace`, `live:
+  metis-loop-console`: the judge replays it member alone, as a console session's), and its intro says so: `workspace
+  .: bundle alfworld v-8c989f738dd7 BUILT · 0 open surprise(s) · trace .metis/traces/repl-…`. Its verbs: `drop
+  WORDS` (the last tick, the words' first sentence the reading), `mark K WORDS` / `mark K0..K1 WORDS` (a tick or a
+  window of its trace), both `ws.drop_surprise`; `surprises`; `status` (the same two lines as pi's `/status`). Out
+  of a workspace the intro says there is none and the verbs say how to get one.
+- **What `metis ARG` serves** (`metis.catalog.serve_target`): a member's unit (`grasp_domain.llp`, which alone lacks
+  the tick protocol its member includes) → the program that includes it (several includers: refused, naming them);
+  a package name (`metis grasp`) → its program; a package directory; `metis` alone in a package → its program (it
+  was a blank scratch world).
+- **The cwd joins the catalog's places** (`metis.catalog.places()` with no root given: after the root, when it is
+  another directory): under `$METIS_CATALOG` a package or an include where the person stands resolves; the root
+  still wins a name in both. metisc's own include rule is unchanged (the bundle's `make` runs in its directory).
+- **pi's own commands** are the chat's table (`loop/chat_tools.json` → `pi.registerCommand` in
+  metis-workspace.ts): the workspace's answers run `python -m loop.chat --root DIR "/…"` at 0 USD and print in the
+  TUI (the model never sees them); `/take [ID]` says "take the next surprise" (or "take surprise ID") as the console
+  does; `/budget USD` sets this session's budget; `/stop` releases the lock and ends pi. `/drop` and `/reload` are
+  the REPL's (the CLI says so; pi's built-in `/reload` keeps its name). The `chat_*` tools the model has are
+  unchanged.
+- **The console** is a wrapper over the same functions: its REPL session's trace is the same class; nothing else in
+  it changed.

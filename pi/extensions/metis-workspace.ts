@@ -475,11 +475,13 @@ export default function (host: ExtensionAPI) {
 	// The REPL is the other terminal: its drop / mark / reload are its own (the CLI says so).
 	const chatCli = async (line: string) => {
 		const r = root();
-		const env = { ...process.env, PYTHONPATH: [LOOP_REPO, process.env.PYTHONPATH].filter(Boolean).join(":") };
+		// METIS_LOOP_PI_SELF: /status says this session is the pi loop holding the workspace, not "held elsewhere"
+		const env = { ...process.env, METIS_LOOP_PI_SELF: String(process.pid), PYTHONPATH: [LOOP_REPO, process.env.PYTHONPATH].filter(Boolean).join(":") };
 		const res = await run(process.env.METIS_LOOP_SDK_PY || "python3", ["-m", "loop.chat", "--root", r, line], r, env);
 		return { ok: res.code === 0, out: `${res.out}${res.err ? `${res.out ? "\n" : ""}${res.err}` : ""}`.trim() || "(no output)" };
 	};
-	for (const t of chatDecl) {
+	const PI_OWN = new Set(["reload"]);   // pi's built-in /reload (its extensions) wins; the REPL's reload is its own verb
+	for (const t of chatDecl.filter((x: any) => !PI_OWN.has(x.name))) {
 		pi.registerCommand(t.name, {
 			description: `${t.description} (0 USD${t.name === "take" ? "; then the model's turn" : ""})`,
 			handler: async (args: string, ctx: any) => {

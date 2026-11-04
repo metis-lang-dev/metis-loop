@@ -162,6 +162,18 @@ def test_status(root):
     assert "surprises: 1 open, 0 taken, 0 ruled" in t
 
 
+def test_status_from_the_pi_session_holding_the_workspace(root, monkeypatch, capsys):
+    """two-terminals: pi's own /status (METIS_LOOP_PI_SELF its pid) says this session, not "held elsewhere"."""
+    import os
+    W.workspace(root).lock("pi", os.getpid(), mode="tui", model="openrouter/m")
+    monkeypatch.setenv("METIS_LOOP_PI_SELF", str(os.getpid()))
+    assert chat.main(["--root", str(root), "/status"]) == 0
+    assert f"pi: this session, pid {os.getpid()} (tui, openrouter/m)" in capsys.readouterr().out
+    monkeypatch.setenv("METIS_LOOP_PI_SELF", "1")
+    assert chat.main(["--root", str(root), "/status"]) == 0
+    assert f"pi: held elsewhere, pid {os.getpid()} (tui)" in capsys.readouterr().out
+
+
 def test_surprises(root):
     ch = channels(root)
     assert say(ch, "/surprises")["text"].startswith("no surprises")
@@ -243,6 +255,9 @@ def test_mark_and_drop_from_the_pages_session(root):
     assert (rec["session"], rec["member"], rec["trace"], rec["k"], rec["words"], rec["reading"], rec["status"]) == \
         ("s1", "lamp", "traces/s1", 7, "it should be on. The switch was pressed at 5.", "it should be on.", "open")
     assert chat.first_sentence("  no stop here  ") == "no stop here" and chat.first_sentence("a? b.") == "a?"
+    f = say(ch, "/drop it didn't stop. The lamp's switch was off.", session="s1")      # an apostrophe is a word's
+    assert W.workspace(root).surprise(f["id"])["reading"] == "it didn't stop."
+    assert "No closing quotation" in say(ch, "/why it's")["error"]                     # a command's arguments stay shell words
 
 
 def test_rebuild(root):

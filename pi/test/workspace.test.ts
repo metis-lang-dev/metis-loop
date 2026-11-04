@@ -573,7 +573,7 @@ test("metis-workspace: the chat's slash table is pi's own commands (two-terminal
 	const p = fakePi();
 	workspace(p.api);
 	const decl = JSON.parse(readFileSync(join(HERE, "..", "..", "loop", "chat_tools.json"), "utf8")).tools.map((t: any) => t.name);
-	assert.deepEqual([...p.commands.keys()].sort(), [...decl].sort());
+	assert.deepEqual([...p.commands.keys()].sort(), decl.filter((n: string) => n !== "reload").sort());   // pi's own /reload stays
 	const said: [string, string][] = [];
 	let down = 0;
 	const c = { ui: { notify: (m: string, k: string) => said.push([m, k]) }, shutdown: () => down++ };
