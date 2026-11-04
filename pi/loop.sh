@@ -153,13 +153,19 @@ export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
 MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
-# METIS_LOOP_THINKING=off (the console's chat sets it unless its options ask for thinking): pi's :off suffix on a MODEL
-# without a thinking suffix of its own (the alf drive: v4 pro's thinking ate its 2048-token cap, turns with no words)
-case "${METIS_LOOP_THINKING:-}:$MODEL" in
-  off:*:off|off:*:minimal|off:*:low|off:*:medium|off:*:high|off:*:xhigh|off:*:max) ;;
-  off:*) MODEL="$MODEL:off" ;;
+# METIS_LOOP_THINKING=off|minimal|low|medium|high|xhigh|max: pi's thinking suffix on a MODEL without one of its own
+# (the console's chat sets off when its options say "no thinking"); unset or on: pi's default level for the model.
+# Reasoning stays on by default (loop-prompt, PROMPT.md §2: the output cap is 8192, agent/models.json)
+case "${METIS_LOOP_THINKING:-}" in
+  ""|on) ;;
+  off|minimal|low|medium|high|xhigh|max)
+    case "$MODEL" in
+      *:off|*:minimal|*:low|*:medium|*:high|*:xhigh|*:max) ;;
+      *) MODEL="$MODEL:$METIS_LOOP_THINKING" ;;
+    esac ;;
+  *) echo "loop.sh: METIS_LOOP_THINKING=$METIS_LOOP_THINKING: off | minimal | low | medium | high | xhigh | max (unset: pi's default)" >&2; exit 2 ;;
 esac
-# a paid model runs with a budget (1 USD by default: a session of v4 pro at 2048 tokens a request spends
+# a paid model runs with a budget (1 USD by default: a session of v4 pro at 8192 tokens a request spends
 # cents a turn, so 1 USD bounds a runaway session well inside a paid round's limit); empty: refused
 # the key: the environment's; unset, the person's key file (the architect's F5: a start from the chat got no key),
 # read only when it is the person's own and private (mode 600 or 400), into the environment, never printed

@@ -33,8 +33,8 @@
 //   METISC             metisc for bundle_build (else metisc on PATH)
 //   METIS_LOOP_PROPOSE propose.sh for pack_propose (else ../propose.sh beside this file)
 import { execFile, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
@@ -122,6 +122,26 @@ const nocomment = (l: string) => l.replace(/\s+%(?!%).*$/, "").trimEnd();
 export function derivedFrom(path: string, text: string): string | null {
 	const m = text.match(/^% DERIVED from (\S+)/);
 	return m ? resolve(dirname(path), m[1]) : null;
+}
+
+const SKILLS = resolve(HERE, "..", "skills");           // pi.sh's --skill directories (loop-prompt, PROMPT.md §2)
+
+/** pi's built-in read (pi.sh --tools +read, for the skills' SKILL.md and their files) is kept to the skills and the
+ *  workspace: a path elsewhere (the key file under ~/.config, another checkout) is refused in words, and so is a
+ *  `.env` file anywhere. → the refusal, or null when the read may go. */
+export function readRefusal(path: string, root: string, skills = SKILLS): string | null {
+	const raw = String(path || "");
+	const abs = raw.startsWith("~/") ? join(homedir(), raw.slice(2)) : resolve(root, raw);
+	let real = abs;
+	try {
+		real = realpathSync(abs);
+	} catch {
+		// a path that does not exist: judged as written (read says it is missing)
+	}
+	const under = (d: string) => { let rd = d; try { rd = realpathSync(d); } catch { /* as written */ } return real === rd || real.startsWith(rd + "/"); };
+	if (/(^|\/)[^/]*\.env$/.test(real)) return `read ${raw}: an .env file is never read here (a key lives in it)`;
+	if (under(skills) || under(root)) return null;
+	return `read ${raw}: outside the skills (${skills}) and the workspace (${root}); this loop reads only those`;
 }
 
 /** The rule names of a unit's text (the rule heads, in order). */
@@ -657,8 +677,12 @@ export default function (host: ExtensionAPI) {
 		return { action: "handled" };
 	});
 	let calls = 0;
-	pi.on("tool_call", async () => {
+	pi.on("tool_call", async (e: any) => {
 		if (over) return { block: true, reason: refusal(), terminate: true };
+		if (e?.toolName === "read") {
+			const no = readRefusal(String(e?.input?.path ?? ""), root());
+			if (no) return { block: true, reason: no };
+		}
 		calls++;
 		return undefined;
 	});

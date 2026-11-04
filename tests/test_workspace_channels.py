@@ -329,17 +329,28 @@ def test_a_turn_without_words_says_so(gw, tmp_path):
         exited(ws)
     ends = [r for r in W.workspace(tmp_path).events() if r["kind"] == "rpc_turn_end"]
     assert [(r.get("empty"), r.get("tools"), r.get("stop")) for r in ends] == [(True, 2, "length"), (None, None, None)]
-    assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "off"            # the chat's model thinks only when asked
+    assert "METIS_LOOP_THINKING" not in StubPi.made[-1].env or os.environ.get("METIS_LOOP_THINKING")   # reasoning stays on
 
 
-def test_the_chat_start_thinks_only_when_asked(gw, tmp_path):
-    """The alf drive's L1: the backend's child runs with METIS_LOOP_THINKING=off (loop.sh appends :off), on only
-    when the start asks; the child's budget is the one the start used (/budget's too: the page's note reads it)."""
+def test_the_chat_start_turns_thinking_off_only_when_asked(gw, tmp_path, monkeypatch):
+    """loop-prompt (PROMPT.md §2): reasoning stays on; the start's no_thinking runs the child with
+    METIS_LOOP_THINKING=off (loop.sh appends :off); unasked, the operator's own value stays. The child's budget is the
+    one the start used (/budget's too: the page's note reads it)."""
     gw.gw.wsc.pi_factory = StubPi
+    monkeypatch.delenv("METIS_LOOP_THINKING", raising=False)
     with gw.ws() as ws:
         frames(ws, lambda f: f.get("type") == "catalogs")
-        st = ask(ws, "loop", "start", mode="rpc", thinking=True, budget=0.3)
-        assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "on" and st["child"]["budget"] == 0.3
+        st = ask(ws, "loop", "start", mode="rpc", no_thinking=True, budget=0.3)
+        assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "off" and st["child"]["budget"] == 0.3
+        ask(ws, "loop", "stop")
+        exited(ws)
+        ask(ws, "loop", "start", mode="rpc", thinking=True)                  # the old field: no effect, pi's default
+        assert "METIS_LOOP_THINKING" not in StubPi.made[-1].env
+        ask(ws, "loop", "stop")
+        exited(ws)
+        monkeypatch.setenv("METIS_LOOP_THINKING", "low")
+        ask(ws, "loop", "start", mode="rpc")
+        assert StubPi.made[-1].env["METIS_LOOP_THINKING"] == "low"
         ask(ws, "loop", "stop")
         exited(ws)
 

@@ -9,11 +9,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { chatLine, derivedFrom, firings, ruleNames, ruleText, schema, signature, tracePath, whoseUnit } from "../extensions/metis-workspace.ts";
+import workspace, { chatLine, derivedFrom, firings, readRefusal, ruleNames, ruleText, schema, signature, tracePath, whoseUnit } from "../extensions/metis-workspace.ts";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
@@ -399,10 +399,13 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	const none = run([], { OPENROUTER_API_KEY: "", METIS_OPENROUTER_ENV: "" });
 	assert.equal(none.status, 1);
 	assert.match(none.stderr, /needs OPENROUTER_API_KEY: the environment, or a key file/);
-	// the alf drive's L1: the chat's start asks METIS_LOOP_THINKING=off: pi's :off on a model without a thinking suffix
+	// loop-prompt: reasoning on by default (pi's level); METIS_LOOP_THINKING=off|low|… is pi's suffix on a model without one
 	assert.equal(run([], { METIS_LOOP_THINKING: "off" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:off budget=1.00 USD");
+	assert.equal(run([], { METIS_LOOP_THINKING: "low" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro:low budget=1.00 USD");
 	assert.equal(run([], { METIS_LOOP_THINKING: "off", MODEL: "openrouter/x:high" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/x:high budget=1.00 USD");
 	assert.equal(run([], { METIS_LOOP_THINKING: "on" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
+	assert.equal(run([], { METIS_LOOP_THINKING: "" }).stderr.split("\n")[0], "loop.sh: MODEL=openrouter/deepseek/deepseek-v4-pro budget=1.00 USD");
+	assert.match(run([], { METIS_LOOP_THINKING: "lots" }).stderr, /METIS_LOOP_THINKING=lots: off \| minimal/);
 	const free = run([], { MODEL: "stub/script" });
 	assert.equal(free.stderr.split("\n")[0], "loop.sh: MODEL=stub/script budget=none USD");
 });
@@ -558,10 +561,13 @@ test("metis-workspace: the chat's read-only commands are tools: their line from 
 	assert.equal(r.details.line, "/status");
 });
 
-test("the system prompt: a workspace surprise is ruled only through pack_propose, never the person's own loop", () => {
+test("the system prompt: a workspace surprise is ruled through pack_propose; the person's own loop is the seed-domain skill's", () => {
 	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
-	assert.match(t, /A surprise in a workspace is ruled only through `pack_propose`\*\*: never `repl_text`, `repl_formalize`, `repl_gate` or `catalog_new` for it/);
-	assert.match(t, /Once it is ruled you are done with that surprise/);
+	assert.match(t, /the explanation is a pack, never a hand edit of the program/);
+	assert.match(t, /Judge it with `pack_propose`/);
+	assert.match(t, /The verdict is the gate's, never yours, and the ruling is written whatever it says/);
+	assert.match(t, /read the skill `seed-domain` first/);
+	for (const n of ["repl_text", "repl_formalize", "repl_gate", "catalog_new", "catalog_take", "domain_open"]) assert.ok(!t.includes(n), `${n} is the seed-domain skill's`);
 });
 
 test("the system prompt: the chat (loop-chat step 3, CHAT.md §2): words at every turn's end, a take in one turn, the intents", () => {
@@ -638,4 +644,71 @@ test("metis-workspace: the ruling counts the candidate's firings beside its verd
 	};
 	assert.deepEqual(firings(e), { count: 2, rows: 2, of_rows: 3, first: 401, last: 481 });
 	assert.deepEqual(firings({}), { count: 0, rows: 0, of_rows: 0, first: null, last: null });
+});
+
+test("the prompt and the skills (loop-prompt step 2, PROMPT.md §2-3): sizes, every tool named exists in its mode, each SKILL.md parses; pi's read stays inside", () => {
+	scratch();
+	const set = (mode: string | null) => {
+		if (mode) process.env.METIS_LOOP_TOOLS = mode;
+		else delete process.env.METIS_LOOP_TOOLS;
+		try {
+			const p = fakePi();
+			repl(p.api);
+			domain(p.api);
+			workspace(p.api);
+			return new Set([...p.tools.keys(), "read"]);                 // pi's read: pi.sh --tools +read
+		} finally {
+			delete process.env.METIS_LOOP_TOOLS;
+		}
+	};
+	const wsSet = set("workspace"), all = set(null);
+	const named = (text: string) => [...text.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
+	const prompt = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
+	assert.ok(Buffer.byteLength(prompt) <= 7168, `the system prompt is ${Buffer.byteLength(prompt)} bytes (≤ 7 KB)`);
+	const missing = named(prompt).filter((n) => !wsSet.has(n));
+	assert.deepEqual(missing, [], "every tool the prompt names is registered in a workspace");
+	const dirs = readdirSync(join(HERE, "..", "skills"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+	assert.deepEqual(dirs, ["metis-language", "seed-domain", "surprise-ruling"]);
+	for (const m of prompt.matchAll(/skill `([a-z-]+)`/g)) assert.ok(dirs.includes(m[1]), `the prompt names skill ${m[1]}`);
+	for (const d of dirs) {
+		const text = readFileSync(join(HERE, "..", "skills", d, "SKILL.md"), "utf8");
+		assert.ok(Buffer.byteLength(text) <= 8192, `${d}/SKILL.md is ${Buffer.byteLength(text)} bytes (≤ 8 KB)`);
+		const fm = text.match(/^---\nname: ([a-z0-9-]+)\ndescription: (.+)\n---\n/);
+		assert.ok(fm, `${d}/SKILL.md opens with its frontmatter`);
+		assert.equal(fm![1], d);
+		assert.ok(fm![2].length >= 80 && fm![2].length <= 1024, `${d}'s description is ${fm![2].length} characters (pi: ≤ 1024)`);
+		assert.match(fm![2], /Load (when|before)/, `${d}'s description says when to load it`);
+		const unknown = named(text).filter((n) => /_/.test(n) && !all.has(n) && !/^(tick__|intent_)/.test(n));
+		const tools = named(text).filter((n) => all.has(n));
+		// the REPL's verbs and the domain's tools register at the session's start (metis's help, the agent's declaration):
+		// only the families registered at load are checked here
+		assert.deepEqual(unknown.filter((n) => /^(catalog|trace|chat|surprise|pack|bundle|workspace|rule)_/.test(n)), [], `${d} names only tools that exist`);
+		assert.ok(d === "metis-language" || tools.length > 0, `${d} names its tools`);
+	}
+	for (const f of readdirSync(join(HERE, "..", "skills", "surprise-ruling", "rulings")).filter((x) => x !== "README.md"))
+		assert.ok(existsSync(join(HERE, "..", "skills", "surprise-ruling", "rulings", f)), f);
+	const sh = readFileSync(join(HERE, "..", "pi.sh"), "utf8");
+	assert.match(sh, /--no-builtin-tools --tools \+read /);                // +read adds read; a bare `read` would be an allowlist dropping the extensions' tools
+	assert.match(sh, /SKILLS\+=\(--skill /);
+	// pi's read: the skills and the workspace, never elsewhere, never an .env
+	const r = mkdtempSync(join(tmpdir(), "ws-read-"));
+	writeFileSync(join(r, "README.md"), "x\n");
+	assert.equal(readRefusal(join(HERE, "..", "skills", "metis-language", "SKILL.md"), r), null);
+	assert.equal(readRefusal("README.md", r), null);
+	assert.match(readRefusal("~/.config/metis/openrouter.env", r)!, /an \.env file is never read here/);
+	assert.match(readRefusal("/etc/passwd", r)!, /outside the skills .* and the workspace/);
+	assert.match(readRefusal("../elsewhere/x.llp", r)!, /outside/);
+	writeFileSync(join(r, "service.env"), "K=1\n");
+	assert.match(readRefusal("service.env", r)!, /\.env file/);
+});
+
+test("metis-workspace: pi's read is blocked outside the skills and the workspace, at the tool call", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	const no = await p.emit("tool_call", { toolName: "read", input: { path: "/etc/hostname" } }, ctx);
+	assert.equal(no.block, true);
+	assert.match(no.reason, /outside the skills/);
+	assert.equal(await p.emit("tool_call", { toolName: "read", input: { path: join(r, "README.md") } }, ctx), undefined);
+	assert.equal(await p.emit("tool_call", { toolName: "surprise_list", input: {} }, ctx), undefined);
 });
