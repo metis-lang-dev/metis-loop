@@ -142,10 +142,9 @@ in the config dot file, so the next REPL starts on it; no default. Every paid re
 read from `OPENROUTER_API_KEY` only; `metis FILE.llp` says on its intro line whether it is set, never its value.
 The gateway loads the person's private key file (`METIS_OPENROUTER_ENV`, default
 `~/.config/metis/openrouter.env`, mode 600/400) into its own environment at start, parsed, never sourced, never
-printed. In `shared` mode `llm` only shows the model (it is the operator's, and D4 writes nothing a visitor
-types), and `narrate` is served on a local backend only (ollama, command): on openrouter or anthropic it
-answers "narrate: a paid model is not served in shared mode; the operator sets a local one with llm" and
-makes no call. There is no per-visitor cap: a cap on the operator's key is still the operator's money.
+printed. narrate and llm behave the same in every console mode (the user, 2026-11-05: "there no
+remote/local backend… repl narration is in metis host config. for narration from pi loop we have model on
+openrouter"): repl-llm's shared-mode rules were reverted (two-terminals s-065d46d5 step 1).
 
 The REPL session gains a trace writer: `open` with `trace: true` writes `.metis/traces/<session>/` through
 the Segments writer (the py Live's code path from trace-replay), so a surprise dropped from a session points
