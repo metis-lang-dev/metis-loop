@@ -361,3 +361,11 @@ one is metispy's own `ollama:` backend). MODEL (and FORMALIZE_MODEL) on the comm
 loop.sh refuses and says how to set it: there is no default anywhere. The console's loop start passes no MODEL
 unless the page names one, so it starts the same model from the same file, and says which (`dot_model`). pi's own
 `/model` is not the setting: the dot file is, so both terminals and the console agree.
+
+A local model under pi needs two things of the Ollama server (found on taycann, 2026-11-04): **a context that holds
+pi's prompt** (about 6k tokens with the tools): Ollama's `/v1` takes no `num_ctx`, and an 8 GB GPU's default is 4096,
+so the prompt is cut and the model never sees its tools; run the server with `OLLAMA_CONTEXT_LENGTH=32768` (or a
+model whose own `num_ctx` is large; `llm loop` says so); and **a model that makes tool calls**: gemma3:4b cannot
+(Ollama: completion, vision); phi4-mini is listed with tools but wrote its call as text; metis-gemma4-e4b called
+`surprise_next`, `trace_blame` and `pack_propose` (its pack refused at the link: the interworking held, the
+language is the model's).
