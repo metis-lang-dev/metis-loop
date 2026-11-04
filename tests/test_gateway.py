@@ -445,3 +445,43 @@ def test_the_workspace_widgets_served_from_the_sdk(personal):
         with pytest.raises(urllib.error.HTTPError) as e:
             urllib.request.urlopen(base + bad, timeout=5)
         assert e.value.code == 404
+
+
+def test_shared_mode_narrates_on_a_local_backend_only(monkeypatch):
+    """repl-llm step 2 (the architect's ruling): a visitor's narrate never spends the operator's key. In
+    shared mode a paid endpoint (openrouter, anthropic) answers one line and calls nothing; a local one
+    (ollama, command) is served; `narrate system` shows the prompt and calls no model. Personal mode serves
+    a paid endpoint (the operator's own)."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    line = "narrate: a paid model is not served in shared mode; the operator sets a local one with llm"
+    r = Running(mode="shared")
+    try:
+        with r.ws() as ws:
+            json.loads(ws.recv(timeout=5))
+            sid = open3(ws)["session"]
+            sh = r.gw.srv.shells[sid]
+            for k, spec in enumerate(("openrouter:deepseek/deepseek-v4.1-flash-1017", "anthropic")):
+                sh.llm = spec
+                p = send(ws, sid, "narrate", f"p{k}")[-1]
+                assert p["status"] == "refused" and p["result"] == line, p
+            p = send(ws, sid, "narrate system", "ps")[-1]   # the prompt half: no model call
+            assert p["status"] != "refused" and "narrate" in p["result"], p
+            sh.llm = "ollama:phi3@http://127.0.0.1:9"       # local: served (here, no server)
+            p = send(ws, sid, "narrate", "l0")[-1]
+            assert p["status"] != "refused" and "not reachable" in p["result"], p
+            sh.llm = "command:cat"                          # local (the operator's own command)
+            p = send(ws, sid, "narrate", "l1")[-1]
+            assert p["status"] != "refused" and "paid model" not in p["result"], p
+    finally:
+        r.close()
+    r = Running(mode="personal")
+    try:
+        with r.ws() as ws:
+            json.loads(ws.recv(timeout=5))
+            sid = open3(ws)["session"]
+            r.gw.srv.shells[sid].llm = "openrouter:m"
+            p = send(ws, sid, "narrate", "q0")[-1]          # the operator's own: served (no key here: one line)
+            assert p["status"] != "refused" and "OPENROUTER_API_KEY is not set" in p["result"], p
+    finally:
+        r.close()

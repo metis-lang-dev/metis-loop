@@ -64,7 +64,9 @@ workspace and the pi loop formalizes and rules it. `narrate` and `llm` are
 the REPL's own again (the user, 2026-11-04): the REPL's model (metispy
 metis.loop.llm), set with `llm` and saved in the dot file in personal mode;
 in shared mode `llm` only shows it (the model and its key are the
-operator's, and nothing a visitor types is written to disk, D4). The
+operator's, and nothing a visitor types is written to disk, D4), and
+narrate is served on a local backend only (ollama, command): a paid one
+answers one line and calls nothing. The
 OpenRouter key comes from the environment, or the person's private key
 file loaded at start (load_key_file), never printed.
 
@@ -113,6 +115,7 @@ DEFAULTS = {
 # the REPL's own model (metispy metis.loop.llm: ollama | openrouter | anthropic | command, set with `llm`, saved in
 # the dot file; the OpenRouter key from the environment only)
 LLM_VERBS = frozenset(["formalize"])
+PAID_BACKENDS = frozenset(["openrouter", "anthropic"])   # shared mode narrates on ollama / command only
 RETIRED = {     # [console] keys of the retired seats: a dot file that still has one is told, not failed
     "agent", "agent_model", "agent_tool_calls", "agent_cmd_timeout", "agent_max_turns", "agent_gate_timeout",
     "narrate", "narrate_model", "narrate_thinking", "narrate_reasoning", "formalize_model",
@@ -502,16 +505,28 @@ class Gateway:
         for ws in list(self.pages):
             await self._send(ws, frame)
 
-    def _gate(self, cmd: str) -> Optional[str]:
+    def _gate(self, cmd: str, endpoint: str = "") -> Optional[str]:
         """Gateway-side policy beyond run_intent's whitelist: formalize (the pi loop's) is refused in every
-        mode, setting the model (`llm WORDS`) in shared mode. Returns the refusal, or None."""
+        mode; in shared mode, setting the model (`llm WORDS`) and a narrate on a PAID endpoint (the session's
+        model: openrouter, anthropic) — a visitor's narrate never spends the operator's key, so shared mode
+        narrates on a local backend only (ollama, command; repl-llm step 2, the architect's ruling). `narrate
+        system|user` shows the prompt halves and calls no model. Returns the refusal, or None."""
         verb, _, rest = cmd.strip().lstrip(":").partition(" ")
         if verb in LLM_VERBS:
             return f"'{verb}' is not served here: {SEATS_GONE}"
-        if verb == "llm" and rest.strip() and self.cfg.get("mode") == "shared":
-            return ("'llm WORDS' is not served in shared mode: the model is the operator's "
-                    "(`llm` alone shows it)")
+        if self.cfg.get("mode") == "shared":
+            if verb == "llm" and rest.strip():
+                return ("'llm WORDS' is not served in shared mode: the model is the operator's "
+                        "(`llm` alone shows it)")
+            if verb == "narrate" and rest.split()[:1] not in (["system"], ["user"]) and \
+                    str(endpoint or "").strip().partition(":")[0] in PAID_BACKENDS:
+                return "narrate: a paid model is not served in shared mode; the operator sets a local one with llm"
         return None
+
+    def _endpoint(self, s: "Sess") -> str:
+        """The session's model spec (the REPL's `llm`, from the operator's dot file), "" if none."""
+        sh = self.srv.shells.get(s.sid)
+        return str(getattr(sh, "llm", "") or "")
 
     def _cap_run(self, cmd: str):
         """`run N` above max_run_steps is clamped; returns (cmd, note)."""
@@ -591,7 +606,7 @@ class Gateway:
         s.last = time.time()
         await self._broadcast(s, {"ch": "repl", "type": "queued",
                                   "session": s.sid, **item}, log=True)
-        refusal = self._gate(cmd)
+        refusal = self._gate(cmd, self._endpoint(s))
         if refusal:
             post = {"status": "refused", "result": refusal,
                     "json": {"ok": False, "error": refusal},
