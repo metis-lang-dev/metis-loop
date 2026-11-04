@@ -367,3 +367,14 @@ def test_replay_and_why_say_a_weight_port_was_stood_in(root):
     assert line in t and "fired " + chose in t, t
     t = say(ch, "/why ready at 2")["text"]
     assert line in t and "last moved at k 2 by rule" in t, t
+
+
+def test_replay_defaults_to_the_surprise_ruled_last_not_the_newest_record(root):
+    """F7 (loop-prompt step 5): after a ruling, /replay with no argument is the ruled surprise's window."""
+    ch = channels(root)
+    first = surprise(root)                                                            # window 0..5
+    surprise(root, window=[2, 4])                                                     # the newest record
+    assert say(ch, "/replay")["text"].startswith("road-town01-2 · 2..4 · planner")  # nothing ruled: the newest
+    rule(root, first)
+    assert say(ch, "/replay")["text"].startswith("road-town01-2 · 0..5 · planner")  # the one ruled, not the newest
+    assert say(ch, "/ruling")["ruling"] == first

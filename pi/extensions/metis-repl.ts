@@ -31,6 +31,8 @@ import { runDir, takeRoot, writeRoot } from "./lib/roots.ts";
 import { scoped, toolset } from "./lib/toolset.ts";
 import * as catalog from "./sdk/catalog.ts";
 import * as gate from "./sdk/gate.ts";
+import * as ws from "./sdk/workspace.ts";
+import { applied, type Applied } from "./lib/applied.ts";
 
 const NO_WORDS = "(the REPL's wire declares no description for this verb — finding: metispy)";
 const ARG = Type.Object({
@@ -143,12 +145,12 @@ export default function (host: ExtensionAPI) {
 	// candidate and the program it serves, the person at pi's confirm, and serving the program after.
 
 	type Tool = "catalog_new" | "catalog_edit" | "catalog_take";
-	type Plan = gate.Plan & { tool: Tool };
+	type Plan = gate.Plan & { tool: Tool; applied?: Applied };
 	type NewArgs = {
 		domain: string; program: string; display?: string; line?: string; intents?: boolean;
 		readme_title?: string; readme_summary?: string;
 	};
-	type EditArgs = { domain: string; path: string; old_string: string; new_string: string; replace_all?: boolean };
+	type EditArgs = { domain: string; path: string; old_string: string; new_string: string; replace_all?: boolean; ruling?: string };
 
 	// the proposal of a tool call: the REPL's part first (its candidate, what it serves), then the gate's
 	async function propose(tool: Tool, input: any): Promise<Plan> {
@@ -159,7 +161,11 @@ export default function (host: ExtensionAPI) {
 		}
 		if (tool === "catalog_edit") {
 			const p = input as EditArgs;
-			return { ...gate.propose("edit", p.domain, { path: p.path, old: p.old_string, new: p.new_string, replace_all: !!p.replace_all, who: "pi" }, o), tool };
+			// F1 (loop-prompt step 5): in a workspace a .llp edit is the apply of an accepted ruling, checked before the
+			// gate's own plan; refused in words when its rules are no accepted pack's
+			const tie = set === "workspace" && /\.llp$/.test(p.path) ? applied(p, o.root) : null;
+			const plan = gate.propose("edit", p.domain, { path: p.path, old: p.old_string, new: p.new_string, replace_all: !!p.replace_all, who: "pi" }, o);
+			return { ...plan, tool, ...(tie ? { say: (plan.say ?? "") + tie.say, applied: tie.applied } : {}) };
 		}
 		const p = input as NewArgs;
 		const args: Record<string, unknown> = { who: "pi" };
@@ -194,6 +200,10 @@ export default function (host: ExtensionAPI) {
 		if (!pl || pl.tool !== tool) throw new Error("not approved");
 		const out = gate.confirm(pl.token, runDir());
 		if (out.note) return { content: [{ type: "text" as const, text: out.note + "." }], details: { written: [], note: out.note } };
+		if (pl.applied) {                           // the journal's row: which ruling the written edit applied (or undid); hashes, never texts
+			const { ids, undo, ...ptrs } = pl.applied;
+			ws.journal("pi", undo ? "undone" : "applied", { surprise: ids.length === 1 ? ids[0] : ids, ...ptrs }, pl.root);
+		}
 		const written: string[] = out.written;
 		let after = "";
 		if (out.serve) {
@@ -252,13 +262,16 @@ export default function (host: ExtensionAPI) {
 			"old_string empty makes a file the domain lacks: an extension (extensions/<name>.llp, new_string its whole text, e.g. the REPL's " +
 			"gated candidate from repl_show llp), a first README.md or intent.yaml. The person approves the diff. old_string must match the " +
 			"file exactly (whitespace and all) and occur once, unless replace_all; a .llp edit must add no diagnostic (the lint's rows are " +
-			"shown, never refusing). path is relative to the domain's directory: <domain>.llp, extensions/<name>.llp, README.md, intent.yaml, domain.yaml.",
+			"shown, never refusing). path is relative to the domain's directory: <domain>.llp, extensions/<name>.llp, README.md, intent.yaml, domain.yaml. " +
+			"In a workspace a .llp edit is the APPLY of an accepted ruling: every rule it adds or rewrites must be a rule of an accepted pack, word for " +
+			"word (the %% line and spacing aside), else it is refused; an edit that changes no rule applies nothing and the reply says so.",
 		parameters: Type.Object({
 			domain: Type.String({ description: "the domain's name: lowercase letters, digits, _" }),
 			path: Type.String({ description: "the file, relative to the domain's directory (e.g. <domain>.llp, README.md)" }),
 			old_string: Type.String({ description: "the exact text to replace (enough of it to occur once); empty: make the file the domain lacks" }),
 			new_string: Type.String({ description: "the text to put in its place" }),
 			replace_all: Type.Optional(Type.Boolean({ description: "replace every occurrence (default: exactly one)" })),
+			ruling: Type.Optional(Type.String({ description: "\"undo\": this edit reverses an applied edit exactly (old_string what it wrote, new_string what it replaced); otherwise the accepted ruling is found by the rules' text" })),
 		}),
 		async execute(id) {
 			return execute(id, "catalog_edit");

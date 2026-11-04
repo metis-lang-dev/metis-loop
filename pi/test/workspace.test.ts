@@ -18,6 +18,8 @@ import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
 import * as ws from "../extensions/sdk/workspace.ts";
+import { applied, sha } from "../extensions/lib/applied.ts";
+import { changedRules } from "../extensions/lib/rules.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PKGS = join(HERE, "..", "..", "..");
@@ -724,4 +726,67 @@ test("metis-workspace: pi's read is blocked outside the skills and the workspace
 	assert.match(no.reason, /outside the skills/);
 	assert.equal(await p.emit("tool_call", { toolName: "read", input: { path: "README.md" } }, { ...ctx, cwd: r }), undefined);   // pi's cwd
 	assert.equal(await p.emit("tool_call", { toolName: "surprise_list", input: {} }, ctx), undefined);
+});
+
+test("catalog_edit in a workspace is the apply of an ACCEPTED ruling, or refused in words; a comment-only edit applies nothing (the architect's F1, step 5)", async () => {
+	const { r } = scratch();
+	process.env.METIS_LOOP_TOOLS = "workspace";
+	const p = fakePi();
+	workspace(p.api);
+	repl(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 7, atoms: ["lit"], words: "w", config: "service.yaml" }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		const edit = (input: any) => p.emit("tool_call", { toolName: "catalog_edit", toolCallId: "e" + Math.random(), input }, ctx);
+		// no ruling yet: a rule is refused before the person is asked
+		const none = await edit({ domain: "lamp", path: "lamp.llp", old_string: "% the lamp's rules\n", new_string: "% the lamp's rules\nstage go {\n  dark [dyn] : $late -o ().\n}\n" });
+		assert.equal(none.block, true);
+		assert.match(none.reason, /not the judged pack: 1 rule\(s\) of this edit \(dark\) are in no accepted ruling \(none in this workspace\)/);
+		process.env.STUB_VERDICT = "accepted";
+		await p.tools.get("pack_propose").execute("j", { id, pack: "stage go {\n  %% I go dark late.\n  dark [dyn] : $late * now -o ().\n}" });
+		// a rule that is not the accepted pack's
+		const other = await edit({ domain: "lamp", path: "lamp.llp", old_string: "% the lamp's rules\n", new_string: "% the lamp's rules\nstage go {\n  dark [dyn] : $late -o ().\n}\n" });
+		assert.equal(other.block, true);
+		assert.match(other.reason, new RegExp(`\\(dark\\) are in no accepted ruling \\(accepted: ${id}\\)`));
+		// the accepted pack's rule, another %% line and spacing: it applies (the gate's own plan follows)
+		const ok = applied({ domain: "lamp", path: "lamp.llp", old_string: "% the lamp's rules\n", new_string: "% the lamp's rules\nstage go {\n  %% my own words\n  dark [dyn] :   $late * now\n    -o ().\n}\n" }, r);
+		assert.equal(ok.say, ` Applies the accepted ruling ${id}.`);
+		assert.deepEqual(ok.applied!.ids, [id]);
+		// a comment-only edit applies nothing, and says so
+		const note = applied({ domain: "lamp", path: "lamp.llp", old_string: "% the lamp's rules\n", new_string: "% the lamp's rules, fixed\n" }, r);
+		assert.match(note.say, /No rule changed: this edit applies no ruling/);
+		assert.equal(note.applied, undefined);
+		// undo: only the exact reversal of an applied edit
+		ws.journal("pi", "applied", { surprise: id, domain: "lamp", path: "lamp.llp", old_sha: sha("A"), new_sha: sha("B") }, r);
+		assert.throws(() => applied({ domain: "lamp", path: "lamp.llp", old_string: "B", new_string: "C", ruling: "undo" }, r), /undo: no applied edit is reversed/);
+		const un = applied({ domain: "lamp", path: "lamp.llp", old_string: "B", new_string: "A", ruling: "undo" }, r);
+		assert.match(un.say, new RegExp(`Reverses the applied edit of ruling ${id}`));
+		assert.equal(un.applied!.undo, true);
+		// not a .llp, or not a workspace: no tie
+		assert.equal(changedRules("a [dyn] : x -o y.", "%% doc\na [dyn] :  x -o y .").length, 0);
+	} finally {
+		await p.emit("session_shutdown", {}, {});
+		delete process.env.METIS_LOOP_TOOLS;
+	}
+});
+
+test("pack_propose: a bare unit name is found under the bundle; a name no file has is refused in words and the take kept (the architect's F3, step 5)", async () => {
+	const { r, bin } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 7, atoms: ["lit"], words: "w", config: "service.yaml" }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		await assert.rejects(p.tools.get("pack_propose").execute("j0", { id, pack: "% x", unit: "nothing.llp" }), /unit=nothing\.llp: no such file under [\s\S]*stays taken/);
+		assert.equal(ws.surprise(id, r).status, "taken");                              // not released
+		process.env.STUB_VERDICT = "accepted";
+		const j = await p.tools.get("pack_propose").execute("j1", { id, pack: "% x", unit: "lamp.llp" });
+		assert.match(j.content[0].text, /^unit lamp\.llp read as domains\/lamp\/lamp\.llp\naccepted/);
+		const args = readFileSync(join(bin, "propose.args"), "utf8").split("\n");
+		assert.equal(args[args.indexOf("--unit") + 1], "domains/lamp/lamp.llp");
+	} finally {
+		await p.emit("session_shutdown", {}, {});
+	}
 });

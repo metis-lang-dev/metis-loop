@@ -33,9 +33,9 @@
 //   METISC             metisc for bundle_build (else metisc on PATH)
 //   METIS_LOOP_PROPOSE propose.sh for pack_propose (else ../propose.sh beside this file)
 import { execFile, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -157,6 +157,22 @@ export function readRefusal(path: string, root: string, cwd: string = process.cw
 	if (/(^|\/)[^/]*\.env$/.test(real)) return `read ${raw}: an .env file is never read here (a key lives in it)`;
 	if (under(skills) || under(root)) return null;
 	return `read ${raw}: outside the skills (${skills}) and the workspace (${root}); this loop reads only those`;
+}
+
+/** The files named NAME under DIR (.metis, build, node_modules, .git and .wt skipped), for a unit given by its name. */
+export function findFiles(dir: string, name: string): string[] {
+	const out: string[] = [];
+	const skip = new Set([".metis", "build", "node_modules", ".git", ".wt"]);
+	const walk = (d: string) => {
+		let ents: import("node:fs").Dirent[];
+		try { ents = readdirSync(d, { withFileTypes: true }); } catch { return; }
+		for (const e of ents) {
+			if (e.isDirectory()) { if (!skip.has(e.name)) walk(join(d, e.name)); }
+			else if (e.name === name) out.push(join(d, e.name));
+		}
+	};
+	walk(dir);
+	return out.sort();
 }
 
 /** The rule names of a unit's text (the rule heads, in order). */
@@ -488,11 +504,24 @@ export default function (host: ExtensionAPI) {
 				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
 				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run")];
 				if (b) argv.push("--composition", dirname(b.composition));
+				let unitNote = "";
 				if (p.unit) {
-					const u = resolve(r, String(p.unit));
-					const gen = existsSync(u) ? derivedFrom(u, readFileSync(u, "utf8")) : null;
-					if (gen) throw new Error(`unit=${p.unit} is generated from ${gen} by make: give unit=${gen}, never the generated file`);
-					argv.push("--unit", p.unit);
+					const given = String(p.unit);
+					let u = resolve(r, given);
+					if (!existsSync(u)) {
+						// F3 (loop-prompt step 5): a bare name crashed the judge and released the take; the file is found under the
+						// bundle when one has that name, else refused in words, the surprise still taken
+						const found = findFiles(b ? resolve(r, dirname(b.composition)) : join(r, "domains"), basename(given));
+						if (found.length !== 1)
+							throw new Error(`unit=${given}: no such file under ${r}` +
+								(found.length ? `, and ${found.length} files are named ${basename(given)}: ${found.map((f) => relative(r, f)).join(", ")}; give the path` : "; give the path as surprise_next printed it") +
+								`. Surprise ${p.id} stays taken.`);
+						u = found[0];
+						unitNote = `unit ${given} read as ${relative(r, u)}\n`;
+					}
+					const gen = derivedFrom(u, readFileSync(u, "utf8"));
+					if (gen) throw new Error(`unit=${given} is generated from ${gen} by make: give unit=${gen}, never the generated file`);
+					argv.push("--unit", relative(r, u));
 				}
 				for (const c of p.cases ?? []) argv.push("--case", resolve(r, c));
 				if (p.brain) argv.push("--brain", p.brain);
@@ -521,7 +550,7 @@ export default function (host: ExtensionAPI) {
 					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e) };
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
-				return text(`${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });
+				return text(`${unitNote}${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });
 			} finally {
 				logSpend(join(tmp, "run"), p.id, r); // a run that spent and then wrote no ruling still leaves its spend
 				rmSync(tmp, { recursive: true, force: true });

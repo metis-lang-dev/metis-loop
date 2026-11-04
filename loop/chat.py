@@ -175,9 +175,17 @@ def help_text(command=None):
 # ── the answers ──────────────────────────────────────────────────────────────
 
 def last_surprise(ws, ruled=False):
-    """The newest surprise (with a ruling when RULED), or None."""
-    rows = ws.surprises("ruled" if ruled else None)
-    return rows[-1] if rows else None
+    """The surprise the chat means by default: the one ruled LAST (by its ruling's ts), else the one taken, else the
+    newest record; None when RULED and none is (F7, loop-prompt step 5: /replay after a ruling showed the newest
+    record's window, never the ruled one's)."""
+    rows = ws.surprises()
+    done = [ws.surprise(x["id"]) for x in rows if x.get("status") == "ruled"]
+    if done:
+        return max(done, key=lambda s: (str((s.get("ruling") or {}).get("ts") or ""), s["id"]))
+    if ruled or not rows:
+        return None
+    taken = [x for x in rows if x.get("status") == "taken"]
+    return taken[-1] if taken else rows[-1]
 
 
 def _trace_dir(ws, run):

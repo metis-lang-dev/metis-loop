@@ -100,4 +100,8 @@ numbers by the implementer: the user reads them.
    a description; 0 USD, CI green.
 3. **opus**: the two drives of §4 and the report (two caps of 0.50 USD).
 4. **nina**: review of 2–3 (the quotes against their sources; the skills' loading seen in the session file).
-5. the user drives the chat on the new prompt.
+5. the user drives the chat on the new prompt. (2026-11-04 evening, the user: "please do short drive test and use
+   your judgement on step 5. same goes for f1,3,7": the architect fixed F1 (a .llp edit in a workspace is the apply of
+   an accepted ruling, by the rules' text, else refused; a comment-only edit says it applies nothing; `ruling="undo"`
+   reverses an applied edit), F3 (a bare unit name is found under the bundle or refused with the take kept) and F7
+   (the chat's default surprise is the one ruled last), then drove the records once; `steps/prompt-step5-architect.md`.)
