@@ -28,9 +28,13 @@ process.env.METIS_LOOP_SDK_PY = PY;
 
 function fakePi() {
 	const tools = new Map<string, any>();
+	const commands = new Map<string, any>();
+	const sent: string[] = [];
 	const on = new Map<string, ((e: any, c: any) => any)[]>();
 	return {
 		tools,
+		commands,
+		sent,
 		emit: async (ev: string, e: any, c: any) => {
 			let r;
 			for (const h of on.get(ev) ?? []) r = (await h(e, c)) ?? r;
@@ -38,7 +42,8 @@ function fakePi() {
 		},
 		api: {
 			registerTool: (t: any) => tools.set(t.name, t),
-			registerCommand: () => {},
+			registerCommand: (n: string, o: any) => commands.set(n, o),
+			sendUserMessage: (m: string) => sent.push(m),
 			on: (ev: string, h: any) => on.set(ev, [...(on.get(ev) ?? []), h]),
 			sendMessage: () => {},
 		} as any,
@@ -561,6 +566,32 @@ test("metis-workspace: the chat's read-only commands are tools: their line from 
 	const r = await p.tools.get("chat_status").execute("c1", {});
 	assert.match(r.content[0].text, /surprises: 0 open, 0 taken, 0 ruled/, r.content[0].text);
 	assert.equal(r.details.line, "/status");
+});
+
+test("metis-workspace: the chat's slash table is pi's own commands (two-terminals): 0 USD answers, /take the model's turn", async () => {
+	scratch();
+	const p = fakePi();
+	workspace(p.api);
+	const decl = JSON.parse(readFileSync(join(HERE, "..", "..", "loop", "chat_tools.json"), "utf8")).tools.map((t: any) => t.name);
+	assert.deepEqual([...p.commands.keys()].sort(), [...decl].sort());
+	const said: [string, string][] = [];
+	let down = 0;
+	const c = { ui: { notify: (m: string, k: string) => said.push([m, k]) }, shutdown: () => down++ };
+	await p.commands.get("status").handler("", c);
+	assert.match(said.at(-1)![0], /surprises: 0 open, 0 taken, 0 ruled/);
+	await p.commands.get("help").handler("replay", c);
+	assert.match(said.at(-1)![0], /replay/);
+	await p.commands.get("drop").handler("it lied", c);
+	assert.deepEqual([said.at(-1)![1], /the REPL's: `drop WORDS` in its terminal/.test(said.at(-1)![0])], ["error", true]);
+	await p.commands.get("take").handler("", c);
+	await p.commands.get("take").handler("20261105T101010-abcdef", c);
+	assert.deepEqual(p.sent, ["take the next surprise", "take surprise 20261105T101010-abcdef"]);   // the model's turns
+	await p.commands.get("budget").handler("nope", c);
+	assert.equal(said.at(-1)![1], "error");
+	await p.commands.get("budget").handler("0.05", c);
+	assert.match(said.at(-1)![0], /this session's budget: 0.05 USD/);
+	await p.commands.get("stop").handler("", c);
+	assert.equal(down, 1);
 });
 
 test("the system prompt: a workspace surprise is ruled through pack_propose; the person's own loop is the seed-domain skill's", () => {

@@ -468,6 +468,48 @@ export default function (host: ExtensionAPI) {
 		});
 	}
 
+	// ---- the chat's slash table as pi's OWN commands (two-terminals s-065d46d5; docs/WORKSPACE.md §10) -------------
+	// The person types them in the TUI; the model never sees them. The workspace's answers run loop.chat at 0 USD
+	// (python -m loop.chat --root DIR "/name …": READ and TERMINAL) and print here; /take is the model's turn in the
+	// words the console says ("take the next surprise"); /budget sets this session's budget; /stop ends the session.
+	// The REPL is the other terminal: its drop / mark / reload are its own (the CLI says so).
+	const chatCli = async (line: string) => {
+		const r = root();
+		const env = { ...process.env, PYTHONPATH: [LOOP_REPO, process.env.PYTHONPATH].filter(Boolean).join(":") };
+		const res = await run(process.env.METIS_LOOP_SDK_PY || "python3", ["-m", "loop.chat", "--root", r, line], r, env);
+		return { ok: res.code === 0, out: `${res.out}${res.err ? `${res.out ? "\n" : ""}${res.err}` : ""}`.trim() || "(no output)" };
+	};
+	for (const t of chatDecl) {
+		pi.registerCommand(t.name, {
+			description: `${t.description} (0 USD${t.name === "take" ? "; then the model's turn" : ""})`,
+			handler: async (args: string, ctx: any) => {
+				const a = (args || "").trim();
+				const say = (msg: string, kind: "info" | "warning" | "error" = "info") => ctx?.ui?.notify?.(msg, kind);
+				if (t.name === "take") {
+					const words = a ? `take surprise ${a.split(/\s+/)[0]}` : "take the next surprise";
+					say(`said to the model: ${words}`);
+					pi.sendUserMessage(words);
+					return;
+				}
+				if (t.name === "budget") {
+					const usd = Number(a);
+					if (!(usd > 0)) return say("/budget USD: a number of USD above 0", "error");
+					budget = usd;
+					if (spent < budget) over = false;
+					return say(`this session's budget: ${budget} USD (${spent.toFixed(4)} spent by pi's estimate; the key's bill runs higher)`);
+				}
+				if (t.name === "stop") {
+					say("the pi session ends (the lock is released)");
+					unlockSession();
+					ctx?.shutdown?.();
+					return;
+				}
+				const r = await chatCli(`/${t.name}${a ? ` ${a}` : ""}`);
+				say(r.out, r.ok ? "info" : "error");
+			},
+		});
+	}
+
 	// ---- the pack verb: the judgement, as the surprise's ruling -------------------------------------
 	pi.registerTool({
 		name: "pack_propose",
@@ -658,7 +700,7 @@ export default function (host: ExtensionAPI) {
 	// command face. Past the budget the session REFUSES (the architect's rule): no further model turn (the
 	// person's input is handled here, a tool call is blocked and ends the batch, the running turn is
 	// aborted), a `budget` journal row with the spend, and the lock released. pi is not killed.
-	const budget = Number(process.env.METIS_LOOP_BUDGET || 0) || 0;
+	let budget = Number(process.env.METIS_LOOP_BUDGET || 0) || 0;   // /budget USD sets it for this session
 	let spent = 0;
 	let requests = 0;
 	let over = false;

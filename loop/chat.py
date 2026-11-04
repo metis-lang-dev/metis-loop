@@ -443,9 +443,68 @@ def answer(ws, name, a, child=None, budget_next=None):
     raise ValueError(f"/{name}: not a command the workspace answers alone (the chat's: /help)")
 
 
+# the commands the pi loop's TUI answers itself through this CLI (two-terminals s-065d46d5: pi.registerCommand in
+# pi/extensions/metis-workspace.ts): READ, and these, with no page and no REPL session in this process — the REPL
+# is the other terminal. take, budget and stop are the pi session's own (the extension answers them).
+TERMINAL = ("help", "mark", "drop", "rebuild", "reload", "lint")
+
+
+def drop_draft(ws, draft):
+    """A /mark draft dropped as it is (no dialog in a terminal): a trace's window kept as its own trace first (as the
+    console's drop does), the run's config.yaml carried, the reading the words' first sentence. → the surprise id."""
+    run = draft.get("run")
+    if not run:
+        raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its session)")
+    if not draft.get("member"):
+        raise ValueError(f"/mark: {run} has several members: the REPL or the console names one")
+    rec = {"member": draft["member"], "trace": "traces/" + run, "words": draft["words"],
+           "reading": first_sentence(draft["words"])}
+    if draft.get("window"):
+        k0, k1 = draft["window"]
+        name = "w%d-%d" % (k0, k1)
+        got = ws.path("trace", run=W._check_run("%s-%s" % (run, name)))
+        rec["trace"] = "traces/" + got.name if got.is_dir() else ws.keep_window(run, k0, k1, name)
+        rec["window"] = [k0, k1]
+    elif draft.get("k") is not None:
+        rec["k"] = draft["k"]
+    cfg = ws.state / rec["trace"] / "config.yaml"
+    if cfg.is_file():
+        rec["config"] = str(cfg.relative_to(ws.root))
+    return ws.drop_surprise(rec)
+
+
+def terminal(ws, name, a):
+    """The answer of a TERMINAL command: {text}."""
+    if name == "help":
+        return {"text": help_text(a.command)}
+    if name == "mark":
+        w = list(a.words)
+        if not (len(w) >= 2 and window(w[0]) is None and window(w[1]) is not None):
+            raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its "
+                             "session)")
+        sid = drop_draft(ws, mark(ws, w, None))
+        return {"text": f"dropped {sid}: /surprises lists it, /take rules it"}
+    if name == "drop":
+        raise ValueError("/drop is the REPL's: `drop WORDS` in its terminal drops its last tick (here: /mark RUN K WORDS)")
+    if name == "reload":
+        raise ValueError("/reload is the REPL's: `reload` in its terminal re-reads the files (after /rebuild)")
+    if name == "rebuild":
+        from .workspace_ch import _scope
+        return rebuild(ws, _scope())
+    if name == "lint":
+        rows = []
+        for m, prog, mf in lint_targets(ws, a.member):
+            argv = W.tool_argv("lint", {"file": prog, **({"manifest": mf} if mf else {})})
+            p = subprocess.run(argv, cwd=str(ws.root), capture_output=True, text=True, timeout=BUILD_SECS)
+            rows.append(f"{m}: " + ((p.stdout + p.stderr).strip() or f"exit {p.returncode}"))
+        return {"text": "\n".join(rows)}
+    raise ValueError(f"/{name}: the pi session's own (/take, /budget, /stop), not this CLI's")
+
+
 def main(argv=None):
-    """python -m loop.chat [--root DIR] "/replay 412..430" — a READ command answered on the workspace at DIR (the
-    pi loop's chat_<name> tools); without --root, the line parsed only. Prints the text; exit 1 with the refusal."""
+    """python -m loop.chat [--root DIR] "/replay 412..430" — a READ or TERMINAL command answered on the workspace at
+    DIR (the pi loop's chat_<name> tools and its TUI's /commands); without --root, the line parsed only. Prints the
+    text; exit 1 with the refusal."""
     ap = argparse.ArgumentParser(prog="python -m loop.chat", description="the chat's read-only commands, on a workspace")
     ap.add_argument("--root", help="the workspace (default: the line is parsed only)")
     ap.add_argument("lines", nargs="+")
@@ -456,7 +515,8 @@ def main(argv=None):
             if o.root is None:
                 print(name, vars(a))
                 continue
-            out = answer(W.workspace(o.root), name, a)
+            ws = W.workspace(o.root)
+            out = answer(ws, name, a) if name in READ else terminal(ws, name, a)
         except (ValueError, KeyError, T.TraceError, OSError) as e:
             print(str(e).strip("'\""), file=sys.stderr)
             return 1

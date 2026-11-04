@@ -378,3 +378,35 @@ def test_replay_defaults_to_the_surprise_ruled_last_not_the_newest_record(root):
     rule(root, first)
     assert say(ch, "/replay")["text"].startswith("road-town01-2 · 0..5 · planner")  # the one ruled, not the newest
     assert say(ch, "/ruling")["ruling"] == first
+
+
+def test_the_terminal_cli_answers_the_tuis_commands(root, capsys):
+    """two-terminals: the pi TUI's /commands run `python -m loop.chat --root DIR "/…"` (no page, no session here: the
+    REPL is the other terminal). /mark RUN K WORDS drops at once (no dialog), the window kept as its own trace;
+    /drop and /reload point at the REPL; /help is the table."""
+    import io
+    from metis.lang.repl import Repl
+    from metis.session_trace import SessionTrace
+    r = Repl(root / "domains" / "lamp" / "lamp.llp", seed=1, stdout=io.StringIO())
+    tr = SessionTrace(W.workspace(root).path("trace", run="repl-1"), r, "lamp", program=r.path)
+    for cmd in ("run 1", "run 1"):
+        tr.before(r)
+        r.onecmd(cmd)
+        tr.after(r, cmd)
+    tr.close()
+    assert chat.main(["--root", str(root), "/mark repl-1 1 the lamp lit. It should not have."]) == 0
+    sid = capsys.readouterr().out.split()[1].rstrip(":")
+    rec = W.workspace(root).surprise(sid)
+    assert (rec["member"], rec["trace"], rec["k"], rec["reading"]) == ("lamp", "traces/repl-1", 1, "the lamp lit.")
+    assert chat.main(["--root", str(root), "/mark repl-1 1..2 both ticks"]) == 0
+    sid = capsys.readouterr().out.split()[1].rstrip(":")
+    rec = W.workspace(root).surprise(sid)
+    assert rec["window"] == [1, 2] and rec["trace"] == "traces/repl-1-w1-2" and (root / ".metis" / rec["trace"]).is_dir()
+    assert chat.main(["--root", str(root), f"/mark {RUN} 10 late"]) == 1          # the road's: several members
+    assert "several members" in capsys.readouterr().err
+    assert chat.main(["--root", str(root), "/mark 3 no trace named"]) == 1
+    assert "/mark here names a trace" in capsys.readouterr().err
+    for line, words in (("/drop x", "`drop WORDS` in its terminal"), ("/reload", "`reload` in its terminal"),
+                        ("/take", "the pi session's own")):
+        assert chat.main(["--root", str(root), line]) == 1 and words in capsys.readouterr().err, line
+    assert chat.main(["--root", str(root), "/help"]) == 0 and "/replay" in capsys.readouterr().out
