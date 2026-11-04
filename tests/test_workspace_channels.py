@@ -449,3 +449,25 @@ def test_a_marked_window_is_kept_and_dropped_with_its_config(gw, tmp_path):
     assert sorted(p.name for p in (tmp_path / ".metis/traces/page-mark-1").glob("seg-*.jsonl")) == ["seg-3.jsonl", "seg-6.jsonl"]
     assert rc["trace"] == "traces/page" and rc["config"] == ".metis/traces/page/config.yaml"     # one tick: no copy
     assert [r["kind"] for r in w.events()].count("keep") == 1
+
+
+def test_the_consoles_start_takes_the_dot_files_loop_model(gw, tmp_path, monkeypatch):
+    """llm-config: a start that names no model passes no MODEL (loop.sh takes the dot file's [llm] loop, as a
+    terminal's does) and says the model it will run, the same file's."""
+    import metis.loop.llm as mllm
+    if not hasattr(mllm, "pi_model"):
+        pytest.skip("metispy without the seats (llm-config)")
+    dot = tmp_path / "dot.toml"
+    dot.write_text('[llm]\nloop = "ollama:phi4-mini"\n')
+    monkeypatch.setenv("METIS_CONFIG", str(dot))
+    gw.gw.wsc.pi_factory = StubPi
+    with gw.ws() as ws:
+        frames(ws, lambda f: f.get("type") == "catalogs")
+        st = ask(ws, "loop", "start", mode="rpc")
+        assert st["child"]["model"] == "ollama/phi4-mini", st
+        assert "MODEL" not in StubPi.made[-1].env or StubPi.made[-1].env["MODEL"] == os.environ.get("MODEL")
+        ask(ws, "loop", "stop")
+        exited(ws)
+    assert workspace_ch.dot_model() == "ollama/phi4-mini"
+    monkeypatch.setenv("METIS_CONFIG", "")
+    assert workspace_ch.dot_model() is None                        # unset: loop.sh refuses, saying how

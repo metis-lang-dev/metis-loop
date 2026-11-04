@@ -337,3 +337,27 @@ llp> surprises    llp> status                        /rebuild  /lint  /budget US
   unchanged.
 - **The console** is a wrapper over the same functions: its REPL session's trace is the same class; nothing else in
   it changed.
+
+**The model setting (llm-config s-07a070ad; the user, 2026-11-05: "harmonize config for narration and formalization.
+both path can be configured to ollama or openroute. thus we can test whenever we want on local models").** One
+configuration for every seat, the dot file's `[llm]` (metispy `metis.loop.config`), one grammar
+(`ollama:MODEL[@URL] | openrouter:MODEL | anthropic[:MODEL] | command:ARGV`):
+
+```
+[llm]
+endpoint  = "ollama:gemma3:4b"     # the REPL's narrate          llp> llm ollama gemma3:4b
+loop      = "ollama:phi4-mini"     # the pi loop's model         llp> llm loop ollama phi4-mini
+formalize = "ollama:phi4-mini"     # the loop's formalize        llp> llm formalize …   (default: loop's)
+```
+
+`llm` alone shows the three, checked: the key in the environment for openrouter; for Ollama the server, the pulled
+model and, for the loop, whether it can call tools (Ollama's capabilities: gemma3:4b cannot; phi4-mini and gemma4
+can). `pi/loop.sh` with MODEL unset takes `[llm] loop` (`python -m metis.loop.llm pi loop`): `openrouter:M` is pi's
+`openrouter/M` with the key and the budget as before; `ollama:M@URL` is pi's provider `ollama` over the server's
+OpenAI-compatible `URL/v1`, written for the start into `DIR/.metis/pi-agent/models.json` (pi/agent/models.json with
+the provider merged: the URL is the person's, so it is generated, never committed; only models.json, never pi's
+auth.json), cost 0, no key, no budget. FORMALIZE_MODEL comes from `[llm] formalize`, else `[llm] loop` (an Ollama
+one is metispy's own `ollama:` backend). MODEL (and FORMALIZE_MODEL) on the command line still win; with neither,
+loop.sh refuses and says how to set it: there is no default anywhere. The console's loop start passes no MODEL
+unless the page names one, so it starts the same model from the same file, and says which (`dot_model`). pi's own
+`/model` is not the setting: the dot file is, so both terminals and the console agree.

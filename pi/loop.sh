@@ -30,19 +30,24 @@
 #                                        never a commit); none named: catalog_take refuses
 #   METIS_CATALOG=DIR loop.sh …          the same, started elsewhere
 #
-#   MODEL=<pi provider>/<id>, default openrouter/deepseek/deepseek-v4-pro (the user, 2026-11-03:
-#         "use deepseek v4 pro"; its key OPENROUTER_API_KEY from the environment, else read from
-#         METIS_OPENROUTER_ENV (default ~/.config/metis/openrouter.env, only when private: mode 600);
-#         agent/models.json caps and routes it)
+#   MODEL=<pi provider>/<id> for one start; unset: the dot file's [llm] loop (llm-config: ONE configuration for
+#         every seat, metispy metis.loop.config; the REPL's `llm loop ollama phi4-mini` or `llm loop openrouter
+#         deepseek/deepseek-v4.1-flash-1017` writes it); neither: refused (no default). openrouter/<id>: its key
+#         OPENROUTER_API_KEY from the environment, else read from METIS_OPENROUTER_ENV (default
+#         ~/.config/metis/openrouter.env, only when private: mode 600), agent/models.json caps and routes it, and a
+#         budget. ollama/<id> ([llm] loop = "ollama:ID[@URL]"; MODEL=ollama/ID: METIS_OLLAMA_URL, else
+#         http://127.0.0.1:11434): pi's provider over the server's /v1 in DIR/.metis/pi-agent/ (loop/pi_models.py),
+#         no key, 0 USD, no budget needed; a model that cannot call tools cannot run the loop (`llm` says so)
 #   --budget USD (or METIS_LOOP_BUDGET=USD): the session's spend cap on a paid model (openrouter/*),
 #         default 1.00; past it the workspace extension refuses further model turns, journals
 #         `budget` and releases the lock (no kill). A paid MODEL with an empty budget is refused.
 #   FORMALIZE_MODEL=the model the kernel's formalize drafts with: openrouter/<id> (the loop
 #         SDK's OpenAI-compatible command face, reasoning off, 2048 tokens, data_collection
-#         deny; its calls and their cost in $METIS_LOOP_RECORDS/formalize-calls.jsonl), or
-#         claude[/<id>] (the SDK's claude -p command face, the person's own login).
-#         Default: MODEL's when MODEL is openrouter/*, thinking suffix dropped; otherwise
-#         none, and the kernel's formalize says how to set one ([llm] endpoint)
+#         deny; its calls and their cost in $METIS_LOOP_RECORDS/formalize-calls.jsonl),
+#         ollama/<id> (metispy's own ollama backend, 0 USD), or claude[/<id>] (the SDK's
+#         claude -p command face, the person's own login). Default: the dot file's [llm]
+#         formalize, else its [llm] loop; else MODEL's when MODEL is openrouter/* or ollama/*,
+#         thinking suffix dropped; otherwise none, and the kernel's formalize says how to set one
 #   METIS_LOOP_LLP=<file.llp>  the program the REPL starts on (default: a blank world; demo.sh
 #              starts on the plant, so formalize sees a known world's vocabulary)
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
@@ -152,7 +157,45 @@ TOOLS="$("$SDK_PY" -m metis.catalog installed --json | field tools)"
 export PYTHONPATH="$TOOLS${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
-MODEL="${MODEL:-openrouter/deepseek/deepseek-v4-pro}"
+# the model (llm-config s-07a070ad): MODEL as given wins; else the dot file's [llm] loop (metispy metis.loop.llm: ONE
+# configuration for every seat, set in the REPL with `llm loop WORDS`); no default: unset is refused, saying how
+seat() { PYTHONPATH="$HERE/..${PYTHONPATH:+:$PYTHONPATH}" "$SDK_PY" -m metis.loop.llm pi "$1"; }
+OLLAMA_ID="" OLLAMA_BASE=""
+if [ -z "${MODEL:-}" ]; then
+  seatj="$(seat loop)" || { echo "loop.sh: no model: set [llm] loop (the REPL's llm loop WORDS) or give MODEL=<provider>/<id>" >&2; exit 2; }
+  MODEL="$(printf '%s' "$seatj" | field model)"
+  if [ "$(printf '%s' "$seatj" | field backend)" = ollama ]; then
+    OLLAMA_ID="$(printf '%s' "$seatj" | field id)" OLLAMA_BASE="$(printf '%s' "$seatj" | field base_url)"
+  fi
+  echo "loop.sh: MODEL from $(printf '%s' "$seatj" | field where) ($(printf '%s' "$seatj" | field spec))" >&2
+fi
+# an Ollama model: pi's provider `ollama` over the server's OpenAI-compatible /v1, in an agent directory generated
+# for this start (DIR/.metis/pi-agent/: pi/agent/models.json with the provider merged; loop/pi_models.py says
+# why); no key, cost 0, no budget needed. MODEL=ollama/M given: the server is METIS_OLLAMA_URL, else 127.0.0.1:11434
+case "$MODEL" in
+  ollama/*)
+    OLLAMA_ID="${OLLAMA_ID:-${MODEL#ollama/}}"
+    case "$OLLAMA_ID" in *:off|*:minimal|*:low|*:medium|*:high|*:xhigh|*:max) OLLAMA_ID="${OLLAMA_ID%:*}" ;; esac
+    OLLAMA_BASE="${OLLAMA_BASE:-${METIS_OLLAMA_URL:-http://127.0.0.1:11434}/v1}"
+    PI_CODING_AGENT_DIR="$(PYTHONPATH="$HERE/..${PYTHONPATH:+:$PYTHONPATH}" "$SDK_PY" -m loop.pi_models ollama-agent \
+      --state "$ST" --id "$OLLAMA_ID" --base-url "$OLLAMA_BASE")" || { echo "loop.sh: the Ollama agent directory was not written" >&2; exit 1; }
+    export PI_CODING_AGENT_DIR ;;
+esac
+# the kernel's formalize (FORMALIZE_MODEL given wins): the dot file's [llm] formalize, default its [llm] loop; else, as
+# before, an openrouter MODEL's own; an Ollama one is metispy's own ollama: backend (FORMALIZE_SPEC), no face, no key
+FORMALIZE_SPEC=""
+if [ -z "${FORMALIZE_MODEL:-}" ] && fj="$(seat formalize 2>/dev/null)"; then
+  case "$(printf '%s' "$fj" | field backend)" in
+    openrouter) FORMALIZE_MODEL="$(printf '%s' "$fj" | field model)" ;;
+    *) FORMALIZE_SPEC="$(printf '%s' "$fj" | field spec)" ;;
+  esac
+fi
+case "${FORMALIZE_MODEL:-}" in
+  ollama/*) FORMALIZE_SPEC="ollama:${FORMALIZE_MODEL#ollama/}@${METIS_OLLAMA_URL:-http://127.0.0.1:11434}"; FORMALIZE_MODEL="" ;;
+esac
+if [ -z "${FORMALIZE_MODEL:-}" ] && [ -z "$FORMALIZE_SPEC" ] && [ -n "$OLLAMA_ID" ]; then
+  FORMALIZE_SPEC="ollama:$OLLAMA_ID@${OLLAMA_BASE%/v1}"            # the loop's own model, formalize's default
+fi
 # METIS_LOOP_THINKING=off|minimal|low|medium|high|xhigh|max: pi's thinking suffix on a MODEL without one of its own
 # (the console's chat sets off when its options say "no thinking"); unset or on: pi's default level for the model.
 # Reasoning stays on by default (loop-prompt, PROMPT.md §2: the output cap is 8192, agent/models.json)
@@ -198,9 +241,9 @@ case "$MODEL" in
   *) METIS_LOOP_BUDGET="${METIS_LOOP_BUDGET-}" ;;
 esac
 export METIS_LOOP_BUDGET
-echo "loop.sh: MODEL=$MODEL budget=${METIS_LOOP_BUDGET:-none} USD" >&2   # the first line (stderr: stdout is pi's, the rpc protocol in rpc mode)
+echo "loop.sh: MODEL=$MODEL budget=${METIS_LOOP_BUDGET:-none} USD${FORMALIZE_SPEC:+ formalize=$FORMALIZE_SPEC}" >&2   # the first line (stderr: stdout is pi's, the rpc protocol in rpc mode)
 case "$MODEL" in
-  openrouter/*) FORMALIZE_MODEL="${FORMALIZE_MODEL:-$MODEL}" ;;
+  openrouter/*) [ -n "$FORMALIZE_SPEC" ] || FORMALIZE_MODEL="${FORMALIZE_MODEL:-$MODEL}" ;;
 esac
 FORMALIZE_MODEL="${FORMALIZE_MODEL:-}"
 case "$FORMALIZE_MODEL" in                                       # pi's thinking suffix is pi's, not the model's
@@ -229,7 +272,8 @@ if [ ! -s "$CONF" ]; then
     "") ;;
     *) echo "loop.sh: FORMALIZE_MODEL=$FORMALIZE_MODEL: openrouter/<id> or claude[/<id>]" >&2; exit 1 ;;
   esac
-  [ -z "$FACE" ] || printf '[llm]\nendpoint = "command:%s -m metis_loop_sdk.models %s"\n' "$SDK_PY" "$FACE" > "$CONF"
+  if [ -n "$FACE" ]; then printf '[llm]\nendpoint = "command:%s -m metis_loop_sdk.models %s"\n' "$SDK_PY" "$FACE" > "$CONF"
+  elif [ -n "$FORMALIZE_SPEC" ]; then printf '[llm]\nendpoint = "%s"\n' "$FORMALIZE_SPEC" > "$CONF"; fi
 fi
 export METIS_CONFIG="$CONF"
 export METIS_LOOP_METIS="${METIS_LOOP_METIS:-$PKGS/.venv/bin/metis}"

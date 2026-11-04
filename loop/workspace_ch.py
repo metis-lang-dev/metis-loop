@@ -88,6 +88,23 @@ def _scope():
 from metis.session_trace import CUT_VERBS, SessionTrace  # noqa: E402,F401 — re-exported (gateway.py)
 
 
+def dot_model():
+    """The pi model the dot file's [llm] loop names (metispy metis.loop.llm, llm-config s-07a070ad): what loop.sh
+    starts when MODEL is not given, so the console and a terminal start the same one; None when unset (loop.sh then
+    refuses, saying how to set it) or on a metispy without the seats."""
+    try:
+        from metis.loop import config
+        from metis.loop.llm import pi_model, seat
+    except ImportError:
+        return None
+    config.load(reload=True)                    # the REPL's `llm loop` may have written it since
+    spec, _ = seat("loop")
+    try:
+        return pi_model(spec)["model"] if spec else None
+    except ValueError:
+        return None
+
+
 class WorkspaceChannels:
     """The four channels of one gateway. `pi_factory(argv, cwd, env)` makes the pi loop's rpc client (nina's
     loop/pi_rpc.PiRpc: start, say, events, answer, stop, pid); a test passes a stub."""
@@ -405,8 +422,9 @@ class WorkspaceChannels:
 
     async def start(self, msg):
         """The pi loop as this backend's child over pi's --mode rpc (WORKSPACE.md §5.2). Refused while any pi loop
-        holds the workspace (the TUI's, another backend's) or this one has a child; MODEL as the person names it
-        (loop.sh has the default)."""
+        holds the workspace (the TUI's, another backend's) or this one has a child; MODEL as the person names it,
+        else loop.sh takes the dot file's [llm] loop, the same one a terminal's loop.sh takes (llm-config; dot_model:
+        what the child is said to run)."""
         if (msg.get("mode") or "rpc") != "rpc":
             raise ValueError("the backend starts the pi loop in rpc mode only (the TUI is a terminal's)")
         if self.child and self.child["state"] != "exited":
@@ -437,7 +455,7 @@ class WorkspaceChannels:
         if budget is not None:
             env["METIS_LOOP_BUDGET"] = str(budget)
         rpc = self.pi_factory(_scope() + [str(LOOP_SH), "--mode", "rpc"], str(self.ws.root), env)
-        child = {"rpc": rpc, "model": msg.get("model"), "budget": budget, "started": W._ts(),
+        child = {"rpc": rpc, "model": msg.get("model") or dot_model(), "budget": budget, "started": W._ts(),
                  "gates": {}, "state": "starting"}
         self.child = child
         try:
