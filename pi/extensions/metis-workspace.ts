@@ -654,19 +654,19 @@ export default function (host: ExtensionAPI) {
 	pi.registerTool({
 		name: "bundle_build",
 		label: "build the bundle",
-		description: "Rebuild the workspace's bundle (`metisc build .` where its composition is) after an applied ruling: the image hash before and after, and metisc's account. The backend sees the new build and shows its sessions STALE.",
+		description: "Rebuild the workspace's bundle after an applied ruling: the chat's /rebuild (make where its composition is, else `metisc build .`), the image hash before and after. The backend sees the new build and shows its sessions STALE.",
 		parameters: Type.Object({}),
 		async execute() {
 			const r = root();
 			mustHold(r);
 			const before = ws.bundle(undefined, r);
 			if (!before) throw new Error("the workspace has no bundle (no domains/composition.yaml)");
-			const cdir = join(r, dirname(before.composition));
-			const res = await run(process.env.METISC || "metisc", ["build", "."], cdir);
+			// loop-ui I4: ONE rebuild, the terminal's /rebuild (loop/chat.py rebuild: the bundle's Makefile, which finds
+			// metisc and the world's python as demo.sh does); the tool ran metisc from PATH and failed where make works
+			const env = { ...process.env, METIS_LOOP_PI_SELF: String(process.pid), PYTHONPATH: [LOOP_REPO, process.env.PYTHONPATH].filter(Boolean).join(":") };
+			const res = await run(process.env.METIS_LOOP_SDK_PY || "python3", ["-m", "loop.chat", "--root", r, "/rebuild"], r, env);
 			const after = ws.bundle(undefined, r);
-			ws.journal("pi", "built", { bundle: before.name, image: after?.image ?? null, before: before.image, code: res.code }, r);
-			const head = res.code === 0 ? `image ${before.image ?? "(none)"} -> ${after?.image ?? "(none)"}${after?.stale ? ` (still STALE: ${after.why})` : ""}` : `metisc build failed (exit ${res.code})`;
-			return text(`${head}\n${res.out}${res.err ? `\n${res.err}` : ""}`.trim(), { before: before.image, after: after?.image ?? null, code: res.code });
+			return text(`${res.out}${res.err ? `\n${res.err}` : ""}`.trim() || `exit ${res.code}`, { before: before.image, after: after?.image ?? null, code: res.code });
 		},
 	});
 
@@ -776,6 +776,15 @@ export default function (host: ExtensionAPI) {
 		syncFormalize(ctx);
 		const cost = Number(m?.role === "assistant" ? m?.usage?.cost?.total : 0) || 0;
 		if (cost > 0) charge(root(), { who: "pi", model: m.model ?? process.env.MODEL ?? null, cost }, ctx);
+		// loop-ui I8: every model call is a journal row, paid or local, TUI or rpc: the one count every face's spend
+		// line reads (loop/chat.py spend); cost.jsonl stays the paid rows only (the budget's)
+		if (m?.role === "assistant") {
+			try {
+				ws.journal("pi", "usage", { model: process.env.MODEL ?? m.model ?? null, cost, input: m?.usage?.input ?? null, output: m?.usage?.output ?? null }, root());
+			} catch {
+				// a workspace without state yet: nothing to count
+			}
+		}
 	});
 	pi.on("input", async (_e: any, ctx: any) => {
 		if (!over) return { action: "continue" };

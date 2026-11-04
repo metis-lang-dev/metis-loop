@@ -150,7 +150,7 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 		assert.equal(b1.details.after, "abc1");
 		assert.equal(ws.bundle(undefined, r)!.stale, false);
 		const b2 = await p.tools.get("bundle_build").execute("b2", {});
-		assert.match(b2.content[0].text, /^image abc1 -> abc2/);
+		assert.match(b2.content[0].text, /^\S*metisc build \. in domains\nimage abc1 -> abc2/);   // the chat's /rebuild (loop-ui I4)
 		await p.tools.get("journal").execute("w", { words: "ruled the lamp's surprise\nsecond line dropped" });
 		const kinds = ws.events(0, r).filter((e) => e.who === "pi").map((e) => e.kind);
 		assert.deepEqual(kinds, ["lock", "take", "judging", "ruling", "built", "built", "say"]);
@@ -368,6 +368,9 @@ test("metis-workspace: past the session's budget the loop refuses further model 
 		assert.equal(rows[1].usage_before, 0.03);
 		await p.emit("message_end", msg(0.03), c);                                          // a late message is still logged, not re-journaled
 		assert.equal(ws.events(0, r).filter((x) => x.kind === "budget").length, 1);
+		// loop-ui I8: every model call is a journal `usage` row (the one count of every face's spend line), paid or not
+		const u = ws.events(0, r).filter((x) => x.kind === "usage" && x.who === "pi");
+		assert.deepEqual(u.map((x) => x.cost), [0.03, 0.03, 0.03]);
 		await p.emit("session_shutdown", {}, {});
 	} finally {
 		delete process.env.METIS_LOOP_BUDGET;

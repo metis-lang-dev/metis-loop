@@ -330,6 +330,16 @@ def surprises_text(ws, status=None):
     return "\n".join(out)
 
 
+def spend(ws):
+    """The one spend count (loop-ui I8): metispy's Workspace.spend (the REPL's status says the same); a metispy before
+    loop-ui: cost.jsonl alone, as before."""
+    if hasattr(ws, "spend"):
+        return ws.spend()
+    c = ws.cost()
+    return {"usd": c["total"], "calls": c["calls"], "local": False,
+            "line": f"{c['total']:.4f} USD spent by pi's estimate ({c['calls']} calls; the key's bill runs higher)"}
+
+
 def status_text(ws, child, budget_next=None):
     b = ws.bundle()
     bl = "no bundle" if b is None else f"{b['name']} · v-{(b['image'] or '')[:12] or '(not built)'} " + (
@@ -344,10 +354,9 @@ def status_text(ws, child, budget_next=None):
         pl = f"pi: held elsewhere, pid {pi.get('pid')} ({pi.get('mode') or '?'})"
     else:
         pl = "pi: none"
-    c = ws.cost()
     n = {k: len(ws.surprises(k)) for k in W.STATUS}
     nxt = f" · next start {budget_next} USD" if budget_next is not None else ""
-    return (f"{bl} · {pl} · {c['total']:.4f} USD spent by pi's estimate ({c['calls']} calls; the key's bill runs higher){nxt}\n"
+    return (f"{bl} · {pl} · {spend(ws)['line']}{nxt}\n"
             f"surprises: {n['open']} open, {n['taken']} taken, {n['ruled']} ruled")
 
 
@@ -383,8 +392,9 @@ def mark(ws, words, session=None):
     return draft
 
 
-def rebuild(ws, scope=()):
-    """make where the bundle's composition is (its Makefile), else metisc build . there."""
+def rebuild(ws, scope=(), who="backend"):
+    """make where the bundle's composition is (its Makefile), else metisc build . there. The one rebuild: the chat's
+    /rebuild in every face and pi's bundle_build tool (loop-ui I4); WHO journals it ("pi" from pi's session)."""
     b = ws.bundle()
     if b is None:
         raise ValueError("no bundle here (no domains/composition.yaml): nothing to rebuild")
@@ -398,7 +408,7 @@ def rebuild(ws, scope=()):
     except subprocess.TimeoutExpired:
         raise ValueError(f"/rebuild: stopped after {BUILD_SECS} s") from None
     after = ws.bundle()
-    ws.journal("backend", "built", bundle=b["name"], before=b["image"], image=after["image"] if after else None,
+    ws.journal(who, "built", bundle=b["name"], before=b["image"], image=after["image"] if after else None,
                code=p.returncode)
     tail = (p.stdout + p.stderr).strip().splitlines()[-12:]
     head = (f"image {b['image'] or '(none)'} -> {(after or {}).get('image') or '(none)'}"
@@ -479,13 +489,19 @@ def drop_draft(ws, draft):
     return ws.drop_surprise(rec)
 
 
+def marks_a_run(words):
+    """/mark RUN K WORDS (a trace named): the terminal's form; /mark K WORDS marks the page's own session (the REPL's)."""
+    w = list(words)
+    return len(w) >= 2 and window(w[0]) is None and window(w[1]) is not None
+
+
 def terminal(ws, name, a):
     """The answer of a TERMINAL command: {text}."""
     if name == "help":
         return {"text": help_text(a.command)}
     if name == "mark":
         w = list(a.words)
-        if not (len(w) >= 2 and window(w[0]) is None and window(w[1]) is not None):
+        if not marks_a_run(w):
             raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its "
                              "session)")
         sid = drop_draft(ws, mark(ws, w, None))
@@ -496,7 +512,7 @@ def terminal(ws, name, a):
         raise ValueError("/reload is the REPL's: `reload` in its terminal re-reads the files (after /rebuild)")
     if name == "rebuild":
         from .workspace_ch import _scope
-        return rebuild(ws, _scope())
+        return rebuild(ws, _scope(), who="pi" if os.environ.get("METIS_LOOP_PI_SELF") else "backend")
     if name == "lint":
         rows = []
         for m, prog, mf in lint_targets(ws, a.member):

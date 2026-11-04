@@ -230,7 +230,7 @@ def test_the_chat_widget_carries_the_cards():
     cards, STALE as a notice with rebuild and reload; the ruling card is RULINGS' own function, not a copy."""
     js = (Path(__file__).resolve().parents[1] / "web/workspace/loop.js").read_text()
     for part in ("function header()", "bundlePart()", "piPart()", "spendPart()", "function gateCard(", "function staleCard(",
-                 "function builtCard(", "window.MetisRulings.card", "sendLine('/rebuild')", "io.ask('bundle', 'reload'",
+                 "function builtCard(", "window.MetisRulings.card", "sendLine('/rebuild')", "sendLine('/reload')",
                  "io.ask('loop', 'start'", "'confirm'", "'refuse'"):
         assert part in js, part
     assert "row.kind === 'ruling'" in js                      # a ruling journalled opens its card

@@ -9,7 +9,7 @@
      firings, goldens moved, lint, spend, show pack / show document); STALE as a notice with [rebuild] [reload];
    - a line said with no pi child starts one first (the options' model and budget, else loop.sh's) and says so.
 
-     const c = MetisLoop.mount(box, io, {session: () => sid})   session: the REPL session [reload] re-opens
+     const c = MetisLoop.mount(box, io, {session: () => sid})   session: the REPL session /reload re-opens
      c.refresh()        the child, the locks, the bundle
      c.tail()           the journal (the "journal" chip)
      c.ruling(id)       the ruling of surprise ID as a card in the chat
@@ -18,10 +18,9 @@
      c.fill(text)       TEXT in the input, focused, not said (the host's "mark here": the /mark line to finish)
 
    A line starting with "/" is the backend's command (loop-chat step 2, CHAT.md §2: loop/chat_tools.json, 0 USD): it never
-   starts pi; its answer shows as a block, a ruling as its card, a /mark draft dropped as it is (its words, the reading
-   their first sentence: the terminal's /mark does the same; console-voice step 1 took the SURPRISES dock and its
-   dialog out), or handed to the host when it has opts.onMark(draft). The input completes the commands on "/" (the
-   table, `loop commands`).
+   starts pi; its answer shows as a block, a ruling as its card. /drop and /mark are the page session's REPL verbs,
+   answered by the REPL itself (loop-ui 2.2: the console has no command path of its own); /mark RUN K WORDS is the
+   terminal's. The input completes the commands on "/" (the table, `loop commands`).
    opts.onWords(text): pi's words as they come (the host speaks them: the band's voice, console-voice s-dc1f184c).
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
@@ -79,8 +78,10 @@
     }
     function spendPart() {
       const c = child();
+      const sp = s.state && s.state.spend;          // the one count, /status's line (loop-ui I8: loop/chat.py spend)
+      if (sp && sp.local) return el('span', { title: 'every model call on a local model (Ollama): no key, no bill' }, sp.line);
       const of = s.budget ? Number(s.budget.budget) : c && c.budget ? Number(c.budget) : DEFAULT_BUDGET;
-      const spent = Math.max(s.spent, s.budget ? Number(s.budget.spent) : 0);
+      const spent = Math.max(sp ? Number(sp.usd) : 0, s.budget ? Number(s.budget.spent) : 0);
       const total = s.state && s.state.cost ? s.state.cost : {};
       const tip = `the session: ${spent.toFixed(4)} USD by pi's estimate (the key's real bill ran ~3x higher on deepseek v4 pro: loop-chat step 3's round, 0.4477 USD billed vs 0.149 counted)` +
         (s.budget ? `, ${s.budget.calls} tool calls, ${s.budget.requests} model requests` : '') +
@@ -146,7 +147,7 @@
       return el('button', {
         class: 'btn', disabled: !sid,
         title: sid ? 'the session re-opened on what is built now (epoch + 1)' : 'no session on this page: a host page (the road) reloads its own',
-        onclick: () => reload(sid),
+        onclick: () => sendLine('/reload'),     // the CHAT's /reload, as typed (loop-ui 2.2: no path of its own)
       }, 'reload');
     }
     function line(m) {
@@ -201,7 +202,7 @@
         push('note', '', ev.aborted ? '— the turn was aborted —' : '— pi waits for you —');
       }
       else if (k === 'exit') push('err', 'exit', `pi exited (${ev.code})${ev.stderr_tail && ev.stderr_tail.length ? ': ' + [].concat(ev.stderr_tail).slice(-3).join(' | ') : ''}`);
-      else if (k === 'usage') { s.spent += Number(ev.cost) || 0; }
+      else if (k === 'usage') { refresh(); }      // the count is the journal's: re-read it, never summed here
       render();
     }
 
@@ -261,7 +262,6 @@
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
         if (r.text) push('cmd', '/' + (r.command || ''), r.text);
         if (r.ruling) await ruling(r.ruling);
-        if (r.draft) { if (o.onMark) o.onMark(r.draft); else await drop(r.draft); }
         if (r.child !== undefined || ['take', 'stop', 'budget', 'rebuild', 'reload'].includes(r.command)) await refresh();
       } catch (e) { push('err', 'error', e.message); }
       render();
@@ -276,22 +276,6 @@
         if (!(await start())) return;
       }
       try { await io.ask('loop', 'say', { text }); } catch (e) { push('err', 'error', e.message); render(); }
-    }
-    function firstSentence(words) {   // loop/chat.py first_sentence: the reading a drop carries
-      const one = String(words || '').split(/\s+/).filter(Boolean).join(' ');
-      const m = one.match(/^(.+?[.!?])(\s|$)/);
-      return (m ? m[1] : one).slice(0, 200);
-    }
-    async function drop(d) {
-      const msg = { words: d.words, reading: firstSentence(d.words) };
-      if (d.session) msg.session = d.session;
-      else { msg.run = d.run; if (d.member) msg.member = d.member; if (d.mark !== undefined && d.mark !== null) msg.mark = d.mark; }
-      if (d.k !== undefined && d.k !== null) msg.k = d.k;
-      if (d.window) msg.window = d.window;
-      try {
-        const r = await io.ask('surprise', 'drop', msg);
-        push('cmd', '/mark', `dropped ${r.id}: /surprises lists it, /take rules it`);
-      } catch (e) { push('err', 'error', e.message); }
     }
     function fill(text) {
       const i = box.querySelector('.mw-row [name=text]');
@@ -311,11 +295,6 @@
       m.node = null;
       render();
       try { await io.ask('loop', how, { token: m.token }); } catch (e) { m.answered = `${how}: ${e.message}`; m.node = null; render(); }
-    }
-    async function reload(sid) {
-      try { await io.ask('bundle', 'reload', { session: sid }); push('note', 'loop', `reloaded ${sid}: the session is on the files as they are now`); }
-      catch (e) { push('err', 'error', e.message); }
-      refresh();
     }
     async function ruling(id) {
       try {

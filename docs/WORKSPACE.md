@@ -342,6 +342,13 @@ llp> surprises    llp> status                        /rebuild  /lint  /budget US
   session's trace to the session's shell, so `drop`, `mark`, `surprises` and `status` answer as terminal 1's do (a
   shared-mode visitor's shell has none attached and keeps the wire's whitelist). Opening a member's unit serves its
   includer, as `metis UNIT` does, and the session frame says so (`served`).
+- **One command path** (loop-ui 2.2): the console's CHAT `/drop` and `/mark K WORDS` are its session's REPL verbs (the
+  line goes to the REPL pane, as typed there); `/mark RUN K WORDS`, `/lint` and `/rebuild` are `loop.chat`'s terminal
+  answers, pi's own; the STALE/BUILT card's [reload] says `/reload`. pi's `bundle_build` tool is `/rebuild` (the
+  bundle's Makefile, which finds metisc and the world's python as demo.sh does). **One spend count**: pi journals a
+  `usage` row per model call (paid or local, TUI or rpc), and every face's line is metispy's `Workspace.spend()`:
+  `0 USD, local (11 calls)` on a local model, else `0.0123 USD spent by pi's estimate (12 calls; …)`; the page's
+  header reads the same.
 - **A drop records the unit** the person had open (`unit: domains/hier/grasp_domain.llp` when `metis
   domains/hier/grasp_domain.llp` serves grasp/grasp.llp), and `pack_propose` amends the surprise's unit when the model
   names none: the rule is in the unit, and the member's program alone refused the right pack ("the pack drops begin,

@@ -52,6 +52,11 @@ class GW:
     async def reopen(self, s, why):
         self.reopened.append((s.sid, why))
 
+    async def submit(self, s, cmd, actor):
+        """The session's REPL line, queued and posted (loop-ui 2.2: /drop and /mark are the REPL's verbs)."""
+        self.submitted = getattr(self, "submitted", []) + [(s.sid, cmd, actor)]
+        return {"status": "done", "result": f"(the REPL's) {cmd}"}
+
     def member_of(self, s):
         return s.trace.member
 
@@ -162,6 +167,22 @@ def test_status(root):
     assert "surprises: 1 open, 0 taken, 0 ruled" in t
 
 
+def test_status_on_a_local_model_says_so(root):
+    """loop-ui I8: the one count (pi's journal `usage` rows; metispy Workspace.spend): eleven local calls read
+    '0 USD, local (11 calls)', not '0.0000 USD … (0 calls …)'; the console's loop state carries the same line."""
+    ws = W.workspace(root)
+    if not hasattr(ws, "spend"):
+        pytest.skip("metispy before loop-ui: no Workspace.spend")
+    for _ in range(11):
+        ws.journal("pi", "usage", model="ollama/qwen3:4b", cost=0)
+    ch = channels(root)
+    assert "· pi: none · 0 USD, local (11 calls)\n" in say(ch, "/status")["text"]
+    ch.gw.sent.clear()
+    asyncio.run(ch.handle("page", {"ch": "loop", "type": "state", "req": "st"}))
+    (f,) = [x for x in ch.gw.sent if x.get("req") == "st"]
+    assert f["spend"]["line"] == "0 USD, local (11 calls)" and f["spend"]["local"] is True
+
+
 def test_status_from_the_pi_session_holding_the_workspace(root, monkeypatch, capsys):
     """two-terminals: pi's own /status (METIS_LOOP_PI_SELF its pid) says this session, not "held elsewhere"."""
     import os
@@ -232,31 +253,30 @@ def test_ruling_and_diff(root):
 
 
 def test_mark_from_a_trace_and_the_refusals(root):
+    """/mark RUN K WORDS is the terminal's: dropped at once (pi's /mark, loop-ui 2.2: no draft for the page to drop)."""
     ch = channels(root)
-    f = say(ch, f"/mark {RUN} 10..20 it braked late behind the lead car")
-    assert f["draft"] == {"run": RUN, "member": None, "window": [10, 20],
-                          "words": "it braked late behind the lead car"}
-    assert say(ch, f"/mark {RUN} 12 late")["draft"]["k"] == 12
-    assert "no open session writes a trace" in say(ch, "/mark 10 late")["error"]
+    f = say(ch, f"/mark {RUN} 10..20 it braked late behind the lead car")              # the terminal's own refusal
+    assert f["type"] == "error" and "has several members: the REPL or the console names one" in f["error"]
+    assert "/mark here names a trace" in say(ch, "/mark 10 late")["error"]            # no session: the terminal's form only
     assert "the words are what the record carries" in say(ch, f"/mark {RUN} 10")["error"]
 
 
 def test_mark_and_drop_from_the_pages_session(root):
+    """loop-ui 2.2: /drop and /mark K on the page's session are its REPL's own verbs (the REPL pane gets the line);
+    the gateway writes no surprise of its own."""
     ch = channels(root)
     trace = SimpleNamespace(path=root / ".metis" / "traces" / "s1", member="lamp", last_k=lambda: 7, extensions=())
     ch.gw.sessions["s1"] = SimpleNamespace(sid="s1", subs={"page"}, trace=trace, running=False)
-    f = say(ch, "/mark it should be on", session="s1")
-    assert f["draft"] == {"session": "s1", "k": 7, "words": "it should be on"}        # the dialog drops from the session
+    f = say(ch, "/mark 7 it should be on", session="s1")
+    assert f["text"] == "(the REPL's) mark 7 it should be on"
     assert "no open session" in say(ch, "/drop it should be on")["error"]            # no session named: refused
     assert "no open session" in say(ch, "/drop x", session="other")["error"]         # not this page's
-    f = say(ch, "/drop it should be on. The switch was pressed at 5.", session="s1")   # opus's review: the drop writes
-    rec = W.workspace(root).surprise(f["id"])
-    assert f["text"] == f"dropped {f['id']}: the pi loop takes it from .metis/surprises/"
-    assert (rec["session"], rec["member"], rec["trace"], rec["k"], rec["words"], rec["reading"], rec["status"]) == \
-        ("s1", "lamp", "traces/s1", 7, "it should be on. The switch was pressed at 5.", "it should be on.", "open")
-    assert chat.first_sentence("  no stop here  ") == "no stop here" and chat.first_sentence("a? b.") == "a?"
     f = say(ch, "/drop it didn't stop. The lamp's switch was off.", session="s1")      # an apostrophe is a word's
-    assert W.workspace(root).surprise(f["id"])["reading"] == "it didn't stop."
+    assert f["text"] == "(the REPL's) drop it didn't stop. The lamp's switch was off."
+    assert ch.gw.submitted == [("s1", "mark 7 it should be on", "chat"),
+                               ("s1", "drop it didn't stop. The lamp's switch was off.", "chat")]
+    assert W.workspace(root).surprises() == []                                        # nothing written by the gateway
+    assert chat.first_sentence("  no stop here  ") == "no stop here" and chat.first_sentence("a? b.") == "a?"
     assert "No closing quotation" in say(ch, "/why it's")["error"]                     # a command's arguments stay shell words
 
 
@@ -313,14 +333,14 @@ def test_budget_take_and_stop(root):
 
 def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     """The chat widget (web/workspace/loop.js): a "/" line asks the backend and never starts pi; the input's
-    completion is the table; a /mark draft is dropped as it is, or handed to the host's opts.onMark (console-voice
-    step 1: the console has no SURPRISES dialog to hand it to)."""
+    completion is the table; /drop and /mark are answered by the session's REPL, never dropped by the page (loop-ui
+    2.2: no command path of its own); [reload] says /reload."""
     js = (HERE.parent / "web" / "workspace" / "loop.js").read_text()
     assert "if (text.startsWith('/')) return command(text);" in js
     assert js.index("if (text.startsWith('/')) return command(text);") < js.index("if (!running()) {\n        if (elsewhere())")
     assert "list: listId" in js and "el('datalist', { id: listId }" in js and "io.ask('loop', 'commands')" in js
-    assert "if (r.draft) { if (o.onMark) o.onMark(r.draft); else await drop(r.draft); }" in js
-    assert "const msg = { words: d.words, reading: firstSentence(d.words) };" in js and "io.ask('surprise', 'drop', msg)" in js
+    assert "r.draft" not in js and "io.ask('surprise', 'drop'" not in js and "firstSentence" not in js
+    assert "onclick: () => sendLine('/reload')," in js and "io.ask('bundle', 'reload'" not in js
     assert "return { refresh, tail, ruling, say: sendLine, fill };" in js
     page = (HERE.parent / "console" / "loop_console.html").read_text()
     assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page

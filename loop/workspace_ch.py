@@ -21,7 +21,7 @@ the REPL session's trace writer (§3: `open` with `trace: true`).
                                                                        document and pack
                  {ch:"bundle", type:"state", req}                   -> {type:"state", bundle}: ws.bundle() (None: no composition)
                  {ch:"bundle", type:"reload", session, req}         -> the session re-opened from its catalog (epoch + 1)
-                 {ch:"loop", type:"state", req}                     -> {type:"state", loops, cost, child}
+                 {ch:"loop", type:"state", req}                     -> {type:"state", loops, cost, spend, child}
                  {ch:"loop", type:"events", since?, req}            -> {type:"events", since, rows}; then {type:"event", n, row} as rows come
                  {ch:"loop", type:"start", mode:"rpc", model, budget?, req}
                                                                     -> the pi loop as this backend's child (refused while a pi loop holds
@@ -301,8 +301,9 @@ class WorkspaceChannels:
 
     async def _loop(self, page, typ, msg):
         if typ == "state":
+            from . import chat
             return {"loops": await self._run(self.ws.loops), "cost": await self._run(self.ws.cost),
-                    "child": self.child_state()}
+                    "spend": await self._run(chat.spend, self.ws), "child": self.child_state()}
         if typ == "events":
             since = int(msg.get("since") or 0)
             rows = await self._run(self.ws.events, since)
@@ -357,32 +358,26 @@ class WorkspaceChannels:
             out.update(await self._run(chat.answer, self.ws, name, a, self.child_state(), self.budget_next))
             if name == "status":
                 out["child"] = self.child_state()
-        elif name == "mark":
-            sess = None
-            if s is not None and s.trace is not None:
-                sess = {"session": s.sid, "k": s.trace.last_k()}
-            draft = await self._run(chat.mark, self.ws, a.words, sess)
-            out.update(draft=draft, text="a surprise draft in SURPRISES: check the member and the tick, then drop it")
-        elif name == "drop":
+        elif name == "mark" and (s is None or chat.marks_a_run(a.words)):
+            # /mark RUN K WORDS: a trace's tick, dropped at once: the terminal's (pi's /mark) own answer
+            out.update(await self._run(chat.terminal, self.ws, name, a))
+        elif name in ("drop", "mark"):
+            # loop-ui 2.2: the REPL's own verb on this page's session (its REPL pane gets the line, as typed there):
+            # `drop WORDS` its last tick, `mark K[..K1] WORDS` a tick of its trace; the same code as terminal 1's
             if s is None:
-                raise ValueError("/drop: no open session on this page (open one, or /mark RUN K WORDS)")
-            words = " ".join(a.words)                    # the words are enough: the reading is their first sentence
-            r = await self._surprise(page, "drop", {"session": s.sid, "words": words, "reading": chat.first_sentence(words)})
-            out.update(text=f"dropped {r['id']}: the pi loop takes it from .metis/surprises/", id=r["id"])
-        elif name == "rebuild":
-            out.update(await self._run(chat.rebuild, self.ws, _scope()))
+                raise ValueError(f"/{name}: no open session on this page (open a program in the CATALOG"
+                                 + (", or /mark RUN K WORDS)" if name == "mark" else ", or /mark RUN K WORDS)"))
+            post = await self.gw.submit(s, f"{name} " + " ".join(a.words), "chat")
+            if post.get("status") != "done":
+                raise ValueError(str(post.get("result") or post.get("status")))
+            out["text"] = post.get("result") or ""
+        elif name in ("rebuild", "lint"):                # the terminal's answer (pi's /rebuild, /lint): one code
+            out.update(await self._run(chat.terminal, self.ws, name, a))
         elif name == "reload":
             if s is None:
                 raise ValueError("/reload: no open session on this page")
             await self._bundle(page, "reload", {"session": s.sid})
             out["text"] = f"reloaded {s.sid}: the session is on the files as they are now (epoch + 1)"
-        elif name == "lint":
-            rows = []
-            for m, prog, mf in await self._run(chat.lint_targets, self.ws, a.member):
-                args = {"file": prog, **({"manifest": mf} if mf else {})}
-                r = await self._run(self.verb, "lint", args)
-                rows.append(f"{m}: " + ((r["out"] + r["err"]).strip() or f"exit {r['code']}"))
-            out["text"] = "\n".join(rows)
         elif name == "budget":
             if not (a.usd > 0):
                 raise ValueError("/budget USD: a number of USD above 0")
