@@ -317,3 +317,53 @@ def test_an_inert_acceptance_says_so():
     assert line.startswith("x on m: accepted (inert) · ")
     assert "(inert)" not in chat.ruling_line({"id": "x", "member": "m"}, {"verdict": "accepted", "first_enabled": {"k": 3, "rule": "r"}})
 
+
+
+PICKY = """
+catalog picky 1.
+provenance text "a weight port for the chat's stand-in line" "2026-11-04".
+layers (dyn).
+stages (main).
+type place {door sofa}.
+namespace g produce (dyn).
+pred want(place) : g.
+pred at(place) : g.
+pred ready : g.
+weight pick(P) reads {want(P)}.
+stage main {
+  %% I go to {P}, or I stay.
+  go [dyn] : want(P) -o (at(P) @w pick(P) | ready @w ~pick(P)).
+}
+#steps 20
+#seeds 1
+"""
+
+
+def test_replay_and_why_say_a_weight_port_was_stood_in(root):
+    """alfworld's task (weight look): metispy opens the member with the port stood in, and /replay and /why carry its
+    one line, so the loop reads on every tool that the member's choices are the record's, not evidence."""
+    from metis import trace as T
+    if not hasattr(T, "trace_note"):
+        pytest.skip("metispy before the trace verbs' stand-in (trace-stand-in)")
+    from metis.fw.registry import Registry
+    from metis.lang.repl import Repl as Shell
+    p = root / "domains" / "picky" / "picky.llp"
+    p.parent.mkdir(parents=True)
+    p.write_text(PICKY)
+    sh = Shell(str(p), seed=1, registry=Registry().weight("pick", T.STAND_IN))
+    chose = sorted(e.name for _, _, e in sh.events_tbl if "door" in e.name)[-1]
+    d = root / ".metis" / "traces" / "wpicky"
+    w = T.Segments(d, every=0)
+    w.open_segment(0, {"members": {"picky": {"key": T.program_key(p), "program": str(p), "seed": 1, "weights": ["pick"], "out": []}},
+                       "commands": [], "live": "metis-loop-console", "clock": "command"},
+                   {"sessions": {"picky": T.session_state(sh)}, "copies": {"picky": {}}})
+    w.line({"k": 1, "members": {"picky": {"why": "command", "seq": [{"take": ["+want(door)"], "by": "person"}]}}})
+    w.line({"k": 2, "members": {"picky": {"why": "command", "seq": [{"step": [chose], "by": "tool"}]}}})
+    w.close()
+    W.workspace(root).drop_surprise({"member": "picky", "trace": "traces/wpicky", "k": 2, "reading": "it stayed"})
+    ch = channels(root)
+    line = "picky: pick stood in at 0.5: this member's choices are the record's, not evidence"
+    t = say(ch, "/replay wpicky 2")["text"]
+    assert line in t and "fired " + chose in t, t
+    t = say(ch, "/why ready at 2")["text"]
+    assert line in t and "last moved at k 2 by rule" in t, t

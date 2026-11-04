@@ -209,10 +209,18 @@ def target(ws, run=None, win=None):
     return d, run, members, win
 
 
+def _stood_in(d, member):
+    """metispy's line for a member opened with its weight ports stood in (metis.trace trace_note), or none on a metispy
+    before it."""
+    note = getattr(T, "trace_note", None)
+    return note(d, member) if note else []
+
+
 def replay(ws, run=None, win=None):
     d, run, members, win = target(ws, run, win)
-    lines, n = [], 0
+    lines, n, notes = [], 0, []
     for m in members:
+        notes += [f"{m}: {x}" for x in _stood_in(d, m)]
         ticks, exact = T.timeline(d, m)
         sel = [t for t in ticks if win is None or win[0] <= t.k <= win[1]]
         if not sel and win is not None:
@@ -225,7 +233,7 @@ def replay(ws, run=None, win=None):
                              + (f"; made {', '.join(sorted(t.made))}" if t.made else ""))
     span = f"{win[0]}..{win[1]}" if win else "whole"
     head = f"{run} · {span} · {', '.join(members)} · {n} row(s)" + (f" (the first {ROWS} shown)" if n > ROWS else "")
-    return {"text": "\n".join([head, *lines, "(fired as the trace has them; made: the takes' and beats' atoms)"]),
+    return {"text": "\n".join([head, *notes, *lines, "(fired as the trace has them; made: the takes' and beats' atoms)"]),
             "run": run, "rows": n}
 
 
@@ -248,6 +256,8 @@ def why(ws, atom, at=None):
             out.append(f"{m}: {row['atom']} want {row['want']} have {row['have']} at k {k}: {mover}; "
                        f"{row.get('whose') or 'holds as it should'}")
         out.append(f"{m}: {r['verdict']}")
+        if r.get("note"):
+            out.append(f"{m}: {r['note']}")
     return {"text": f"why {atom} at k {k} on {run}\n" + "\n".join(out), "run": run, "k": k}
 
 
