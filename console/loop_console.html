@@ -634,6 +634,7 @@ function wsHandle(f){
       intents.set(f.id,{...i,status:"error",result:f.error,json:{ok:false,error:f.error}});renderStream();settle()}
     banner(f.error+(f.detail?" — "+f.detail:""),6000);return}
   if(f.type==="files"){if(f.session===sid)onFiles(f);return}
+  if(f.type==="notice"){if(f.session===sid)banner(f.text,8000);return}
   if(f.type==="session"){
     if(f.req&&f.req===pendingReq){pendingReq=null;sid=f.session;sstore.set("loopconsole.sid",sid);
       intents=new Map();seenEpoch=null;$("#stream").innerHTML="";

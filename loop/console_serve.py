@@ -163,8 +163,7 @@ class ConsoleServer:
             for d in _shared(self.root):        # a METIS_HOME package: by its name or its (absolute) path
                 if d.program and name in (d.name, str(Path(d.program).with_suffix(""))):
                     return Path(d.program).resolve()
-            raise ValueError(f"no catalog '{llp}' in {self.root}" + (f" nor METIS_HOME ({catalog.home()})"
-                                                                   if hasattr(catalog, "home") else ""))
+            raise ValueError(f"no catalog '{llp}' in {self.root} nor METIS_HOME ({catalog.home()})")
         if len(hits) > 1:                       # a package's program wins over any other .llp (a goldens case
             progs = {d["path"] for d in self.domains() if d.get("kind") == "domain"}     # is not a package)
             hits = [n for n in hits if n in progs] or hits
@@ -424,7 +423,7 @@ class ConsoleServer:
                 out.append({"path": e.relative_to(root).as_posix(), "text": e.read_text(), "role": "extension"})
         # a bundle member's rule files (the alf drive's L5): what its program includes inside the composition's directory,
         # a generated (DERIVED) file shown as its source, the one copy an edit changes (metispy's includes(within=))
-        bundle = catalog.bundle_dir(prog.parent, self.root) if hasattr(catalog, "bundle_dir") else None
+        bundle = catalog.bundle_dir(prog.parent, self.root)
         if bundle is not None:
             try:
                 inc = catalog.includes(prog.parent, [prog, *exts], self.root, within=bundle)
@@ -443,11 +442,12 @@ class ConsoleServer:
     def _domain_file(self, rel: str):
         """(the domain, the path inside its directory) of a checkout file `rel` (relative to the root)."""
         p = self._under(rel)
-        for d in catalog.walk("domain.yaml", self.root):
-            dd = Path(d).parent.resolve()
-            if dd in p.parents:
-                return dd.name, p.relative_to(dd).as_posix(), p
-        raise ValueError(f"'{rel}' is not a file of a domain of this catalog")
+        dirs = [Path(d).parent.resolve() for d in catalog.walk("domain.yaml", self.root)]
+        mine = [dd for dd in dirs if dd in p.parents]
+        if not mine:
+            raise ValueError(f"'{rel}' is not a file of a domain of this catalog")
+        dd = max(mine, key=lambda x: len(x.parts))      # nina: the nearest manifest, so a nested package is its own
+        return dd.name, p.relative_to(dd).as_posix(), p
 
     def _plan_edit(self, domain: str, path: str, old: str, new: str) -> dict:
         """The edit's dry run (metispy's catalog.edit, dry_run=True): {path, diff, findings: [{level, code, line, msg,
@@ -466,7 +466,7 @@ class ConsoleServer:
         p = self._under(rel)
         sh = self.shells.get(sid) if sid else None
         d = Path(sh.path).resolve().parent if sh is not None else None
-        bundle = catalog.bundle_dir(d, self.root) if d is not None and hasattr(catalog, "bundle_dir") else None
+        bundle = catalog.bundle_dir(d, self.root) if d is not None else None
         if d is not None and d not in p.parents and bundle is not None and bundle in p.parents:
             # a file of the session member's bundle (its ../x.llp): planned from that member (nina: only then; any
             # other file is its own domain's, as without a session)

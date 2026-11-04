@@ -335,3 +335,46 @@ def test_an_edit_of_another_domains_file_is_its_own_with_a_session_open(tmp_path
         pl = srv.edit_plan(readme, text.splitlines()[0], text.splitlines()[0] + " (edited)", sid=sid)
         assert pl["ok"] and pl["domain"] == "lamp" and pl["token"], (sid, pl)
 
+
+
+def test_a_nested_package_edits_as_its_own(tmp_path):
+    """nina's note 3: the nearest manifest above a file names its domain, so a package inside another's directory
+    edits as itself, not as the outer one."""
+    srv = server(tmp_path)
+    inner = srv.root / "domains/plant/inner"
+    inner.mkdir()
+    (inner / "domain.yaml").write_text("program: inner.llp\n")
+    (inner / "README.md").write_text("An inner package.\n")
+    assert srv._domain_file("domains/plant/inner/README.md")[:2] == ("inner", "README.md")
+    assert srv._domain_file(PROG)[:2] == ("plant", "plant.llp")
+
+
+def test_a_session_running_elsewhere_is_told_and_reopens_after(tmp_path):
+    """nina's note 2: a confirm that writes the file of a session running elsewhere tells that session's page, and the
+    session re-opens (epoch + 1, the files frame) when its command ends, not before."""
+    import asyncio
+    srv = server(tmp_path)
+    r = Running(srv, mode="personal")
+    try:
+        with r.ws() as a, r.ws() as b:
+            sa, sb = open3(a, "domains/plant/plant"), open3(b, "domains/plant/plant")
+            text = sa["_files"]["files"][0]["text"]
+            other = r.gw.sessions[sb["session"]]
+            other.running = {"cmd": "a long one"}                     # as if b's command were mid-run
+            a.send(json.dumps({"ch": "repl", "type": "edit", "session": sa["session"], "path": PROG, "old": text,
+                               "new": text.replace("%% I wake up.", "%% I wake up slowly.")}))
+            pl = frames(a, lambda f: f.get("type") == "edit")[-1]
+            a.send(json.dumps({"ch": "repl", "type": "edit", "op": "confirm", "session": sa["session"],
+                               "token": pl["token"]}))
+            got = frames(b, lambda f: f.get("type") == "files")
+            note = [f for f in got if f.get("type") == "notice"]
+            assert note and "re-opens when it ends" in note[-1]["text"], got
+            assert not any(f.get("type") == "session" and f.get("edited") for f in got)     # not while it runs
+            assert other.written
+            other.running = None
+            asyncio.run_coroutine_threadsafe(r.gw._after_run(other), r.loop).result(10)
+            after = frames(b, lambda f: f.get("type") == "files")
+            assert any(f.get("type") == "session" and f.get("edited") for f in after), after
+            assert "slowly" in after[-1]["files"][0]["text"] and not other.written
+    finally:
+        r.close()

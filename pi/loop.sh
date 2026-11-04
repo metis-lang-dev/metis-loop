@@ -46,8 +46,12 @@
 #   METIS_LOOP_LLP=<file.llp>  the program the REPL starts on (default: a blank world; demo.sh
 #              starts on the plant, so formalize sees a known world's vocabulary)
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
+#   --help (first): this text; nothing starts, no key read
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
 set -euo pipefail
+case "${1:-}" in                      # loop.sh's own help: the header above (pascal, loop-test); pi's is pi.sh --help
+  -h|--help) sed -n '2,/^set -euo/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;;
+esac
 case " $* " in
   *" --mode rpc "*) ;;                # rpc: stdin IS the protocol (the backend's child, person.py): kept
   *) [ -t 0 ] || exec </dev/null ;;   # no terminal: pi must not sit reading a stdin nobody will close

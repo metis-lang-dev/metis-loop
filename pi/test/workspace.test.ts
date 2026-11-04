@@ -354,6 +354,12 @@ test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without o
 	assert.equal(empty.status, 1);
 	assert.match(empty.stderr, /is paid: give --budget USD/);
 	assert.match(run(["--budget", "lots"]).stderr, /a positive number of USD/);
+	// pascal (loop-test): --help prints the header and starts nothing, with no key and no SDK
+	const h = spawnSync(join(HERE, "..", "loop.sh"), ["--help"], { encoding: "utf8", cwd: r, env: { PATH: process.env.PATH } as any });
+	assert.equal(h.status, 0, h.stderr);
+	assert.match(h.stdout, /^loop\.sh — the agentic loop/);
+	assert.match(h.stdout, /--budget USD/);
+	assert.doesNotMatch(h.stdout, /set -euo|^#/m);
 	// the architect's F5: no key in the environment, the person's key file is read when private (mode 600), else refused
 	const kd = mkdtempSync(join(tmpdir(), "ws-key-"));
 	const kf = join(kd, "openrouter.env");

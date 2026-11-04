@@ -43,6 +43,8 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"posting", session, id, cmd, actor, ts, …intent_posting}
                  {ch:"repl", type:"files",   session, program, files:[{path, text, role}]}  the EDITOR's
                                           files of the session, as they are on disk (after open and every write)
+                 {ch:"repl", type:"notice",  session, text}  a word for the session's page (an edit wrote
+                                          its file while it ran: it re-opens when the command ends)
                  {ch:"…",    type:"error",   error, session?, id?}
 
 The posting payload is `intent_posting` verbatim (via ConsoleServer.
@@ -180,6 +182,7 @@ class Sess:
         self.last = time.time()
         self.worker: Optional[asyncio.Task] = None
         self.futs: Dict[str, asyncio.Future] = {}   # submit() waiters
+        self.written = False                        # its files were written while it ran: re-opens when it ends
 
 
 class Gateway:
@@ -333,14 +336,31 @@ class Gateway:
             except ValueError:
                 continue
             if o is s or theirs & (written or mine):
-                if not o.running:
-                    try:
-                        await self.reopen(o, "edited")
-                    except ValueError as e:
-                        await self._broadcast(o, {"ch": "repl", "type": "error", "session": o.sid,
-                                                  "error": f"the file is written; the session did not re-open: {e}"})
+                if o.running:                           # nina: a session running elsewhere is told, and re-opens after
+                    o.written = True
+                    await self._broadcast(o, {"ch": "repl", "type": "notice", "session": o.sid,
+                                              "text": "a file of this session was written while it ran: the "
+                                                      "command goes on with the old program; the session "
+                                                      "re-opens when it ends"})
+                else:
+                    await self._reopen_edited(o)
                 await self._broadcast(o, await self._files_frame(o))
         await self._send_all({"ch": "meta", "type": "domains", "domains": self.srv.domains()})
+
+    async def _reopen_edited(self, o: "Sess"):
+        """Re-open a session whose files an edit wrote (at the write, or when its running command ends)."""
+        o.written = False
+        try:
+            await self.reopen(o, "edited")
+        except ValueError as e:
+            await self._broadcast(o, {"ch": "repl", "type": "error", "session": o.sid,
+                                      "error": f"the file is written; the session did not re-open: {e}"})
+
+    async def _after_run(self, s: "Sess"):
+        """After a command: a session written while it ran re-opens now (its queue waits behind it)."""
+        if s.written and s.running is None:
+            await self._reopen_edited(s)
+            await self._broadcast(s, await self._files_frame(s))
 
     async def files(self, ws, ip, msg):
         """The checkout's files (e2e-workflow step 1): records sank by
@@ -580,6 +600,7 @@ class Gateway:
                                       "session": s.sid, **item, **posting},
                                   log=True)
             self._resolve(s, item["id"], posting)
+            await self._after_run(s)
             await self._broadcast(s, self._session_frame(s))
 
     def _traced(self, s: "Sess", when: str, cmd: str = ""):
