@@ -28,6 +28,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap, JsonlChild, type Line } from "./lib/jsonl.ts";
 import { runDir, takeRoot, writeRoot } from "./lib/roots.ts";
+import { scoped, toolset } from "./lib/toolset.ts";
 import * as catalog from "./sdk/catalog.ts";
 import * as gate from "./sdk/gate.ts";
 
@@ -37,7 +38,10 @@ const ARG = Type.Object({
 });
 const NAME = /^[a-z][a-z0-9_]*$/;
 
-export default function (pi: ExtensionAPI) {
+export default function (host: ExtensionAPI) {
+	// the tool set by mode (lib/toolset.ts): in a workspace only catalog_edit, the person's gate for an accepted pack
+	const set = toolset();
+	const pi = scoped(host, (n) => set !== "workspace" || n === "catalog_edit");
 	let repl: JsonlChild | null = null;
 	let served: string | null = null; // the program file the REPL serves (null: a blank world)
 	let servedHost: string | null = null; // the host it was started with (--host: the operator's argv, D4)

@@ -48,6 +48,7 @@
 #   pi args: e.g. --mode rpc (a client is the person), or none (pi's TUI)
 #   --help (first): this text; nothing starts, no key read
 #   METIS_LOOP_PI=<cmd>  run it in pi.sh's place, with pi.sh's arguments (the tests' stand-in)
+#   METIS_LOOP_TOOLS=workspace|seed|all  the tool set (default: seed with --seed or no bundle in DIR, else workspace)
 set -euo pipefail
 case "${1:-}" in                      # loop.sh's own help: the header above (pascal, loop-test); pi's is pi.sh --help
   -h|--help) sed -n '2,/^set -euo/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;;
@@ -237,5 +238,13 @@ p = json.load(sys.stdin).get("pi")
 print("" if not p or p.get("alive") is False else "pid %s, started %s, mode %s" % (p.get("pid"), p.get("started"), p.get("mode")), end="")')"
 [ -z "$held" ] || { echo "loop.sh: a pi loop runs in $DIR already ($held): one per workspace" >&2; exit 1; }
 case " $* " in *" --mode rpc "*) export METIS_LOOP_MODE=rpc ;; *) export METIS_LOOP_MODE=tui ;; esac
+# the tool set (loop-prompt, PROMPT.md §3; extensions/lib/toolset.ts): seed with --seed or a DIR without a bundle (the
+# standalone catalog loop), workspace when DIR has one (the surprise loop); METIS_LOOP_TOOLS given is kept
+if [ -z "${METIS_LOOP_TOOLS:-}" ]; then
+  if [ -n "$SEED" ]; then METIS_LOOP_TOOLS=seed
+  elif [ "$("$SDK_PY" -m metis.catalog.workspace --root "$DIR" bundle --json 2>/dev/null | head -c 4)" = null ]; then METIS_LOOP_TOOLS=seed
+  else METIS_LOOP_TOOLS=workspace; fi
+fi
+export METIS_LOOP_TOOLS
 export MODEL
 exec "${METIS_LOOP_PI:-$HERE/pi.sh}" --model "$MODEL" --system-prompt "$HERE/prompts/loop-system.md" "$@" "${TASK[@]}"

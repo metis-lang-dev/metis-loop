@@ -30,6 +30,7 @@ import { Type, type TSchema } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap, JsonlChild, type Line } from "./lib/jsonl.ts";
 import * as catalog from "./sdk/catalog.ts";
+import { scoped, toolset } from "./lib/toolset.ts";
 
 const SERVED = new Set(["repl", "watch", "agent"]);
 const NAME = /^[a-z][a-z0-9_]*$/;
@@ -46,7 +47,10 @@ function schema(p: Record<string, any> | null, domain: string): TSchema {
 	return Type.Object(props);
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (host: ExtensionAPI) {
+	// the tool set by mode (lib/toolset.ts): none in a workspace (a surprise is ruled through pack_propose)
+	const set = toolset();
+	const pi = scoped(host, () => set !== "workspace");
 	let agent: JsonlChild | null = null;
 	let domain: string | null = null;
 	const registered = new Set<string>();
