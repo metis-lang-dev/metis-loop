@@ -52,46 +52,8 @@ def srv(tmp_path, monkeypatch):
     return s
 
 
-def test_draft_propose_save(srv, tmp_path):
-    name = "domains/plant/plant"
-    r = it.read(srv, name)
-    assert r["draft"] and "verb: WATER" in r["text"] and "I water the plant." in r["text"]
-    p = it.propose(srv, name, r["text"])
-    assert p["ok"], p["misses"]
-    assert p["new"] and p["path"] == "domains/plant/intent.yaml" and "+verbs:" in p["diff"]
-    assert not (tmp_path / "domains/plant/intent.yaml").exists()          # shown, not written
-    bad = it.propose(srv, name, r["text"].replace("atom: cmd_water", "atom: cmd_nope"))
-    assert not bad["ok"] and bad["misses"]                                  # an example that maps to no atom
-    assert "asks:\n- CHECK" in r["text"]                                    # the draft's candidate: check only reads
-    ask = it.propose(srv, name, r["text"] + "asks: [WATER]\n")             # an ask that changes the state
-    assert not ask["ok"] and any(m.startswith("ASKS asks WATER: rule water consumes dry") for m in ask["misses"])
-    with pytest.raises(ValueError, match="does not generate"):
-        it.propose(srv, name, "verbs: [}")
-    with pytest.raises(ValueError, match="no such proposal"):
-        it.save(srv, p, "wrong")
-    out = it.save(srv, p, p["token"])
-    assert out["written"] == ["domains/plant/intent.yaml", "domains/plant/intent/plant.gbnf",   # no -spoken.txt: empty
-                              "domains/plant/intent/plant-prompt.txt", "domains/plant/domain.yaml"]
-    # the manifest names the spec only (the generated files at their fixed names), its own text kept,
-    # and the loader derives them (catalog-entry step 2)
-    import yaml
-    from metis import catalog
-    mtext = (tmp_path / "domains/plant/domain.yaml").read_text()
-    m = yaml.safe_load(mtext)
-    assert m["intent"] == {"spec": "intent.yaml"} and m["display"] == "the plant"
-    got = catalog.get("plant", tmp_path).intent
-    assert (got["grammar"].name, got["prompt"].name) == ("plant.gbnf", "plant-prompt.txt")
-    assert "examples" not in got                                            # no spoken: no -spoken.txt (loop-fixes)
-    out2 = it.save(srv, p, p["token"])                                     # again: the operator's block stands
-    assert "domains/plant/domain.yaml" not in out2["written"] and "manifest_lacks" not in out2
-    assert (tmp_path / "domains/plant/domain.yaml").read_text() == mtext
-    g = (tmp_path / "domains/plant/intent/plant.gbnf").read_text()
-    assert '"\\"WATER\\""' in g and '"\\"CHECK\\""' in g
-    assert not it.read(srv, name)["draft"]
-
-
 def test_intents_need_a_domain_directory(srv):
     with pytest.raises(ValueError, match="in memory only"):
-        it.read(srv, "scratch thing")
+        it.domain_of(srv, "scratch thing")
     with pytest.raises(ValueError, match="no intent.yaml yet"):
         it.check(srv, "domains/plant/plant")

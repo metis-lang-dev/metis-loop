@@ -50,30 +50,6 @@ def test_an_edit_shows_the_diff_and_writes_only_what_was_shown(srv, tmp_path):
     assert srv.open_session("s", {"llp": llp})["status"] != "closed"
 
 
-def test_records_listed_newest_first_and_sunk_into_a_session(srv, tmp_path):
-    llp = srv.new_domain("plant", "a plant")
-    rec = tmp_path / "domains/plant/records/s1.jsonl"
-    rec.parent.mkdir()
-    base = {"kind": "rare", "observed": {"awake": 1}, "init": {"idle": 1}, "record": 0, "session": "s1"}
-    rec.write_text("\n".join(json.dumps(x) for x in [
-        {**base, "ts": "2026-10-14T10:00:00", "close": {"status": "open", "beat": 3}},
-        {**base, "ts": "2026-10-14T10:00:05", "mined_text": "a visitor watered it", "escalated": {"beat": 4},
-         "close": {"status": "escalated", "beat": 4}}]) + "\n")
-    rows = srv.records()
-    assert [(r["i"], r["status"], r["escalated"]) for r in rows] == [(1, "escalated", True), (0, "open", False)]
-    assert rows[0]["domain"] == "domains/plant" and rows[0]["session"] == "s1" and rows[0]["mined_text"] == "a visitor watered it"
-    srv.open_session("s", {"llp": llp})
-    out = srv.load_sink("s", "domains/plant/records/s1.jsonl")
-    assert out["ok"] and len(out["records"]) == 2
-    # the page selects the clicked row by its identity, never by its line
-    assert out["ids"] == [[r["record"], r["ts"]] for r in sorted(rows, key=lambda r: r["i"])]
-    assert srv.serve_one("s", "record 1")["posting"]["status"] == "done"
-    assert srv.shells["s"].loop.text == "a visitor watered it"                # record N adopts the mined text
-    for bad in ("domains/plant/plant.llp", "../etc/passwd", "domains/plant/records/nope.jsonl"):
-        with pytest.raises(ValueError):
-            srv.load_sink("s", bad)
-
-
 SOIL = """catalog plant 1.
 layers (dyn).
 stages (main).
@@ -131,8 +107,8 @@ def test_an_edit_reopen_keeps_the_sunk_records_and_the_selected_one(srv, tmp_pat
     rec.write_text(json.dumps({"kind": "unmodeled", "observed": {"moist": 1}, "init": {"dry": 1},
                                "record": 0, "session": "s1", "mined_text": "a visitor watered it",
                                "close": {"status": "escalated", "beat": 4}}) + "\n")
-    assert srv.load_sink("s", "domains/plant/records/s1.jsonl")["ok"]
     sh = srv.shells["s"]
+    assert sh.cmd_sink(str(rec))["ok"]                 # the REPL's own sink (the wire's went with the RECORDS dock)
     assert sh.cmd_record("0")["ok"] and sh.loop.rec_idx == 0
     sh.loop.text = "a visitor waters the plant when it is dry"
     d = tmp_path / "domains/plant"

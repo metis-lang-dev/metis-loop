@@ -1,10 +1,9 @@
-"""`intents` in the loop console (e2e-workflow s-143c3088, WORKFLOW.md
-stage 3): a domain's intent.yaml drafted by Claude from the program's cmd_*
-atoms and %% lines, shown as a diff, written with `intents save` (the
-operator's checkout, never committed), its grammar and prompts generated,
-and the check: the domain's corpus — or, before it has one, its examples —
+"""`intents check` in the loop console (e2e-workflow s-143c3088, WORKFLOW.md
+stage 3): the domain's corpus — or, before it has one, its examples —
 through the generated prompt and grammar on the intent model, every answer
-mapped to a command atom.
+mapped to a command atom. (The draft, propose and save of intent.yaml went
+with the console's agent seat: the pi loop's catalog_new intents=true drafts
+it at the gate; loop-ui 2.4.)
 
 The generator is metispy's metis.intents (CATALOG.md "intent.yaml"),
 reached through metis.catalog (the generator, and the write —
@@ -12,12 +11,9 @@ catalog.apply); the mapper and the model run in
 metis-agent's py venv (metis_agent.intent_check): $METIS_AGENT_PY, else
 this python when it has metis_agent.
 """
-import difflib
-import hashlib
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from metis import catalog
@@ -58,27 +54,6 @@ def domain_of(srv, name):
     return d, d.name
 
 
-def read(srv, name):
-    """The domain's intent.yaml, or a draft from its program (skeleton)."""
-    d, n = domain_of(srv, name)
-    f = d / "intent.yaml"
-    if f.is_file():
-        return {"domain": n, "draft": False, "text": f.read_text()}
-    return {"domain": n, "draft": True, "text": generator(srv.root).skeleton(n)}
-
-
-def _scratch(d, n, text):
-    """A scratch domains/ root: the domain's files linked, intent.yaml the proposal."""
-    tmp = Path(tempfile.mkdtemp(prefix="intents-"))
-    t = tmp / "domains" / n
-    t.mkdir(parents=True)
-    for f in d.iterdir():
-        if f.name not in ("intent.yaml", "intent"):
-            os.symlink(f, t / f.name)
-    (t / "intent.yaml").write_text(text)
-    return tmp
-
-
 def _agent(srv, *args):
     py, cwd = agent_python(srv.root)
     r = subprocess.run([py, "-m", "metis_agent.intent_check", *args], cwd=cwd,
@@ -87,61 +62,6 @@ def _agent(srv, *args):
     if r.returncode and not out:
         out = r.stderr.strip()[-2000:]
     return r.returncode, out
-
-
-def propose(srv, name, text):
-    """A proposed intent.yaml, checked before it is shown: it generates
-    (the grammar, the prompts) and every example maps to a command atom
-    of the program (the generic domain agent's mapper). Returns the diff
-    against the checkout and the token `intents save` writes it with."""
-    d, n = domain_of(srv, name)
-    gen = generator(srv.root)
-    import yaml
-    try:
-        spec = yaml.safe_load(text)
-        gen.grammar(spec), gen.prompt(spec), gen.spoken(spec)
-    except Exception as e:      # the user's text: any failure is the finding
-        raise ValueError(f"intent.yaml does not generate: {type(e).__name__}: {e}")
-    tmp = _scratch(d, n, text)
-    try:
-        rc, out = _agent(srv, n, "--no-model", "--root", str(tmp / "domains"))
-    finally:
-        subprocess.run(["rm", "-rf", str(tmp)])
-    prog = d / f"{n}.llp"       # an ask must ask: its command's rules only read the state (CATALOG.md asks)
-    asks = gen.asks_problems(spec, prog.read_text()) if prog.is_file() and hasattr(gen, "asks_problems") else []
-    f = d / "intent.yaml"
-    old = f.read_text() if f.is_file() else ""
-    rel = f.relative_to(srv.root.resolve()).as_posix()
-    diff = "".join(difflib.unified_diff(old.splitlines(True), text.splitlines(True), f"a/{rel}", f"b/{rel}"))
-    token = hashlib.sha256((rel + "\0" + text).encode()).hexdigest()[:16]
-    misses = [l for l in out.splitlines() if l.startswith("MISS")] + ["ASKS " + a for a in asks]
-    return {"domain": n, "path": rel, "new": not f.is_file(), "diff": diff, "token": token,
-            "mapped": out.splitlines()[-1] if out else "", "misses": misses, "ok": rc == 0 and not asks, "text": text}
-
-
-def save(srv, pending, token):
-    """Write the proposal `token` names, generate its files at their fixed
-    names, and name the spec in the manifest (intent: {spec}) so
-    metis-agent reads them: the catalog's edit of intent.yaml (old: its text now,
-    or "" when the domain has none: workspace-files s-9ea4cfa4; the manifest checked by
-    the loader). A manifest whose intent: names another spec is the
-    operator's: not touched, reported as manifest_lacks."""
-    if not pending or pending.get("token") != token:
-        raise ValueError("no such proposal — ask Claude for one (`intents`), then `intents save`")
-    d, n = domain_of(srv, pending["domain"])
-    import yaml
-    f = d / "domain.yaml"
-    have = (yaml.safe_load(f.read_text()) or {}).get("intent") if f.is_file() else None
-    lacking = ["spec"] if isinstance(have, dict) and have.get("spec") != "intent.yaml" else []
-    it = d / "intent.yaml"
-    old = it.read_text() if it.is_file() else ""
-    out = {"written": []} if old == pending["text"] else \
-        catalog.edit(n, "intent.yaml", old, pending["text"], r=srv.root)
-    written = [pending["path"]] + [p for p in out["written"] if p != pending["path"]]
-    res = {"domain": n, "written": written}
-    if lacking:
-        res["manifest_lacks"] = lacking        # its intent: is the operator's: not touched
-    return res
 
 
 def check(srv, name, model=None):

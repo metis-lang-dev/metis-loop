@@ -1,4 +1,4 @@
-# The tester's interface: CHAT + SURPRISES
+# The tester's interface: CHAT (SURPRISES went: console-voice step 1)
 
 The user's verdict after the loop-test on pascal (2026-11-03): five panels are too much for an embedded
 agent console, and too hard on a tester. The frontend of the pi loop (WORKSPACE.md §6.1: one, shared,
@@ -10,7 +10,7 @@ chat. This document amends WORKSPACE.md §6; it is the brief of loop-chat.
 | panel | why it stays | what it absorbs |
 |---|---|---|
 | **CHAT** | the standard interface of the tester: say what to do, read what the loop did | LOOP's state line (lock, child, model, spend of budget) as the chat's header; the gate's plan as a chat card with **confirm / refuse**; a ruling as a chat card (verdict, first enabled, firings, goldens moved, lint, spend, "show pack", "show document"); BUNDLE's STALE as a chat notice with **[rebuild] [reload]**; TRACE's replay as the reply to `/replay` (the Tick table rows, in the chat) |
-| **SURPRISES** | the visible connection through the workspace between the REPL (or the road game) and the pi loop: what is open, taken, ruled | the drop dialog (from the session, from a mark, from `/mark`); a ruled one opens its card in the chat |
+| ~~SURPRISES~~ (gone: console-voice step 1; `/surprises` lists, `/drop` and `/mark` drop, loop-ui 2.4) | the visible connection through the workspace between the REPL (or the road game) and the pi loop: what is open, taken, ruled | the drop dialog (from the session, from a mark, from `/mark`); a ruled one opens its card in the chat |
 
 TRACE, RULINGS and BUNDLE do not go away: they are the developer's docks, hidden by default, shown by a
 "developer" switch in the band. The CATALOG, REPL and EDITOR panels stay as they are (the human loop's
@@ -30,13 +30,13 @@ trace verbs, no model turn. The pi loop need not be running for them. Each is on
 | command | does | answers with |
 |---|---|---|
 | `/status` | the workspace: bundle (name, image, BUILT/STALE), locks, child, spend, open surprises | the header line, refreshed |
-| `/surprises` | the records by status | the list (the SURPRISES panel scrolls to it) |
+| `/surprises` | the records by status | the list |
 | `/take` | starts the pi loop if it is not running and says "take the next surprise" to it | pi's words |
 | `/replay [RUN] [K0..K1 \| K]` | `metis.trace fired`/`timeline` of the window (default: the last surprise's) | the Tick table rows in the chat: fired rules, made atoms, per k |
 | `/why ATOM [at K]` | `metis.trace blame` | the rule chain that made the atom |
 | `/diff` | the last ruling's fired diff and goldens moved | the rows |
 | `/ruling [ID]` | the ruling card (default: the last) | the card, with "show pack", "show document" |
-| `/mark [K \| K0..K1] WORDS` | a surprise draft from the open session's trace (or `/mark RUN K …` from a run); `keep_window` for a window | the SURPRISES panel's dialog, prefilled |
+| `/mark [K \| K0..K1] WORDS` | a tick (or window) of the open session's trace as a surprise: its REPL's `mark` (loop-ui 2.2); `/mark RUN K …` a run's, dropped at once; `keep_window` for a window | the REPL's line, the record's id |
 | `/drop WORDS` | the session's last tick as a surprise with these words | the record's id |
 | `/rebuild` | `make` / `metisc build` of the bundle | the build line (image, reused, compiled, errors) |
 | `/reload` | the session re-opened from the rebuilt catalog | the session line (epoch) |

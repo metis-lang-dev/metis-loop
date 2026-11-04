@@ -7,7 +7,7 @@ on ONE port (D1), grown from console/dev_serve.py.
     GET /lib/<name>  the console's shell, console/lib/ (shell_lib; no token: public code)
     GET /sdk/catalog/<name>  the CATALOG widget (catalog.js, catalog.css) from the installed
                      loop SDK (metis_loop_sdk.web.WIDGET_DIR; no token: public code)
-    GET /sdk/workspace/<name>  the workspace widgets (io.js, workspace.css, bundle/trace/surprises/
+    GET /sdk/workspace/<name>  the workspace widgets (io.js, workspace.css, bundle/trace/
                      rulings/loop.js: metis_loop_sdk.web.WS_WIDGET_DIR; public code)
     WS  /ws          one multiplexed socket per browser window
 
@@ -24,9 +24,6 @@ Frames (JSON, one per message):
                  {ch:"repl", type:"files", session, req}  -> the files frame again (the EDITOR's reload)
                  {ch:"repl", type:"edit", op:"confirm"|"refuse", session, token, req}  -> {type:"edit",
                                     op:"written"|"refused"}; written: the session re-opened (epoch + 1), its files again
-                 {ch:"repl", type:"close",  session}
-                 {ch:"repl", type:"records"} -> {ch:"meta", type:"records", records}
-                 {ch:"repl", type:"sink", session, file}  a checkout records file into the session
                  {ch:"repl", type:"new", name, line, req}  domains/<name>/ made, then opened
                  {ch:"repl", type:"new", name?, line?, seed, req}  -> {type:"gate", plan} a new domain from a
                                     seed (a package dir: taken whole; an .llp: its program), confirmed by gate
@@ -117,7 +114,7 @@ RETIRED = {     # [console] keys of the retired seats: a dot file that still has
     "narrate", "narrate_model", "narrate_thinking", "narrate_reasoning", "formalize_model",
     "formalize_thinking", "brain", "openrouter_model", "openrouter_narrate_model", "max_usd", "artifact_url"}
 SEATS_GONE = ("formalize moved to the pi loop (loop-workspace, docs/WORKSPACE.md §3): drop a surprise to the "
-              "workspace (the SURPRISES panel) and the pi loop formalizes and rules it (pi/loop.sh), or type "
+              "workspace (the REPL's drop, the CHAT's /drop or /mark) and the pi loop formalizes and rules it (pi/loop.sh), or type "
               "in the CHAT; narrate and llm are the REPL's own (`llm` sets the model)")
 
 
@@ -412,9 +409,6 @@ class Gateway:
         typ, loop = msg.get("type"), asyncio.get_running_loop()
         s = self.sessions.get(msg.get("session", ""))
         try:
-            if typ == "records":
-                rows = await loop.run_in_executor(None, self.srv.records)
-                return await self._send(ws, {"ch": "meta", "type": "records", "records": rows})
             if typ in ("new", "gate") and self.cfg["mode"] == "shared":
                 raise ValueError(f"{typ} writes the operator's checkout: personal mode only")
             if typ == "new" and msg.get("seed"):
@@ -429,9 +423,6 @@ class Gateway:
                 return await self.open(ws, ip, {"llp": llp, "req": msg.get("req")})
             if not s or ws not in s.subs:
                 raise ValueError("no open session")
-            if typ == "sink":
-                out = await loop.run_in_executor(s.pool, self.srv.load_sink, s.sid, str(msg.get("file") or ""))
-                return await self._send(ws, {"ch": "repl", "type": "sink", "session": s.sid, **out})
             if typ == "edit":
                 return await self.edit(ws, msg, s)
             raise ValueError(f"unknown type {typ!r}")
@@ -768,10 +759,6 @@ class Gateway:
                 if ch in WS_CHANNELS:           # the workspace's (loop/workspace_ch.py)
                     await self.wsc.handle(ws, msg)
                     continue
-                if ch == "chat":                # retired with the agent seat (loop-workspace)
-                    await self._send(ws, {"ch": "chat", "type": "error", "session": msg.get("session"),
-                                          "error": f"the chat is retired: {SEATS_GONE}"})
-                    continue
                 if ch != "repl":
                     await self._send(ws, {"ch": "meta", "type": "error",
                                           "error": f"unknown channel {ch!r}"})
@@ -786,7 +773,7 @@ class Gateway:
                     continue
                 if typ == "open":
                     await self.open(ws, ip, msg)
-                elif typ in ("records", "sink", "new", "gate", "edit"):    # e2e-workflow step 1; the gate; the edit
+                elif typ in ("new", "gate", "edit"):    # the gate; the edit (records/sink: gone with their docks, loop-ui 2.4)
                     await self.files(ws, ip, msg)
                 elif typ == "intent":
                     await self.intent(ws, msg)
@@ -796,10 +783,6 @@ class Gateway:
                     s = self.sessions.get(msg.get("session", ""))
                     if s and ws in s.subs:
                         await self._send(ws, dict(await self._files_frame(s), req=msg.get("req")))
-                elif typ == "close":
-                    s = self.sessions.get(msg.get("session", ""))
-                    if s and (ws in s.subs):
-                        await self.close(s.sid)
                 else:
                     await self._send(ws, {"ch": "repl", "type": "error",
                                           "error": f"unknown type {typ!r}"})

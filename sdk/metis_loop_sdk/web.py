@@ -12,12 +12,12 @@ WIDGET_DIR = (Path(__file__).resolve().parent / "widget").resolve()   # the chec
 WIDGET_URL = "/sdk/catalog/"          # where a console serves WIDGET_DIR
 WIDGET_FILES = ("catalog.js", "catalog.css")
 
-# the workspace widgets (loop-workspace step 4, WORKSPACE.md §6): BUNDLE, TRACE, SURPRISES, RULINGS, LOOP over the
+# the workspace widgets (loop-workspace step 4, WORKSPACE.md §6): BUNDLE, TRACE, RULINGS, LOOP (the CHAT) over the
 # backend's channels, and the wire they share: the pi loop's ONE frontend (§6.1), served to the metis-loop console on every
 # workspace; never copied into another page (the road page stays the road's own UI)
 WS_WIDGET_DIR = (Path(__file__).resolve().parent / "workspace").resolve()   # the checkout: ../../web/workspace
 WS_WIDGET_URL = "/sdk/workspace/"
-WS_WIDGETS = ("bundle", "trace", "surprises", "rulings", "loop")
+WS_WIDGETS = ("bundle", "trace", "rulings", "loop")    # SURPRISES went with its dock (console-voice; loop-ui 2.4)
 WS_WIDGET_FILES = ("io.js", "workspace.css") + tuple(f"{w}.js" for w in WS_WIDGETS)
 
 TS_DIR = (Path(__file__).resolve().parent / "ts").resolve()          # the TypeScript face

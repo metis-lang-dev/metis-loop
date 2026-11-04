@@ -347,7 +347,7 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     # console-voice: a heard line is said as a typed one, shown as heard; pi's words go to the host's voice
     assert "push('me', via === 'heard' ? 'you · heard' : 'you', text);" in js
     assert "if (o.onWords && ev.text) o.onWords(String(ev.text));" in js
-    assert "d.words || ''" in (HERE.parent / "web" / "workspace" / "surprises.js").read_text()   # the draft's words filled in
+    assert not (HERE.parent / "web" / "workspace" / "surprises.js").exists()   # loop-ui 2.4: loaded by no page
 
 
 def test_an_inert_acceptance_says_so():

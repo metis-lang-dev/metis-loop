@@ -149,9 +149,9 @@ def test_run_cap_and_the_retired_seats_in_personal_mode():
             if hasattr(mllm, "spec_from_words"):           # metispy repl-llm: the REPL's own llm, checked + saved
                 assert "llm: anthropic" in p["result"], p
                 assert "not saved: METIS_CONFIG is set and empty" in p["result"], p
-            ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "hi"}))
-            err = frames(ws, lambda f: f.get("ch") == "chat")[-1]
-            assert "retired" in err["error"] and "pi loop" in err["error"]
+            ws.send(json.dumps({"ch": "chat", "type": "say", "session": sid, "text": "hi"}))   # gone (loop-ui 2.4)
+            err = frames(ws, lambda f: f.get("ch") == "meta" and f.get("type") == "error")[-1]
+            assert "unknown channel 'chat'" in err["error"]
             p = send(ws, sid, "intents", "d0")[-1]
             assert p["status"] == "error" and "pi loop" in p["result"]
     finally:
@@ -219,8 +219,8 @@ def test_shared_mode_token_llm_seats_chat_caps_and_rate():
             p = send(ws, sid, "llm ollama phi3", "n3")[-1]  # set: the same in every mode (the user, 2026-11-05)
             assert p["status"] != "refused" and "ollama:phi3" in p["result"], p
             ws.send(json.dumps({"ch": "chat", "type": "say", "text": "x"}))
-            assert "retired" in frames(
-                ws, lambda f: f.get("ch") == "chat")[-1]["error"]
+            assert "unknown channel 'chat'" in frames(
+                ws, lambda f: f.get("ch") == "meta" and f.get("type") == "error")[-1]["error"]
             ws.send(json.dumps({"ch": "repl", "type": "open", "llp": "three_pigs",
                                 "req": "r2"}))
             err = frames(ws, lambda f: f.get("type") == "error")[-1]

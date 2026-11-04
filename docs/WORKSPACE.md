@@ -224,7 +224,7 @@ The panels, each over one channel:
 | REPL, EDITOR | repl | sessions, intents; the EDITOR edits the file on disk, save = one gated edit (diff + findings, confirm) |
 | BUNDLE | bundle | name, members, image hash, build time, STALE with the reload button |
 | TRACE | trace | the runs; a run's k range with checkpoints; the Tick table at k (counts, fired rules, made atoms), step ±1, jump; the verbs as buttons with their declared args; "mark here" → a surprise draft |
-| SURPRISES | surprise | the records with status open / taken / ruled, the drop dialog (k, window, atoms, words), each ruled one linking its ruling |
+| ~~SURPRISES~~ | surprise | gone (console-voice step 1; its file loop-ui 2.4): `/surprises` lists, the REPL's `drop`/`mark` and the CHAT's `/drop`/`/mark` drop |
 | RULINGS | surprise, trace | a ruling document rendered: verdict, evidence rows (goldens held / moved by name, cases, fired diff, lint rows, reads-absent, inert), the model's words, spend |
 | LOOP | loop | the pi loop's state (lock, mode, model, budget, spent), start/stop in rpc mode, the chat (say), the journal stream, the pending gate's plan with confirm/refuse |
 
@@ -233,8 +233,8 @@ RULINGS is why.
 
 **Amended by [CHAT.md](CHAT.md) (loop-chat, the user's verdict after loop-test, 2026-11-03):** the tester sees two
 panels, CHAT (LOOP's chat with its state as the header line, the gate, the ruling and STALE as cards) and
-SURPRISES; TRACE, RULINGS and BUNDLE are the developer's, behind the band's "developer" switch; a host page
-embeds the served page as an iframe with `?panels=chat,surprises`.
+SURPRISES (since gone: console-voice); TRACE, RULINGS and BUNDLE are the developer's, behind the band's "developer"
+switch; a host page embeds the served page as an iframe with `?panels=chat`.
 
 ### 6.1 The pi loop's frontend is shared (the user, 2026-11-03)
 

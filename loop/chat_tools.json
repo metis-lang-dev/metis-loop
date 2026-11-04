@@ -123,7 +123,7 @@
   {
    "name": "mark",
    "verb": "mark",
-   "description": "a surprise draft from the open session's trace (or RUN's): the SURPRISES dialog, filled in",
+   "description": "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's, dropped at once",
    "parameters": {
     "type": "OBJECT",
     "properties": {

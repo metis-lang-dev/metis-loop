@@ -10,7 +10,7 @@ trace verbs (tools/gen_chat_tools.py; a test checks the file equals the argparse
     /why ATOM [at K]            metis.trace blame: who last moved ATOM
     /diff [ID]                  the ruling's fired diff and goldens moved (default: the last ruling)
     /ruling [ID]                the ruling card (default: the last)
-    /mark [RUN] [K | K0..K1] WORDS   a surprise draft (the SURPRISES dialog, filled in)
+    /mark [RUN] [K | K0..K1] WORDS   a tick of the session's trace as a surprise (its REPL's mark), or RUN's
     /drop WORDS                 the session's last tick as a surprise with these words
     /rebuild                    make (or metisc build .) of the bundle
     /reload                     the session re-opened from the rebuilt catalog
@@ -21,7 +21,7 @@ trace verbs (tools/gen_chat_tools.py; a test checks the file equals the argparse
 
 The answers are WorkspaceChannels' (loop/workspace_ch.py), over metispy's workspace face and metis.trace; nothing
 here reaches a model. A reply is {command, text, …}: text the chat shows; ruling: an id the chat shows as its card;
-draft: the SURPRISES dialog's fields; child: the pi child's state."""
+child: the pi child's state."""
 import argparse
 import json
 import os
@@ -59,7 +59,7 @@ COMMANDS = (
     ("diff", "the ruling's fired diff and the goldens it moved (default: the last ruling)",
      (("id", {"nargs": "?", "help": "a surprise id"}),)),
     ("ruling", "the ruling card (default: the last ruling)", (("id", {"nargs": "?", "help": "a surprise id"}),)),
-    ("mark", "a surprise draft from the open session's trace (or RUN's): the SURPRISES dialog, filled in",
+    ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's, dropped at once",
      (("words", {"nargs": "+", "help": "[RUN] [K | K0..K1] WORDS"}),)),
     ("drop", "the open session's last tick as a surprise with these words", (("words", {"nargs": "+", "help": "the words"}),)),
     ("rebuild", "make (or metisc build .) of the bundle, where its composition is", ()),
@@ -361,9 +361,10 @@ def status_text(ws, child, budget_next=None):
 
 
 def mark(ws, words, session=None):
-    """/mark [RUN] [K | K0..K1] WORDS → the SURPRISES dialog's draft: {run, member, k | window, words} for a trace
-    named, else {session, k | window, words} for the page's open session (SESSION {session, k}: the dialog drops from
-    it, its member and trace the session's); the tick as given, else the session's last."""
+    """/mark [RUN] [K | K0..K1] WORDS → the surprise's draft (drop_draft drops it): {run, member, k | window, words}
+    for a trace named, else {session, k | window, words} for SESSION {session, k} (its member and trace the
+    session's); the tick as given, else the session's last. The console's /mark K on its own session is the REPL's
+    mark (loop-ui 2.2); the SURPRISES dialog this once filled went with its dock."""
     ws_words = list(words)
     run = None
     if len(ws_words) >= 2 and window(ws_words[0]) is None and window(ws_words[1]) is not None:

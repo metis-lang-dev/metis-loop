@@ -344,59 +344,13 @@ class ConsoleServer:
 
     # -- the drain as one pure mapping (the serving session is glue) ----
 
-    # -- e2e-workflow step 1: records from files, new, save -------------
-
-    def records(self):
-        """Every surprise record the domain agents sank in the checkout
-        (domains/<…>/records/<session>.jsonl, one record per line with
-        its close), newest first; escalated ones carry mined_text."""
-        out = []
-        for f in self.root.rglob("records/*.jsonl"):
-            rel = f.relative_to(self.root).as_posix()
-            if catalog.hidden(rel):     # .metis/records: the loop's own, not a domain agent's
-                continue
-            dom = f.parent.parent.relative_to(self.root).as_posix()
-            try:
-                lines = [ln for ln in f.read_text(errors="replace").splitlines()
-                         if ln.strip() and not ln.startswith("#")]
-            except OSError:
-                continue
-            for i, ln in enumerate(lines):
-                try:
-                    r = json.loads(ln)
-                except ValueError:
-                    continue
-                close = r.get("close") or {}
-                out.append({"file": rel, "i": i, "domain": dom, "session": f.stem,
-                            "ts": r.get("ts") or close.get("ts") or "",
-                            "kind": r.get("kind"), "record": r.get("record"),
-                            "status": close.get("status") or ("escalated" if r.get("escalated") else "open"),
-                            "escalated": bool(r.get("escalated") or close.get("status") == "escalated"),
-                            "mined_text": r.get("mined_text") or "", "beat": close.get("beat", r.get("beat")),
-                            "observed": r.get("observed") or {}, "catalog": r.get("catalog_hash") or r.get("program_key") or ""})
-        return sorted(out, key=lambda e: (str(e["ts"]), e["file"], e["i"]), reverse=True)
+    # -- e2e-workflow step 1: new, save (the records listing and the sink went with their docks, loop-ui 2.4) --
 
     def _under(self, rel: str, must: str = "") -> Path:
         p = (self.root / (rel or "")).resolve()
         if not p.is_relative_to(self.root.resolve()) or (must and must not in p.as_posix()):
             raise ValueError(f"'{rel}' is not a {must.strip('/') or 'checkout'} file of the checkout")
         return p
-
-    def load_sink(self, sid: str, rel: str) -> dict:
-        """`sink` for a session, from a checkout records file (the verb
-        takes a path, so it stays off the wire: the server names the file)."""
-        p = self._under(rel, "/records/")
-        if p.suffix != ".jsonl" or not p.is_file():
-            raise ValueError(f"no records file '{rel}'")
-        if sid not in self.shells:
-            raise ValueError(f"no open session '{sid}'")
-        out = self.shells[sid].cmd_sink(str(p))
-        # each loaded record's identity (its record number and time, as the
-        # Records dock lists it): the page selects the clicked record by it,
-        # never by its line (human-loop step 1, the architect's A6 finding)
-        out["ids"] = [[r.get("record"), r.get("ts") or (r.get("close") or {}).get("ts") or ""]
-                      for r in self.shells[sid].loop.records]
-        return self.scrub(out)
 
     NAME = __import__("re").compile(r"^[a-z][a-z0-9_]{1,31}$")
 

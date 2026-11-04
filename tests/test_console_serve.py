@@ -101,7 +101,7 @@ def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     srv = ConsoleServer()
     assert srv.root == tmp_path.resolve()
-    assert srv.catalogs() == [] and srv.domains() == [] and srv.records() == []
+    assert srv.catalogs() == [] and srv.domains() == []
     assert srv.new_domain("lamp", "a lamp") == "domains/lamp/lamp"
     assert (tmp_path / "domains/lamp/domain.yaml").is_file()
     assert srv.catalogs() == ["domains/lamp/lamp"] and [e["name"] for e in srv.domains()] == ["lamp"]
@@ -111,7 +111,7 @@ def test_an_empty_cwd_is_an_empty_catalog(tmp_path, monkeypatch):
     (tmp_path / ".metis/records/formalize-calls.jsonl").write_text('{"ts": "x"}\n')
     (tmp_path / ".metis/scratch").mkdir()
     (tmp_path / ".metis/scratch/x.llp").write_text("catalog x 1.\n")
-    assert srv.catalogs() == ["domains/lamp/lamp"] and srv.records() == []
+    assert srv.catalogs() == ["domains/lamp/lamp"]
 
 
 def test_a_directory_of_packages_and_its_readme(tmp_path, monkeypatch):
