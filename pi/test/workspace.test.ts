@@ -348,13 +348,17 @@ test("metis-workspace: past the session's budget the loop refuses further model 
 	}
 });
 
-test("loop.sh: deepseek v4 pro by default, with a budget; a paid model without one is refused; the first line says both", () => {
+test("loop.sh: no default model (llm-config); a paid model has a budget, one without is refused; the first line says both", () => {
 	const { r } = scratch();
 	const e: Record<string, string | undefined> = { ...process.env, METIS_LOOP_PI: join(HERE, "stub", "pi"), METIS_CONFIG: "", METIS_LOOP_SDK_PY: PY, METIS_LOOP_TAKE_INTO: "",
-		METIS_LOOP_LLP: "", OPENROUTER_API_KEY: "sk-or-v1-" + "0".repeat(64) };       // a fake key: the stub pi calls nothing
-	delete e.MODEL;
+		METIS_LOOP_LLP: "", OPENROUTER_API_KEY: "sk-or-v1-" + "0".repeat(64),        // a fake key: the stub pi calls nothing
+		MODEL: "openrouter/deepseek/deepseek-v4-pro" };                                // named: there is no default any more
 	delete e.METIS_LOOP_BUDGET;
+	delete e.FORMALIZE_MODEL;
 	const run = (args: string[], extra: Record<string, string> = {}) => spawnSync(join(HERE, "..", "loop.sh"), args, { encoding: "utf8", cwd: r, env: { ...e, ...extra } as any });
+	const nomodel = run([], { MODEL: "" });                                           // no MODEL, no [llm] loop: refused, saying how
+	assert.equal(nomodel.status, 2, nomodel.stderr);
+	assert.match(nomodel.stderr, /no model: set \[llm\] loop \(the REPL's llm loop WORDS\) or give MODEL=/);
 	const a = run([]);
 	assert.equal(a.status, 0, a.stderr);
 	const out = JSON.parse(a.stdout);

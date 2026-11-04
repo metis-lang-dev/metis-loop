@@ -159,7 +159,10 @@ mkdir -p "$ST/records" "$ST/sessions"
 cd "$DIR"                                           # the workspace: pi and the tools it runs, in DIR
 # the model (llm-config s-07a070ad): MODEL as given wins; else the dot file's [llm] loop (metispy metis.loop.llm: ONE
 # configuration for every seat, set in the REPL with `llm loop WORDS`); no default: unset is refused, saying how
-seat() { PYTHONPATH="$HERE/..${PYTHONPATH:+:$PYTHONPATH}" "$SDK_PY" -m metis.loop.llm pi "$1"; }
+seat() {                                          # the seat's JSON; refused (2) when unset or on a metispy without the seats
+  local o; o="$(PYTHONPATH="$HERE/..${PYTHONPATH:+:$PYTHONPATH}" "$SDK_PY" -m metis.loop.llm pi "$1")" || return 2
+  [ -n "$o" ] || { echo "loop.sh: this metispy has no [llm] seats (python -m metis.loop.llm pi: llm-config)" >&2; return 2; }
+  printf '%s' "$o"; }
 OLLAMA_ID="" OLLAMA_BASE=""
 if [ -z "${MODEL:-}" ]; then
   seatj="$(seat loop)" || { echo "loop.sh: no model: set [llm] loop (the REPL's llm loop WORDS) or give MODEL=<provider>/<id>" >&2; exit 2; }
