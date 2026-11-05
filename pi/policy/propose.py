@@ -121,6 +121,8 @@ def document(e, comments, closed, spent):
     if e.get("unjudged"):                      # loop-prompt judge-session: a weight port the trace does not carry
         out += ["**Unjudged:** %s declare%s weight ports the trace does not carry: %s choices are the record's, stood in, so %s rows are not this ruling's evidence." % (
             ", ".join(e["unjudged"]), "s" if len(e["unjudged"]) == 1 else "", "its" if len(e["unjudged"]) == 1 else "their", "its" if len(e["unjudged"]) == 1 else "their"), ""]
+    if e.get("why") == "kind":                 # spec 20 §5: refused before the cascade, by the record's kind
+        out += ["**Kind:** the record is %s, not structural: no pack answers it. Its route: %s." % (e.get("kind"), e.get("route")), ""]
     if e["reasons"]:
         out += ["## Why it is %s" % e["verdict"]] + ["- %s" % r for r in e["reasons"]] + [""]
     if e.get("times"):
@@ -192,6 +194,8 @@ def main(argv=None):
     ap.add_argument("--move-golden", action="append", default=[], metavar="FILE", help="a golden the amendment moves with it: FILE replaces the case of its name, on the copy; the ruling lists it, for a person to read")
     ap.add_argument("--consumer", action="append", default=[], metavar="NAME=ROOT[:COMPOSITION]", help="the family's other consumer: it must still link and keep its goldens (spec/18 §5)")
     ap.add_argument("--case", action="append", default=[], help="a surprise's case (metis.trace case)")
+    ap.add_argument("--record", help="the surprise's record (JSON, .metis/surprises/ID.json): its kind is read before the cascade (spec 20 §5): "
+                                     "a record not structural is refused at once with its kind and route")
     ap.add_argument("--brain", help="the model that writes the ruling's words: openrouter/<model> (the key from the environment only), script:FILE; none: the evidence alone")
     ap.add_argument("--budget", type=float, default=None, help="a paid brain's spend cap (USD)")
     ap.add_argument("--max-tokens", type=int, default=1024)
@@ -227,7 +231,18 @@ def main(argv=None):
         name, _, rest = c.partition("=")
         where, _, comp = rest.partition(":")
         consumers.append((name, where, comp or None))
-    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers, budget=a.time_budget, golden_budget=a.golden_budget, moved=a.move_golden)
+    kw = {}
+    if a.record:
+        import inspect
+        try:
+            record = json.loads(Path(a.record).read_text())
+        except (OSError, ValueError) as x:
+            sys.exit(f"propose.sh: --record {a.record}: {x}")
+        if "record" in inspect.signature(AT.judge).parameters:
+            kw["record"] = record
+        else:                                  # a metis-agent before the kind gate (surprise-kinds s-7a02c2ac): said, never silent
+            print(f"propose.sh: this metis-agent's judge reads no record kind; {a.record} judged as a structural one", file=sys.stderr)
+    e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers, budget=a.time_budget, golden_budget=a.golden_budget, moved=a.move_golden, **kw)
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":
