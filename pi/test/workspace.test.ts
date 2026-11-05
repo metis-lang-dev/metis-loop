@@ -1027,6 +1027,9 @@ test("language-rag layer 2: a recorded refusal answered with its construct, the 
 		const h2 = refusalHelp("## Why it is refused\n- the link refused: lex error: 48:36: bad character '-'\n", `stage act {\n  drop begin.\n  begin [dyn] : $take(X0) * idle * ${neg} -o busy.\n}\n`, [{ path: "g.llp", text: GR2 }]);
 		assert.match(h2, /metis has no negation: `holding` cannot be written absent .* stand for its absence .*: `handsfree`: read one with `\$`/, neg);
 	}
+	// after-llama's grasp refusals: a compile error with three classes, each answered once
+	const h3 = refusalHelp("## Why it is refused\n- the link refused: error compile grasp: does not compile: doc-missing: produce_holding: missing %% doc (mandatory); arity-mismatch: produce_holding: take arity 0 != declared 1; error I4 grasp: rule cancel_tick_holding consumes its out tick__active without producing it\n", "stage act {\n  produce_holding [dyn] : idle * take -o holding.\n}\n", files);
+	for (const want of [/`pred take\(obj\)` is written `take\(O\)`/, /two percent signs/, /the interface check I4: A state predicate is conserved per rule/]) assert.match(h3, want);
 	const checks = "## 3\n\n**L1 `state-dead-end`** (Duty-scoped class). A state pred the program's own rules\nproduce and no rule consumes.\n\n**L2 `x`** other.\n";
 	assert.match(refusalHelp("## Why it is refused\n- lint L1 state-dead-end: holding\n", "", files, checks), /\*\*L1 `state-dead-end`\*\* \(Duty-scoped class\)\. A state pred the program's own rules produce and no rule consumes\./);
 	assert.equal(refusalHelp("## Why it is refused\n- golden drive.yaml moved\n", "", files), "");   // a gate refusal: not this layer's draft yet

@@ -171,6 +171,12 @@ export const REFUSALS: { re: RegExp; spec: string; text: string }[] = [
 	  text: "A rule's body is atoms joined by `*`, then `-o`, then the head. There is no negation in a body (`~` and `not` are not premises): say the absence with an atom a rule produces, or with the state the other case leaves." },
 	{ re: /parse error/, spec: "spec 00 §2",
 	  text: "rule ::= [%% doc] ident \"[\" layer \"]\" \":\" body \"-o\" head \".\"; body ::= atom (\"*\" atom)*; atom ::= [\"$\"] ident [\"(\" term (\",\" term)* \")\"]; head ::= \"()\" | atom (\"*\" atom)*." },
+	{ re: /arity-mismatch: \w+: (\w+) arity (\d+) != declared (\d+)/, spec: "spec 00 §5",
+	  text: "An atom takes the arguments its `pred` line declares, in every rule: `pred take(obj)` is written `take(O)` (a variable) or `take(cup)`, never bare `take`. Copy the atom as the unit's own rules write it." },
+	{ re: /doc-missing: .*missing %% doc/, spec: "spec 00 §1",
+	  text: "Every rule has its `%%` line (the person's words) on the line above it, two percent signs; one `%` is a comment the compiler drops." },
+	{ re: /error I4 .*consumes its out (\w+) without producing it/, spec: "the interface check I4",
+	  text: "A state predicate is conserved per rule: a rule that consumes one of the protocol's state atoms (tick__active, idle, busy …) produces its successor in the same rule, as the unit's own rules do. Write the smallest change: one premise added to the rule the blame named, not new rules." },
 	{ re: /undeclared predicate '([^']+)'/, spec: "spec 00 §5",
 	  text: "Every predicate a rule names is declared (`pred NAME(args) : layer.`) in the unit or a unit it includes. A pack that brings a new atom brings its `pred` line; a name that exists is spelled as the unit spells it." },
 	{ re: /repeats|duplicate/, spec: "the pack's merge",
@@ -229,8 +235,11 @@ export function refusalHelp(doc: string, pack: string, unitFiles: { path: string
 			(c.length ? `The unit's atoms that stand for its absence (a rule passes one for the other): ${c.map((x) => `\`${x}\``).join(", ")}: read one with \`$\`.`
 				: `Say the absence with an atom a rule of the unit produces in the other case.`));
 	}
-	const hit = neg.length ? null : REFUSALS.find((r) => r.re.test(why));
-	if (hit) out.push(`${hit.spec}: ${hit.text}`);
+	const hits = neg.length ? [] : REFUSALS.filter((r) => r.re.test(why));
+	// a lex/parse error is one construct; a compile error lists several classes, each answered once
+	const chosen = hits.length && /lex error|parse error/.test(why) ? [hits[0]] : hits;
+	for (const h of chosen) out.push(`${h.spec}: ${h.text}`);
+	const hit = chosen[0];
 	const codes = [...new Set(why.match(/\bL\d{1,2}\b/g) ?? [])];
 	for (const c of codes) {
 		const p = checks ? lintParagraph(c, checks) : null;
