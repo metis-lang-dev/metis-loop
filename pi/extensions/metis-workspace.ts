@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap } from "./lib/jsonl.ts";
+import { examplesSection, pickExamples, refusalHelp, seedsOf } from "./lib/examples.ts";
 // pi's own path resolution for read (not exported by the package: imported by its file, so the guard resolves a path
 // exactly as the read tool will: a leading @ stripped, ~ expanded, file:// converted, the macOS variants tried)
 import { resolveReadPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/path-utils.js";
@@ -193,6 +194,27 @@ export function findFiles(dir: string, name: string): string[] {
 	walk(dir);
 	return out.sort();
 }
+
+/** The member's own rule texts (language-rag): the program and each included unit that is not the language's
+ *  standard one, a generated unit as its source (the text a pack amends). */
+export function memberTexts(member: string, root: string): { path: string; text: string }[] {
+	const out: { path: string; text: string }[] = [];
+	const seen = new Set<string>();
+	let us: ReturnType<typeof units> = [];
+	try { us = units(member, root); } catch { return out; }
+	for (const u of us) {
+		if (u.kind === "std" || !existsSync(u.path)) continue;
+		const t = readFileSync(u.path, "utf8");
+		const src = derivedFrom(u.path, t);
+		const [p, x] = src && existsSync(src) ? [src, readFileSync(src, "utf8")] : [u.path, t];
+		if (seen.has(resolve(p))) continue;
+		seen.add(resolve(p));
+		out.push({ path: relative(root, p) || p, text: x });
+	}
+	return out;
+}
+
+const CHECKS_MD = join(LOOP_REPO, "skills", "metis-loop", "patterns", "CHECKS.md");
 
 /** The rule names of a unit's text (the rule heads, in order). */
 export function ruleNames(text: string): string[] {
@@ -399,6 +421,15 @@ export default function (host: ExtensionAPI) {
 						: "(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)",
 					signature(t, gen)];
 			};
+			// language-rag layer 1: whole rules of the member over the surprise's atoms (lexical; no model)
+			let examples = "";
+			try {
+				const files = memberTexts(s.member, r);
+				const { seeds, fired } = seedsOf(s, s.trace ? tracePath(s.trace, r) : null, files);
+				examples = examplesSection(pickExamples(files, seeds, fired), seeds);
+			} catch (e: any) {
+				examples = `## examples: none (${e.message})`;
+			}
 			const body = [
 				`## surprise ${s.id} (taken)`,
 				json(withTraceDir(s, r)),
@@ -409,6 +440,7 @@ export default function (host: ExtensionAPI) {
 				...(inc.some((u) => u.kind !== "std") ? ["", "(each included unit as its signature: declarations, and every rule's name with its %% line; rule_text gives rules whole)"] : []),
 				...inc.flatMap(unitView),
 				...(incErr ? ["", `## its includes could not be resolved: ${incErr}`] : []),
+				...(examples ? ["", examples] : []),
 				"",
 				"## earlier rulings on this member",
 				earlier.length ? json(earlier.map((x: any) => ({ id: x.id, verdict: x.verdict, md: x.md }))) : "(none)",
@@ -632,13 +664,22 @@ export default function (host: ExtensionAPI) {
 				// gpt-oss F3 (the architect's ruling): a refusal before the last try is a try, kept in rulings/tries/; the
 				// surprise stays taken, so the corrected pack is judged
 				const after = ws.surprise(p.id, r) as any;
+				// language-rag layer 2: a refusal answered with what fixes it (the construct, the nearest rule, the check)
+				let help = "";
+				if (String(e.verdict).startsWith("refused")) {
+					try {
+						help = refusalHelp(doc, p.pack, memberTexts(s.member, r), existsSync(CHECKS_MD) ? readFileSync(CHECKS_MD, "utf8") : "");
+					} catch {
+						help = "";
+					}
+				}
 				if (after.status === "taken") {
 					const n = (after.tries ?? []).length;
 					return text(`${unitNote}${e.verdict} (try ${n}; kept as ${ruling}): surprise ${p.id} stays taken. Correct the pack ` +
-						`from the reasons below and propose again; a refusal at try ${TRIES} stands as the ruling.\n\n${doc}`,
+						`from the reasons below and propose again; a refusal at try ${TRIES} stands as the ruling.\n\n${doc}${help ? `\n\n${help}` : ""}`,
 						{ verdict: e.verdict, ruling: null, try: n, code: res.code, spent });
 				}
-				return text(`${unitNote}${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });
+				return text(`${unitNote}${e.verdict}: ${ruling}\n\n${doc}${help ? `\n\n${help}` : ""}`, { verdict: e.verdict, ruling, code: res.code, spent });
 			} finally {
 				logSpend(join(tmp, "run"), p.id, r); // a run that spent and then wrote no ruling still leaves its spend
 				rmSync(tmp, { recursive: true, force: true });

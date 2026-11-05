@@ -11,12 +11,13 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import workspace, { chatLine, derivedFrom, firings, readRefusal, skillRead, ruleNames, ruleText, schema, signature, tracePath, whoseUnit, withTraceDir } from "../extensions/metis-workspace.ts";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
+import { GRAMMAR, pickExamples, predsOf, refusalHelp, seedsOf } from "../extensions/lib/examples.ts";
 import * as ws from "../extensions/sdk/workspace.ts";
 import { applied, sha } from "../extensions/lib/applied.ts";
 import { changedRules } from "../extensions/lib/rules.ts";
@@ -485,8 +486,12 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		assert.ok(t.includes("% the lamp's own words"), t);                                 // the program itself, whole
 		assert.ok(t.includes(`## included (the family's, under METIS_HOME): ${join(home, "fam.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)`), t);
 		assert.ok(t.includes("pred late : lamp.\nstage progress:\n  go_on [dyn]\nstage safety:\n  stop_late [dyn]  %% Too late to stop: I stop."), t);
-		assert.ok(!t.includes("$busy * $late"), t);                                         // no bodies
+		const sig = t.split("## examples")[0];
+		assert.ok(!sig.includes("$busy * $late"), t);                                       // no bodies in the signatures
 		assert.ok(!t.includes("the clock's"), t);                                           // nor comments
+		// language-rag layer 1: the rules over the surprise's atoms (late), whole, in their own section
+		assert.ok(t.includes(`## examples: whole rules of this member over the surprise's atoms`), t);
+		assert.ok(t.includes(`(the atoms: late)\n\n% ${relative(r, join(home, "fam.llp"))}:7 (stage safety)\n%% Too late to stop: I stop.\nstop_late [dyn] : $busy * $late\n* now -o ().`), t);
 		assert.doesNotMatch(t, /how a rule is written|every rule names its layer/);         // the primer is the prompt's (PROMPT.md §2)
 		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)\npred dim : lamp.`), t);
 		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }, { path: join(r, "domains", "bund.llp"), kind: "shared" }]);
@@ -957,4 +962,60 @@ test("pack_propose: a bare unit name is found under the bundle; a name no file h
 	} finally {
 		await p.emit("session_shutdown", {}, {});
 	}
+});
+
+// ---- language-rag (gpt-oss s-0f23f8cd step 3): the language in front of the model ------------------------------------
+const GRASP = `catalog grasp_domain 1.
+pred take(obj) : grasp.
+pred idle : grasp.
+pred busy : grasp.
+pred handsfree : grasp.
+pred holding : grasp.
+stage act {
+  %% I take my goal.
+  begin [dyn] : $take(X0) * idle -o busy * tick__active(grasp).
+  %% My hands are full.
+  hands_full [dyn] : take(O) * $at(L) * $objat(O, L) * $holding * busy -o refused_take(O) * idle * tick__stuck(grasp).
+  %% I look around.
+  look [dyn] : $at(L) * idle -o idle * seen(L)  @w peek(L).
+}
+`;
+
+test("language-rag layer 1: the surprise's atoms pick whole rules of the member, the fired rule first, with the grammar line", () => {
+	assert.deepEqual([...predsOf("go [dyn] : goto(R) * $at(L) * L <> L2 -o reached(R) * idle  @w look(O, R).")].sort(), ["at", "goto", "idle", "look", "reached"]);
+	const t = mkdtempSync(join(tmpdir(), "rag-"));
+	writeFileSync(join(t, "seg-0.jsonl"), [
+		JSON.stringify({ clock: "command", members: {} }),
+		JSON.stringify({ k: 1, members: { grasp: { seq: [{ take: ["+take(other)"], by: "person" }] } } }),
+		JSON.stringify({ k: 2, members: { grasp: { seq: [{ step: ["begin[X0=other]"], by: "tool" }] } } }),
+	].join("\n") + "\n");
+	const files = [{ path: "domains/hier/grasp_domain.llp", text: GRASP }];
+	const s = { member: "grasp", k: 2, reading: "begin took the other hand's object while the hands were full", words: "it should wait for a free hand" };
+	const { seeds, fired } = seedsOf(s, t, files);
+	assert.deepEqual([...fired], ["begin"]);
+	assert.ok(["take", "idle", "busy", "tick__active"].every((p) => seeds.has(p)), [...seeds].join(","));
+	const ex = pickExamples(files, seeds, fired);
+	assert.deepEqual(ex.map((r) => r.name), ["begin", "hands_full", "look"]);
+	assert.equal(ex[0].doc, "%% I take my goal.");
+	assert.equal(ex[0].stage, "act");
+	assert.equal(ex[0].line, 9);
+	assert.ok(GRAMMAR.split(/\s+/).length <= 45);
+});
+
+test("language-rag layer 2: a recorded refusal answered with its construct, the nearest rule of the unit, a lint row's check", () => {
+	const files = [{ path: "domains/hier/grasp_domain.llp", text: GRASP }];
+	// G-high's grasp refusal (gpt-oss step 2): the unit= line inside the pack
+	const doc = "# Ruling: refused\n\n**grasp**, begin; the program unit domains/hier/grasp_domain.llp.\n\n## Why it is refused\n- the link refused: lex error: 49:5: bad character '='\n\nThe judgement's time: …\n";
+	const pack = "unit=grasp_domain.llp\n%% I take my goal.\nbegin [dyn] : $take(X0) * idle * handsfree -o busy * tick__active(grasp).\n";
+	const h = refusalHelp(doc, pack, files);
+	assert.match(h, /^## what fixes it\n/);
+	assert.match(h, /spec 00 §1: A `key=value` line is not metis: .* pack_propose's unit argument/);
+	assert.match(h, /the nearest well-formed rules of the unit:\n% domains\/hier\/grasp_domain.llp:9 \(stage act\)\n%% I take my goal.\nbegin \[dyn\]/);
+	// G-med-sk's nav refusal: I5
+	assert.match(refusalHelp("## Why it is refused\n- the link refused: error I5 nav: gating program, but no rule reads tick__grant for motion\n", "drop go.\n", files), /the interface check I5: .*tick__grant/);
+	// step 1 no-skills: the rule outside a stage block
+	assert.match(refusalHelp("## Why it is refused\n- the link refused: parse error: 49:7: expected '.'\n", "begin [dyn] : $take(X0) * idle -o busy.\n", files), /spec 00 §2: `\.` ends every declaration; a rule sits inside `stage S \{ … \}`/);
+	const checks = "## 3\n\n**L1 `state-dead-end`** (Duty-scoped class). A state pred the program's own rules\nproduce and no rule consumes.\n\n**L2 `x`** other.\n";
+	assert.match(refusalHelp("## Why it is refused\n- lint L1 state-dead-end: holding\n", "", files, checks), /\*\*L1 `state-dead-end`\*\* \(Duty-scoped class\)\. A state pred the program's own rules produce and no rule consumes\./);
+	assert.equal(refusalHelp("## Why it is refused\n- golden drive.yaml moved\n", "", files), "");   // a gate refusal: not this layer's draft yet
 });
