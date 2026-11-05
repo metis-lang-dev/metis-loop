@@ -40,7 +40,7 @@ import { fileURLToPath } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { cap } from "./lib/jsonl.ts";
-import { examplesSection, pickExamples, refusalHelp, seedsOf } from "./lib/examples.ts";
+import { asBlocks, examplesSection, pickExamples, refusalHelp, seedsOf } from "./lib/examples.ts";
 // pi's own path resolution for read (not exported by the package: imported by its file, so the guard resolves a path
 // exactly as the read tool will: a leading @ stripped, ~ expanded, file:// converted, the macOS variants tried)
 import { resolveReadPath } from "../node_modules/@earendil-works/pi-coding-agent/dist/core/tools/path-utils.js";
@@ -469,6 +469,33 @@ export default function (host: ExtensionAPI) {
 				return { path: u.path, text: t, ...(src && existsSync(src) ? { src: { path: src, text: read(src) } } : {}) };
 			});
 			return text(ruleText(files, (p.names || []) as string[]) || "(no rules named)", { member: m }, 8000);
+		},
+	});
+
+	// gpt-oss F16 (the architect: yes): the model reaches for `search` (its training's browsing tool); here it is layer 1's
+	// scoring over the member's own units: the rules naming the most of the query's words, whole, in their stage blocks
+	pi.registerTool({
+		name: "search",
+		label: "search the member's rules",
+		description:
+			"Search the member's own units (its program and the units it includes, as the compiler resolves them) for the rules that name the most of the query's atoms or words: the rules whole, in their stage blocks, each under its path:line. Lexical, 0 USD; no web. Default member: the one of the surprise taken last.",
+		parameters: Type.Object({
+			query: Type.String({ description: "atoms or words, e.g. \"handsfree holding take\"" }),
+			member: Type.Optional(Type.String({ description: "the member (default: the surprise taken last)" })),
+			path: Type.Optional(Type.String({ description: "ignored: the search is the member's units" })),
+		}),
+		async execute(_id, p: any) {
+			const r = root();
+			const m = String(p.member || lastMember || "");
+			if (!m) throw new Error("search: name the member (no surprise taken yet)");
+			const files = memberTexts(m, r);
+			const words = new Set((String(p.query || "").toLowerCase().match(/[a-z][a-z0-9_]*/g) ?? []));
+			const found = pickExamples(files, words, new Set([...words]), 8, 3000);
+			if (found.length) return text([`rules of ${m} naming ${[...words].join(", ")}:`, ...asBlocks(found)].join("\n"), { member: m, rules: found.map((x) => x.name) });
+			// no rule names them: the lines that hold the query as written
+			const q = String(p.query || "").trim().toLowerCase();
+			const lines = q ? files.flatMap((f) => f.text.split("\n").map((l, i) => ({ l, i })).filter((x) => x.l.toLowerCase().includes(q)).map((x) => `${f.path}:${x.i + 1}: ${x.l.trim()}`)) : [];
+			return text(lines.length ? lines.slice(0, 40).join("\n") : `nothing in ${m}'s units names ${q || "(an empty query)"}: rule_text gives a rule by name; surprise_next's signatures list them`, { member: m, rules: [] });
 		},
 	});
 

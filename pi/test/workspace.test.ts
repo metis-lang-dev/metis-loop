@@ -98,7 +98,7 @@ test("metis-workspace: its tools, the trace verbs as declared, their schemas as 
 	const declared = ws.tools().tools.map((t) => t.name);
 	assert.ok(declared.includes("trace_case") && declared.includes("lint"), declared.join(" "));
 	const chat = ["chat_diff", "chat_replay", "chat_ruling", "chat_status", "chat_surprises", "chat_why"];   // loop-chat step 3
-	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "rule_text", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
+	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "rule_text", "search", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
 	const c = p.tools.get("trace_case").parameters;
 	assert.equal(c.type, "object");
 	assert.equal(c.properties.at.type, "integer");
@@ -499,6 +499,12 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		assert.doesNotMatch(t, /how a rule is written|every rule names its layer/);         // the primer is the prompt's (PROMPT.md §2)
 		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)\npred dim : lamp.`), t);
 		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }, { path: join(r, "domains", "bund.llp"), kind: "shared" }]);
+		// F16: search, layer 1's scoring as a tool (the model's own habit: {path, query})
+		const found = (await p.tools.get("search").execute("s", { path: "..", query: "late busy" })).content[0].text;
+		assert.ok(found.startsWith("rules of lamp naming late, busy:\n\nstage safety {\n  % "), found);
+		assert.ok(found.includes("  stop_late [dyn] : $busy * $late"), found);
+		assert.match((await p.tools.get("search").execute("s", { query: "the clock" })).content[0].text, /fam\.llp:1: pred late : lamp\.   % the clock's/);
+		assert.match((await p.tools.get("search").execute("s", { query: "zebra" })).content[0].text, /nothing in lamp's units names zebra/);
 		const whole = (await p.tools.get("rule_text").execute("w", { names: ["stop_late", "nope"] })).content[0].text;
 		assert.equal(whole, `${join(home, "fam.llp")}:7\n%% Too late to stop: I stop.\nstop_late [dyn] : $busy * $late\n* now -o ().\n\nnot a rule of these units: nope`);
 		await p.emit("session_shutdown", {}, {});
