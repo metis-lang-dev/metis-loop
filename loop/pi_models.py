@@ -44,6 +44,22 @@ def show(base_url, model_id, timeout=3):
         return {}
 
 
+def props(base_url, timeout=3):
+    """llama.cpp's server under the same scheme (gpt-oss s-0f23f8cd: `ollama:MODEL@http://host:8081`, its /v1 is
+    OpenAI-compatible as Ollama's): its /props read as /api/show's answer, {} when it does not answer. The served
+    context is its n_ctx; thinking when its chat template takes a reasoning effort (gpt-oss's harmony)."""
+    root = base_url[:-3] if base_url.endswith("/v1") else base_url
+    try:
+        with urllib.request.urlopen(root.rstrip("/") + "/props", timeout=timeout) as r:
+            p = json.loads(r.read())
+    except Exception:  # noqa: BLE001 — neither server answered: the defaults
+        return {}
+    n = (p.get("default_generation_settings") or {}).get("n_ctx")
+    t = str(p.get("chat_template") or "")
+    caps = ["completion", "tools"] + (["thinking"] if "reasoning_effort" in t or "<|channel|>" in t else [])
+    return {"capabilities": caps, "parameters": f"num_ctx {n}" if n else "", "server": "llama.cpp"}
+
+
 def served_context(info, env=None):
     """The context the server gives the model: its own num_ctx (it wins), else OLLAMA_CONTEXT_LENGTH as this
     environment names it; None when neither says (the caller's default)."""
@@ -63,7 +79,7 @@ def entry(model_id, info=None):
     ctx = served_context(info) or CONTEXT
     ctx = min(ctx, trained) if trained else ctx
     caps = info.get("capabilities") or []
-    return {"id": model_id, "name": f"{model_id} (Ollama)", "reasoning": "thinking" in caps, "input": ["text"],
+    return {"id": model_id, "name": f"{model_id} ({'llama.cpp' if info.get('server') == 'llama.cpp' else 'Ollama'})", "reasoning": "thinking" in caps, "input": ["text"],
             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
             "contextWindow": ctx, "maxTokens": MAX_TOKENS,
             # the instructions as role system (qwen-loop F4): pi sends a thinking model's system prompt as role
@@ -88,7 +104,7 @@ def ollama_agent(state, model_id, base_url, agent=AGENT, info=None):
     d.mkdir(parents=True, exist_ok=True)
     base = json.loads((Path(agent) / "models.json").read_text())
     if info is None:
-        info = show(base_url, model_id)
+        info = show(base_url, model_id) or props(base_url)
     tmp = d / "models.json.tmp"
     tmp.write_text(json.dumps(models_json(base, model_id, base_url, info), indent=1) + "\n")
     tmp.replace(d / "models.json")

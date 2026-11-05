@@ -119,3 +119,26 @@ def test_the_ollama_entry(tmp_path, monkeypatch):
     assert pi_models.entry("phi4-mini", {})["contextWindow"] == pi_models.CONTEXT
     d = pi_models.ollama_agent(tmp_path / ".metis", "phi4-mini", "http://box:11434/v1", info={})
     assert [p.name for p in d.iterdir()] == ["models.json"]           # never pi's auth.json into a workspace
+
+
+def test_a_llama_cpp_server_under_the_ollama_scheme(monkeypatch):
+    """gpt-oss s-0f23f8cd: llama.cpp's server at ollama:MODEL@http://host:PORT (its /v1 is OpenAI-compatible): no
+    /api/show there, so its /props tells the served context (n_ctx) and thinking (a template that takes a reasoning
+    effort: gpt-oss's harmony)."""
+    import io
+    import json as J
+    from loop import pi_models
+
+    def fake(url, timeout=3):
+        u = url if isinstance(url, str) else url.full_url
+        if u.endswith("/api/show"):
+            raise OSError("404")
+        assert u == "http://box:8081/props"
+        return io.BytesIO(J.dumps({"default_generation_settings": {"n_ctx": 65536},
+                                   "chat_template": "{{ reasoning_effort }} <|channel|>"}).encode())
+    monkeypatch.setattr(pi_models.urllib.request, "urlopen", fake)
+    info = pi_models.show("http://box:8081/v1", "gpt-oss:20b") or pi_models.props("http://box:8081/v1")
+    e = pi_models.entry("gpt-oss:20b", info)
+    assert (e["name"], e["reasoning"], e["contextWindow"]) == ("gpt-oss:20b (llama.cpp)", True, 65536)
+    monkeypatch.setattr(pi_models.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(OSError("down")))
+    assert pi_models.props("http://box:8081/v1") == {}
