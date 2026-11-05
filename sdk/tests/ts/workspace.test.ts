@@ -160,6 +160,7 @@ s.close()`, d]);
 	assert.deepEqual(ws.marks("r1", r), pyws(r, 'ws.marks("r1")'));
 	assert.deepEqual(ws.marks("r1", r).map((m) => [m.k0, m.k1]), [[4, 7]]);
 	assert.equal(ws.keep_window("r1", 4, 7, "mark-1", r), "traces/r1-mark-1");
-	assert.deepEqual(readdirSync(join(r, ".metis", "traces", "r1-mark-1")).sort(), ["checkpoints", "marks.jsonl", "seg-3.jsonl", "seg-6.jsonl"]);
+	// metispy f50b76c (surprise-kinds 1b) writes kept.json beside a kept window's segments: what was kept, from where
+	assert.deepEqual(readdirSync(join(r, ".metis", "traces", "r1-mark-1")).filter((f) => f !== "kept.json").sort(), ["checkpoints", "marks.jsonl", "seg-3.jsonl", "seg-6.jsonl"]);
 	assert.throws(() => ws.keep_window("r1", 4, 7, "mark-1", r), /there already/);
 });
