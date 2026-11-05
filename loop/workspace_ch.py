@@ -493,8 +493,9 @@ class WorkspaceChannels:
             raise ValueError(f"the pi loop did not start: {e}") from None
         self.child["state"] = "running"
         self.child["task"] = asyncio.create_task(self._pump(self.child))
+        # the model started, named or the dot file's (gpt-oss F7: the journal said nothing of a dot-file start)
         await self._run(lambda: self.ws.journal("backend", "pi_start", pid=getattr(rpc, "pid", None),
-                                                **({"model": msg["model"]} if msg.get("model") else {})))
+                                                **({"model": child["model"]} if child["model"] else {})))
         return {"child": self.child_state()}
 
     async def _pump(self, child):

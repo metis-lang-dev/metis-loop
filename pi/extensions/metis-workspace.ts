@@ -134,6 +134,7 @@ export function derivedFrom(path: string, text: string): string | null {
 }
 
 const SKILLS = resolve(HERE, "..", "skills");           // pi.sh's --skill directories (loop-prompt, PROMPT.md §2)
+const TRIES = 3;                                        // metispy workspace.TRIES: the refusal that stands as the ruling
 
 /** The person's key file (loop.sh's METIS_OPENROUTER_ENV, default ~/.config/metis/openrouter.env), as a real path. */
 function keyFile(): string {
@@ -163,6 +164,18 @@ export function readRefusal(path: string, root: string, cwd: string = process.cw
 	if (/(^|\/)[^/]*\.env$/.test(real)) return `read ${raw}: an .env file is never read here (a key lives in it)`;
 	if (under(skills) || under(root)) return null;
 	return `read ${raw}: outside the skills (${skills}) and the workspace (${root}); this loop reads only those`;
+}
+
+/** gpt-oss F4: a read of `skills/<name>/<file>` that is not there (relative to the workspace, or under a guessed root)
+ *  is the skill's own file when the skills have it: → its absolute path, or null (the read goes as given). pi lists
+ *  each SKILL.md by its absolute path; a model that reads `skills/metis-language/SKILL.md` meant that one. */
+export function skillRead(path: string, cwd: string = process.cwd(), skills = SKILLS): string | null {
+	const raw = String(path || "");
+	if (existsSync(resolveReadPath(raw, cwd))) return null;
+	const m = /(?:^|\/)skills\/([^/]+)\/(.+)$/.exec(raw);
+	if (!m || m[1] === ".." || m[2].split("/").includes("..")) return null;
+	const f = join(skills, m[1], m[2]);
+	return existsSync(f) ? f : null;
 }
 
 /** The files named NAME under DIR (.metis, build, node_modules, .git and .wt skipped), for a unit given by its name. */
@@ -382,8 +395,8 @@ export default function (host: ExtensionAPI) {
 				const mine = src ? new Set(ruleNames(read(src))) : null;
 				const gen = mine ? new Set(ruleNames(t).filter((n) => !mine.has(n))) : new Set<string>();
 				return ["", `## included (${whose}): ${u.path}`,
-					src ? `(generated from ${src} by make: a pack that amends it gives unit=${src}, never this file. rule_text reads a rule there; (generated) marks a rule only make writes)`
-						: "(a pack that amends it gives unit=<this path>)",
+					src ? `(generated from ${src} by make: a pack that amends it passes ${src} as pack_propose's unit argument, never this file. rule_text reads a rule there; (generated) marks a rule only make writes)`
+						: "(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)",
 					signature(t, gen)];
 			};
 			const body = [
@@ -587,7 +600,7 @@ export default function (host: ExtensionAPI) {
 					argv.push("--unit", relative(r, u));
 				}
 				for (const c of p.cases ?? []) argv.push("--case", resolve(r, c));
-				if (p.brain) argv.push("--brain", p.brain);
+				if (p.brain && p.brain !== "none") argv.push("--brain", p.brain);   // none: the evidence alone (gpt-oss F2)
 				if (p.budget) argv.push("--budget", String(p.budget));
 				ws.journal("pi", "judging", { surprise: p.id }, r);
 				const res = await run(process.env.METIS_LOOP_PROPOSE || join(HERE, "..", "propose.sh"), argv, r);
@@ -615,6 +628,15 @@ export default function (host: ExtensionAPI) {
 					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e) };
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
+				// gpt-oss F3 (the architect's ruling): a refusal before the last try is a try, kept in rulings/tries/; the
+				// surprise stays taken, so the corrected pack is judged
+				const after = ws.surprise(p.id, r) as any;
+				if (after.status === "taken") {
+					const n = (after.tries ?? []).length;
+					return text(`${unitNote}${e.verdict} (try ${n}; kept as ${ruling}): surprise ${p.id} stays taken. Correct the pack ` +
+						`from the reasons below and propose again; a refusal at try ${TRIES} stands as the ruling.\n\n${doc}`,
+						{ verdict: e.verdict, ruling: null, try: n, code: res.code, spent });
+				}
 				return text(`${unitNote}${e.verdict}: ${ruling}\n\n${doc}`, { verdict: e.verdict, ruling, code: res.code, spent });
 			} finally {
 				logSpend(join(tmp, "run"), p.id, r); // a run that spent and then wrote no ruling still leaves its spend
@@ -798,6 +820,8 @@ export default function (host: ExtensionAPI) {
 	pi.on("tool_call", async (e: any, ctx: any) => {
 		if (over) return { block: true, reason: refusal(), terminate: true };
 		if (e?.toolName === "read") {
+			const sk = skillRead(String(e?.input?.path ?? ""), ctx?.cwd || process.cwd());
+			if (sk) e.input.path = sk;   // pi: event.input is mutable, the read runs on the patched path
 			const no = readRefusal(String(e?.input?.path ?? ""), root(), ctx?.cwd || process.cwd());
 			if (no) return { block: true, reason: no };
 		}

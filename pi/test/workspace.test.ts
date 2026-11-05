@@ -11,9 +11,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import workspace, { chatLine, derivedFrom, firings, readRefusal, ruleNames, ruleText, schema, signature, tracePath, whoseUnit, withTraceDir } from "../extensions/metis-workspace.ts";
+import workspace, { chatLine, derivedFrom, firings, readRefusal, skillRead, ruleNames, ruleText, schema, signature, tracePath, whoseUnit, withTraceDir } from "../extensions/metis-workspace.ts";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
 import { scoped } from "../extensions/lib/toolset.ts";
@@ -179,8 +179,8 @@ test("metis-workspace: pack_propose never guesses a config: none on the surprise
 	}
 });
 
-test("metis-workspace: a refused pack is ruled refused; a surprise not taken is not judged", async () => {
-	const { r } = scratch();
+test("metis-workspace: a refusal is a try, the surprise stays taken; the third stands; brain none is the evidence alone (gpt-oss F2, F3)", async () => {
+	const { r, bin } = scratch();
 	const p = fakePi();
 	workspace(p.api);
 	await p.emit("session_start", {}, ctx);
@@ -191,9 +191,18 @@ test("metis-workspace: a refused pack is ruled refused; a surprise not taken is 
 	ws.take_surprise(none, process.pid, "pi", r);
 	await assert.rejects(p.tools.get("pack_propose").execute("j", { id: none, pack: "% x" }), /no service config/);   // none named anywhere
 	process.env.STUB_VERDICT = "refused";
+	for (const n of [1, 2]) {
+		const t = await p.tools.get("pack_propose").execute("j", { id, pack: `% try ${n}`, brain: "none" });
+		assert.equal(t.details.verdict, "refused");
+		assert.equal(t.details.try, n);
+		assert.match(t.content[0].text, new RegExp(`refused \\(try ${n}; kept as rulings/tries/${id}-${n}\\.json\\): surprise ${id} stays taken`));
+		assert.equal(ws.surprise(id, r).status, "taken");
+		assert.ok(!readFileSync(join(bin, "propose.args"), "utf8").split("\n").includes("--brain"), "brain none: no --brain");
+	}
 	const j = await p.tools.get("pack_propose").execute("j", { id, pack: "% x" });
 	assert.equal(j.details.verdict, "refused");
 	assert.equal(ws.surprise(id, r).ruling.verdict, "refused");
+	assert.equal(ws.surprise(id, r).tries.length, 2);
 	await p.emit("session_shutdown", {}, {});
 });
 
@@ -474,12 +483,12 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		const out = await p.tools.get("surprise_next").execute("n", {});
 		const t = out.content[0].text;
 		assert.ok(t.includes("% the lamp's own words"), t);                                 // the program itself, whole
-		assert.ok(t.includes(`## included (the family's, under METIS_HOME): ${join(home, "fam.llp")}\n(a pack that amends it gives unit=<this path>)`), t);
+		assert.ok(t.includes(`## included (the family's, under METIS_HOME): ${join(home, "fam.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)`), t);
 		assert.ok(t.includes("pred late : lamp.\nstage progress:\n  go_on [dyn]\nstage safety:\n  stop_late [dyn]  %% Too late to stop: I stop."), t);
 		assert.ok(!t.includes("$busy * $late"), t);                                         // no bodies
 		assert.ok(!t.includes("the clock's"), t);                                           // nor comments
 		assert.doesNotMatch(t, /how a rule is written|every rule names its layer/);         // the primer is the prompt's (PROMPT.md §2)
-		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it gives unit=<this path>)\npred dim : lamp.`), t);
+		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)\npred dim : lamp.`), t);
 		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }, { path: join(r, "domains", "bund.llp"), kind: "shared" }]);
 		const whole = (await p.tools.get("rule_text").execute("w", { names: ["stop_late", "nope"] })).content[0].text;
 		assert.equal(whole, `${join(home, "fam.llp")}:7\n%% Too late to stop: I stop.\nstop_late [dyn] : $busy * $late\n* now -o ().\n\nnot a rule of these units: nope`);
@@ -827,6 +836,21 @@ test("metis-workspace: pi's read is blocked outside the skills and the workspace
 	assert.match(no.reason, /outside the skills/);
 	assert.equal(await p.emit("tool_call", { toolName: "read", input: { path: "README.md" } }, { ...ctx, cwd: r }), undefined);   // pi's cwd
 	assert.equal(await p.emit("tool_call", { toolName: "surprise_list", input: {} }, ctx), undefined);
+});
+
+test("metis-workspace: a read of skills/<name>/… that is not there reads the skill's own file (gpt-oss F4)", async () => {
+	const { r } = scratch();
+	const sk = resolve(dirname(fileURLToPath(import.meta.url)), "..", "skills");
+	assert.equal(skillRead("skills/metis-language/SKILL.md", r), join(sk, "metis-language", "SKILL.md"));
+	assert.equal(skillRead("/home/x/guessed-root/skills/surprise-ruling/SKILL.md", r), join(sk, "surprise-ruling", "SKILL.md"));
+	assert.equal(skillRead(join(sk, "metis-language", "SKILL.md"), r), null);         // there: read as given
+	assert.equal(skillRead("skills/nope/SKILL.md", r), null);
+	assert.equal(skillRead("skills/../../etc/passwd", r), null);
+	const p = fakePi();
+	workspace(p.api);
+	const e = { toolName: "read", input: { path: "skills/metis-language/SKILL.md" } };
+	assert.equal(await p.emit("tool_call", e, { ...ctx, cwd: r }), undefined);
+	assert.equal(e.input.path, join(sk, "metis-language", "SKILL.md"));
 });
 
 test("catalog_edit in a workspace is the apply of an ACCEPTED ruling, or refused in words; a comment-only edit applies nothing (the architect's F1, step 5)", async () => {
