@@ -231,7 +231,7 @@ export function signature(text: string, generated: Set<string> = new Set()): str
 	for (let i = 0; i < lines.length; i++) {
 		const l = lines[i];
 		const st = l.match(/^\s*stage\s+([a-z0-9_]+)\s*\{/);
-		if (st) { out.push(`stage ${st[1]}:`); continue; }
+		if (st) { out.push(`rules of stage ${st[1]}:`); continue; }
 		const r = l.match(RULE_HEAD);
 		if (r) {
 			const doc = i > 0 && /^\s*%%/.test(lines[i - 1]) ? "  " + lines[i - 1].trim() : "";

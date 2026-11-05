@@ -489,7 +489,7 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		const t = out.content[0].text;
 		assert.ok(t.includes("% the lamp's own words"), t);                                 // the program itself, whole
 		assert.ok(t.includes(`## included (the family's, under METIS_HOME): ${join(home, "fam.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)`), t);
-		assert.ok(t.includes("pred late : lamp.\nstage progress:\n  go_on [dyn]\nstage safety:\n  stop_late [dyn]  %% Too late to stop: I stop."), t);
+		assert.ok(t.includes("pred late : lamp.\nrules of stage progress:\n  go_on [dyn]\nrules of stage safety:\n  stop_late [dyn]  %% Too late to stop: I stop."), t);
 		const sig = t.split("## examples")[0];
 		assert.ok(!sig.includes("$busy * $late"), t);                                       // no bodies in the signatures
 		assert.ok(!t.includes("the clock's"), t);                                           // nor comments
@@ -550,7 +550,7 @@ test("signature of an alfworld unit (the tree's nav, generated): declarations an
 	assert.equal(signature(nav), [
 		"catalog nav_domain 1.", "layers (dyn).", "stages (act).", "types (receptacle location).", 'include "iface/alfworld.llp".',
 		"namespace nav produce (dyn).", "pred recat(receptacle, location) : nav.", "pred at(location) : nav.",
-		"stage act:", "  begin [dyn]", "  go [dyn]  %% I go to {R}.", "  here [dyn]  %% {R} is right here.",
+		"rules of stage act:", "  begin [dyn]", "  go [dyn]  %% I go to {R}.", "  here [dyn]  %% {R} is right here.",
 	].join("\n"));
 	assert.equal(derivedFrom("/w/hier/tree/nav_domain.llp", nav), "/w/hier/nav_domain.llp");
 	assert.equal(derivedFrom("/w/hier/nav_domain.llp", "% nav_domain\n"), null);
