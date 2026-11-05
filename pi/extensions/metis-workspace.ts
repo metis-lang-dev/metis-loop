@@ -594,6 +594,14 @@ export default function (host: ExtensionAPI) {
 			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
 			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay (the ruling would have no fired diff)`);
 			if (p.brain?.startsWith("openrouter/") && !(p.budget && p.budget > 0)) throw new Error("a paid brain needs a budget (USD)");
+			// gpt-oss after-drive: brain "script:metis-language/SKILL.md" crashed the judge, which released the take and sent
+			// the model round surprise_next again; a brain the judge cannot run is refused here, the surprise still taken
+			if (p.brain && p.brain !== "none") {
+				const sc = /^script:(.+)$/.exec(p.brain);
+				if (sc ? !existsSync(resolve(r, sc[1])) : !/^(openrouter\/.+|claude(\/.+)?)$/.test(p.brain))
+					throw new Error(`brain ${p.brain}: ${sc ? "no such script" : "not a brain"} (script:FILE, openrouter/<id> with a budget, ` +
+						`or leave it out: the evidence alone). Surprise ${p.id} stays taken: propose again without it.`);
+			}
 			const b = ws.bundle(undefined, r);
 			// the service config: the surprise's (the run it was dropped from), else the bundle's service.yaml; never the
 			// model's guess (the alf drive's L3: a guessed config crashed the judge, then a ruling "refused: 'v3'")

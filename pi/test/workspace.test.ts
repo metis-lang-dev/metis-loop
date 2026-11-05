@@ -200,6 +200,10 @@ test("metis-workspace: a refusal is a try, the surprise stays taken; the third s
 		assert.equal(ws.surprise(id, r).status, "taken");
 		assert.ok(!readFileSync(join(bin, "propose.args"), "utf8").split("\n").includes("--brain"), "brain none: no --brain");
 	}
+	await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x", brain: "script:metis-language/SKILL.md" }),
+		/brain script:metis-language\/SKILL.md: no such script .* stays taken/);              // the after drive's crash, refused in words
+	assert.equal(ws.surprise(id, r).status, "taken");
+	await assert.rejects(p.tools.get("pack_propose").execute("j", { id, pack: "% x", brain: "gpt-oss" }), /brain gpt-oss: not a brain/);
 	const j = await p.tools.get("pack_propose").execute("j", { id, pack: "% x" });
 	assert.equal(j.details.verdict, "refused");
 	assert.equal(ws.surprise(id, r).ruling.verdict, "refused");
