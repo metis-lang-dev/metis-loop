@@ -495,7 +495,7 @@ test("metis-workspace: surprise_next shows the member's program whole and each u
 		assert.ok(!t.includes("the clock's"), t);                                           // nor comments
 		// language-rag layer 1: the rules over the surprise's atoms (late), whole, in their own section
 		assert.ok(t.includes(`## examples: whole rules of this member over the surprise's atoms`), t);
-		assert.ok(t.includes(`(the atoms: late)\n\n% ${relative(r, join(home, "fam.llp"))}:7 (stage safety)\n%% Too late to stop: I stop.\nstop_late [dyn] : $busy * $late\n* now -o ().`), t);
+		assert.ok(t.includes(`(the atoms: late)\n\nstage safety {\n  % ${relative(r, join(home, "fam.llp"))}:7\n  %% Too late to stop: I stop.\n  stop_late [dyn] : $busy * $late\n  * now -o ().\n}`), t);
 		assert.doesNotMatch(t, /how a rule is written|every rule names its layer/);         // the primer is the prompt's (PROMPT.md §2)
 		assert.ok(t.includes(`## included (the bundle's): ${join(r, "domains", "bund.llp")}\n(a pack that amends it passes this path as pack_propose's unit argument; the pack's text is rules only)\npred dim : lamp.`), t);
 		assert.deepEqual(out.details.units, [{ path: join(home, "fam.llp"), kind: "shared" }, { path: join(r, "domains", "bund.llp"), kind: "shared" }]);
@@ -1014,7 +1014,9 @@ test("language-rag layer 2: a recorded refusal answered with its construct, the 
 	const h = refusalHelp(doc, pack, files);
 	assert.match(h, /^## what fixes it\n/);
 	assert.match(h, /spec 00 §1: A `key=value` line is not metis: .* pack_propose's unit argument/);
-	assert.match(h, /the nearest well-formed rules of the unit:\n% domains\/hier\/grasp_domain.llp:9 \(stage act\)\n%% I take my goal.\nbegin \[dyn\]/);
+	assert.match(h, /the nearest well-formed rules of the unit, as they sit in it:\n\nstage act \{\n  % domains\/hier\/grasp_domain.llp:9\n  %% I take my goal.\n  begin \[dyn\]/);
+	// the after drive's grasp refusal: `stage act:` copied from the signatures
+	assert.match(refusalHelp("## Why it is refused\n- the link refused: parse error: 49:10: expected '{'\n", "stage act:\n  x [dyn] : take(O) * $holding -o idle.\n", files), /`stage act:` is how the signatures list/);
 	// G-med-sk's nav refusal: I5
 	assert.match(refusalHelp("## Why it is refused\n- the link refused: error I5 nav: gating program, but no rule reads tick__grant for motion\n", "drop go.\n", files), /the interface check I5: .*tick__grant/);
 	// step 1 no-skills: the rule outside a stage block

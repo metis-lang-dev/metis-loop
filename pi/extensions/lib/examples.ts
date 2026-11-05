@@ -99,6 +99,29 @@ export function pickExamples(files: { path: string; text: string }[], seeds: Set
 	return out;
 }
 
+/** RULES as the language writes them: each file's rules in their `stage S { … }` block (the shape a pack copies:
+ *  gpt-oss wrote `stage act:` from the signatures), each rule under a `% path:line` comment and its %% line. */
+export function asBlocks(rules: UnitRule[]): string[] {
+	const out: string[] = [];
+	const groups = new Map<string, UnitRule[]>();
+	for (const r of rules) {
+		const k = `${r.path}\u0000${r.stage ?? ""}`;
+		if (!groups.has(k)) groups.set(k, []);
+		groups.get(k)!.push(r);
+	}
+	for (const g of groups.values()) {
+		const st = g[0].stage;
+		out.push("");
+		if (st) out.push(`stage ${st} {`);
+		for (const r of g) {
+			const ind = st ? "  " : "";
+			out.push(`${ind}% ${r.path}:${r.line}`, ...(r.doc ? [ind + r.doc] : []), ...r.text.split("\n").map((l) => ind + l));
+		}
+		if (st) out.push("}");
+	}
+	return out;
+}
+
 /** The section surprise_next prints: the grammar line, the seeds, the rules whole with where they sit. */
 export function examplesSection(ex: UnitRule[], seeds: Set<string>): string {
 	if (!ex.length) return "";
@@ -106,7 +129,7 @@ export function examplesSection(ex: UnitRule[], seeds: Set<string>): string {
 		"## examples: whole rules of this member over the surprise's atoms (copy their shape; the pack is written like them)",
 		GRAMMAR,
 		`(the atoms: ${[...seeds].sort().join(", ")})`,
-		...ex.flatMap((r) => ["", `% ${r.path}:${r.line}${r.stage ? ` (stage ${r.stage})` : ""}`, ...(r.doc ? [r.doc] : []), r.text]),
+		...asBlocks(ex),
 	].join("\n");
 }
 
@@ -140,6 +163,8 @@ export const REFUSALS: { re: RegExp; spec: string; text: string }[] = [
 	  text: "A `key=value` line is not metis: the pack's text is rules and declarations only. The file a pack amends is pack_propose's unit argument, never a line of the pack." },
 	{ re: /lex error/, spec: "spec 00 §1",
 	  text: "The tokens are idents, numbers, strings, `-o`, `:-`, `<>`, `@w`, `..`, `%%` doc lines, `%` comments and the punctuation { } ( ) . , * : [ ] ~ $; any other character is a lex error. No prose outside `%%` lines." },
+	{ re: /parse error: .*expected '\{'/, spec: "spec 00 §2",
+	  text: "A stage block opens with `{` and closes with `}`: `stage act {`, the rules, `}`. `stage act:` is how the signatures list a stage's rules, not the language." },
 	{ re: /parse error: .*expected '\.'/, spec: "spec 00 §2",
 	  text: "`.` ends every declaration; a rule sits inside `stage S { … }` as `name [layer] : body -o head.`, its %% line above it. A bare rule outside a stage block does not parse." },
 	{ re: /parse error: .*expected -o/, spec: "spec 00 §2",
@@ -179,7 +204,7 @@ export function refusalHelp(doc: string, pack: string, unitFiles: { path: string
 		const names = new Set(unitRules("pack", pack).map((r) => r.name));
 		for (const m of pack.matchAll(/^\s*drop\s+([a-z][a-z0-9_]*)/gm)) names.add(m[1]);
 		const near = pickExamples(unitFiles, seeds, names, 2, 900);
-		if (near.length) out.push("the nearest well-formed rules of the unit:", ...near.flatMap((r) => [`% ${r.path}:${r.line}${r.stage ? ` (stage ${r.stage})` : ""}`, ...(r.doc ? [r.doc] : []), r.text]));
+		if (near.length) out.push("the nearest well-formed rules of the unit, as they sit in it:", ...asBlocks(near));
 	}
 	return out.length ? ["## what fixes it", GRAMMAR, ...out].join("\n") : "";
 }
