@@ -1021,6 +1021,12 @@ test("language-rag layer 2: a recorded refusal answered with its construct, the 
 	assert.match(refusalHelp("## Why it is refused\n- the link refused: error I5 nav: gating program, but no rule reads tick__grant for motion\n", "drop go.\n", files), /the interface check I5: .*tick__grant/);
 	// step 1 no-skills: the rule outside a stage block
 	assert.match(refusalHelp("## Why it is refused\n- the link refused: parse error: 49:7: expected '.'\n", "begin [dyn] : $take(X0) * idle -o busy.\n", files), /spec 00 §2: `\.` ends every declaration; a rule sits inside `stage S \{ … \}`/);
+	// after drive v2: the absence written as a negation, three ways; the unit's complement named (take_open: handsfree in, holding out)
+	const GR2 = GRASP.replace("  %% I look around.", "  %% I take {O}.\n  take_open [dyn] : take(O) * handsfree * busy -o holding * idle.\n  %% I look around.");
+	for (const neg of ["-holding", "¬holding", "not holding"]) {
+		const h2 = refusalHelp("## Why it is refused\n- the link refused: lex error: 48:36: bad character '-'\n", `stage act {\n  drop begin.\n  begin [dyn] : $take(X0) * idle * ${neg} -o busy.\n}\n`, [{ path: "g.llp", text: GR2 }]);
+		assert.match(h2, /metis has no negation: `holding` cannot be written absent .* stand for its absence .*: `handsfree`: read one with `\$`/, neg);
+	}
 	const checks = "## 3\n\n**L1 `state-dead-end`** (Duty-scoped class). A state pred the program's own rules\nproduce and no rule consumes.\n\n**L2 `x`** other.\n";
 	assert.match(refusalHelp("## Why it is refused\n- lint L1 state-dead-end: holding\n", "", files, checks), /\*\*L1 `state-dead-end`\*\* \(Duty-scoped class\)\. A state pred the program's own rules produce and no rule consumes\./);
 	assert.equal(refusalHelp("## Why it is refused\n- golden drive.yaml moved\n", "", files), "");   // a gate refusal: not this layer's draft yet

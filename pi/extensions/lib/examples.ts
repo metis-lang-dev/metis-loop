@@ -179,6 +179,37 @@ export const REFUSALS: { re: RegExp; spec: string; text: string }[] = [
 	  text: "This member gates itself: the rule that starts its motion reads the grant, as the unit's own rules do (`$tick__grant(…)` among its premises). Keep that premise when you rewrite such a rule." },
 ];
 
+/** The atoms a pack's text tries to negate (`-holding`, `¬holding`, `not holding`, `~at(L)`, `!x`): metis has none. */
+export function negated(pack: string): string[] {
+	const out = new Set<string>();
+	for (const l of pack.split("\n")) {
+		const body = nocomment(l).split(/-o\b/)[0];
+		for (const m of body.matchAll(/(?:^|[*:(]\s*)(?:-|¬|!|~|not\s+|no_|non_)\s*\$?([a-z][a-z0-9_]*)/g)) out.add(m[1]);
+	}
+	return [...out];
+}
+
+/** The positive atoms that stand for A's absence in the unit: B such that a rule consumes B and produces A, or
+ *  consumes A and produces B (a token passed between them: the free hand is consumed as `holding` is made). */
+export function complements(a: string, files: { path: string; text: string }[]): string[] {
+	const out = new Set<string>();
+	const sides = (t: string) => {
+		const [lhs, rhs = ""] = t.replace(RULE_HEAD, "").split(/-o\b/);
+		const bare = (x: string) => new Set((x.replace(/\([^)]*\)/g, "()").match(/(?<![$\w])[a-z][a-z0-9_]*(?:\(\))?/g) ?? []));
+		return { used: bare(lhs), made: bare(rhs) };
+	};
+	// the same arity as A (with arguments or without: `holding` stands against `handsfree`, never the goal `take(O)`)
+	const args = files.some((f) => new RegExp(`(?<![\\w$])${a}\\(`).test(f.text));
+	a = args ? `${a}()` : a;
+	for (const f of files)
+		for (const r of unitRules(f.path, f.text)) {
+			const { used, made } = sides(nocomment(r.text));
+			if (made.has(a) && !used.has(a)) for (const b of used) if (!made.has(b) && b !== a) out.add(b);
+			if (used.has(a) && !made.has(a)) for (const b of made) if (!used.has(b) && b !== a) out.add(b);
+		}
+	return [...out].filter((b) => b.endsWith("()") === args).map((b) => b.replace(/\(\)$/, "")).filter((b) => !/^(idle|busy|tick__\w+)$/.test(b)).sort();
+}
+
 /** A lint row's check, from the pattern catalogue (CHECKS.md §3: the **Ln `name`** paragraph). */
 export function lintParagraph(code: string, checks: string): string | null {
 	const m = new RegExp(`\\*\\*${code}([ *\`][\\s\\S]*?)(?:\\n\\n|$)`).exec(checks);
@@ -191,14 +222,21 @@ export function lintParagraph(code: string, checks: string): string | null {
 export function refusalHelp(doc: string, pack: string, unitFiles: { path: string; text: string }[], checks = ""): string {
 	const out: string[] = [];
 	const why = (doc.match(/## Why it is refused\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? doc).trim();
-	const hit = REFUSALS.find((r) => r.re.test(why));
+	const neg = negated(pack);
+	for (const a of neg) {
+		const c = complements(a, unitFiles);
+		out.push(`metis has no negation: \`${a}\` cannot be written absent (no \`-\`, \`¬\`, \`not\`, \`~\` in a body). ` +
+			(c.length ? `The unit's atoms that stand for its absence (a rule passes one for the other): ${c.map((x) => `\`${x}\``).join(", ")}: read one with \`$\`.`
+				: `Say the absence with an atom a rule of the unit produces in the other case.`));
+	}
+	const hit = neg.length ? null : REFUSALS.find((r) => r.re.test(why));
 	if (hit) out.push(`${hit.spec}: ${hit.text}`);
 	const codes = [...new Set(why.match(/\bL\d{1,2}\b/g) ?? [])];
 	for (const c of codes) {
 		const p = checks ? lintParagraph(c, checks) : null;
 		if (p) out.push(p);
 	}
-	if (hit || /link refused|parse|lex/.test(why)) {
+	if (hit || neg.length || /link refused|parse|lex/.test(why)) {
 		const seeds = new Set<string>();
 		for (const r of unitRules("pack", pack)) for (const p of r.preds) seeds.add(p);
 		const names = new Set(unitRules("pack", pack).map((r) => r.name));
