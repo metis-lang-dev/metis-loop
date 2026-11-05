@@ -10,7 +10,7 @@ trace verbs (tools/gen_chat_tools.py; a test checks the file equals the argparse
     /why ATOM [at K]            metis.trace blame: who last moved ATOM
     /diff [ID]                  the ruling's fired diff and goldens moved (default: the last ruling)
     /ruling [ID]                the ruling card (default: the last)
-    /mark [RUN] [K | K0..K1] WORDS   a tick of the session's trace as a surprise (its REPL's mark), or RUN's
+    /mark [RUN[:MEMBER]] [K | K0..K1] WORDS   a tick of the session's trace as a surprise (its REPL's mark), or RUN's
     /drop WORDS                 the session's last tick as a surprise with these words
     /apply [ID]                 an accepted ruling applied (the judge's merge of its pack onto its unit), at the gate
     /rebuild                    make (or metisc build .) of the bundle
@@ -36,7 +36,7 @@ from metis import trace as T
 from metis.catalog import workspace as W
 
 TOOLS_FILE = Path(__file__).resolve().parent / "chat_tools.json"
-SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN] [K | K0..K1] WORDS"}   # /help's argument shapes
+SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN[:MEMBER]] [K | K0..K1] WORDS"}   # /help's argument shapes
 FREE = ("mark", "drop")       # commands whose words are the person's text: an apostrophe is a word's, not a quote
 WINDOW = re.compile(r"^(-?\d+)(?:\.\.(-?\d+))?$")
 ROWS = 60                     # a /replay's rows at most (the window's first; the rest are counted)
@@ -60,8 +60,8 @@ COMMANDS = (
     ("diff", "the ruling's fired diff and the goldens it moved (default: the last ruling)",
      (("id", {"nargs": "?", "help": "a surprise id"}),)),
     ("ruling", "the ruling card (default: the last ruling)", (("id", {"nargs": "?", "help": "a surprise id"}),)),
-    ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's, dropped at once",
-     (("words", {"nargs": "+", "help": "[RUN] [K | K0..K1] WORDS"}),)),
+    ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members), dropped at once",
+     (("words", {"nargs": "+", "help": "[RUN[:MEMBER]] [K | K0..K1] WORDS"}),)),
     ("drop", "the open session's last tick as a surprise with these words", (("words", {"nargs": "+", "help": "the words"}),)),
     ("apply", "an accepted ruling applied: the judge's merge of its pack onto its unit, the diff shown, then confirm or refuse (default: the last ruling)",
      (("id", {"nargs": "?", "help": "a surprise id"}),)),
@@ -364,7 +364,7 @@ def status_text(ws, child, budget_next=None):
 
 
 def mark(ws, words, session=None):
-    """/mark [RUN] [K | K0..K1] WORDS → the surprise's draft (drop_draft drops it): {run, member, k | window, words}
+    """/mark [RUN[:MEMBER]] [K | K0..K1] WORDS → the surprise's draft (drop_draft drops it): {run, member, k | window, words}
     for a trace named, else {session, k | window, words} for SESSION {session, k} (its member and trace the
     session's); the tick as given, else the session's last. The console's /mark K on its own session is the REPL's
     mark (loop-ui 2.2); the SURPRISES dialog this once filled went with its dock."""
@@ -385,9 +385,13 @@ def mark(ws, words, session=None):
         if win is None and session.get("k") is not None:
             win = (session["k"], session["k"])
     else:
+        # RUN:MEMBER names the member of a trace of several (loop-ui I9: the alfworld demo's run has six)
+        run, _, member = run.partition(":")
         d, run = _trace_dir(ws, run)
         ms = sorted(T.read(d)[0].header["members"])
-        draft = {"run": run, "member": ms[0] if len(ms) == 1 else None, "words": text}
+        if member and member not in ms:
+            raise ValueError(f"/mark: {run} has no member {member} (its members: {', '.join(ms)})")
+        draft = {"run": run, "member": member or (ms[0] if len(ms) == 1 else None), "members": ms, "words": text}
     if win is not None:
         if win[0] == win[1]:
             draft["k"] = win[0]
@@ -476,7 +480,9 @@ def drop_draft(ws, draft):
     if not run:
         raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its session)")
     if not draft.get("member"):
-        raise ValueError(f"/mark: {run} has several members: the REPL or the console names one")
+        ms = draft.get("members") or []
+        raise ValueError(f"/mark: {run} has several members" + (f" ({', '.join(ms)})" if ms else "")
+                         + f": name one, /mark {run}:MEMBER K WORDS")
     rec = {"member": draft["member"], "trace": "traces/" + run, "words": draft["words"],
            "reading": first_sentence(draft["words"])}
     if draft.get("window"):

@@ -349,6 +349,9 @@ llp> surprises    llp> status                        /rebuild  /lint  /budget US
   `usage` row per model call (paid or local, TUI or rpc), and every face's line is metispy's `Workspace.spend()`:
   `0 USD, local (11 calls)` on a local model, else `0.0123 USD spent by pi's estimate (12 calls; …)`; the page's
   header reads the same.
+- **The tester's first view:** the CHAT opens with "say what surprised you; /help for the commands", then `/status`
+  and `/surprises` printed. `/mark RUN:MEMBER K WORDS` marks a tick of a trace of several members (the alfworld demo's
+  run has six); without the member the refusal names them.
 - **`/apply [ID]`** (loop-ui 2.3, the user: "the apply writes exactly what was judged"): an accepted ruling's pack
   merged onto its unit by the judge's own code (metispy `Workspace.apply_plan`: `metis.trace.apply_pack`; the unit the
   ruling records, else the surprise's, else the member's program), shown as the diff of that one file, written when the

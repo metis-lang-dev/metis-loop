@@ -130,7 +130,7 @@ def test_the_table_is_the_argparse_and_help_reads_it():
     h = chat.help_text()
     for n in names:
         assert f"/{n}" in h, n
-    assert "/why ATOM [at K]" in h and "/replay [RUN] [K0..K1 | K]" in h and "/mark [RUN] [K | K0..K1] WORDS" in h
+    assert "/why ATOM [at K]" in h and "/replay [RUN] [K0..K1 | K]" in h and "/mark [RUN[:MEMBER]] [K | K0..K1] WORDS" in h
     assert "`do +atom`" in h and "a bare `+atom` line is refused" in h                 # the drive's F6
     assert chat.help_text("why").startswith("/why ATOM [at K] — ")
 
@@ -256,7 +256,15 @@ def test_mark_from_a_trace_and_the_refusals(root):
     """/mark RUN K WORDS is the terminal's: dropped at once (pi's /mark, loop-ui 2.2: no draft for the page to drop)."""
     ch = channels(root)
     f = say(ch, f"/mark {RUN} 10..20 it braked late behind the lead car")              # the terminal's own refusal
-    assert f["type"] == "error" and "has several members: the REPL or the console names one" in f["error"]
+    assert f["type"] == "error" and (f"has several members (planner, responder, road_director): name one, /mark {RUN}:MEMBER "
+                                     "K WORDS") in f["error"]
+    # loop-ui I9: RUN:MEMBER names it (the alfworld demo's run has six members), at once, as pi's /mark does
+    f = say(ch, f"/mark {RUN}:planner 10..20 it braked late behind the lead car")
+    sid = f["text"].split()[1].rstrip(":")
+    rec = W.workspace(root).surprise(sid)
+    assert (rec["member"], rec["window"], rec["words"]) == ("planner", [10, 20], "it braked late behind the lead car")
+    assert "has no member nobody (its members: planner, responder, road_director)" in \
+        say(ch, f"/mark {RUN}:nobody 12 late")["error"]
     assert "/mark here names a trace" in say(ch, "/mark 10 late")["error"]            # no session: the terminal's form only
     assert "the words are what the record carries" in say(ch, f"/mark {RUN} 10")["error"]
 
@@ -342,6 +350,9 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     assert "r.draft" not in js and "io.ask('surprise', 'drop'" not in js and "firstSentence" not in js
     assert "onclick: () => sendLine('/reload')," in js and "io.ask('bundle', 'reload'" not in js
     assert "return { refresh, tail, ruling, say: sendLine, fill };" in js
+    # the tester's first view (loop-ui): the line on what to do, then /status and /surprises printed, once at the mount
+    assert "push('note', 'loop', 'say what surprised you; /help for the commands');" in js
+    assert "for (const c of ['/status', '/surprises']) await command(c);" in js and "\n    opening();\n" in js
     page = (HERE.parent / "console" / "loop_console.html").read_text()
     assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page
     # console-voice: a heard line is said as a typed one, shown as heard; pi's words go to the host's voice
@@ -445,6 +456,8 @@ def test_the_terminal_cli_answers_the_tuis_commands(root, capsys):
     assert rec["window"] == [1, 2] and rec["trace"] == "traces/repl-1-w1-2" and (root / ".metis" / rec["trace"]).is_dir()
     assert chat.main(["--root", str(root), f"/mark {RUN} 10 late"]) == 1          # the road's: several members
     assert "several members" in capsys.readouterr().err
+    assert chat.main(["--root", str(root), f"/mark {RUN}:responder 10 late"]) == 0          # named: dropped (pi's /mark)
+    assert "dropped " in capsys.readouterr().out
     assert chat.main(["--root", str(root), "/mark 3 no trace named"]) == 1
     assert "/mark here names a trace" in capsys.readouterr().err
     for line, words in (("/drop x", "`drop WORDS` in its terminal"), ("/reload", "`reload` in its terminal"),

@@ -336,9 +336,17 @@
       try { s.commands = (await io.ask('loop', 'commands')).commands || []; render(); } catch (e) { /* an older backend: no completion */ }
     }
     render();
+    // the tester's first view (loop-ui step 1 §4; 2.5's follow-up): the workspace's /status and /surprises printed,
+    // and one line on what to do; once, at the mount (a page reload is a new view)
+    async function opening() {
+      push('note', 'loop', 'say what surprised you; /help for the commands');
+      render();
+      for (const c of ['/status', '/surprises']) await command(c);
+    }
     refresh();
     tail();
     commands();
+    opening();
     return { refresh, tail, ruling, say: sendLine, fill };
   }
   window.MetisLoop = { mount };

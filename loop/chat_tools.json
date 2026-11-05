@@ -123,13 +123,13 @@
   {
    "name": "mark",
    "verb": "mark",
-   "description": "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's, dropped at once",
+   "description": "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members), dropped at once",
    "parameters": {
     "type": "OBJECT",
     "properties": {
      "words": {
       "type": "STRING",
-      "description": "[RUN] [K | K0..K1] WORDS",
+      "description": "[RUN[:MEMBER]] [K | K0..K1] WORDS",
       "positional": 0
      }
     },
