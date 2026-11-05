@@ -625,7 +625,8 @@ export default function (host: ExtensionAPI) {
 				// unit: the file the pack amends, recorded so /apply merges onto it (loop-ui 2.3)
 				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace,
 					unit: e.unit ?? (s as any).unit ?? null,
-					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e) };
+					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e),
+					...(e.why ? { why: e.why } : {}) };   // why: kind, a refusal by the record's kind (spec 20 §5): it stands, never a try
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
 				// gpt-oss F3 (the architect's ruling): a refusal before the last try is a try, kept in rulings/tries/; the
