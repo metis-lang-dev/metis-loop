@@ -444,7 +444,7 @@ def test_a_marked_window_is_kept_and_dropped_with_its_config(gw, tmp_path):
         c = ask(ws, "surprise", "drop", run="page", member="planner", k=5, atoms=["+x"])["id"]
     w = W.workspace(tmp_path)
     ra, rb, rc = (w.surprise(i) for i in (a, b, c))
-    assert ra["trace"] == rb["trace"] == "traces/page-mark-1" and ra["window"] == [4, 7] and ra["mark"] == 1
+    assert ra["trace"] == rb["trace"] == "traces/page-mark-1" and ra["window"] == [4, 7] and ra["page_mark"] == 1
     assert ra["config"] == ".metis/traces/page-mark-1/config.yaml"
     assert sorted(p.name for p in (tmp_path / ".metis/traces/page-mark-1").glob("seg-*.jsonl")) == ["seg-3.jsonl", "seg-6.jsonl"]
     assert rc["trace"] == "traces/page" and rc["config"] == ".metis/traces/page/config.yaml"     # one tick: no copy

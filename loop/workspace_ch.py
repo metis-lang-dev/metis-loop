@@ -237,8 +237,10 @@ class WorkspaceChannels:
         or from a trace (run and member named). The person's reading or atoms, and words, as given. No `config`: a
         REPL session has no service config, and for a trace the judge falls back to the bundle's (pack_propose:
         the argument, the surprise's, then ws.bundle().config, the architect's order)."""
-        rec = {k: msg[k] for k in ("reading", "atoms", "words", "window", "k", "k0", "config", "mark")
+        rec = {k: msg[k] for k in ("reading", "atoms", "words", "window", "k", "k0", "config")
                if msg.get(k) not in (None, "", [])}
+        if msg.get("mark") not in (None, "", []):        # the page's mark NUMBER (marks.jsonl): page_mark, since spec 20 §8's
+            rec["page_mark"] = msg["mark"]               # `mark` is a confusion record's {n, k0, k1, said} (metispy checks it)
         if msg.get("session"):
             s = self.gw.sessions.get(str(msg["session"]))
             if s is None:

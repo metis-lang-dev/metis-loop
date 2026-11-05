@@ -161,9 +161,8 @@ def test_a_member_with_a_weight_port_the_trace_lacks_is_named_unjudged():
 
 def test_a_ruling_refused_by_the_records_kind_says_the_kind_and_its_route():
     """spec 20 §5 (surprise-kinds s-7a02c2ac): the judge refuses a record that is not structural before the cascade; the ruling says so."""
-    from pi.policy.propose import document
     e = {"verdict": "refused", "why": "kind", "kind": "probabilistic", "status": "refused", "member": "planner", "inert": False, "times": [],
          "route": "the fold's bounds, a weight, a belief or a sensor parameter; never a rule",
          "reasons": ["the record's kind is probabilistic, not structural: no pack answers it. the fold's bounds, a weight, a belief or a sensor parameter; never a rule"]}
-    text = document(e, None, None, 0.0)
+    text = P.document(e, None, None, 0.0)
     assert text.startswith("# Ruling: refused") and "**Kind:** the record is probabilistic, not structural" in text and "never a rule" in text
