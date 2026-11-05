@@ -554,7 +554,36 @@ def narration(ws, draft):
             said = re.sub(r"\{(\w+)\}", lambda m: vals.get(m.group(1), m.group(0)), doc) if doc else f"({base}: a rule with no words)"
             if not out or out[-1] != f"k {t.k}: {said}":
                 out.append(f"k {t.k}: {said}")
-    return out or [f"no rule of {member} fired in {k0}..{k1}"]
+    out = out or [f"no rule of {member} fired in {k0}..{k1}"]
+    return out + explain(ws, d, member, k0, k1)
+
+
+EXPLAIN_ROWS = 8
+
+
+def explain(ws, d, member, k0, k1):
+    """The explain half (spec 20 §3, §10.7: narrate, then explain): per rule that did NOT fire in the window and was one fact
+    short of firing, a line "k A–B: RULE was one fact short: ATOM" (metispy metis.surprise_kind.one_guard_away on the member's
+    program), the member's own state and protocol tokens left out (a bare atom, tick__…); nothing when the program or the
+    instrument is not at hand. → [lines] (at most EXPLAIN_ROWS, the rest counted)."""
+    try:
+        from metis import catalog
+        from metis.surprise_kind import one_guard_away
+        prog = catalog.get(member, ws.root).program
+        if not prog or k0 is None:
+            return []
+        rows = one_guard_away(d, member, k0, k1 if k1 is not None else k0, str(prog))
+    except Exception:  # noqa: BLE001 — an explanation is an aside: a trace the instrument cannot replay says nothing
+        return []
+    keep = [r for r in rows if not r.get("fired_at") and "(" in r["missing"] and not r["missing"].startswith("tick__")]
+    lines = []
+    for r in keep[:EXPLAIN_ROWS]:
+        ts = r.get("ticks") or []
+        when = (f"k {ts[0]}–{ts[-1]}" if ts and ts[0] != ts[-1] else f"k {ts[0]}") if ts else f"k {k0}–{k1}"
+        lines.append(f"{when}: {r.get('ground') or r['rule']} was one fact short: {r['missing']}")
+    if len(keep) > EXPLAIN_ROWS:
+        lines.append(f"(and {len(keep) - EXPLAIN_ROWS} rule(s) more one fact short)")
+    return lines
 
 
 def _marks(ws):
@@ -574,8 +603,8 @@ def open_mark(ws, draft):
     lines = narration(ws, draft)
     d = _marks(ws)
     last = d / "last"                                   # the marks' numbers never come again, a closed one's neither
-    n = 1 + max([int(last.read_text())] if last.is_file() else [] + [int(f.stem) for f in d.glob("*.json") if f.stem.isdigit()],
-                default=0)
+    held = [int(f.stem) for f in d.glob("*.json") if f.stem.isdigit()]
+    n = 1 + max(held + ([int(last.read_text())] if last.is_file() else []), default=0)
     last.write_text(str(n))
     (d / f"{n}.json").write_text(json.dumps({"n": n, "draft": draft, "narration": lines}, indent=1))
     ws.journal("backend", "mark", n=n, run=draft["run"], member=draft["member"])
@@ -617,17 +646,23 @@ def disagree(ws, n, words):
     f, m = _held(ws, n)
     sid = drop_draft(ws, _confusion(m, "disagreed", said=words.strip()))
     f.unlink()
-    found = None
+    found, why = None, None
     try:
         from metis import surprise_kind as K
         rec = ws.surprise(sid)
         r = K.triage(rec, ws.state / rec["trace"])
         ws.set_kind(sid, r["kind"], r["evidence"], r["response"], then=r.get("then"), also=r.get("also") or ())
         found = r.get("then")
-    except ImportError:            # a metispy before the triage: the record waits for `metis.trace kind`
-        pass
+        if found == "evidential":              # not a finding: the columns it lacks (today mostly the truth column)
+            why = "it waits for %s" % ", ".join((r.get("evidence") or {}).get("missing") or ["a column the trace lacks"])
+    except ImportError:                        # a metispy before the triage: the record waits for `metis.trace kind`
+        why = "this metispy has no triage"
+    except (ValueError, LookupError) as x:     # the trace not readable, a window gone (TraceError is a ValueError)
+        why = str(x)[:200]
     ws.journal("backend", "mark disagreed", n=int(n), surprise=sid, then=found)
-    return {"text": f"mark {n} kept as {sid}: confusion" + (f", its kind on your words: {found}" if found else ""), "surprise": sid, "then": found}
+    said = (f", its kind on your words: {found}" if found and found != "evidential" else "") + \
+        (f"; kind not decided: {why} (metis.trace kind --write decides it later)" if why else "")
+    return {"text": f"mark {n} kept as {sid}: confusion" + said, "surprise": sid, "then": found}
 
 
 def marks_a_run(words):

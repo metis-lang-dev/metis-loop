@@ -4,6 +4,7 @@ table, and every command answered at 0 USD on a committed road trace (tests/fixt
 sort-town01-2, its first segment), the loop channel driven directly (no socket, a stub pi)."""
 import asyncio
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -200,7 +201,7 @@ def test_surprises(root):
     assert say(ch, "/surprises")["text"].startswith("no surprises")
     sid = surprise(root)
     t = say(ch, "/surprises open")["text"]
-    assert sid in t and "planner" in t and "traces/road-town01-2 0..5" in t and "it should have waited" in t
+    assert sid in t and "planner" in t and re.search(r"traces/road-town01-2(-[0-9T]+-[0-9a-f]+)? 0\.\.5", t) and "it should have waited" in t
     assert say(ch, "/surprises ruled")["text"] == "no surprises ruled (.metis/surprises/)"
 
 
@@ -208,10 +209,10 @@ def test_replay_the_last_surprises_window_and_a_named_one(root):
     ch = channels(root)
     surprise(root)
     f = say(ch, "/replay")
-    assert f["text"].startswith("road-town01-2 · 0..5 · planner · 6 row(s)")
+    assert re.match(r"road-town01-2(-[0-9T]+-[0-9a-f]+)? · 0\.\.5 · planner · 6 row\(s\)", f["text"])
     assert "k     2  planner: fired decide, accel, back" in f["text"]
     t = say(ch, "/replay 2")["text"]                                                  # the window alone: the last surprise's trace
-    assert t.startswith("road-town01-2 · 2..2 · planner · 1 row(s)")
+    assert re.match(r"road-town01-2(-[0-9T]+-[0-9a-f]+)? · 2\.\.2 · planner · 1 row\(s\)", t)
     t = say(ch, f"/replay {RUN} 1..2")["text"]                                       # a trace named: every member
     assert "responder, planner, road_director" not in t and "planner, responder, road_director · 6 row(s)" in t
     assert "road_director: fired status_reset[D=responder,A=a0], path_push[D=planner]" in t
@@ -436,9 +437,9 @@ def test_replay_defaults_to_the_surprise_ruled_last_not_the_newest_record(root):
     ch = channels(root)
     first = surprise(root)                                                            # window 0..5
     surprise(root, window=[2, 4])                                                     # the newest record
-    assert say(ch, "/replay")["text"].startswith("road-town01-2 · 2..4 · planner")  # nothing ruled: the newest
+    assert re.match(r"road-town01-2(-[0-9T]+-[0-9a-f]+)? · 2\.\.4 · planner", say(ch, "/replay")["text"])  # nothing ruled: the newest
     rule(root, first)
-    assert say(ch, "/replay")["text"].startswith("road-town01-2 · 0..5 · planner")  # the one ruled, not the newest
+    assert re.match(r"road-town01-2(-[0-9T]+-[0-9a-f]+)? · 0\.\.5 · planner", say(ch, "/replay")["text"])  # the one ruled, not the newest
     assert say(ch, "/ruling")["ruling"] == first
 
 
@@ -479,3 +480,24 @@ def test_the_terminal_cli_answers_the_tuis_commands(root, capsys):
                         ("/take", "the pi session's own")):
         assert chat.main(["--root", str(root), line]) == 1 and words in capsys.readouterr().err, line
     assert chat.main(["--root", str(root), "/help"]) == 0 and "/replay" in capsys.readouterr().out
+
+
+def test_the_explain_half_names_the_rules_one_fact_short(monkeypatch, tmp_path):
+    """spec 20 §3, §10.7 (nina's review): after the fired rules, the narration says why the expected rule did not fire: each rule
+    one fact short in the window (metis.surprise_kind.one_guard_away), not the member's own state or protocol tokens, nor one that
+    fired later in the window."""
+    from types import SimpleNamespace
+    from metis import catalog, surprise_kind
+    monkeypatch.setattr(catalog, "get", lambda m, root=None: SimpleNamespace(program=tmp_path / "p.llp"))
+    rows = [{"rule": "brake_cross", "ground": "brake_cross[R=brake_min_correct]", "missing": "cross_overlap(nextzone)", "ticks": [41, 51, 61], "fired_at": []},
+            {"rule": "keep_limit", "ground": "keep_limit", "missing": "go", "ticks": [41], "fired_at": [41]},
+            {"rule": "drive", "ground": "drive", "missing": "idle", "ticks": [41], "fired_at": []},
+            {"rule": "released", "ground": "released", "missing": "tick__release(planner,controls)", "ticks": [41], "fired_at": []},
+            {"rule": "guard", "ground": "guard[R=brake_min]", "missing": "resp_lon(brake_min)", "ticks": [50], "fired_at": []}]
+    monkeypatch.setattr(surprise_kind, "one_guard_away", lambda *a, **k: rows)
+    ws = SimpleNamespace(root=tmp_path)
+    assert chat.explain(ws, tmp_path, "planner", 39, 64) == [
+        "k 41–61: brake_cross[R=brake_min_correct] was one fact short: cross_overlap(nextzone)",
+        "k 50: guard[R=brake_min] was one fact short: resp_lon(brake_min)"]
+    monkeypatch.setattr(surprise_kind, "one_guard_away", lambda *a, **k: (_ for _ in ()).throw(ValueError("diverges")))
+    assert chat.explain(ws, tmp_path, "planner", 39, 64) == []        # an aside: a trace it cannot replay says nothing
