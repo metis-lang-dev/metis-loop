@@ -85,6 +85,19 @@ also their window into the loop.
    (its init/steps become the scene), `replay` for the explanation;
    push likelihood/explanation to the record doc; set
    `status: investigating`.
+
+   **Read the record's `kind` first** (metis-lang spec/20 §4;
+   `metis.trace kind RECORD` writes it when the record has none).
+   Only a STRUCTURAL record (the atoms hold, no rule fires or one is
+   a guard away) goes on to steps 2–6. Any other kind is handed over
+   with its spec 20 §5 row and no pack is written: ontological → the
+   architect names the predicate and its host contract (the
+   vocabulary is never a pack's); perception/probabilistic → a host
+   parameter or a port value; computational → a form or a budget;
+   world/evidential/confusion → no proposal (pi/docs/POLICY.md, "The
+   kinds and the hand-over"). The judge refuses a pack on a
+   non-structural record anyway (`why: kind`), so the check saves
+   the beat, not the gate.
 2. **Mine**: `mine <text>` — the `%%` description of the unmodeled
    behavior, from the record's observed-vs-modeled gap. Short,
    factual, quoting atoms. It is stamped on the record as

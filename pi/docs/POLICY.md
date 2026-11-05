@@ -142,6 +142,37 @@ judges the loop's own competence). Its count per run is a measure beside the thr
 LEARNING.md: a loop that disengages often on a family is not autonomous on it; one that
 never disengages and never wins is worse.
 
+### The kinds and the hand-over (spec 20, surprise-kinds s-7a02c2ac; the architect, 2026-11-05)
+
+A surprise record carries a `kind` (metis-lang spec/20 §3–§4: ontological, perception,
+structural, probabilistic, computational, world, evidential, confusion), written by the
+replay-time triage over the trace's three columns (`metis.trace kind RECORD`). The five
+cornered conditions above are the loop's own competence; the kind is the record's. They map:
+
+| cornered | the kind it usually is | the hand-over's question |
+|---|---|---|
+| budget | computational | the grounding form, a role count, a horizon or the budget itself (spec 14): the architect's |
+| no progress | structural with a refused history; evidential when a column could not be read (the record names the missing column) | the last proposals and verdicts, as before; for evidential, the column |
+| out of vocabulary | ontological when the truth column has the thing; probabilistic (hidden variable, spec 19 §4.2) when the same before-facts give different after-facts across records; world when the simulation cannot hold it | ontological: "the vocabulary has no atom for X; name the predicate and its host contract" (the architect's word, projection by hand); probabilistic: the ladder's next step; world: the world's owner |
+| contradiction | structural (a stage-order or law question) | as before |
+| the world says so (`stuck(X)`) | structural when a rule could handle X; world otherwise | as before |
+
+**A sixth hand-over, before the first proposal: the kind is not structural.** The loop reads the
+record's `kind` at ingest (writing it first when the record has none). Only a structural
+record goes on to a proposal; any other kind is handed over at once, with the kind and spec
+20 §5's response row as the record's one question, and no beat is spent. The judge enforces
+the same from its side (metis-agent `kind_gate`: a pack on a non-structural record is
+refused with `why: kind` and the route), so a loop that skips the check is refused, not
+wrong. The obvious-fix rule (the user, 2026-11-05) is the structural row's cheap half: an
+agent with the judge writes the pack directly, the paid loop takes the non-obvious ones.
+
+**Confusion never becomes a proposal.** A person's mark that still disagrees after the
+narration is kept as a record of kind confusion (the mark, the narration, the person's
+words); its triage runs on the words, and a disagreement with the LAW goes to the human
+gate before any pack. A disagreement with the NARRATION is the narrator's vocabulary to
+improve, not law. The loop's cycle (skills/metis-loop/SKILL.md step 1) and the language
+retrieval (docs/LANGUAGE-RAG.md) serve the structural kind only.
+
 ## The run on ALFWorld (world-alfworld step 2, redefined)
 
 The loop starts from an EMPTY domain over the first family (the generator emits types,
