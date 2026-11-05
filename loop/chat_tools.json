@@ -123,7 +123,7 @@
   {
    "name": "mark",
    "verb": "mark",
-   "description": "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members), dropped at once",
+   "description": "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members): narrated first (the rules' own words), then /agree N or /disagree N WORDS",
    "parameters": {
     "type": "OBJECT",
     "properties": {
@@ -134,6 +134,53 @@
      }
     },
     "required": [
+     "words"
+    ]
+   }
+  },
+  {
+   "name": "agree",
+   "verb": "agree",
+   "description": "mark N as narrated: a pass, the mark closed (keep: kept as a closed mark with its narration)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "n": {
+      "type": "INTEGER",
+      "description": "the mark's number (/mark says it)",
+      "positional": 0
+     },
+     "keep": {
+      "type": "STRING",
+      "description": "keep it as a closed mark",
+      "positional": 1
+     }
+    },
+    "required": [
+     "n"
+    ]
+   }
+  },
+  {
+   "name": "disagree",
+   "verb": "disagree",
+   "description": "mark N not as narrated: a confusion record with your words, the narration you heard and its kind found on your words",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "n": {
+      "type": "INTEGER",
+      "description": "the mark's number",
+      "positional": 0
+     },
+     "words": {
+      "type": "STRING",
+      "description": "what you see that the narration does not say",
+      "positional": 1
+     }
+    },
+    "required": [
+     "n",
      "words"
     ]
    }

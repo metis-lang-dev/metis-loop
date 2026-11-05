@@ -362,7 +362,9 @@ class WorkspaceChannels:
             if name == "status":
                 out["child"] = self.child_state()
         elif name == "mark" and (s is None or chat.marks_a_run(a.words)):
-            # /mark RUN K WORDS: a trace's tick, dropped at once: the terminal's (pi's /mark) own answer
+            # /mark RUN K WORDS: a trace's tick, narrated first (spec 20 §10 item 7): the terminal's (pi's /mark) own answer
+            out.update(await self._run(chat.terminal, self.ws, name, a))
+        elif name in ("agree", "disagree"):              # the mark's two endings: a pass, or a confusion record on the words
             out.update(await self._run(chat.terminal, self.ws, name, a))
         elif name in ("drop", "mark"):
             # loop-ui 2.2: the REPL's own verb on this page's session (its REPL pane gets the line, as typed there):

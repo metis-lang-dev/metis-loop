@@ -36,7 +36,9 @@ trace verbs, no model turn. The pi loop need not be running for them. Each is on
 | `/why ATOM [at K]` | `metis.trace blame` | the rule chain that made the atom |
 | `/diff` | the last ruling's fired diff and goldens moved | the rows |
 | `/ruling [ID]` | the ruling card (default: the last) | the card, with "show pack", "show document" |
-| `/mark [K \| K0..K1] WORDS` | a tick (or window) of the open session's trace as a surprise: its REPL's `mark` (loop-ui 2.2); `/mark RUN K …` a run's, dropped at once; `keep_window` for a window | the REPL's line, the record's id |
+| `/mark [K \| K0..K1] WORDS` | a tick (or window) of the open session's trace as a surprise: its REPL's `mark` (loop-ui 2.2); `/mark RUN K …` a run's, NARRATED FIRST (spec 20 §10 item 7, surprise-kinds s-7a02c2ac): the window told in the rules' own `%%` words, held open as mark N | the REPL's line; mark N's narration as a card with **agree** and **disagree** |
+| `/agree N [keep]` | the narration is what you saw: mark N closes as a pass, nothing recorded (`keep`: a closed mark, a confusion record with verdict agreed, status closed) | the mark closed |
+| `/disagree N WORDS` | what you see that the narration does not say: mark N kept as a confusion record (its mark, the narration you heard, your words, verdict disagreed), then spec 20 §4 run on your words (`metis.surprise_kind.triage`): its `then` is the kind found | the record's id and its kind on your words |
 | `/drop WORDS` | the session's last tick as a surprise with these words | the record's id |
 | `/apply [ID]` | an accepted ruling applied: the judge's merge of its pack onto its unit (loop-ui 2.3) | the gate card: the diff, confirm / refuse |
 | `/rebuild` | `make` / `metisc build` of the bundle | the build line (image, reused, compiled, errors) |

@@ -37,7 +37,7 @@ from metis.catalog import workspace as W
 
 TOOLS_FILE = Path(__file__).resolve().parent / "chat_tools.json"
 SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN[:MEMBER]] [K | K0..K1] WORDS"}   # /help's argument shapes
-FREE = ("mark", "drop")       # commands whose words are the person's text: an apostrophe is a word's, not a quote
+FREE = ("mark", "drop", "disagree")   # commands whose words are the person's text: an apostrophe is a word's, not a quote
 WINDOW = re.compile(r"^(-?\d+)(?:\.\.(-?\d+))?$")
 ROWS = 60                     # a /replay's rows at most (the window's first; the rest are counted)
 BUILD_SECS = 600
@@ -60,8 +60,13 @@ COMMANDS = (
     ("diff", "the ruling's fired diff and the goldens it moved (default: the last ruling)",
      (("id", {"nargs": "?", "help": "a surprise id"}),)),
     ("ruling", "the ruling card (default: the last ruling)", (("id", {"nargs": "?", "help": "a surprise id"}),)),
-    ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members), dropped at once",
+    ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members): narrated first (the rules' own words), then /agree N or /disagree N WORDS",
      (("words", {"nargs": "+", "help": "[RUN[:MEMBER]] [K | K0..K1] WORDS"}),)),
+    ("agree", "mark N as narrated: a pass, the mark closed (keep: kept as a closed mark with its narration)",
+     (("n", {"type": int, "help": "the mark's number (/mark says it)"}),
+      ("keep", {"nargs": "?", "choices": ["keep"], "help": "keep it as a closed mark"}))),
+    ("disagree", "mark N not as narrated: a confusion record with your words, the narration you heard and its kind found on your words",
+     (("n", {"type": int, "help": "the mark's number"}), ("words", {"nargs": "+", "help": "what you see that the narration does not say"}))),
     ("drop", "the open session's last tick as a surprise with these words", (("words", {"nargs": "+", "help": "the words"}),)),
     ("apply", "an accepted ruling applied: the judge's merge of its pack onto its unit, the diff shown, then confirm or refuse (default: the last ruling)",
      (("id", {"nargs": "?", "help": "a surprise id"}),)),
@@ -470,7 +475,7 @@ def answer(ws, name, a, child=None, budget_next=None):
 # the commands the pi loop's TUI answers itself through this CLI (two-terminals s-065d46d5: pi.registerCommand in
 # pi/extensions/metis-workspace.ts): READ, and these, with no page and no REPL session in this process — the REPL
 # is the other terminal. take, budget and stop are the pi session's own (the extension answers them).
-TERMINAL = ("help", "mark", "drop", "apply", "rebuild", "reload", "lint")
+TERMINAL = ("help", "mark", "agree", "disagree", "drop", "apply", "rebuild", "reload", "lint")
 
 
 def drop_draft(ws, draft):
@@ -485,6 +490,9 @@ def drop_draft(ws, draft):
                          + f": name one, /mark {run}:MEMBER K WORDS")
     rec = {"member": draft["member"], "trace": "traces/" + run, "words": draft["words"],
            "reading": first_sentence(draft["words"])}
+    for f in ("kind", "verdict", "narration", "mark"):          # a mark's ending (spec 20 §8's confusion fields)
+        if draft.get(f) is not None:
+            rec[f] = draft[f]
     if draft.get("window"):
         k0, k1 = draft["window"]
         name = "w%d-%d" % (k0, k1)
@@ -497,6 +505,129 @@ def drop_draft(ws, draft):
     if cfg.is_file():
         rec["config"] = str(cfg.relative_to(ws.root))
     return ws.drop_surprise(rec)
+
+
+# ── a mark's two endings (spec 20 §10 item 7, surprise-kinds s-7a02c2ac): narrated first, then the person agrees or not ──
+def _rule_docs(ws, member):
+    """{rule: its %% doc} of MEMBER's program and the units it includes (the rules' own words, the narrator's vocabulary)."""
+    import os
+    import re
+    from metis import catalog
+    try:
+        prog = Path(catalog.get(member, ws.root).program)
+    except Exception:  # noqa: BLE001 — no program: the Tick table alone
+        return {}
+    docs, todo, seen = {}, [prog], set()
+    home = os.environ.get("METIS_HOME")
+    while todo:
+        f = todo.pop()
+        if f in seen or not f.is_file():
+            continue
+        seen.add(f)
+        text = f.read_text()
+        for doc, rule in re.findall(r"^\s*%%\s*(.+?)\s*\n\s*([a-z_][a-z0-9_]*)\s*\[", text, re.M):
+            docs.setdefault(rule, doc)
+        for inc in re.findall(r'^include "([^"]+)"', text, re.M):
+            todo += [d / inc for d in [f.parent] + ([Path(home)] if home else [])]
+    return docs
+
+
+def narration(ws, draft):
+    """The window of DRAFT told in the rules' own words, deterministic and at 0 USD: per tick, each fired rule's %% doc with its
+    binding's values in the doc's {X} (the Tick table's vocabulary); a rule with no doc is named. → [lines]."""
+    import re
+    run, member = draft.get("run"), draft.get("member")
+    if not run or not member:
+        raise ValueError("/mark here names a trace and its member: /mark RUN[:MEMBER] K WORDS")
+    d, run = _trace_dir(ws, run)
+    k0, k1 = draft.get("window") or [draft.get("k"), draft.get("k")]
+    docs = _rule_docs(ws, member)
+    ticks, _ = T.timeline(d, member)
+    out = []
+    for t in ticks:
+        if (k0 is not None and t.k < k0) or (k1 is not None and t.k > k1):
+            continue
+        for name in t.fired:
+            base, _, bind = name.partition("[")
+            vals = dict(x.split("=", 1) for x in bind.rstrip("]").split(",") if "=" in x)
+            doc = docs.get(base.rsplit("-", 1)[0] if base not in docs else base)
+            said = re.sub(r"\{(\w+)\}", lambda m: vals.get(m.group(1), m.group(0)), doc) if doc else f"({base}: a rule with no words)"
+            if not out or out[-1] != f"k {t.k}: {said}":
+                out.append(f"k {t.k}: {said}")
+    return out or [f"no rule of {member} fired in {k0}..{k1}"]
+
+
+def _marks(ws):
+    d = ws.state / "marks"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def open_mark(ws, draft):
+    """A /mark held open, narrated: .metis/marks/N.json {n, draft, narration}. → (N, the narration's lines)."""
+    if not draft.get("run"):
+        raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its session)")
+    if not draft.get("member"):
+        ms = draft.get("members") or []
+        raise ValueError(f"/mark: {draft['run']} has several members" + (f" ({', '.join(ms)})" if ms else "")
+                         + f": name one, /mark {draft['run']}:MEMBER K WORDS")
+    lines = narration(ws, draft)
+    d = _marks(ws)
+    last = d / "last"                                   # the marks' numbers never come again, a closed one's neither
+    n = 1 + max([int(last.read_text())] if last.is_file() else [] + [int(f.stem) for f in d.glob("*.json") if f.stem.isdigit()],
+                default=0)
+    last.write_text(str(n))
+    (d / f"{n}.json").write_text(json.dumps({"n": n, "draft": draft, "narration": lines}, indent=1))
+    ws.journal("backend", "mark", n=n, run=draft["run"], member=draft["member"])
+    return n, lines
+
+
+def _held(ws, n):
+    f = _marks(ws) / f"{int(n)}.json"
+    if not f.is_file():
+        raise ValueError(f"no open mark {n} (/mark opens one)")
+    return f, json.loads(f.read_text())
+
+
+def _confusion(m, verdict, said=None):
+    draft = m["draft"]
+    k0, k1 = draft.get("window") or [draft.get("k"), draft.get("k")]
+    rec = dict(draft, kind="confusion", verdict=verdict, narration=m["narration"],
+               mark={"n": m["n"], "k0": k0, "k1": k1, "said": said if said is not None else draft["words"]})
+    if said is not None:
+        rec["words"] = said
+    return rec
+
+
+def agree(ws, n, keep=False):
+    """/agree N: the narration accepted, the mark closed as a pass; KEEP: kept as a closed mark (a confusion record, verdict agreed,
+    status closed), else nothing recorded. → {text}."""
+    f, m = _held(ws, n)
+    sid = drop_draft(ws, _confusion(m, "agreed")) if keep else None
+    f.unlink()
+    ws.journal("backend", "mark agreed", n=int(n), surprise=sid)
+    return {"text": f"mark {n} closed: agreed" + (f", kept as {sid}" if sid else ""), "surprise": sid}
+
+
+def disagree(ws, n, words):
+    """/disagree N WORDS: the mark kept with the person's words and the narration they heard, as a confusion record (verdict
+    disagreed), then spec 20 §4 run on the words (metispy metis.surprise_kind.triage): its THEN is the kind found. → {text}."""
+    if not words.strip():
+        raise ValueError(f"/disagree {n} WORDS: the words are what the record carries")
+    f, m = _held(ws, n)
+    sid = drop_draft(ws, _confusion(m, "disagreed", said=words.strip()))
+    f.unlink()
+    found = None
+    try:
+        from metis import surprise_kind as K
+        rec = ws.surprise(sid)
+        r = K.triage(rec, ws.state / rec["trace"])
+        ws.set_kind(sid, r["kind"], r["evidence"], r["response"], then=r.get("then"), also=r.get("also") or ())
+        found = r.get("then")
+    except ImportError:            # a metispy before the triage: the record waits for `metis.trace kind`
+        pass
+    ws.journal("backend", "mark disagreed", n=int(n), surprise=sid, then=found)
+    return {"text": f"mark {n} kept as {sid}: confusion" + (f", its kind on your words: {found}" if found else ""), "surprise": sid, "then": found}
 
 
 def marks_a_run(words):
@@ -532,8 +663,13 @@ def terminal(ws, name, a):
         if not marks_a_run(w):
             raise ValueError("/mark here names a trace: /mark RUN K WORDS (the REPL's own `mark K WORDS` marks its "
                              "session)")
-        sid = drop_draft(ws, mark(ws, w, None))
-        return {"text": f"dropped {sid}: /surprises lists it, /take rules it"}
+        n, lines = open_mark(ws, mark(ws, w, None))
+        return {"text": "\n".join([f"mark {n}, as the rules tell it:", *lines,
+                                   f"agree: /agree {n}   ·   disagree: /disagree {n} WHAT YOU SEE"]), "mark": n, "narration": lines}
+    if name == "agree":
+        return agree(ws, a.n, keep=bool(a.keep))
+    if name == "disagree":
+        return disagree(ws, a.n, " ".join(a.words))
     if name == "drop":
         raise ValueError("/drop is the REPL's: `drop WORDS` in its terminal drops its last tick (here: /mark RUN K WORDS)")
     if name == "reload":

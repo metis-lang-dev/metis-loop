@@ -125,7 +125,7 @@ def test_the_table_is_the_argparse_and_help_reads_it():
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     names = [t["name"] for t in chat.tools()["tools"]]
-    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "drop", "apply",
+    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "agree", "disagree", "drop", "apply",
                      "rebuild", "reload", "lint", "budget", "stop", "help"]
     h = chat.help_text()
     for n in names:
@@ -253,16 +253,26 @@ def test_ruling_and_diff(root):
 
 
 def test_mark_from_a_trace_and_the_refusals(root):
-    """/mark RUN K WORDS is the terminal's: dropped at once (pi's /mark, loop-ui 2.2: no draft for the page to drop)."""
+    """/mark RUN K WORDS is the terminal's: narrated first, in the rules' own words, then /agree N (a pass) or /disagree N WORDS
+    (a confusion record: spec 20 §10 item 7, surprise-kinds s-7a02c2ac)."""
     ch = channels(root)
     f = say(ch, f"/mark {RUN} 10..20 it braked late behind the lead car")              # the terminal's own refusal
     assert f["type"] == "error" and (f"has several members (planner, responder, road_director): name one, /mark {RUN}:MEMBER "
                                      "K WORDS") in f["error"]
     # loop-ui I9: RUN:MEMBER names it (the alfworld demo's run has six members), at once, as pi's /mark does
     f = say(ch, f"/mark {RUN}:planner 10..20 it braked late behind the lead car")
-    sid = f["text"].split()[1].rstrip(":")
+    assert f["text"].startswith("mark 1, as the rules tell it:") and "/agree 1" in f["text"] and "/disagree 1" in f["text"]
+    assert not W.workspace(root).surprises()                                           # nothing dropped while it is narrated
+    f = say(ch, "/agree 1")
+    assert f["text"] == "mark 1 closed: agreed" and not W.workspace(root).surprises()    # a pass: nothing recorded
+    say(ch, f"/mark {RUN}:planner 10..20 it braked late behind the lead car")
+    f = say(ch, "/disagree 2 the lead was far, it braked for nothing")
+    sid = f["surprise"]
     rec = W.workspace(root).surprise(sid)
-    assert (rec["member"], rec["window"], rec["words"]) == ("planner", [10, 20], "it braked late behind the lead car")
+    assert (rec["member"], rec["window"], rec["kind"], rec["verdict"]) == ("planner", [10, 20], "confusion", "disagreed")
+    assert rec["mark"] == {"n": 2, "k0": 10, "k1": 20, "said": "the lead was far, it braked for nothing"} and rec["narration"]
+    assert rec["words"] == "the lead was far, it braked for nothing" and "then" in rec           # the triage ran on the words
+    assert "no open mark 9" in say(ch, "/agree 9")["error"]
     assert "has no member nobody (its members: planner, responder, road_director)" in \
         say(ch, f"/mark {RUN}:nobody 12 late")["error"]
     assert "/mark here names a trace" in say(ch, "/mark 10 late")["error"]            # no session: the terminal's form only
@@ -447,17 +457,22 @@ def test_the_terminal_cli_answers_the_tuis_commands(root, capsys):
         tr.after(r, cmd)
     tr.close()
     assert chat.main(["--root", str(root), "/mark repl-1 1 the lamp lit. It should not have."]) == 0
-    sid = capsys.readouterr().out.split()[1].rstrip(":")
+    assert capsys.readouterr().out.startswith("mark 1, as the rules tell it:")          # narrated first (spec 20 §10 item 7)
+    assert chat.main(["--root", str(root), "/agree 1 keep"]) == 0
+    sid = capsys.readouterr().out.split()[-1]
     rec = W.workspace(root).surprise(sid)
     assert (rec["member"], rec["trace"], rec["k"], rec["reading"]) == ("lamp", "traces/repl-1", 1, "the lamp lit.")
+    assert (rec["kind"], rec["verdict"]) == ("confusion", "agreed")                     # kept on request: a closed mark
     assert chat.main(["--root", str(root), "/mark repl-1 1..2 both ticks"]) == 0
-    sid = capsys.readouterr().out.split()[1].rstrip(":")
+    capsys.readouterr()
+    assert chat.main(["--root", str(root), "/disagree 2 both ticks lit it"]) == 0
+    sid = capsys.readouterr().out.split()[4].rstrip(":")
     rec = W.workspace(root).surprise(sid)
     assert rec["window"] == [1, 2] and rec["trace"] == "traces/repl-1-w1-2" and (root / ".metis" / rec["trace"]).is_dir()
     assert chat.main(["--root", str(root), f"/mark {RUN} 10 late"]) == 1          # the road's: several members
     assert "several members" in capsys.readouterr().err
-    assert chat.main(["--root", str(root), f"/mark {RUN}:responder 10 late"]) == 0          # named: dropped (pi's /mark)
-    assert "dropped " in capsys.readouterr().out
+    assert chat.main(["--root", str(root), f"/mark {RUN}:responder 10 late"]) == 0          # named: narrated, then agree or not
+    assert "/agree 3" in capsys.readouterr().out
     assert chat.main(["--root", str(root), "/mark 3 no trace named"]) == 1
     assert "/mark here names a trace" in capsys.readouterr().err
     for line, words in (("/drop x", "`drop WORDS` in its terminal"), ("/reload", "`reload` in its terminal"),

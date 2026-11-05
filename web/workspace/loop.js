@@ -128,6 +128,17 @@
             el('button', { class: 'btn', onclick: () => answer(m, 'confirm') }, 'confirm'),
             el('button', { class: 'btn', onclick: () => answer(m, 'refuse') }, 'refuse')));
     }
+    function markCard(m) {     // spec 20 §10 item 7 (surprise-kinds s-7a02c2ac): a mark narrated first, then the person's two endings
+      return el('div', { class: 'mw-card mw-mark' },
+        el('div', { class: 'mw-sub' }, 'MARK ' + m.mark + ' — as the rules tell it'),
+        el('pre', { class: 'mw-out' }, (m.narration || []).join('\n')),
+        m.answered ? el('div', { class: 'empty' }, m.answered)
+          : el('div', { class: 'mw-acts' },
+            el('button', { class: 'btn', title: 'says /agree N: the narration is what you saw; the mark closes as a pass',
+              onclick: () => { m.answered = 'agreed'; m.node = null; sendLine('/agree ' + m.mark); } }, 'agree'),
+            el('button', { class: 'btn', title: 'fills /disagree N: say what you see that the narration does not; a confusion record is kept with your words',
+              onclick: () => fill('/disagree ' + m.mark + ' ') }, 'disagree')));
+    }
     function staleCard(b) {
       const sid = o.session ? o.session() : null;
       return el('div', { class: 'mw-card mw-notice' },
@@ -260,7 +271,10 @@
       try {
         const sid = o.session ? o.session() : null;
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
-        if (r.text) push('cmd', '/' + (r.command || ''), r.text);
+        if (r.mark) pushCard({ mark: r.mark, narration: r.narration, card() { return markCard(this); } });   // /mark: narrated, two endings
+        else if (r.text) push('cmd', '/' + (r.command || ''), r.text);
+        if (r.command === 'disagree' || r.command === 'agree')
+          for (const m of s.chat) if (m.mark && !m.answered && r.text && r.text.startsWith('mark ' + m.mark + ' ')) { m.answered = r.text; m.node = null; }
         if (r.ruling) await ruling(r.ruling);
         if (r.gate) pushCard({ gate: true, token: r.gate.token, plan: r.gate.plan, card() { return gateCard(this); } });   // /apply's plan (loop-ui 2.3)
         if (r.child !== undefined || ['take', 'stop', 'budget', 'rebuild', 'reload'].includes(r.command)) await refresh();
