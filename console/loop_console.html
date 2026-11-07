@@ -225,6 +225,7 @@ details summary{cursor:pointer;color:var(--dim)}
 </div>
 
 <script src="lib/shell.js"></script>
+<script src="lib/embed.js"></script>
 <script src="sdk/catalog/catalog.js"></script>
 <script src="sdk/workspace/io.js"></script>
 <script src="sdk/workspace/bundle.js"></script>
@@ -593,10 +594,12 @@ function applyManifest(){
    mode). The tester's one: CHAT (console-voice step 1: SURPRISES went, /surprises lists them, /mark and /drop drop
    one); the developer's three (TRACE, RULINGS, BUNDLE) behind the band's "developer" switch. TRACE's "mark here"
    puts the /mark line in the CHAT's input, the person's words to finish it. ?panels=chat mounts only the named
-   docks (an embedding host's iframe). */
+   docks (an embedding host's iframe); &embed=ORIGIN adds the embed face (lib/embed.js, loop-road-ui): the host's lines
+   into the CHAT, the CHAT's rows and gate to the host, by postMessage at ORIGIN only; the host speaks them (no onWords). */
 const WS_CH=["trace","surprise","bundle","loop"],WS_DOCKS=["chat","rulings","trace","bundle"],DEV_DOCKS=["rulings","trace","bundle"];
 let wsIO=null,wsW=null;
 const wsOn=d=>!PANELS||PANELS.includes(d);
+const EMBED=window.MetisEmbed?MetisEmbed.face(window,location.search):null;
 function mountWorkspace(){
   if(!window.MetisIO)return;
   wsIO=MetisIO.make(wsSend);
@@ -604,7 +607,9 @@ function mountWorkspace(){
   const W={};
   if(wsOn("bundle"))W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
   if(wsOn("rulings"))W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
-  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});
+  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate}
+    :{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});
+  if(EMBED&&W.chat)EMBED.attach(W.chat);
   if(wsOn("trace"))W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{if(!W.chat)return;dockUI.set("chat",{shown:true,open:true});
     W.chat.fill(`/mark ${d.run} ${d.window?d.window[0]+".."+d.window[1]:d.k} `)}});
   wsW=W;

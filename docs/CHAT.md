@@ -20,6 +20,12 @@ tools, personal mode). The dock key becomes v5 (the person's v4 layout is not ke
 as an iframe of the served URL with `?panels=chat` (SURPRISES went: console-voice step 1), never a copy of its code (§6.1). The
 workspace is the host page's root; the gateway serves it there. Nothing of the loop moves.
 
+**The embed face** (loop-road-ui s-0314a8ee step 1, `console/lib/embed.js`): `&embed=ORIGIN` names the one origin the framed
+console listens to and posts to (`window.postMessage`, checked on origin and on the framing window; without it nothing listens).
+Host → console `{metis:"chat", text, via?}` (a line as typed: `/` rows at 0 USD, else pi) and `{metis:"gate", answer, id}`;
+console → host `{metis:"ready"}` first, then every row as shown `{metis:"row", who, text, kind}` and the gate `{metis:"gate", open|answered, id}`.
+Embedded, the CHAT does not speak pi's words itself: the host's one voice does. The files stay the data path; the wire carries chat lines only.
+
 ## 2. Two kinds of lines in the chat
 
 A line the tester types is one of two kinds, told apart by its first character:

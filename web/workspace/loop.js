@@ -22,6 +22,10 @@
    answered by the REPL itself (loop-ui 2.2: the console has no command path of its own); /mark RUN K WORDS is the
    terminal's. The input completes the commands on "/" (the table, `loop commands`).
    opts.onWords(text): pi's words as they come (the host speaks them: the band's voice, console-voice s-dc1f184c).
+   opts.onRow(row): every row as the chat shows it, {who, text, kind} (kind: me, pi, tool, cmd, note, err, mark, gate,
+     ruling, stale, built; a mark's row carries mark: N): the console's embed face posts them to its host (loop-road-ui).
+   opts.onGate(g): the gate's card opened {open: true, token, title} or answered {answered: 'confirm'|'refuse', token}.
+     c.answerGate(token, how)  the open gate TOKEN answered (how: confirm | refuse) as its card's button would
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
   'use strict';
@@ -110,13 +114,19 @@
     }
 
     // ---- the chat: lines and cards ----
+    function emit(row) {         // a row as shown, to the host (opts.onRow): a host's failure never breaks the chat
+      if (o.onRow) try { o.onRow(row); } catch (e) { /* the host's */ }
+    }
     function push(cls, who, text) {
       s.chat.push({ cls, who, text });
       if (s.chat.length > MAX) s.chat.splice(0, s.chat.length - MAX);
+      emit({ who, text: String(text == null ? '' : text), kind: String(cls).split(' ')[0] });
     }
     function pushCard(m) {       // m.node() builds the card; the node is kept, so a fold opened stays open across pushes
       s.chat.push(m);
       if (s.chat.length > MAX) s.chat.splice(0, s.chat.length - MAX);
+      if (m.row) emit(m.row);
+      if (m.gate && o.onGate) try { o.onGate({ open: true, token: m.token, title: (m.plan || {}).title || 'pi asks to write' }); } catch (e) { /* the host's */ }
     }
     function gateCard(m) {
       const p = m.plan || {};
@@ -271,7 +281,8 @@
       try {
         const sid = o.session ? o.session() : null;
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
-        if (r.mark) pushCard({ mark: r.mark, narration: r.narration, card() { return markCard(this); } });   // /mark: narrated, two endings
+        if (r.mark) pushCard({ mark: r.mark, narration: r.narration, card() { return markCard(this); },
+          row: { who: 'loop', kind: 'mark', mark: r.mark, text: ['mark ' + r.mark + ', as the rules tell it:'].concat(r.narration || []).join('\n') } });   // /mark: narrated, two endings
         else if (r.text) push('cmd', '/' + (r.command || ''), r.text);
         if (r.command === 'disagree' || r.command === 'agree')
           for (const m of s.chat) if (m.mark && !m.answered && r.text && r.text.startsWith('mark ' + m.mark + ' ')) { m.answered = r.text; m.node = null; }
@@ -308,6 +319,7 @@
       if (m.answered) return;
       m.answered = how === 'confirm' ? 'confirmed' : 'refused: nothing written';
       m.node = null;
+      if (o.onGate) try { o.onGate({ answered: how, token: m.token }); } catch (e) { /* the host's */ }
       render();
       try {
         const r = await io.ask('loop', how, { token: m.token });
@@ -318,7 +330,8 @@
       try {
         const g = await io.ask('surprise', 'get', { id });
         const card = window.MetisRulings && window.MetisRulings.card;
-        if (card) pushCard({ card: () => card(g) });
+        const v = ((g.surprise || {}).ruling || {}).verdict || '?';
+        if (card) pushCard({ card: () => card(g), row: { who: 'loop', kind: 'ruling', id, text: 'ruling ' + id + ': ' + v } });
         else push('note', 'ruling', `${id}: ${((g.surprise || {}).ruling || {}).verdict || '?'}`);
       } catch (e) { push('err', 'error', e.message); }
       render();
@@ -342,8 +355,8 @@
     io.on('bundle', 'stale', f => {
       const b = f.bundle, was = s.bundle;
       s.bundle = b;
-      if (b && b.stale && !(was && was.stale)) pushCard({ card: () => staleCard(b) });
-      else if (b && !b.stale && was && was.stale) pushCard({ card: () => builtCard(b) });
+      if (b && b.stale && !(was && was.stale)) pushCard({ card: () => staleCard(b), row: { who: 'loop', kind: 'stale', text: (b.name || 'the bundle') + ' is stale: rebuild it' } });
+      else if (b && !b.stale && was && was.stale) pushCard({ card: () => builtCard(b), row: { who: 'loop', kind: 'built', text: (b.name || 'the bundle') + ' is built' } });
       render();
     });
     async function commands() {
@@ -361,7 +374,14 @@
     tail();
     commands();
     opening();
-    return { refresh, tail, ruling, say: sendLine, fill };
+    function answerGate(token, how) {   // the host's answer (the embed face): the open gate TOKEN, as its card's button
+      if (how !== 'confirm' && how !== 'refuse') return false;
+      const m = s.chat.find(x => x.gate && !x.answered && x.token === token);
+      if (!m) return false;
+      answer(m, how);
+      return true;
+    }
+    return { refresh, tail, ruling, say: sendLine, fill, answerGate };
   }
   window.MetisLoop = { mount };
 })();

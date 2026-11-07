@@ -360,12 +360,12 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     assert "list: listId" in js and "el('datalist', { id: listId }" in js and "io.ask('loop', 'commands')" in js
     assert "r.draft" not in js and "io.ask('surprise', 'drop'" not in js and "firstSentence" not in js
     assert "onclick: () => sendLine('/reload')," in js and "io.ask('bundle', 'reload'" not in js
-    assert "return { refresh, tail, ruling, say: sendLine, fill };" in js
+    assert "return { refresh, tail, ruling, say: sendLine, fill, answerGate };" in js     # answerGate: the embed face (loop-road-ui)
     # the tester's first view (loop-ui): the line on what to do, then /status and /surprises printed, once at the mount
     assert "push('note', 'loop', 'say what surprised you; /help for the commands');" in js
     assert "for (const c of ['/status', '/surprises']) await command(c);" in js and "\n    opening();\n" in js
     page = (HERE.parent / "console" / "loop_console.html").read_text()
-    assert 'W.chat=MetisLoop.mount($("#w-chat"),wsIO,{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page
+    assert ':{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page   # not embedded (embedded: the host speaks)
     # console-voice: a heard line is said as a typed one, shown as heard; pi's words go to the host's voice
     assert "push('me', via === 'heard' ? 'you · heard' : 'you', text);" in js
     assert "if (o.onWords && ev.text) o.onWords(String(ev.text));" in js

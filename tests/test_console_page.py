@@ -14,8 +14,10 @@ def test_skeleton_free_title_style_first_one_script():
     assert PAGE.index("<style>") < PAGE.index("</style>") < PAGE.index("<header")
     # one inline script; the shell (console/lib/), the SDK's CATALOG widget
     # (sdk/catalog/) and its four workspace widgets with their wire (sdk/workspace/)
-    # linked relative, before the page's own; after it the voice's module (console-voice)
-    assert PAGE.count("<script") == 9 and PAGE.count("<script>") == 1
+    # linked relative, before the page's own; after it the voice's module (console-voice); lib/embed.js the embed face
+    # (loop-road-ui step 1)
+    assert PAGE.count("<script") == 10 and PAGE.count("<script>") == 1
+    assert PAGE.index('<script src="lib/embed.js"></script>') < PAGE.index("<script>")
     assert PAGE.count('<script type="module">') == 1 and PAGE.index("<script>") < PAGE.index('<script type="module">')
     for w in ("io", "bundle", "trace", "rulings", "loop"):
         assert PAGE.index(f'<script src="sdk/workspace/{w}.js"></script>') < PAGE.index("<script>")
@@ -155,8 +157,9 @@ def test_no_voice_navigation_on_the_page():
     """voice-nav-removal s-90621b2c (the user, 2026-10-24: one voice paradigm, the dialog with the
     agent and the game; the web UI stays web): the console has no TALK dock, no navigation agent,
     no flip key and no widget tags. console/lib is the shell alone — the fsttm-web copies went with TALK; the
-    voice of console-voice is fsttm-web served from its installed package (no copy, no import map)."""
-    assert sorted(p.name for p in LIB.iterdir()) == ["shell.css", "shell.js"]
+    voice of console-voice is fsttm-web served from its installed package (no copy, no import map). Beside the shell,
+    the console's own embed face (embed.js, loop-road-ui step 1): no voice in it."""
+    assert sorted(p.name for p in LIB.iterdir()) == ["embed.js", "shell.css", "shell.js"]
     for gone in ("dock-talk", 'data-strip="talk"', "nav.js", "ui-port", "importmap", "fsttm-web/",
                  "navHook", "consolePage", "flip_key", "data-w=", "data-role="):
         assert gone not in PAGE, gone
