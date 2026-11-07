@@ -116,7 +116,7 @@ def test_ready_is_the_first_post_even_before_attach(tmp_path):
 def test_the_page_attaches_the_face_to_the_chat():
     assert '<script src="lib/embed.js"></script>' in PAGE
     assert "const EMBED=window.MetisEmbed?MetisEmbed.face(window,location.search):null;" in PAGE
-    assert "EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate}" in PAGE      # embedded: the host speaks, no onWords
+    assert "EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate,follow:true}" in PAGE      # embedded: the host speaks, no onWords; the newest row shown
     assert "if(EMBED&&W.chat)EMBED.attach(W.chat);" in PAGE
 
 

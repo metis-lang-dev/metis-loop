@@ -610,7 +610,7 @@ function mountWorkspace(){
   const W={};
   if(wsOn("bundle"))W.bundle=MetisBundle.mount($("#w-bundle"),wsIO,{session:()=>sid});
   if(wsOn("rulings"))W.rulings=MetisRulings.mount($("#w-rulings"),wsIO,{});
-  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate}
+  if(wsOn("chat"))W.chat=MetisLoop.mount($("#w-chat"),wsIO,EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate,follow:true}
     :{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});
   if(EMBED&&W.chat)EMBED.attach(W.chat);
   if(wsOn("trace"))W.trace=MetisTrace.mount($("#w-trace"),wsIO,{onMark:d=>{if(!W.chat)return;dockUI.set("chat",{shown:true,open:true});

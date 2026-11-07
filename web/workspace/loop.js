@@ -24,6 +24,7 @@
    opts.onWords(text): pi's words as they come (the host speaks them: the band's voice, console-voice s-dc1f184c).
    opts.onRow(row): every row as the chat shows it, {who, text, kind} (kind: me, pi, tool, cmd, note, err, mark, gate,
      ruling, stale, built; a mark's row carries mark: N): the console's embed face posts them to its host (loop-road-ui).
+   opts.follow: the log always shows the newest row (the embed face: the host's tester does not read back), else only when at its end.
    opts.onGate(g): the gate's card opened {open: true, token, title} or answered {answered: 'confirm'|'refuse', token}.
      c.answerGate(token, how)  the open gate TOKEN answered (how: confirm | refuse) as its card's button would
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
@@ -203,7 +204,7 @@
         s.tab === 'chat' ? chatBox() : journalBox(), s.note ? el('div', { class: 'empty' }, s.note) : '');
       unsnap(box, kept);
       const l2 = box.querySelector('.mw-log');
-      if (l2 && atEnd) l2.scrollTop = l2.scrollHeight;
+      if (l2 && (atEnd || o.follow)) l2.scrollTop = l2.scrollHeight;   // opts.follow (embedded in a host's dock): always the newest row
     }
 
     // ---- pi's events ----
