@@ -535,9 +535,10 @@ def _rule_docs(ws, member):
     return docs
 
 
-def narration(ws, draft):
+def narration(ws, draft, why=True):
     """The window of DRAFT told in the rules' own words, deterministic and at 0 USD: per tick, each fired rule's %% doc with its
-    binding's values in the doc's {X} (the Tick table's vocabulary); a rule with no doc is named. → [lines]."""
+    binding's values in the doc's {X} (the Tick table's vocabulary); a rule with no doc is named; why: the explain half after it
+    (the rules one fact short). → [lines]."""
     import re
     run, member = draft.get("run"), draft.get("member")
     if not run or not member:
@@ -558,7 +559,7 @@ def narration(ws, draft):
             if not out or out[-1] != f"k {t.k}: {said}":
                 out.append(f"k {t.k}: {said}")
     out = out or [f"no rule of {member} fired in {k0}..{k1}"]
-    return out + explain(ws, d, member, k0, k1)
+    return out + (explain(ws, d, member, k0, k1) if why else [])
 
 
 EXPLAIN_ROWS = 8
@@ -578,7 +579,15 @@ def explain(ws, d, member, k0, k1):
         rows = one_guard_away(d, member, k0, k1 if k1 is not None else k0, str(prog))
     except Exception:  # noqa: BLE001 — an explanation is an aside: a trace the instrument cannot replay says nothing
         return []
-    keep = [r for r in rows if not r.get("fired_at") and "(" in r["missing"] and not r["missing"].startswith("tick__")]
+    from metis import trace as T
+    try:                                    # the predicates the member's own rules make (its state, not the world's)
+        made = {T.pred_of(a) for _, _, ev in T.open_session(str(prog)).events_tbl for a in getattr(ev, "produce", {})}
+    except Exception:  # noqa: BLE001 — a program the session cannot open: nothing more left out
+        made = set()
+    # the member's own state left out: a bare atom, a protocol token, and any fact its own rules make (road_director's held/queued/
+    # age_of… were 113 of its 121 rows: the user, 2026-11-07, "the rest is gibberish"); what stays is a fact the world gives
+    keep = [r for r in rows if not r.get("fired_at") and "(" in r["missing"] and not r["missing"].startswith("tick__")
+            and T.pred_of(r["missing"]) not in made]
     lines = []
     for r in keep[:EXPLAIN_ROWS]:
         ts = r.get("ticks") or []
@@ -625,14 +634,20 @@ def narrate(ws, words):
     if draft.get("k") is None and not draft.get("window"):
         raise ValueError("/narrate: the window, K or K0..K1, after the trace")
     members = [draft["member"]] if one else (draft.get("members") or [draft["member"]])
-    told = [(m, _numbered(_worded(narration(ws, dict(draft, member=m))))) for m in members]
-    fired = [(m, ls) for m, ls in told if not (len(ls) >= 1 and ls[0].startswith(SILENT) and all(not _STEP.match(x) or "one fact short" in x for x in ls[1:]))]
-    keep = fired or told
+    # a tester's narration (the user, 2026-11-07): what each member did, in its rules' words, numbered; the explain half (the rules
+    # one fact short, in the rules' own syntax) and the protocol's unworded rules are not a tester's: /why and pi's explain have them
+    raw = [(m, narration(ws, dict(draft, member=m), why=False)) for m in members]
+    told = [(m, _numbered(_said(ls))) for m, ls in raw]
+    if not any(ls for _, ls in told):                    # no member's rules have words (a catalog without %% docs): their names, as fired
+        told = [(m, _numbered([x for x in ls if _K.match(x)])) for m, ls in raw]
+    fired = [(m, ls) for m, ls in told if ls]
+    keep = fired or [(members[0], [f"no rule with words fired in {draft['window'][0] if draft.get('window') else draft.get('k')}"
+                                    f"..{draft['window'][1] if draft.get('window') else draft.get('k')}"])]
     lines = []
     for m, ls in keep:
         lines += [f"{m}:"] + [f"  {x}" for x in ls] if len(keep) > 1 else ls
     if fired and len(fired) < len(told):
-        lines.append("(nothing fired for " + ", ".join(m for m, _ in told if m not in dict(fired)) + ")")
+        lines.append("(nothing to tell for " + ", ".join(m for m, _ in told if m not in dict(fired)) + ")")
     n, lines = _hold(ws, dict(draft, member=keep[0][0], narrated=[m for m, _ in keep]), lines)
     return n, lines, draft["words"]
 
@@ -659,6 +674,11 @@ def _numbered(lines):
         out.append(f"{n}. {text}")
         last = [text, 1, len(out) - 1]
     return out
+
+
+def _said(lines):
+    """The fired rules that have words: the steps "k N: …" whose rule has a doc (no "(X: a rule with no words)", no silence line)."""
+    return [x for x in lines if _K.match(x) and not x.endswith(": a rule with no words)") and " was one fact short: " not in x]
 
 
 def _worded(lines):

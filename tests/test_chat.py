@@ -537,3 +537,26 @@ def test_a_narration_is_a_numbered_list_without_the_traces_ticks():
              "k 12802–12812: brake_lon[R=brake_max] was one fact short: resp_lon(brake_max)", "(8 line(s) of the protocol's own rules, with no words, left out)"]
     assert chat._numbered(lines) == ["1. I brake: the proper response, brake_min. (×3)", "2. Nothing asks a response: the plan has the controls again.",
                                      "3. brake_lon[R=brake_max] was one fact short: resp_lon(brake_max)", "(8 line(s) of the protocol's own rules, with no words, left out)"]
+
+
+def test_the_explain_half_leaves_out_what_the_members_own_rules_make(monkeypatch, tmp_path):
+    """The user, 2026-11-07 ("the rest is gibberish"): road_director's held/queued/age_of… rows are its own bookkeeping, a fact its
+    own rules make, never the world's: left out; a fact the world gives stays."""
+    from types import SimpleNamespace
+    from metis import catalog, surprise_kind, trace as T
+    monkeypatch.setattr(catalog, "get", lambda m, root=None: SimpleNamespace(program=tmp_path / "p.llp"))
+    rows = [{"rule": "age_grant", "ground": "age_grant[D=responder,A=a0,B=a1]", "missing": "held(responder,a0)", "ticks": [41], "fired_at": []},
+            {"rule": "yield_walker", "ground": "yield_walker[W=near,C=near]", "missing": "crossing(vru1,near)", "ticks": [41, 50], "fired_at": []}]
+    monkeypatch.setattr(surprise_kind, "one_guard_away", lambda *a, **k: rows)
+    ev = SimpleNamespace(name="grant", produce={"held(responder,a0)": 1})
+    monkeypatch.setattr(T, "open_session", lambda p: SimpleNamespace(events_tbl=[("clause", "s", ev)]))
+    assert chat.explain(SimpleNamespace(root=tmp_path), tmp_path, "road_director", 39, 64) == [
+        "k 41–50: yield_walker[W=near,C=near] was one fact short: crossing(vru1,near)"]
+
+
+def test_a_testers_narration_is_the_worded_steps_only():
+    """/narrate's lines per member: the fired rules that have words; no rule one fact short, no unworded protocol rule, no count."""
+    lines = ["k 5: A walker is at the crossing ahead: I stop before it.", "k 6: (decide: a rule with no words)",
+             "k 5–9: yield_walker[W=near,C=near] was one fact short: crossing(vru1,near)", "(and 3 rule(s) more one fact short)"]
+    assert chat._said(lines) == ["k 5: A walker is at the crossing ahead: I stop before it."]
+    assert chat._said(["k 6: (decide: a rule with no words)", "no rule of x fired in 1..2"]) == []
