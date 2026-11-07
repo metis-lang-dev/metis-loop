@@ -1002,10 +1002,10 @@ if(GW)wsConnect();
 else banner("No backend in this view: the gateway serves this page (metis-loop console-serve)");
 </script>
 <script type="module">
-/* The voice (console-voice s-dc1f184c): fsttm-web's widget in the band ([● mic ⟦switch⟧ narrator] and speak), the
+/* The voice (console-voice s-dc1f184c): fsttm-web's widget in the band ([● mic ⟦switch⟧ ● voice ⟦switch⟧ narrator]), the
    dialog's own part (the floor, barge-in, attention, the floor / state / events cards) in the DIALOG dock, last of the
    docks. What the mic hears goes to the CHAT as the person's line (shown "you · heard"), as a typed line would: a "/"
-   line is the backend's, anything else pi's. pi's words are spoken on the dialog's floor (speak: on/off, per viewer).
+   line is the backend's, anything else pi's. pi's words are spoken on the dialog's floor (the widget's voice switch, Shift+8, per viewer).
    The panel's own chat is not shown: the CHAT is the console's. fsttm-web is served at /lib/ from the installed
    fsttm_web package; without it the page has no voice and says so in the console. */
 let fw = null;
@@ -1013,9 +1013,8 @@ try {
   fw = await Promise.all([import('./lib/panel.js'), import('./lib/switch.js'), import('./lib/narrator.js')]);
 } catch (e) { console.warn('the console has no voice: fsttm-web is not served at /lib/ (pip install fsttm-web)', e); }
 if (fw) {
-  const [{ Panel }, { voiceWidget, toggleSwitch }, { Narrator, attachSelection, attachKey }] = fw;
+  const [{ Panel }, { voiceWidget }, { Narrator, attachSelection, attachKey }] = fw;
   const $ = s => document.querySelector(s);
-  const KEY = 'loopconsole.voice.speak';
   const chat = () => (typeof wsW !== 'undefined' && wsW && wsW.chat) || null;
   const backend = {                       // the dialog's turn: the heard line said in the CHAT; the reply comes as pi's words
     onFrame: null,
@@ -1025,20 +1024,14 @@ if (fw) {
       c.say(text, 'heard');
     },
   };
-  let speak = true;
-  try { speak = JSON.parse(localStorage.getItem(KEY) ?? 'true') !== false; } catch { /* the default */ }
   const panel = new Panel($('#voicepanel'), {
-    backend, table: await (await fetch('lib/fsttm.json')).json(), title: '', voice: speak,
+    backend, table: await (await fetch('lib/fsttm.json')).json(), title: '', voice: true,
     sections: ['floor', 'state', 'events'], dialogIn: $('#dialogpart'), micButton: false, storeKey: 'loopconsole',
   });
   const narrator = new Narrator({ tts: panel.core.tts });      // the page's selected text read aloud on F8
   attachSelection(narrator, document);
   attachKey(narrator, document, { key: 'F8' });
-  const vw = voiceWidget(panel, { narrator, key: 'F8' });      // the mic on F9
-  const sp = toggleSwitch({ label: 'speak', title: "pi's words spoken on the dialog's floor",
-    onChange: on => { panel.core.setVoice(on); sp.set(on ? 'on' : 'off'); try { localStorage.setItem(KEY, JSON.stringify(on)); } catch { /* kept for this page */ } } });
-  sp.set(speak ? 'on' : 'off');
-  vw.el.append(sp.el);
+  const vw = voiceWidget(panel, { narrator, key: 'F8', store: 'loopconsole.voice' });   // the mic on F9, pi's words spoken: the voice switch (Shift+8)
   $('#voice').replaceWith(Object.assign(vw.el, { id: 'voice' }));
   const strip = $('[data-strip=dialog]');
   if (strip) strip.hidden = false;

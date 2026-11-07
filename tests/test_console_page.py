@@ -180,6 +180,8 @@ def test_the_voice_in_the_band_and_the_dialog_dock():
         assert imp in mod, imp
     assert "dialogIn: $('#dialogpart')" in mod and "micButton: false" in mod and "#voicepanel{display:none}" in PAGE
     assert "c.say(text, 'heard')" in mod and "voiceWidget(panel" in mod
+    # the voice switch is the widget's (fsttm-web voiceWidget, Shift+8), never a page's own speak switch (the user, 2026-11-07)
+    assert "voiceWidget(panel, { narrator, key: 'F8', store: 'loopconsole.voice' })" in mod and "toggleSwitch" not in mod and "label: 'speak'" not in mod
     assert "speak: text => panel.core.frame({ ev: 'chat', who: 'system', text })" in mod
     assert "onWords:t=>window.MetisVoice&&MetisVoice.speak(t)" in PAGE
     assert "onChange:st=>window.MetisVoice&&MetisVoice.showDialog(st)" in PAGE

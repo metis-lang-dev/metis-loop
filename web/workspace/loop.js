@@ -186,8 +186,7 @@
             : running() ? 'say what to do: "take the next surprise"' : 'say what to do — "take the next surprise" starts the pi loop first')),
         el('form', { class: 'mw-row', onsubmit: e => { e.preventDefault(); say(e.target); } },
           el('input', { name: 'text', class: 'mw-grow', placeholder: held ? 'another pi loop holds this workspace: /commands still answer (/help)' : 'to the pi loop, or /help', 'aria-label': 'to the pi loop', autocomplete: 'off', list: listId }),
-          el('datalist', { id: listId }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description))),
-          el('button', { class: 'btn', type: 'submit' }, 'say')));
+          el('datalist', { id: listId }, s.commands.map(c => el('option', { value: '/' + c.name }, c.description)))));   // Enter says it: no button (the user, 2026-11-07)
     }
     function journalBox() {
       return el('div', { class: 'mw-log mw-journal' }, s.journal.length ? s.journal.slice(-MAX).map(r => {

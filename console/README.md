@@ -23,7 +23,7 @@ dock, its navigation agent (`console-nav.sh`, `domains/ui`, `domains/repl`), `li
 CLAUDE dock is gone too: the console has no chat. The docks keep the keyboard and the mouse.
 
 **The voice** (console-voice s-dc1f184c; the user, 2026-11-05): fsttm-web's voice widget in the
-band (mic on F9, the narrator on F8, speak on/off) and the dialog's own part (the floor, barge-in,
+band (mic on F9, pi's words spoken by its voice switch on Shift+8, the narrator on F8) and the dialog's own part (the floor, barge-in,
 attention, the floor / state / events cards) in the DIALOG dock, the last dock. What the mic hears
 is said in the CHAT as the person's line (`you · heard`): a `/` line is the backend's, anything
 else pi's; pi's words are spoken on the dialog's floor. fsttm-web is served at `/lib/` from the
