@@ -615,6 +615,9 @@ def narrate(ws, words):
     held as ONE mark (its member the first that fired: /disagree's record names it), so /agree N or /disagree N WORDS ends it.
     → (N, the narration's lines, the context)."""
     w = list(words)
+    if w and w[0].lower() in ("event", "it", "this", "the"):         # "/narrate event 4": a host page's event, not a trace
+        raise ValueError("/narrate names a trace and its window: /narrate RUN[:MEMBER] K0..K1 CONTEXT; an event of the road page: "
+                         "its ¶, or \"narrate event N\" said or typed on the page")
     if not marks_a_run(w):
         raise ValueError("/narrate names a trace and its window: /narrate RUN[:MEMBER] K0..K1 CONTEXT")
     one = ":" in w[0]

@@ -2,13 +2,16 @@
    iframe with ?panels=chat&embed=ORIGIN; ORIGIN is the only origin the face listens to and posts to. Without embed= (or
    with a value that is not an origin) nothing listens and nothing is posted. The wire is window.postMessage, both ways:
 
-     host -> console  {metis: "chat", text, via?}          a line as typed into the CHAT's input, sent ("/" rows at 0 USD,
-                                                            anything else to pi); via "heard": shown as heard (the host's mic)
+     host -> console  {metis: "chat", text, via?, shown?}  a line as typed into the CHAT's input, sent ("/" rows at 0 USD,
+                                                            anything else to pi); via "heard": shown as heard (the host's mic);
+                                                            shown: the log's short form of a long line (the road's /narrate)
                       {metis: "gate", answer, id}           the open gate ID answered: confirm | refuse
      console -> host  {metis: "ready"}                      the face is up, always the first post (the host's "the loop is not
                                                             running" ends)
                       {metis: "row", who, text, kind, ...}  every row as the CHAT shows it (a mark's carries mark: N)
                       {metis: "gate", open: true, id, title} | {metis: "gate", answered, id}
+                      {metis: "page", text}                 a line typed in the CHAT that is the host's: its events by number
+                                                            ("narrate event 4", "/explain 4", "send event 2 to pi"), never the loop's
 
    The workspace files stay the data path (marks, traces, records): the wire carries chat lines only.
 
@@ -16,6 +19,7 @@
      face.attach(chat)        chat: MetisLoop.mount's {say, answerGate}; posts {metis: "ready"}
      face.row(row)            opts.onRow of the CHAT
      face.gate(g)             opts.onGate of the CHAT
+     face.typed(text)         opts.onTyped of the CHAT: true when the line went to the host (PAGE)
 */
 (function (root) {
   function origin(q) {
@@ -26,6 +30,9 @@
       return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin === e.replace(/\/$/, '') ? u.origin : null;
     } catch (err) { return null; }
   }
+
+  // the host page's events by number (the road page: the loop's /narrate wants a trace and a window, the page has the event)
+  const PAGE = [/^\/?(?:narrate|explain)(?:\s+event)?\s+\d+\s*$/i, /^\/?send\s+(?:event\s+)?\d+\s+to\s+(?:pi|the loop|the pi loop)\s*$/i];
 
   function face(win, search) {
     const at = origin(search);
@@ -38,7 +45,7 @@
       const d = ev.data;
       if (!d || typeof d !== 'object' || !chat) return;
       if (d.metis === 'chat' && typeof d.text === 'string' && d.text.trim())
-        chat.say(d.text.trim(), d.via === 'heard' ? 'heard' : undefined);
+        chat.say(d.text.trim(), d.via === 'heard' ? 'heard' : undefined, typeof d.shown === 'string' && d.shown.trim() ? d.shown.trim() : undefined);
       else if (d.metis === 'gate' && (d.answer === 'confirm' || d.answer === 'refuse') && d.id)
         chat.answerGate(d.id, d.answer);
     });
@@ -46,6 +53,12 @@
       origin: at,
       attach(c) { chat = c; if (!ready) { ready = true; send({ metis: 'ready' }); } },
       row(r) { if (r) post(Object.assign({ metis: 'row' }, r)); },
+      typed(text) {
+        const t = String(text || '').trim();
+        if (!PAGE.some(re => re.test(t))) return false;
+        post({ metis: 'page', text: t });
+        return true;
+      },
       gate(g) {
         if (!g) return;
         if (g.open) post({ metis: 'gate', open: true, id: g.token, title: g.title || '' });
@@ -54,5 +67,5 @@
     };
   }
 
-  root.MetisEmbed = { origin, face };
+  root.MetisEmbed = { origin, face, PAGE };
 })(typeof window !== 'undefined' ? window : globalThis);

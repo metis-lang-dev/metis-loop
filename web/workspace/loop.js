@@ -13,7 +13,7 @@
      c.refresh()        the child, the locks, the bundle
      c.tail()           the journal (the "journal" chip)
      c.ruling(id)       the ruling of surprise ID as a card in the chat
-     c.say(text, via)   a line said as the person's: via 'heard' is the voice widget's (the band's mic, console-voice
+     c.say(text, via, shown)   a line said as the person's (shown: the log's short form of it): via 'heard' is the voice widget's (the band's mic, console-voice
                         s-dc1f184c): the chat shows it as heard, and it goes on as a typed line would
      c.fill(text)       TEXT in the input, focused, not said (the host's "mark here": the /mark line to finish)
 
@@ -293,9 +293,9 @@
       } catch (e) { push('err', 'error', e.message); }
       render();
     }
-    async function sendLine(text, via) {
+    async function sendLine(text, via, shown) {    // shown: what the log shows of it (a host's short form of a long line), else the line
       if (!text) return;
-      push('me', via === 'heard' ? 'you · heard' : 'you', text);
+      push('me', via === 'heard' ? 'you · heard' : 'you', shown || text);
       render();
       if (text.startsWith('/')) return command(text);       // the backend's, never a model turn
       if (!running()) {
@@ -314,6 +314,11 @@
       const i = form.querySelector('[name=text]');
       const text = String(i.value || '').trim();
       i.value = '';
+      if (text && o.onTyped) {                 // opts.onTyped (an embedding host): a line that is the host's ("narrate event 4"), taken there
+        let taken = false;
+        try { taken = !!o.onTyped(text); } catch (e) { /* the host's */ }
+        if (taken) { push('me', 'you → the page', text); render(); return; }
+      }
       return sendLine(text);
     }
     async function answer(m, how) {

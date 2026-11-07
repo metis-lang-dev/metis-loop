@@ -31,11 +31,12 @@ vm.runInContext(fs.readFileSync(src, 'utf8'), ctx);
 const face = ctx.window.MetisEmbed.face(win, search);
 const out = { face: !!face, listeners: listeners.length };
 if (face) {
-  face.attach({ say: (t, via) => said.push([t, via || null]), answerGate: (id, how) => gates.push([id, how]) });
+  face.attach({ say: (t, via, shown) => said.push(shown ? [t, via || null, shown] : [t, via || null]), answerGate: (id, how) => gates.push([id, how]) });
   for (const d of plan.deliver || [])
     for (const f of listeners) f({ origin: d.origin, source: d.from_parent === false ? {} : parent, data: d.data });
   for (const r of plan.rows || []) face.row(r);
   for (const g of plan.gates || []) face.gate(g);
+  out.typed = (plan.typed || []).map(t => face.typed(t));
 }
 Object.assign(out, { posted, said, gates });
 process.stdout.write(JSON.stringify(out));
@@ -116,7 +117,7 @@ def test_ready_is_the_first_post_even_before_attach(tmp_path):
 def test_the_page_attaches_the_face_to_the_chat():
     assert '<script src="lib/embed.js"></script>' in PAGE
     assert "const EMBED=window.MetisEmbed?MetisEmbed.face(window,location.search):null;" in PAGE
-    assert "EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate,follow:true}" in PAGE      # embedded: the host speaks, no onWords; the newest row shown
+    assert "EMBED?{session:()=>sid,onRow:EMBED.row,onGate:EMBED.gate,onTyped:EMBED.typed,follow:true}" in PAGE      # embedded: the host speaks, no onWords; the newest row shown
     assert "if(EMBED&&W.chat)EMBED.attach(W.chat);" in PAGE
 
 
@@ -126,3 +127,18 @@ def test_the_chat_widget_emits_its_rows_and_gate():
                  "function answerGate(token, how)", "return { refresh, tail, ruling, say: sendLine, fill, answerGate };",
                  "row: { who: 'loop', kind: 'mark', mark: r.mark"):
         assert part in LOOP_JS, part
+
+
+def test_a_line_about_the_hosts_events_typed_in_the_chat_goes_to_the_host(tmp_path):
+    """The user, 2026-11-07: "narrate event 4" typed in the road page's loop chat answered /mark's usage error. The page's events by
+    number are the host's: the face posts them {metis: "page", text}; anything else stays the loop's (/narrate RUN K0..K1 among them)."""
+    lines = ["narrate event 4", "/narrate event 4", "/explain 4", "send event 2 to pi", "/narrate Town03-1-x 10..20 ctx", "why did it brake", "/mark run 4 w"]
+    out = run(tmp_path, f"?embed={HOST}", {"typed": lines})
+    assert out["typed"] == [True, True, True, True, False, False, False]
+    assert [x["m"] for x in out["posted"]] == [{"metis": "ready"}] + [{"metis": "page", "text": t} for t in lines[:4]]
+
+
+def test_a_long_line_from_the_host_is_shown_by_its_short_form(tmp_path):
+    """The road's /narrate carries the trace and its context; the log shows the host's short form (the user: "long name")."""
+    out = run(tmp_path, f"?embed={HOST}", {"deliver": [{"origin": HOST, "data": {"metis": "chat", "text": "/narrate T-1 10..20 event 3, a mark", "shown": "/narrate event 3"}}]})
+    assert out["said"] == [["/narrate T-1 10..20 event 3, a mark", None, "/narrate event 3"]]

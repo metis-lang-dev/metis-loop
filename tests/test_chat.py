@@ -388,7 +388,7 @@ def test_the_page_routes_a_slash_line_to_the_backend_and_completes_it():
     page = (HERE.parent / "console" / "loop_console.html").read_text()
     assert ':{session:()=>sid,onWords:t=>window.MetisVoice&&MetisVoice.speak(t)});' in page   # not embedded (embedded: the host speaks)
     # console-voice: a heard line is said as a typed one, shown as heard; pi's words go to the host's voice
-    assert "push('me', via === 'heard' ? 'you · heard' : 'you', text);" in js
+    assert "push('me', via === 'heard' ? 'you · heard' : 'you', shown || text);" in js
     assert "if (o.onWords && ev.text) o.onWords(String(ev.text));" in js
     assert not (HERE.parent / "web" / "workspace" / "surprises.js").exists()   # loop-ui 2.4: loaded by no page
 
@@ -522,3 +522,9 @@ def test_the_explain_half_names_the_rules_one_fact_short(monkeypatch, tmp_path):
         "k 50: guard[R=brake_min] was one fact short: resp_lon(brake_min)"]
     monkeypatch.setattr(surprise_kind, "one_guard_away", lambda *a, **k: (_ for _ in ()).throw(ValueError("diverges")))
     assert chat.explain(ws, tmp_path, "planner", 39, 64) == []        # an aside: a trace it cannot replay says nothing
+
+
+def test_narrate_of_a_page_event_says_where_it_is_narrated():
+    """'/narrate event 4' (the user, 2026-11-07, on the road page): never /mark's usage error, the trace form and the page's way."""
+    with pytest.raises(ValueError, match=r"/narrate RUN\[:MEMBER\] K0..K1 CONTEXT; an event of the road page"):
+        chat.narrate(None, ["event", "4"])
