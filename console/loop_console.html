@@ -118,6 +118,11 @@ details summary{cursor:pointer;color:var(--dim)}
 /* framed (a host's dock): a shown panel fills the frame, its body shown, so the CHAT's log scrolls to the newest row inside it */
 #root.panels #right>.dock:not([hidden]){flex:1 1 0!important;min-height:0}
 #root.panels #right>.dock:not([hidden])>.dbody{display:flex!important;flex-direction:column;flex:1;min-height:0}
+/* framed: the host's dock has its own title, so the panel's is dropped; the CHAT's header one tight line, the log the rest of the frame */
+#root.panels #right>.dock>header{display:none}
+#root.panels .mw-head{font-size:11px;gap:2px 6px;padding-bottom:2px;line-height:1.35}
+#root.panels .mw-head .btn,#root.panels .mw-head .chip{padding:0 6px;font-size:11px;min-height:0}
+#root.panels .mw-log{max-height:none;flex:1 1 auto;min-height:4em}
 /* the CHAT fills its dock: the log scrolls, the line to say stays in view */
 #dock-chat>.dbody{display:flex;flex-direction:column;overflow:hidden}#w-chat{flex:1;min-height:0}
 /* fsttm-web in the shell's look (as the world page's): the voice in the band, the dialog's own part in DIALOG */
