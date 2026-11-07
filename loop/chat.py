@@ -625,8 +625,8 @@ def narrate(ws, words):
     if draft.get("k") is None and not draft.get("window"):
         raise ValueError("/narrate: the window, K or K0..K1, after the trace")
     members = [draft["member"]] if one else (draft.get("members") or [draft["member"]])
-    told = [(m, _worded(narration(ws, dict(draft, member=m)))) for m in members]
-    fired = [(m, ls) for m, ls in told if not (len(ls) >= 1 and ls[0].startswith(SILENT) and all(not x.startswith("k ") or "one fact short" in x for x in ls[1:]))]
+    told = [(m, _numbered(_worded(narration(ws, dict(draft, member=m))))) for m in members]
+    fired = [(m, ls) for m, ls in told if not (len(ls) >= 1 and ls[0].startswith(SILENT) and all(not _STEP.match(x) or "one fact short" in x for x in ls[1:]))]
     keep = fired or told
     lines = []
     for m, ls in keep:
@@ -635,6 +635,30 @@ def narrate(ws, words):
         lines.append("(nothing fired for " + ", ".join(m for m, _ in told if m not in dict(fired)) + ")")
     n, lines = _hold(ws, dict(draft, member=keep[0][0], narrated=[m for m, _ in keep]), lines)
     return n, lines, draft["words"]
+
+
+_STEP = re.compile(r"^(?:k \d+(?:[–-]\d+)?: |\d+\. )(.*)$")
+_K = re.compile(r"^k \d+(?:[–-]\d+)?: (.*)$")
+
+
+def _numbered(lines):
+    """A tester's narration (the user, 2026-11-07): the trace's ticks ("k 12814:") left out, the steps a list numbered from 1 in their
+    order, the same words said again at once one step (×N)."""
+    out, n, last = [], 0, None
+    for x in lines:
+        m = _K.match(x)
+        if not m:
+            out.append(x); last = None
+            continue
+        text = m.group(1)
+        if last is not None and last[0] == text:
+            last[1] += 1
+            out[last[2]] = f"{n}. {text} (×{last[1]})"
+            continue
+        n += 1
+        out.append(f"{n}. {text}")
+        last = [text, 1, len(out) - 1]
+    return out
 
 
 def _worded(lines):

@@ -528,3 +528,12 @@ def test_narrate_of_a_page_event_says_where_it_is_narrated():
     """'/narrate event 4' (the user, 2026-11-07, on the road page): never /mark's usage error, the trace form and the page's way."""
     with pytest.raises(ValueError, match=r"/narrate RUN\[:MEMBER\] K0..K1 CONTEXT; an event of the road page"):
         chat.narrate(None, ["event", "4"])
+
+
+def test_a_narration_is_a_numbered_list_without_the_traces_ticks():
+    """The user, 2026-11-07: "k 12814:" means nothing to a tester: the steps numbered from 1, the same words at once one step (×N)."""
+    lines = ["k 12802: I brake: the proper response, brake_min.", "k 12803: I brake: the proper response, brake_min.",
+             "k 12804: I brake: the proper response, brake_min.", "k 12812: Nothing asks a response: the plan has the controls again.",
+             "k 12802–12812: brake_lon[R=brake_max] was one fact short: resp_lon(brake_max)", "(8 line(s) of the protocol's own rules, with no words, left out)"]
+    assert chat._numbered(lines) == ["1. I brake: the proper response, brake_min. (×3)", "2. Nothing asks a response: the plan has the controls again.",
+                                     "3. brake_lon[R=brake_max] was one fact short: resp_lon(brake_max)", "(8 line(s) of the protocol's own rules, with no words, left out)"]
