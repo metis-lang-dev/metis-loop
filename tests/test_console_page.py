@@ -224,6 +224,7 @@ def test_panels_query_mounts_only_those():
     assert 'new URLSearchParams(location.search).get("panels")' in PAGE
     assert 'if(PANELS)$("#root").classList.add("panels")' in PAGE
     assert "#root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}" in PAGE
+    assert "#root.panels #right>.dock:not([hidden]){flex:1 1 0!important;min-height:0}" in PAGE      # framed: the panel fills the frame
     assert 'key:"loopconsole.docks.v5.panels"' in PAGE
     for w in ("bundle", "rulings", "chat", "trace"):
         assert f'if(wsOn("{w}"))W.{w}=' in PAGE

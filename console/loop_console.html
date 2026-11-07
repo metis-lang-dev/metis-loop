@@ -115,6 +115,9 @@ details summary{cursor:pointer;color:var(--dim)}
 /* ?panels=chat (CHAT.md §1, the embedding): the named docks only, the whole width; no band, REPL or strip */
 #root.panels #strip,#root.panels #band,#root.panels #left,#root.panels #split{display:none!important}
 #root.panels #right{flex:1 1 auto;min-width:0}
+/* framed (a host's dock): a shown panel fills the frame, its body shown, so the CHAT's log scrolls to the newest row inside it */
+#root.panels #right>.dock:not([hidden]){flex:1 1 0!important;min-height:0}
+#root.panels #right>.dock:not([hidden])>.dbody{display:flex!important;flex-direction:column;flex:1;min-height:0}
 /* the CHAT fills its dock: the log scrolls, the line to say stays in view */
 #dock-chat>.dbody{display:flex;flex-direction:column;overflow:hidden}#w-chat{flex:1;min-height:0}
 /* fsttm-web in the shell's look (as the world page's): the voice in the band, the dialog's own part in DIALOG */
