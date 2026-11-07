@@ -126,7 +126,7 @@ def test_the_table_is_the_argparse_and_help_reads_it():
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     names = [t["name"] for t in chat.tools()["tools"]]
-    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "agree", "disagree", "drop", "apply",
+    assert names == ["status", "surprises", "take", "replay", "why", "diff", "ruling", "mark", "narrate", "agree", "disagree", "drop", "apply",
                      "rebuild", "reload", "lint", "budget", "stop", "help"]
     h = chat.help_text()
     for n in names:
@@ -278,6 +278,27 @@ def test_mark_from_a_trace_and_the_refusals(root):
         say(ch, f"/mark {RUN}:nobody 12 late")["error"]
     assert "/mark here names a trace" in say(ch, "/mark 10 late")["error"]            # no session: the terminal's form only
     assert "the words are what the record carries" in say(ch, f"/mark {RUN} 10")["error"]
+
+
+def test_narrate_tells_every_member_with_its_context(root):
+    """/narrate RUN K0..K1 CONTEXT (loop-road-ui, the user 2026-11-07: the road page's narrate goes to the loop's chat with its context):
+    every member of the trace told (a member where nothing fired left out unless none did), held as ONE mark, its context on the answer;
+    /disagree N on it keeps a confusion record on the first member that fired."""
+    ch = channels(root)
+    f = say(ch, f"/narrate {RUN} 10..20 event 2, a mark at 1.0–2.0 s; the tester: it braked late behind the lead car")
+    assert f["text"].startswith("mark 1, as the rules tell it: event 2, a mark at 1.0–2.0 s; the tester: it braked late behind the lead car")
+    assert f["mark"] == 1 and f["context"].startswith("event 2") and f["narration"] and "/agree 1" in f["text"]
+    held = __import__("json").loads((root / ".metis" / "marks" / "1.json").read_text())
+    assert held["draft"]["window"] == [10, 20] and held["draft"]["member"] in held["draft"]["narrated"]
+    assert "planner:" in f["narration"] and "road_director:" in f["narration"]        # several members: each under its name
+    assert chat._worded(["k 1: (decide: a rule with no words)", "k 1: I speed up."]) == [
+        "k 1: I speed up.", "(1 line(s) of the protocol's own rules, with no words, left out)"]    # a tester's narration: the words
+    assert chat._worded(["k 1: (decide: a rule with no words)"]) == ["k 1: (decide: a rule with no words)"]   # nothing worded: kept
+    f = say(ch, f"/narrate {RUN}:planner 10..20 just the planner")
+    assert f["mark"] == 2 and not any(x == "planner:" for x in f["narration"])          # one member: no member headings
+    rec = W.workspace(root).surprise(say(ch, "/disagree 2 it should have braked earlier")["surprise"])
+    assert (rec["member"], rec["window"], rec["verdict"]) == ("planner", [10, 20], "disagreed")
+    assert "names a trace and its window" in say(ch, "/narrate 10..20 no trace")["error"]
 
 
 def test_mark_and_drop_from_the_pages_session(root):

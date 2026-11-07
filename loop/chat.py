@@ -36,8 +36,9 @@ from metis import trace as T
 from metis.catalog import workspace as W
 
 TOOLS_FILE = Path(__file__).resolve().parent / "chat_tools.json"
-SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN[:MEMBER]] [K | K0..K1] WORDS"}   # /help's argument shapes
-FREE = ("mark", "drop", "disagree")   # commands whose words are the person's text: an apostrophe is a word's, not a quote
+SHOWN = {("replay", "window"): "[K0..K1 | K]", ("mark", "words"): "[RUN[:MEMBER]] [K | K0..K1] WORDS",
+         ("narrate", "words"): "RUN[:MEMBER] K | K0..K1 CONTEXT"}   # /help's argument shapes
+FREE = ("mark", "drop", "disagree", "narrate")   # commands whose words are the person's text: an apostrophe is a word's, not a quote
 WINDOW = re.compile(r"^(-?\d+)(?:\.\.(-?\d+))?$")
 ROWS = 60                     # a /replay's rows at most (the window's first; the rest are counted)
 BUILD_SECS = 600
@@ -62,6 +63,8 @@ COMMANDS = (
     ("ruling", "the ruling card (default: the last ruling)", (("id", {"nargs": "?", "help": "a surprise id"}),)),
     ("mark", "a tick (or K0..K1) of the open session's trace as a surprise, its REPL's mark; or RUN K's (RUN:MEMBER on a trace of several members): narrated first (the rules' own words), then /agree N or /disagree N WORDS",
      (("words", {"nargs": "+", "help": "[RUN[:MEMBER]] [K | K0..K1] WORDS"}),)),
+    ("narrate", "a window of a trace told in its rules' own words for EVERY member (RUN:MEMBER for one), with its context (the event, what the tester saw): held as one mark, then /agree N or /disagree N WORDS (loop-road-ui: the road page's narrate)",
+     (("words", {"nargs": "+", "help": "RUN[:MEMBER] K | K0..K1 CONTEXT"}),)),
     ("agree", "mark N as narrated: a pass, the mark closed (keep: kept as a closed mark with its narration)",
      (("n", {"type": int, "help": "the mark's number (/mark says it)"}),
       ("keep", {"nargs": "?", "choices": ["keep"], "help": "keep it as a closed mark"}))),
@@ -475,7 +478,7 @@ def answer(ws, name, a, child=None, budget_next=None):
 # the commands the pi loop's TUI answers itself through this CLI (two-terminals s-065d46d5: pi.registerCommand in
 # pi/extensions/metis-workspace.ts): READ, and these, with no page and no REPL session in this process — the REPL
 # is the other terminal. take, budget and stop are the pi session's own (the extension answers them).
-TERMINAL = ("help", "mark", "agree", "disagree", "drop", "apply", "rebuild", "reload", "lint")
+TERMINAL = ("help", "mark", "narrate", "agree", "disagree", "drop", "apply", "rebuild", "reload", "lint")
 
 
 def drop_draft(ws, draft):
@@ -600,7 +603,45 @@ def open_mark(ws, draft):
         ms = draft.get("members") or []
         raise ValueError(f"/mark: {draft['run']} has several members" + (f" ({', '.join(ms)})" if ms else "")
                          + f": name one, /mark {draft['run']}:MEMBER K WORDS")
-    lines = narration(ws, draft)
+    return _hold(ws, draft, narration(ws, draft))
+
+
+SILENT = "no rule of "
+
+
+def narrate(ws, words):
+    """/narrate RUN[:MEMBER] K0..K1 CONTEXT (loop-road-ui, the user 2026-11-07: the road page's narrate goes to the loop's chat with its
+    context): the window told for every member of the trace (or the one named), a member where nothing fired left out unless none fired;
+    held as ONE mark (its member the first that fired: /disagree's record names it), so /agree N or /disagree N WORDS ends it.
+    → (N, the narration's lines, the context)."""
+    w = list(words)
+    if not marks_a_run(w):
+        raise ValueError("/narrate names a trace and its window: /narrate RUN[:MEMBER] K0..K1 CONTEXT")
+    one = ":" in w[0]
+    draft = mark(ws, w, None)
+    if draft.get("k") is None and not draft.get("window"):
+        raise ValueError("/narrate: the window, K or K0..K1, after the trace")
+    members = [draft["member"]] if one else (draft.get("members") or [draft["member"]])
+    told = [(m, _worded(narration(ws, dict(draft, member=m)))) for m in members]
+    fired = [(m, ls) for m, ls in told if not (len(ls) >= 1 and ls[0].startswith(SILENT) and all(not x.startswith("k ") or "one fact short" in x for x in ls[1:]))]
+    keep = fired or told
+    lines = []
+    for m, ls in keep:
+        lines += [f"{m}:"] + [f"  {x}" for x in ls] if len(keep) > 1 else ls
+    if fired and len(fired) < len(told):
+        lines.append("(nothing fired for " + ", ".join(m for m, _ in told if m not in dict(fired)) + ")")
+    n, lines = _hold(ws, dict(draft, member=keep[0][0], narrated=[m for m, _ in keep]), lines)
+    return n, lines, draft["words"]
+
+
+def _worded(lines):
+    """A tester's narration: the protocol's rules with no words (decide, back: "(X: a rule with no words)") left out and counted."""
+    keep = [x for x in lines if not x.endswith(": a rule with no words)")]
+    n = len(lines) - len(keep)
+    return keep + ([f"({n} line(s) of the protocol's own rules, with no words, left out)"] if n else []) if keep else lines
+
+
+def _hold(ws, draft, lines):
     d = _marks(ws)
     last = d / "last"                                   # the marks' numbers never come again, a closed one's neither
     held = [int(f.stem) for f in d.glob("*.json") if f.stem.isdigit()]
@@ -701,6 +742,10 @@ def terminal(ws, name, a):
         n, lines = open_mark(ws, mark(ws, w, None))
         return {"text": "\n".join([f"mark {n}, as the rules tell it:", *lines,
                                    f"agree: /agree {n}   ·   disagree: /disagree {n} WHAT YOU SEE"]), "mark": n, "narration": lines}
+    if name == "narrate":
+        n, lines, ctx = narrate(ws, a.words)
+        return {"text": "\n".join([f"mark {n}, as the rules tell it: {ctx}", *lines,
+                                   f"agree: /agree {n}   ·   disagree: /disagree {n} WHAT YOU SEE"]), "mark": n, "narration": lines, "context": ctx}
     if name == "agree":
         return agree(ws, a.n, keep=bool(a.keep))
     if name == "disagree":

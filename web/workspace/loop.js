@@ -141,6 +141,7 @@
     function markCard(m) {     // spec 20 §10 item 7 (surprise-kinds s-7a02c2ac): a mark narrated first, then the person's two endings
       return el('div', { class: 'mw-card mw-mark' },
         el('div', { class: 'mw-sub' }, 'MARK ' + m.mark + ' — as the rules tell it'),
+        m.context ? el('div', { class: 'mw-ctx' }, m.context) : null,
         el('pre', { class: 'mw-out' }, (m.narration || []).join('\n')),
         m.answered ? el('div', { class: 'empty' }, m.answered)
           : el('div', { class: 'mw-acts' },
@@ -281,7 +282,7 @@
       try {
         const sid = o.session ? o.session() : null;
         const r = await io.ask('loop', 'say', sid ? { text, session: sid } : { text }, 120000);
-        if (r.mark) pushCard({ mark: r.mark, narration: r.narration, card() { return markCard(this); },
+        if (r.mark) pushCard({ mark: r.mark, narration: r.narration, context: r.context, card() { return markCard(this); },   // /narrate: its context
           row: { who: 'loop', kind: 'mark', mark: r.mark, text: ['mark ' + r.mark + ', as the rules tell it:'].concat(r.narration || []).join('\n') } });   // /mark: narrated, two endings
         else if (r.text) push('cmd', '/' + (r.command || ''), r.text);
         if (r.command === 'disagree' || r.command === 'agree')

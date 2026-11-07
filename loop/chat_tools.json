@@ -139,6 +139,24 @@
    }
   },
   {
+   "name": "narrate",
+   "verb": "narrate",
+   "description": "a window of a trace told in its rules' own words for EVERY member (RUN:MEMBER for one), with its context (the event, what the tester saw): held as one mark, then /agree N or /disagree N WORDS (loop-road-ui: the road page's narrate)",
+   "parameters": {
+    "type": "OBJECT",
+    "properties": {
+     "words": {
+      "type": "STRING",
+      "description": "RUN[:MEMBER] K | K0..K1 CONTEXT",
+      "positional": 0
+     }
+    },
+    "required": [
+     "words"
+    ]
+   }
+  },
+  {
    "name": "agree",
    "verb": "agree",
    "description": "mark N as narrated: a pass, the mark closed (keep: kept as a closed mark with its narration)",

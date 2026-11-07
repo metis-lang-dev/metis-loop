@@ -10,6 +10,7 @@
 .mw-kv{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px}
 .mw-kv>span:nth-child(odd){color:var(--dim)}
 .mw-sub{color:var(--dim);font-size:11px;letter-spacing:.04em}
+.mw-ctx{color:var(--fg);font-size:12px;margin:2px 0 4px}
 .mw-badge{font-size:10.5px;padding:0 6px;border:1px solid var(--line);text-transform:uppercase}
 .mw-badge.ok{color:var(--green);border-color:#2a4d33}.mw-badge.warn{color:var(--yellow);border-color:#4d3f1f}
 .mw-badge.bad{color:var(--red);border-color:#5a2a2a}.mw-badge.info{color:var(--cyan);border-color:currentColor}

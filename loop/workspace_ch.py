@@ -366,6 +366,8 @@ class WorkspaceChannels:
         elif name == "mark" and (s is None or chat.marks_a_run(a.words)):
             # /mark RUN K WORDS: a trace's tick, narrated first (spec 20 §10 item 7): the terminal's (pi's /mark) own answer
             out.update(await self._run(chat.terminal, self.ws, name, a))
+        elif name == "narrate":                          # every member's narration of a trace's window, with its context: one mark
+            out.update(await self._run(chat.terminal, self.ws, name, a))
         elif name in ("agree", "disagree"):              # the mark's two endings: a pass, or a confusion record on the words
             out.update(await self._run(chat.terminal, self.ws, name, a))
         elif name in ("drop", "mark"):
