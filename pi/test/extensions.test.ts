@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import repl from "../extensions/metis-repl.ts";
 import domain from "../extensions/metis-domain.ts";
+import { JsonlChild } from "../extensions/lib/jsonl.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // the workspace (metis-agentic-loop beside metispy's venv and metis-agent: defaults only);
@@ -893,4 +894,18 @@ test("metis-repl: catalog_new program=served on a package seed says that a displ
 		process.env.METIS_LOOP_LLP = "";
 		await p.emit("session_shutdown", {}, {});
 	}
+});
+
+test("JsonlChild: a spawn that fails (ENOENT) rejects its waiting request at once, as an exit does; a live child still answers (jsonl-spawn-error, s-5e34eb35)", async () => {
+	const dead = new JsonlChild(join(tmpdir(), "no-such-binary-" + process.pid), ["--json"], {});
+	const t0 = Date.now();
+	await assert.rejects(dead.request({ op: "help" }, () => true), /no-such-binary-\d+ did not start: .*ENOENT/);
+	assert.ok(Date.now() - t0 < 5000, "rejected at once, not at the 600 s timer");
+	assert.equal(dead.exited, -1);
+	await assert.rejects(dead.request({ op: "help" }, () => true), /has exited \(-1\)/);          // later requests: refused before any timer
+	dead.close();
+	const echo = new JsonlChild(process.execPath, ["-e", "process.stdin.on('data', (d) => process.stdout.write(d))"], {});
+	const got = await echo.request({ op: "help", ok: true }, (l) => "ok" in l);
+	assert.deepEqual(got, [{ op: "help", ok: true }]);
+	echo.close();
 });

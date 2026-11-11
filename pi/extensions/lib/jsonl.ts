@@ -29,6 +29,13 @@ export class JsonlChild {
 			const err = new Error(`${cmd} exited (${this.exited}): ${this.stderr.trim().slice(-600)}`);
 			for (const w of this.waiting.splice(0)) w.reject(err);
 		});
+		// a spawn that fails (ENOENT, EACCES) emits `error` and never `exit`: the same end, or each waiting request kept its
+		// timer (600 s) and the process with it (workspace.test.ts ran 10 min where `metis` was not on PATH, s-5e34eb35)
+		this.proc.on("error", (e) => {
+			if (this.exited === null) this.exited = -1;
+			const err = new Error(`${cmd} did not start: ${e.message}`);
+			for (const w of this.waiting.splice(0)) w.reject(err);
+		});
 	}
 
 	private feed(chunk: string) {
