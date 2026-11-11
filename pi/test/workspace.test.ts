@@ -211,6 +211,49 @@ test("metis-workspace: a refusal is a try, the surprise stays taken; the third s
 	await p.emit("session_shutdown", {}, {});
 });
 
+test("metis-workspace: pack_identify says what the record identifies, and writes no ruling and counts no try (loop-improvement s-5e34eb35)", async () => {
+	const { r, bin } = scratch();
+	// the judge with --identify-only: identification.json in the run, its text on stdout, exit 0 (propose.py's experiment arm)
+	const stub = exe(join(bin, "identify"), `#!/bin/sh
+run=""; prev=""; for a in "$@"; do [ "$prev" = --run ] && run="$a"; prev="$a"; done
+mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/identify.args"
+printf '{"word": "not identified", "target": [], "earlier": [], "support": null, "consumes": [], "lines": ["TARGET: NO."]}' > "$run/identification.json"
+printf '## What this record identifies: not identified\\n- TARGET: NO. At tick 3 the candidate fires exactly what the record fired.\\n'
+`);
+	const saved = process.env.METIS_LOOP_PROPOSE;
+	process.env.METIS_LOOP_PROPOSE = stub;
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		await assert.rejects(p.tools.get("pack_identify").execute("i0", { id, pack: "% x" }), /not taken: surprise_next first/);
+		assert.ok(!existsSync(join(bin, "identify.args")), "refused before the judge runs");
+		await p.tools.get("surprise_next").execute("n", {});
+		const i = await p.tools.get("pack_identify").execute("i1", { id, pack: "stage go {\n  dark [dyn] : $late * now -o ().\n}" });
+		assert.equal(i.details.word, "not identified");
+		assert.match(i.content[0].text, /^## What this record identifies: not identified\n- TARGET: NO\. At tick 3/);
+		const args = readFileSync(join(bin, "identify.args"), "utf8").split("\n");
+		assert.ok(args.includes("--identify-only"), args.join(" "));
+		assert.equal(args[args.indexOf("--member") + 1], "lamp");
+		assert.equal(args[args.indexOf("--record") + 1], ws.path("surprise", { id }, r));          // the surprise's tick from its own record
+		assert.equal(args[args.indexOf("--config") + 1], join(r, "service.yaml"));
+		// no ruling, no try: the surprise is still taken and pack_propose judges it as its first try
+		const s = ws.surprise(id, r);
+		assert.equal(s.status, "taken");
+		assert.ok(!s.ruling && !(s.tries ?? []).length, JSON.stringify(s));
+		assert.ok(!existsSync(join(r, ".metis", "rulings", `${id}.md`)));
+		assert.equal(ws.events(0, r).filter((e) => e.who === "pi" && e.kind === "identified").at(-1)!.word, "not identified");
+		// a judge that writes no identification: said with its exit and its words, the surprise untouched
+		exe(stub, `#!/bin/sh\necho "the record does not replay" >&2\nexit 2\n`);
+		await assert.rejects(p.tools.get("pack_identify").execute("i2", { id, pack: "% x" }), /nothing identified \(exit 2\): the record does not replay/);
+		assert.equal(ws.surprise(id, r).status, "taken");
+	} finally {
+		process.env.METIS_LOOP_PROPOSE = saved;
+		await p.emit("session_shutdown", {}, {});
+	}
+});
+
 test("metis-workspace: pack_propose amends the surprise's unit when none is given (loop-ui I1)", async () => {
 	const { r, bin } = scratch();
 	writeFileSync(join(r, "domains", "lamp_rules.llp"), "% the lamp's unit, beside the composition\n");
@@ -606,7 +649,7 @@ test("the tool sets by mode (loop-prompt, PROMPT.md §3): workspace = the surpri
 	const mine = names(null, true);                                   // metis-workspace's own
 	const all = names(null), w = names("workspace"), s = names("seed");
 	assert.deepEqual(w, [...mine, "catalog_apply", "catalog_edit"].sort());   // loop-ui 2.3: the apply is the judge's merge
-	assert.ok(w.length <= 30, `${w.length} tools in a workspace`);
+	assert.ok(w.length <= 31, `${w.length} tools in a workspace`);   // 30 on master; EXPERIMENT loop-identify adds pack_identify (s-5e34eb35)
 	assert.ok(!s.some((n) => mine.includes(n)), s.join(" "));
 	for (const n of ["catalog_new", "catalog_edit", "catalog_take", "domain_open"]) assert.ok(s.includes(n), n);
 	// the REPL's verbs (repl_text, repl_formalize …) register later, at the session's start: the same filter holds then
@@ -663,7 +706,7 @@ test("metis-workspace: the chat's slash table is pi's own commands (two-terminal
 test("the system prompt: a workspace surprise is ruled through pack_propose; the person's own loop is the seed-domain skill's", () => {
 	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
 	assert.match(t, /the explanation is a pack, never a hand edit of the program/);
-	assert.match(t, /Judge it with `pack_propose`/);
+	assert.match(t, /[Jj]udge it with `pack_propose`/);              // loop-identify: "When it says `identified` …, judge it with" (s-5e34eb35)
 	assert.match(t, /The verdict is the gate's, never yours, and the ruling is written whatever it says/);
 	assert.match(t, /read the skill `seed-domain` first/);
 	for (const n of ["repl_text", "repl_formalize", "repl_gate", "catalog_new", "catalog_take", "domain_open"]) assert.ok(!t.includes(n), `${n} is the seed-domain skill's`);
@@ -792,7 +835,7 @@ test("the prompt and the skills (loop-prompt step 2, PROMPT.md §2-3): sizes, ev
 	const named = (text: string) => [...text.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
 	const prompt = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
 	assert.ok(Buffer.byteLength(prompt) <= 7168, `the system prompt is ${Buffer.byteLength(prompt)} bytes (≤ 7 KB)`);
-	const missing = named(prompt).filter((n) => !wsSet.has(n));
+	const missing = named(prompt).filter((n) => !wsSet.has(n) && n !== "identified");   // loop-identify: pack_identify's word, not a tool (s-5e34eb35)
 	assert.deepEqual(missing, [], "every tool the prompt names is registered in a workspace");
 	const dirs = readdirSync(join(HERE, "..", "skills"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 	assert.deepEqual(dirs, ["metis-language", "seed-domain", "surprise-ruling"]);
