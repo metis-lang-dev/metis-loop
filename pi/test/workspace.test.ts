@@ -98,7 +98,7 @@ test("metis-workspace: its tools, the trace verbs as declared, their schemas as 
 	const declared = ws.tools().tools.map((t) => t.name);
 	assert.ok(declared.includes("trace_case") && declared.includes("lint"), declared.join(" "));
 	const chat = ["chat_diff", "chat_replay", "chat_ruling", "chat_status", "chat_surprises", "chat_why"];   // loop-chat step 3
-	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "rule_text", "search", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
+	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_identify", "pack_propose", "rule_text", "search", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
 	const c = p.tools.get("trace_case").parameters;
 	assert.equal(c.type, "object");
 	assert.equal(c.properties.at.type, "integer");

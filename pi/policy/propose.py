@@ -201,6 +201,8 @@ def main(argv=None):
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--time-budget", type=float, default=1800, help="seconds for the whole judgement; past it the ruling says not judged, and which stage (default 1800)")
     ap.add_argument("--golden-budget", type=float, default=120, help="seconds for one run of one golden (default 120)")
+    ap.add_argument("--identify-only", action="store_true", help="EXPERIMENT (loop-identify): no ruling; print what the record identifies of the pack (policy/identify.py), "
+                                                                 "from the same replay, with --record's tick; exit 0")
     ap.add_argument("--closed-loop", help="a command run once on an accepted pack, on the real tree after you apply it: its result is the certificate's second line")
     a = ap.parse_args(argv)
     if a.brain and a.brain.startswith("openrouter/") and a.budget is None:
@@ -232,7 +234,7 @@ def main(argv=None):
         where, _, comp = rest.partition(":")
         consumers.append((name, where, comp or None))
     kw = {}
-    if a.record:
+    if a.record and not a.identify_only:
         import inspect
         try:
             record = json.loads(Path(a.record).read_text())
@@ -243,6 +245,18 @@ def main(argv=None):
         else:                                  # a metis-agent before the kind gate (surprise-kinds s-7a02c2ac): said, never silent
             print(f"propose.sh: this metis-agent's judge reads no record kind; {a.record} judged as a structural one", file=sys.stderr)
     e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers, budget=a.time_budget, golden_budget=a.golden_budget, moved=a.move_golden, **kw)
+    if a.identify_only:                        # no ruling, no try: the three questions and nothing of the gate's reasons
+        from . import identify as I
+        try:
+            record = json.loads(Path(a.record).read_text()) if a.record else {}
+        except (OSError, ValueError) as x:
+            sys.exit(f"propose.sh: --record {a.record}: {x}")
+        target = Path(a.unit) if a.unit else None
+        unit_text = (Path(a.root) / target).read_text() if target and (Path(a.root) / target).is_file() else target.read_text() if target and target.is_file() else ""
+        i = I.identification(e, record, pack, unit_text)
+        (run / "identification.json").write_text(json.dumps(i, indent=1, default=str))
+        print(I.text(i))
+        return 0
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":
