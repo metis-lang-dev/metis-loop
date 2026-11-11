@@ -722,6 +722,56 @@ export default function (host: ExtensionAPI) {
 		},
 	});
 
+	// EXPERIMENT (loop-identify): what the record identifies of a pack, before it is judged. No ruling, no try; nothing
+	// of the gate's reasons (a pack that does not link is told only that). policy/identify.py through propose.sh.
+	pi.registerTool({
+		name: "pack_identify",
+		label: "what the record identifies",
+		description:
+			"Before pack_propose: what the surprise's record can show of a candidate pack. TARGET: does the pack change what fires AT the surprise's tick (if NO, it does not answer the surprise). EARLIER: does it change ticks the person did not report. SUPPORT: is its rule ever enabled on the record. CONSUMES: an atom it now consumes that other rules need. Writes no ruling and costs no try. Correct the pack until it says `identified`, then pack_propose.",
+		parameters: Type.Object({
+			id: Type.String({ description: "the surprise's id (surprise_next)" }),
+			pack: Type.String({ description: "the pack's text, as for pack_propose" }),
+			unit: Type.Optional(Type.String({ description: "the file the pack amends, as for pack_propose" })),
+		}),
+		async execute(_id, p) {
+			const r = root();
+			mustHold(r);
+			const s = ws.surprise(p.id, r);
+			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
+			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay`);
+			const b = ws.bundle(undefined, r);
+			const config = (s as any).config ?? (b as any)?.config;
+			if (!config) throw new Error(`surprise ${p.id} cannot be replayed here: no service config`);
+			const tmp = mkdtempSync(join(tmpdir(), "pack-identify-"));
+			try {
+				const pack = join(tmp, "pack.llp");
+				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
+				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run"),
+					"--identify-only", "--record", ws.path("surprise", { id: p.id }, r)];
+				if (b) argv.push("--composition", dirname(b.composition));
+				const unit = p.unit ?? (s as any).unit;
+				if (unit) {
+					let u = resolve(r, String(unit));
+					if (!existsSync(u)) {
+						const found = findFiles(b ? resolve(r, dirname(b.composition)) : join(r, "domains"), basename(String(unit)));
+						if (found.length !== 1) throw new Error(`unit=${unit}: no such file under ${r}; give the path as surprise_next printed it`);
+						u = found[0];
+					}
+					argv.push("--unit", relative(r, u));
+				}
+				const res = await run(process.env.METIS_LOOP_PROPOSE || join(HERE, "..", "propose.sh"), argv, r);
+				const f = join(tmp, "run", "identification.json");
+				if (!existsSync(f)) throw new Error(`nothing identified (exit ${res.code}): ${(res.err || res.out).trim().slice(-600)}`);
+				const i = JSON.parse(readFileSync(f, "utf8"));
+				ws.journal("pi", "identified", { surprise: p.id, word: i.word }, r);
+				return text(res.out.trim(), { word: i.word });
+			} finally {
+				rmSync(tmp, { recursive: true, force: true });
+			}
+		},
+	});
+
 	// a take that ends without a ruling releases itself: surprises/<id>.taken removed, a not_judged row with the reason
 	function release(id: string, reason: string, r: string) {
 		held.delete(id);
