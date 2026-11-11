@@ -66,14 +66,17 @@ def identification(e, record, pack, unit_text=""):
     w = window(record)
     lines = []
     if not e.get("baseline") or e.get("gate_error") or e.get("link_failed") or e.get("duplicates") or e.get("not_judged") or "rows" not in e:
-        return {"word": "nothing identified", "lines": ["The pack did not reach the replay (it does not link, repeats a rule, or the record does not replay): "
+        return {"word": "nothing identified", "target": [], "earlier": [], "support": None, "consumes": [], "lines": ["The pack did not reach the replay (it does not link, repeats a rule, or the record does not replay): "
                                                          "nothing is identified. pack_propose says why."]}
     rows = [r for r in e.get("rows") or () if r.get("member") == e.get("member") or len({x.get("member") for x in e["rows"]}) == 1]
     fired = [r for r in rows if "fired" in r or "out" in r]
 
+    def names_of(x):                           # the judge's rows carry lists of rule names: said as names, never as a Python list
+        return ", ".join(map(str, x)) if isinstance(x, (list, tuple)) else str(x) if x else ""
+
     def what(r):
         d = r.get("fired") or r.get("out")
-        return "tick %s: the record %s, the candidate %s" % (r["k"], d["record"] or "nothing", d["candidate"] or "nothing")
+        return "tick %s: the record %s, the candidate %s" % (r["k"], names_of(d.get("record")) or "nothing", names_of(d.get("candidate")) or "nothing")
     target = [r for r in fired if w and w[0] <= r["k"] <= w[1]]
     earlier = [r for r in fired if w and r["k"] < w[0]]
     en = e.get("first_enabled")
@@ -84,7 +87,7 @@ def identification(e, record, pack, unit_text=""):
     elif target:
         lines.append("TARGET: yes. At %s the candidate does something else than the record: %s." % (at, "; ".join(what(r) for r in target[:3])))
     else:
-        first = fired[0]["k"] if fired else None
+        first = min(r["k"] for r in fired) if fired else None
         lines.append("TARGET: NO. At %s the candidate fires exactly what the record fired%s. The pack does not answer this surprise: "
                      "the rule that fired there still fires there. Change THAT rule (drop it and give it the premise it lacked), or say why another tick is the cause."
                      % (at, "" if first is None else "; its first difference is at tick %s" % first))
@@ -107,7 +110,7 @@ def identification(e, record, pack, unit_text=""):
                                                                "" if en else ": the rule is never enabled on it"))
     if w and not target:
         word = "not identified"
-    elif earlier or more or (not en and not target):
+    elif not w or earlier or more or not en and not target:      # no tick: the target is unknown, so never whole
         word = "identified in part"
     else:
         word = "identified"
