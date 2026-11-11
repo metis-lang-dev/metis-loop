@@ -8,6 +8,9 @@ the judge's evidence (metis_agent.trace.judge) and the surprise's tick, none of 
   earlier   does it do something else BEFORE the surprise? Those ticks the person did not report: the pack is broader than the surprise.
   support   is each rule the pack adds or changes ENABLED anywhere on the record (positivity)? A rule never enabled is shown only by what it no longer does;
             what it does when it fires (what it consumes, what it makes) is not in this record.
+            A TARGET row with no rule enabled is still `identified`: it is the restriction (drop the rule that fired at the surprise, give it back with the
+            premise it lacked, e.g. `drop begin.` + `begin` with `$handsfree`), the right fix on this record, which shows exactly that it no longer fires
+            there. What the record cannot show of it, the SUPPORT line says; the word does not lower it.
 
 and one read from the text: a premise the changed rule now CONSUMES that it did not before, and that other rules of the unit need (an effect past the record).
 
