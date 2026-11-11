@@ -101,6 +101,15 @@ def test_no_support_with_a_target_row_says_only_what_the_pack_stops():
     assert line(i, "  It reads opened, which no tick of this record holds.")
 
 
+def test_a_restriction_with_a_target_row_and_no_support_is_identified():
+    # drop begin + begin with the premise it lacked: it stops firing at the surprise and is never enabled after; the record shows exactly that
+    # (pascal's ruling on the open question, s-5e34eb35 step 1): the word stays `identified`, the SUPPORT line says what is not shown
+    pack = "drop begin.\n  begin [dyn] : start * $at(L) * $handsfree -o want(O) * seeking.\n"
+    i = I.identification(ev([row(40, record=("begin",))], None, rules=["begin"]), {"k": 40}, pack, UNIT)
+    assert i["word"] == "identified" and i["target"] == [40] and i["support"] is None and i["consumes"] == []
+    assert "only what the pack STOPS at tick 40" in line(i, "SUPPORT: none.")
+
+
 def test_no_support_and_no_target_row_says_the_record_says_nothing():
     i = I.identification(ev([], None, rules=["a", "b"]), {"k": 40}, "")
     s = line(i, "SUPPORT: none.")
