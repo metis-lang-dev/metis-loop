@@ -4,6 +4,7 @@ the narrator are retired with the brain (loop-workspace, WORKSPACE.md §7).
 The behavior itself is driven through the gateway (loop/gateway.py; dev_serve.py went with the db mode, loop-ui 2.4)."""
 import re
 from pathlib import Path
+import pytest
 
 PAGE = (Path(__file__).resolve().parents[1]
         / "console/loop_console.html").read_text()
@@ -247,8 +248,8 @@ def test_the_chat_widget_carries_the_cards():
     assert "started the pi loop: ${c.model || msg.model" in js and "thinking ${msg.no_thinking ? 'off' : \"on (pi's default level)\"}" in js   # L4; reasoning on (loop-prompt)                              # the header's spend is pi's count, said so
     assert "disabled: !!held" not in js                                     # step 3: /commands answer under a TUI
     rjs = (Path(__file__).resolve().parents[1] / "web/workspace/rulings.js").read_text()
-    assert "window.MetisRulings = { mount, card };" in rjs
-    assert rjs.count("(r.inert ? ' (inert)' : '')") == 2                     # the card and the dock: accepted (inert)
+    assert "window.MetisRulings = { mount, card, badgeOf };" in rjs
+    assert rjs.count("badge(r),") == 2 and rjs.count("(r.inert ? ' (inert)' : '')") == 1   # the card and the dock: one badge, accepted (inert) on old rulings
 
 
 def test_candidates_records_and_surprises_docks_are_gone():
@@ -263,3 +264,28 @@ def test_candidates_records_and_surprises_docks_are_gone():
                  "data-dec", '{ch:"repl",type:"records"}'):
         assert gone not in PAGE, gone
     assert re.findall(r'data-dock="(\w+)"', PAGE) == ["catalog", "chat", "rulings", "trace", "bundle", "dialog"]
+
+
+def test_the_rulings_badge_says_what_the_record_identifies(tmp_path):
+    """loop-improvement step 3 (s-5e34eb35): rulings.js's badge under node: `identified` ok, `identified in part` and
+    `not identified` warn with the word as the title, a refusal bad; a ruling without the field as before (inert)."""
+    import json as _json
+    import os
+    import shutil
+    import subprocess
+    node = os.environ.get("NODE") or shutil.which("node")
+    if not node:
+        pytest.skip("no node for the rulings badge's test")
+    rjs = Path(__file__).resolve().parents[1] / "web/workspace/rulings.js"
+    cases = [{"verdict": "accepted", "identified": "identified", "inert": True}, {"verdict": "accepted", "identified": "identified in part"},
+             {"verdict": "accepted", "identified": "not identified"}, {"verdict": "refused", "identified": "not identified"},
+             {"verdict": "accepted", "inert": True}, {"verdict": "accepted"}, {"verdict": "accepted", "identified": None, "inert": True}]
+    js = ("globalThis.window = {}; require(%s); console.log(JSON.stringify(%s.map(r => window.MetisRulings.badgeOf(r))))"
+          % (_json.dumps(str(rjs)), _json.dumps(cases)))
+    out = _json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, check=True, timeout=60).stdout)
+    assert [(b["cls"], b["text"], b["title"]) for b in out[:4]] == [
+        ("ok", "accepted", "identified"), ("warn", "accepted, identified in part", "identified in part"),
+        ("warn", "accepted, not identified", "not identified"), ("bad", "refused", None)]
+    assert (out[4]["cls"], out[4]["text"]) == ("warn", "accepted (inert)") and "no candidate rule was enabled" in out[4]["title"]
+    assert (out[5]["cls"], out[5]["text"], out[5]["title"]) == ("ok", "accepted", None)
+    assert out[6]["text"] == "accepted (inert)"

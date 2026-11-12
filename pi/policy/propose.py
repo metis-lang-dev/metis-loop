@@ -1,6 +1,6 @@
 """propose — a hand-written amendment, judged and ruled on (trace-replay s-c111ff41; pi/docs/POLICY.md): the verb the loop lacked, formalize being the only way in.
 
-    propose.sh --pack FILE --member M --trace TRACE --root ROOT --config CONFIG --run DIR [--composition domains] [--unit FILE] [--case CASE ...]
+    propose.sh --pack FILE --member M --trace TRACE --root ROOT --config CONFIG --run DIR [--composition domains] [--unit FILE] [--case CASE ...] [--record R] [--surprise R]
                [--brain openrouter/deepseek/deepseek-v4-flash --budget 0.10] [--closed-loop "CMD"]
 
 The pack takes the place of the model's draft and gets the same judgement (metis_agent.trace.judge): the gate cascade (a repeated rule, the link, the I-checks, the receipt: whose
@@ -113,9 +113,29 @@ def certificate(e, closed):
     return lines
 
 
+HEADER = {"identified": "", "identified in part": " (identified in part)",
+          "not identified": " (not identified: it does not change the surprise's tick)"}
+
+
+def unit_text(root, unit):
+    """The text of the unit the pack amends (--unit, under the root or as given), "" when none is given or found: identify.consumes_more reads it."""
+    if not unit:
+        return ""
+    for f in (Path(root) / unit, Path(unit)):
+        if f.is_file():
+            return f.read_text()
+    return ""
+
+
 def document(e, comments, closed, spent):
-    out = ["# Ruling: %s%s" % (e["verdict"], " (inert)" if e.get("inert") else ""), ""]
-    if e.get("inert"):
+    i = e.get("identification")                # loop-improvement step 3 (s-5e34eb35): what the record identifies, in place of "(inert)"; the verdict stays the gate's
+    shown = i if i and i.get("word") != "nothing identified" else None
+    if i:
+        suffix = HEADER.get(i.get("word"), "") if e["verdict"] == "accepted" else ""
+    else:
+        suffix = " (inert)" if e.get("inert") else ""
+    out = ["# Ruling: %s%s" % (e["verdict"], suffix), ""]
+    if e.get("inert") and not i:
         out += ["**Inert:** no candidate rule was enabled on this trace, so this acceptance says nothing of the rule's effect: find a world or a seed where it fires (Search the seeds for a firing).", ""]
     out += ["**%s**, %s; the program unit %s." % (e.get("member"), ", ".join(e.get("rules") or ()) or "no rule", e.get("unit")), ""]
     if e.get("unjudged"):                      # loop-prompt judge-session: a weight port the trace does not carry
@@ -123,6 +143,8 @@ def document(e, comments, closed, spent):
             ", ".join(e["unjudged"]), "s" if len(e["unjudged"]) == 1 else "", "its" if len(e["unjudged"]) == 1 else "their", "its" if len(e["unjudged"]) == 1 else "their"), ""]
     if e.get("why") == "kind":                 # spec 20 §5: refused before the cascade, by the record's kind
         out += ["**Kind:** the record is %s, not structural: no pack answers it. Its route: %s." % (e.get("kind"), e.get("route")), ""]
+    if shown:
+        out += ["## What this record identifies: %s" % shown["word"]] + [x if x.startswith("  ") else "- %s" % x for x in shown.get("lines") or ()] + [""]
     if e["reasons"]:
         out += ["## Why it is %s" % e["verdict"]] + ["- %s" % r for r in e["reasons"]] + [""]
     if e.get("times"):
@@ -196,13 +218,13 @@ def main(argv=None):
     ap.add_argument("--case", action="append", default=[], help="a surprise's case (metis.trace case)")
     ap.add_argument("--record", help="the surprise's record (JSON, .metis/surprises/ID.json): its kind is read before the cascade (spec 20 §5): "
                                      "a record not structural is refused at once with its kind and route")
+    ap.add_argument("--surprise", help="the surprise's record (JSON), read only for its tick (k, or k0..k1): the ruling says what this record identifies of the pack "
+                                       "(policy/identify.py: target, earlier, support, consumes). Not --record, which is the kind gate's")
     ap.add_argument("--brain", help="the model that writes the ruling's words: openrouter/<model> (the key from the environment only), script:FILE; none: the evidence alone")
     ap.add_argument("--budget", type=float, default=None, help="a paid brain's spend cap (USD)")
     ap.add_argument("--max-tokens", type=int, default=1024)
     ap.add_argument("--time-budget", type=float, default=1800, help="seconds for the whole judgement; past it the ruling says not judged, and which stage (default 1800)")
     ap.add_argument("--golden-budget", type=float, default=120, help="seconds for one run of one golden (default 120)")
-    ap.add_argument("--identify-only", action="store_true", help="EXPERIMENT (loop-identify): no ruling; print what the record identifies of the pack (policy/identify.py), "
-                                                                 "from the same replay, with --record's tick; exit 0")
     ap.add_argument("--closed-loop", help="a command run once on an accepted pack, on the real tree after you apply it: its result is the certificate's second line")
     a = ap.parse_args(argv)
     if a.brain and a.brain.startswith("openrouter/") and a.budget is None:
@@ -234,7 +256,7 @@ def main(argv=None):
         where, _, comp = rest.partition(":")
         consumers.append((name, where, comp or None))
     kw = {}
-    if a.record and not a.identify_only:
+    if a.record:
         import inspect
         try:
             record = json.loads(Path(a.record).read_text())
@@ -245,18 +267,13 @@ def main(argv=None):
         else:                                  # a metis-agent before the kind gate (surprise-kinds s-7a02c2ac): said, never silent
             print(f"propose.sh: this metis-agent's judge reads no record kind; {a.record} judged as a structural one", file=sys.stderr)
     e = AT.judge(a.trace, a.member, pack, a.root, config, cases=[Path(c) for c in a.case], composition=a.composition, unit=a.unit, consumers=consumers, budget=a.time_budget, golden_budget=a.golden_budget, moved=a.move_golden, **kw)
-    if a.identify_only:                        # no ruling, no try: the three questions and nothing of the gate's reasons
+    if a.surprise and e["verdict"] != "not judged":
         from . import identify as I
         try:
-            record = json.loads(Path(a.record).read_text()) if a.record else {}
+            surprise = json.loads(Path(a.surprise).read_text())
         except (OSError, ValueError) as x:
-            sys.exit(f"propose.sh: --record {a.record}: {x}")
-        target = Path(a.unit) if a.unit else None
-        unit_text = (Path(a.root) / target).read_text() if target and (Path(a.root) / target).is_file() else target.read_text() if target and target.is_file() else ""
-        i = I.identification(e, record, pack, unit_text)
-        (run / "identification.json").write_text(json.dumps(i, indent=1, default=str))
-        print(I.text(i))
-        return 0
+            sys.exit(f"propose.sh: --surprise {a.surprise}: {x}")
+        e["identification"] = I.identification(e, surprise, pack, unit_text(a.root, a.unit))
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":

@@ -1,4 +1,5 @@
-"""identify — what a record identifies of a pack, before it is judged (EXPERIMENT, branch loop-identify; reports/metis-critique: identification is the loop's concern).
+"""identify — what a record identifies of a pack (reports/metis-critique: identification is the loop's concern). In the judge's ruling card since loop-improvement
+step 3 (s-5e34eb35): propose.py --surprise writes it into evidence.json and the ruling's section "What this record identifies"; the verdict stays the gate's.
 
 A ruling's evidence is observational: one recorded trace of a world that obeyed the OLD program. The judge's replay is the intervention do(program := candidate) on the
 recorded inputs, exact to the first differing output and open-loop past it. So three questions decide whether this record can say anything of a pack, each read from

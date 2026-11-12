@@ -8,6 +8,7 @@
      r.show(id)        the ruling of surprise ID
      r.refresh()       the list of ruled surprises
      MetisRulings.card(g)   the ruling as the CHAT's card (g: the surprise channel's `get` reply; loop-chat step 1)
+     MetisRulings.badgeOf(r)   the verdict's badge {cls, title, text}: the gate's verdict, and what the record identifies
 
    The shared frontend's (WORKSPACE.md §6.1): served to this console from the loop SDK, never copied into another page. */
 (function () {
@@ -35,6 +36,22 @@
     if (!e) return el('span', { class: 'warn' }, r.inert ? 'never enabled: inert' : 'not in this ruling');
     return el('span', {}, `k ${e.k}: ${e.rule}` + (e.beside && e.beside.length ? ` (beside ${e.beside.join(', ')})` : ''));
   }
+  // The verdict's badge. The verdict is the gate's; beside it, what the record identifies of the pack (s-5e34eb35 step 3:
+  // `identified` ok, `identified in part` and `not identified` warn, the word as the title); a ruling judged before the
+  // identification was kept (no `identified` field) reads as it did: accepted (inert) when nothing was enabled.
+  function badgeOf(r) {
+    const ok = r.verdict === 'accepted', w = r.identified;
+    if (w && w !== 'nothing identified') {
+      const plain = !ok || w === 'identified';
+      return { cls: ok ? (w === 'identified' ? 'ok' : 'warn') : 'bad', title: ok ? w : null, text: (r.verdict || '?') + (plain ? '' : ', ' + w) };
+    }
+    return { cls: ok ? (r.inert ? 'warn' : 'ok') : 'bad', title: r.inert ? 'accepted, but no candidate rule was enabled on the trace: it says nothing of the rule\'s effect' : null,
+             text: (r.verdict || '?') + (r.inert ? ' (inert)' : '') };
+  }
+  function badge(r) {
+    const b = badgeOf(r);
+    return el('span', { class: 'mw-badge ' + b.cls, title: b.title }, b.text);
+  }
   function list(xs, empty) {
     return xs && xs.length ? el('span', {}, xs.map(x => el('div', {}, typeof x === 'string' ? x : JSON.stringify(x)))) : el('span', { class: 'empty' }, empty);
   }
@@ -46,7 +63,7 @@
     const fold = (label, text, cls) => text ? el('details', { class: 'mw-fold' }, el('summary', {}, label), el('pre', { class: cls }, text)) : null;
     return el('div', { class: 'mw-card mw-ruling-card' + (ok ? ' ok' : ' bad') },
       el('div', { class: 'mw-row' },
-        el('span', { class: 'mw-badge ' + (ok ? (r.inert ? 'warn' : 'ok') : 'bad'), title: r.inert ? 'accepted, but no candidate rule was enabled on the trace: it says nothing of the rule\'s effect' : null }, (r.verdict || '?') + (r.inert ? ' (inert)' : '')),
+        badge(r),
         el('b', {}, s.member || ''), el('span', { class: 'mono empty' }, s.id || '')),
       ok && r.firings && r.firings.rows > 1 ? el('div', { class: 'warn mw-lesson' },
         'Accepted by the gate, mechanically: read when it fires and how often before you apply it.') : null,
@@ -70,7 +87,7 @@
       const ok = r.verdict === 'accepted';
       return el('div', { class: 'mw-ruling' },
         el('div', { class: 'mw-row' },
-          el('span', { class: 'mw-badge ' + (ok ? (r.inert ? 'warn' : 'ok') : 'bad'), title: r.inert ? 'accepted, but no candidate rule was enabled on the trace: it says nothing of the rule\'s effect' : null }, (r.verdict || '?') + (r.inert ? ' (inert)' : '')),
+          badge(r),
           el('b', {}, s.member), el('span', { class: 'mono' }, s.id), el('span', { class: 'empty' }, r.ts || '')),
         ok && r.firings && r.firings.rows > 1 ? el('div', { class: 'warn mw-lesson' },
           'Accepted by the gate, mechanically. Read when it fires and how often before you apply it: a rule that fires through most of the run is rarely the one asked for.') : null,
@@ -118,5 +135,5 @@
     refresh();
     return { refresh, show };
   }
-  window.MetisRulings = { mount, card };
+  window.MetisRulings = { mount, card, badgeOf };
 })();

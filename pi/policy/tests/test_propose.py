@@ -166,3 +166,93 @@ def test_a_ruling_refused_by_the_records_kind_says_the_kind_and_its_route():
          "reasons": ["the record's kind is probabilistic, not structural: no pack answers it. the fold's bounds, a weight, a belief or a sensor parameter; never a rule"]}
     text = P.document(e, None, None, 0.0)
     assert text.startswith("# Ruling: refused") and "**Kind:** the record is probabilistic, not structural" in text and "never a rule" in text
+
+
+# loop-improvement step 3 (s-5e34eb35): the identification in the ruling card. Canned evidence, no judge run.
+INERT = dict(ACCEPTED, inert=True, first_enabled=None, first_fired_diff=None, first_out_diff=None, open_loop_after=None, members={}, rows=[])
+DROP_BEGIN = "stage act {\n  %% a take begins with free hands\n  begin [dyn] : $take(X0) * idle * $handsfree -o busy * tick__active(grasp).\n}\ndrop begin.\n"
+GRASP = "stage act {\n  begin [dyn] : $take(X0) * idle -o busy * tick__active(grasp).\n  release [dyn] : busy * $holding -o idle.\n}\n"
+
+
+def ident(word):
+    lines = {"identified": ["TARGET: yes. At tick 7 the candidate does something else than the record."],
+             "identified in part": ["TARGET: yes.", "EARLIER: the candidate also changes 1 tick(s) before the surprise."],
+             "not identified": ["TARGET: NO. At tick 7 the candidate fires exactly what the record fired."],
+             "nothing identified": ["The pack did not reach the replay."]}[word]
+    return {"word": word, "target": [7] if "in" not in word or word == "identified in part" else [], "earlier": [], "support": None, "consumes": [], "lines": lines}
+
+
+@pytest.mark.parametrize("name,e", [("accepted", ACCEPTED), ("inert", INERT), ("refused", REFUSED)])
+def test_without_the_surprise_the_document_is_masters_byte_for_byte(name, e):
+    """fixtures/ruling-master-<name>.md: master's document() (2ac2341) on the same evidence, the model's words none."""
+    want = (HERE / "fixtures" / ("ruling-master-%s.md" % name)).read_text()
+    assert P.document(e, None, None, 0.0) == want
+
+
+@pytest.mark.parametrize("word,header", [("identified", "# Ruling: accepted\n"),
+                                         ("identified in part", "# Ruling: accepted (identified in part)\n"),
+                                         ("not identified", "# Ruling: accepted (not identified: it does not change the surprise's tick)\n")])
+def test_the_three_headers_of_an_accepted_ruling(word, header):
+    for e in (ACCEPTED, INERT):                # an inert acceptance too: the identification replaces "(inert)" and its paragraph
+        t = P.document(dict(e, identification=ident(word)), None, None, 0.0)
+        assert t.startswith(header), t[:120]
+        assert "(inert)" not in t and "**Inert:**" not in t
+        sec = "## What this record identifies: %s\n- %s" % (word, ident(word)["lines"][0])
+        assert sec in t and t.index("**planner**") < t.index(sec) < t.index("## The receipt")
+
+
+def test_a_refused_ruling_keeps_its_header_and_gets_the_section_only_past_the_replay():
+    t = P.document(dict(REFUSED, identification=ident("not identified")), None, None, 0.0)
+    assert t.startswith("# Ruling: refused\n")
+    assert t.index("## What this record identifies: not identified") < t.index("## Why it is refused")
+    t = P.document(dict(REFUSED, identification=ident("nothing identified")), None, None, 0.0)
+    assert t.startswith("# Ruling: refused\n") and "What this record identifies" not in t
+
+
+def _main(tmp_path, monkeypatch, *extra, verdict="accepted"):
+    """propose.main with the judge canned: what it was given, and the evidence it returns."""
+    import metis_agent.service as S
+    import metis_agent.trace as AT
+    seen = {}
+
+    def judge(trace, member, pack, root, config, record=None, **kw):     # `record` in the signature: the kind gate's
+        if record is not None:
+            seen["record"] = record
+        e = dict(ACCEPTED if verdict == "accepted" else REFUSED, unit="grasp_domain.llp", verdict=verdict)
+        e["rows"] = [{"k": 7, "member": "planner", "fired": {"record": ["begin"], "candidate": []}}]
+        e["first_enabled"] = None
+        return e
+    monkeypatch.setattr(AT, "judge", judge)
+    monkeypatch.setattr(S, "load_config", lambda f: {"v3": {}})
+    (tmp_path / "grasp_domain.llp").write_text(GRASP)
+    pack = tmp_path / "p.llp"
+    pack.write_text(DROP_BEGIN)
+    rec = tmp_path / "rec.json"
+    rec.write_text(json.dumps({"member": "planner", "k": 7, "kind": "structural"}))
+    run = tmp_path / "run"
+    code = P.main(["--pack", str(pack), "--member", "planner", "--trace", str(tmp_path), "--root", str(tmp_path), "--config", "c.yaml", "--run", str(run),
+                   "--unit", "grasp_domain.llp", *[str(rec) if x == "REC" else x for x in extra]])
+    return code, seen, json.loads((run / "evidence.json").read_text()), (run / "ruling.md").read_text()
+
+
+def test_surprise_puts_the_identification_into_the_evidence_and_the_document(tmp_path, monkeypatch):
+    pytest.importorskip("metis_agent")
+    code, seen, e, t = _main(tmp_path, monkeypatch, "--surprise", "REC")
+    assert code == 0 and "record" not in seen, seen                     # --surprise is not the kind gate's
+    i = e["identification"]
+    assert i["word"] == "identified" and i["target"] == [7] and i["consumes"] == []
+    assert t.startswith("# Ruling: accepted\n") and "## What this record identifies: identified\n- TARGET: yes. At tick 7" in t
+    assert "(inert)" not in t
+
+
+def test_record_alone_only_gates_the_kind(tmp_path, monkeypatch):
+    pytest.importorskip("metis_agent")
+    code, seen, e, t = _main(tmp_path, monkeypatch, "--record", "REC")
+    assert seen["record"]["kind"] == "structural"
+    assert "identification" not in e and "What this record identifies" not in t
+
+
+def test_not_judged_gets_no_identification(tmp_path, monkeypatch):
+    pytest.importorskip("metis_agent")
+    code, seen, e, t = _main(tmp_path, monkeypatch, "--surprise", "REC", verdict="not judged")
+    assert code == 2 and "identification" not in e

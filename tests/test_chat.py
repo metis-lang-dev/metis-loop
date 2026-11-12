@@ -402,6 +402,15 @@ def test_an_inert_acceptance_says_so():
     assert "(inert)" not in chat.ruling_line({"id": "x", "member": "m"}, {"verdict": "accepted", "first_enabled": {"k": 3, "rule": "r"}})
 
 
+def test_the_ruling_line_says_what_the_record_identifies():
+    """loop-improvement step 3 (s-5e34eb35): the word in place of "(inert)" when the ruling carries it; an old ruling as it was."""
+    s = {"id": "x", "member": "m"}
+    for w, head in (("identified", "accepted · "), ("identified in part", "accepted, identified in part · "), ("not identified", "accepted, not identified · ")):
+        assert chat.ruling_line(s, {"verdict": "accepted", "inert": True, "identified": w}).startswith("x on m: " + head), w
+    assert chat.ruling_line(s, {"verdict": "refused", "identified": "not identified"}).startswith("x on m: refused · ")
+    assert chat.ruling_line(s, {"verdict": "accepted", "inert": True, "identified": None}).startswith("x on m: accepted (inert) · ")
+
+
 
 PICKY = """
 catalog picky 1.

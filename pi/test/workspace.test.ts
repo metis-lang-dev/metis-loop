@@ -77,14 +77,16 @@ printf 'image lampset.v-abc%s\\n' "$n" > build/lampset.build
 echo "built lampset v-abc$n"
 `);
 	// propose.sh: the judge's two files, its verdict from STUB_VERDICT, its arguments recorded; STUB_COST: the brain's
-	// per-call log (RUN/cost.jsonl) with that cost; STUB_CRASH: it spends, then dies before any ruling
+	// per-call log (RUN/cost.jsonl) with that cost; STUB_CRASH: it spends, then dies before any ruling; STUB_IDENT: the
+	// evidence's identification (JSON), as propose.py writes it from --surprise (s-5e34eb35 step 3)
 	exe(join(bin, "propose"), `#!/bin/sh
 run=""; prev=""; for a in "$@"; do [ "$prev" = --run ] && run="$a"; prev="$a"; done
 mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/propose.args"
 [ -z "$STUB_COST" ] || printf '{"ts": "t", "who": "judge", "model": "openrouter/m", "cost": %s, "usage_before": 0}\\n' "$STUB_COST" > "$run/cost.jsonl"
 [ -z "$STUB_CRASH" ] || exit 3
 printf '# Ruling: %s\\n\\nThe gate %s it. 0 USD.\\n' "$STUB_VERDICT" "$STUB_VERDICT" > "$run/ruling.md"
-printf '{"verdict": "%s", "receipt": {"moved": ["lamp"]}, "lint": [], "reads_absent": []}' "$STUB_VERDICT" > "$run/evidence.json"
+ident=""; [ -z "$STUB_IDENT" ] || ident=", \\"identification\\": $STUB_IDENT"
+printf '{"verdict": "%s", "receipt": {"moved": ["lamp"]}, "lint": [], "reads_absent": []%s}' "$STUB_VERDICT" "$ident" > "$run/evidence.json"
 case "$STUB_VERDICT" in accepted) exit 0 ;; "not judged") exit 2 ;; *) exit 1 ;; esac
 `);
 	Object.assign(process.env, { METIS_CATALOG: r, METISC: join(bin, "metisc"), METIS_LOOP_PROPOSE: join(bin, "propose"), MODEL: "stub/script", METIS_LOOP_MODE: "tui" });
@@ -98,7 +100,7 @@ test("metis-workspace: its tools, the trace verbs as declared, their schemas as 
 	const declared = ws.tools().tools.map((t) => t.name);
 	assert.ok(declared.includes("trace_case") && declared.includes("lint"), declared.join(" "));
 	const chat = ["chat_diff", "chat_replay", "chat_ruling", "chat_status", "chat_surprises", "chat_why"];   // loop-chat step 3
-	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_identify", "pack_propose", "rule_text", "search", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
+	assert.deepEqual([...p.tools.keys()].sort(), ["bundle_build", "journal", "pack_propose", "rule_text", "search", "surprise_list", "surprise_next", "workspace_context", ...declared, ...chat].sort());
 	const c = p.tools.get("trace_case").parameters;
 	assert.equal(c.type, "object");
 	assert.equal(c.properties.at.type, "integer");
@@ -130,9 +132,14 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 		// a paid brain without a budget is refused before anything runs
 		await assert.rejects(p.tools.get("pack_propose").execute("j0", { id, pack: "% x", brain: "openrouter/m" }), /needs a budget/);
 		process.env.STUB_VERDICT = "accepted";
+		process.env.STUB_IDENT = JSON.stringify({ word: "identified in part", target: [7], earlier: [5], support: null, lines: ["TARGET: yes."],
+			consumes: [{ rule: "dark", atom: "late", needed_by: ["glow"] }] });
 		const j = await p.tools.get("pack_propose").execute("j1", { id, pack: "stage go {\n  dark [dyn] : $late * now -o ().\n}" });
+		delete process.env.STUB_IDENT;
 		assert.equal(j.details.verdict, "accepted");
 		const args = readFileSync(join(bin, "propose.args"), "utf8").split("\n");
+		assert.equal(args[args.indexOf("--surprise") + 1], ws.path("surprise", { id }, r));        // its tick, for the identification (s-5e34eb35 step 3)
+		assert.ok(!args.includes("--record") && !args.includes("--identify-only"), args.join(" "));
 		assert.equal(args[args.indexOf("--member") + 1], "lamp");
 		assert.equal(args[args.indexOf("--trace") + 1], join(r, ".metis", "traces", "s1"));   // the workspace run, as a path
 		assert.equal(args[args.indexOf("--config") + 1], join(r, "service.yaml"));           // the surprise's config
@@ -140,6 +147,10 @@ test("metis-workspace: a dropped surprise taken, judged, ruled; the bundle rebui
 		const ruled = ws.surprise(id, r);
 		assert.equal(ruled.status, "ruled");
 		assert.equal(ruled.ruling.verdict, "accepted");
+		assert.equal(ruled.ruling.identified, "identified in part");                    // the card's word; inert kept for old readers
+		assert.deepEqual(ruled.ruling.target, [7]);
+		assert.deepEqual(ruled.ruling.consumes, [{ rule: "dark", atom: "late" }]);
+		assert.equal(ruled.ruling.inert, false);
 		assert.match(readFileSync(join(r, ".metis", "rulings", `${id}.md`), "utf8"), /^# Ruling: accepted/);
 		assert.match(readFileSync(join(r, ".metis", "packs", `${id}.llp`), "utf8"), /dark \[dyn\]/);
 		await assert.rejects(p.tools.get("pack_propose").execute("j2", { id, pack: "% again" }),
@@ -209,49 +220,6 @@ test("metis-workspace: a refusal is a try, the surprise stays taken; the third s
 	assert.equal(ws.surprise(id, r).ruling.verdict, "refused");
 	assert.equal(ws.surprise(id, r).tries.length, 2);
 	await p.emit("session_shutdown", {}, {});
-});
-
-test("metis-workspace: pack_identify says what the record identifies, and writes no ruling and counts no try (loop-improvement s-5e34eb35)", async () => {
-	const { r, bin } = scratch();
-	// the judge with --identify-only: identification.json in the run, its text on stdout, exit 0 (propose.py's experiment arm)
-	const stub = exe(join(bin, "identify"), `#!/bin/sh
-run=""; prev=""; for a in "$@"; do [ "$prev" = --run ] && run="$a"; prev="$a"; done
-mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/identify.args"
-printf '{"word": "not identified", "target": [], "earlier": [], "support": null, "consumes": [], "lines": ["TARGET: NO."]}' > "$run/identification.json"
-printf '## What this record identifies: not identified\\n- TARGET: NO. At tick 3 the candidate fires exactly what the record fired.\\n'
-`);
-	const saved = process.env.METIS_LOOP_PROPOSE;
-	process.env.METIS_LOOP_PROPOSE = stub;
-	const p = fakePi();
-	workspace(p.api);
-	await p.emit("session_start", {}, ctx);
-	try {
-		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
-		await assert.rejects(p.tools.get("pack_identify").execute("i0", { id, pack: "% x" }), /not taken: surprise_next first/);
-		assert.ok(!existsSync(join(bin, "identify.args")), "refused before the judge runs");
-		await p.tools.get("surprise_next").execute("n", {});
-		const i = await p.tools.get("pack_identify").execute("i1", { id, pack: "stage go {\n  dark [dyn] : $late * now -o ().\n}" });
-		assert.equal(i.details.word, "not identified");
-		assert.match(i.content[0].text, /^## What this record identifies: not identified\n- TARGET: NO\. At tick 3/);
-		const args = readFileSync(join(bin, "identify.args"), "utf8").split("\n");
-		assert.ok(args.includes("--identify-only"), args.join(" "));
-		assert.equal(args[args.indexOf("--member") + 1], "lamp");
-		assert.equal(args[args.indexOf("--record") + 1], ws.path("surprise", { id }, r));          // the surprise's tick from its own record
-		assert.equal(args[args.indexOf("--config") + 1], join(r, "service.yaml"));
-		// no ruling, no try: the surprise is still taken and pack_propose judges it as its first try
-		const s = ws.surprise(id, r);
-		assert.equal(s.status, "taken");
-		assert.ok(!s.ruling && !(s.tries ?? []).length, JSON.stringify(s));
-		assert.ok(!existsSync(join(r, ".metis", "rulings", `${id}.md`)));
-		assert.equal(ws.events(0, r).filter((e) => e.who === "pi" && e.kind === "identified").at(-1)!.word, "not identified");
-		// a judge that writes no identification: said with its exit and its words, the surprise untouched
-		exe(stub, `#!/bin/sh\necho "the record does not replay" >&2\nexit 2\n`);
-		await assert.rejects(p.tools.get("pack_identify").execute("i2", { id, pack: "% x" }), /nothing identified \(exit 2\): the record does not replay/);
-		assert.equal(ws.surprise(id, r).status, "taken");
-	} finally {
-		process.env.METIS_LOOP_PROPOSE = saved;
-		await p.emit("session_shutdown", {}, {});
-	}
 });
 
 test("metis-workspace: pack_propose amends the surprise's unit when none is given (loop-ui I1)", async () => {
@@ -649,7 +617,7 @@ test("the tool sets by mode (loop-prompt, PROMPT.md §3): workspace = the surpri
 	const mine = names(null, true);                                   // metis-workspace's own
 	const all = names(null), w = names("workspace"), s = names("seed");
 	assert.deepEqual(w, [...mine, "catalog_apply", "catalog_edit"].sort());   // loop-ui 2.3: the apply is the judge's merge
-	assert.ok(w.length <= 31, `${w.length} tools in a workspace`);   // 30 on master; EXPERIMENT loop-identify adds pack_identify (s-5e34eb35)
+	assert.ok(w.length <= 30, `${w.length} tools in a workspace`);
 	assert.ok(!s.some((n) => mine.includes(n)), s.join(" "));
 	for (const n of ["catalog_new", "catalog_edit", "catalog_take", "domain_open"]) assert.ok(s.includes(n), n);
 	// the REPL's verbs (repl_text, repl_formalize …) register later, at the session's start: the same filter holds then
@@ -706,7 +674,7 @@ test("metis-workspace: the chat's slash table is pi's own commands (two-terminal
 test("the system prompt: a workspace surprise is ruled through pack_propose; the person's own loop is the seed-domain skill's", () => {
 	const t = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
 	assert.match(t, /the explanation is a pack, never a hand edit of the program/);
-	assert.match(t, /[Jj]udge it with `pack_propose`/);              // loop-identify: "When it says `identified` …, judge it with" (s-5e34eb35)
+	assert.match(t, /Judge it with `pack_propose`/);
 	assert.match(t, /The verdict is the gate's, never yours, and the ruling is written whatever it says/);
 	assert.match(t, /read the skill `seed-domain` first/);
 	for (const n of ["repl_text", "repl_formalize", "repl_gate", "catalog_new", "catalog_take", "domain_open"]) assert.ok(!t.includes(n), `${n} is the seed-domain skill's`);
@@ -835,7 +803,7 @@ test("the prompt and the skills (loop-prompt step 2, PROMPT.md §2-3): sizes, ev
 	const named = (text: string) => [...text.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
 	const prompt = readFileSync(join(HERE, "..", "prompts", "loop-system.md"), "utf8");
 	assert.ok(Buffer.byteLength(prompt) <= 7168, `the system prompt is ${Buffer.byteLength(prompt)} bytes (≤ 7 KB)`);
-	const missing = named(prompt).filter((n) => !wsSet.has(n) && n !== "identified");   // loop-identify: pack_identify's word, not a tool (s-5e34eb35)
+	const missing = named(prompt).filter((n) => !wsSet.has(n));
 	assert.deepEqual(missing, [], "every tool the prompt names is registered in a workspace");
 	const dirs = readdirSync(join(HERE, "..", "skills"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 	assert.deepEqual(dirs, ["metis-language", "seed-domain", "surprise-ruling"]);

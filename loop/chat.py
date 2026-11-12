@@ -300,7 +300,11 @@ def ruling_of(ws, sid=None):
 
 def ruling_line(s, r):
     e, f = r.get("first_enabled") or {}, r.get("firings") or {}
-    parts = [(r.get("verdict") or "?") + (" (inert)" if r.get("inert") else "")]   # accepted with nothing enabled says so
+    w = r.get("identified")                    # what the record identifies of the pack (s-5e34eb35 step 3); absent on old rulings
+    if w and w != "nothing identified":
+        parts = [(r.get("verdict") or "?") + (", " + w if r.get("verdict") == "accepted" and w != "identified" else "")]
+    else:
+        parts = [(r.get("verdict") or "?") + (" (inert)" if r.get("inert") else "")]   # accepted with nothing enabled says so
     if e:
         parts.append(f"first enabled k {e.get('k')} {e.get('rule')}")
     if f:

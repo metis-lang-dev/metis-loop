@@ -641,7 +641,8 @@ export default function (host: ExtensionAPI) {
 			try {
 				const pack = join(tmp, "pack.llp");
 				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
-				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run")];
+				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run"),
+					"--surprise", ws.path("surprise", { id: p.id }, r)];   // its tick: the ruling says what the record identifies (s-5e34eb35 step 3)
 				if (b) argv.push("--composition", dirname(b.composition));
 				let unitNote = "";
 				// loop-ui I1: no unit given → the surprise's own (the file the person had open: `metis grasp_domain.llp`
@@ -693,6 +694,9 @@ export default function (host: ExtensionAPI) {
 				const fields = { moved: e.moved ?? e.receipt?.moved ?? [], lint: e.lint ?? [], reads_absent: e.reads_absent ?? [], spent, member: s.member, trace: s.trace,
 					unit: e.unit ?? (s as any).unit ?? null,
 					first_enabled: e.first_enabled ?? null, open_loop_after: e.open_loop_after ?? null, inert: !!e.inert, firings: firings(e),
+					// what the record identifies of the pack (policy/identify.py): the card's word; inert kept for old readers
+					identified: e.identification?.word ?? null, target: e.identification?.target ?? [],
+					consumes: (e.identification?.consumes ?? []).map((c: any) => ({ rule: c.rule, atom: c.atom })),
 					...(e.why ? { why: e.why } : {}) };   // why: kind, a refusal by the record's kind (spec 20 §5): it stands, never a try
 				// the face journals the ruling
 				const ruling = ws.rule(p.id, doc, String(e.verdict), { pack: readFileSync(pack, "utf8"), fields, who: "pi" }, r);
@@ -717,56 +721,6 @@ export default function (host: ExtensionAPI) {
 				return text(`${unitNote}${e.verdict}: ${ruling}\n\n${doc}${help ? `\n\n${help}` : ""}`, { verdict: e.verdict, ruling, code: res.code, spent });
 			} finally {
 				logSpend(join(tmp, "run"), p.id, r); // a run that spent and then wrote no ruling still leaves its spend
-				rmSync(tmp, { recursive: true, force: true });
-			}
-		},
-	});
-
-	// EXPERIMENT (loop-identify): what the record identifies of a pack, before it is judged. No ruling, no try; nothing
-	// of the gate's reasons (a pack that does not link is told only that). policy/identify.py through propose.sh.
-	pi.registerTool({
-		name: "pack_identify",
-		label: "what the record identifies",
-		description:
-			"Before pack_propose: what the surprise's record can show of a candidate pack. TARGET: does the pack change what fires AT the surprise's tick (if NO, it does not answer the surprise). EARLIER: does it change ticks the person did not report. SUPPORT: is its rule ever enabled on the record. CONSUMES: an atom it now consumes that other rules need. Writes no ruling and costs no try. Correct the pack until it says `identified`, then pack_propose.",
-		parameters: Type.Object({
-			id: Type.String({ description: "the surprise's id (surprise_next)" }),
-			pack: Type.String({ description: "the pack's text, as for pack_propose" }),
-			unit: Type.Optional(Type.String({ description: "the file the pack amends, as for pack_propose" })),
-		}),
-		async execute(_id, p) {
-			const r = root();
-			mustHold(r);
-			const s = ws.surprise(p.id, r);
-			if (s.status !== "taken") throw new Error(`surprise ${p.id} is not taken: surprise_next first`);
-			if (!s.trace) throw new Error(`surprise ${p.id} has no trace: nothing to replay`);
-			const b = ws.bundle(undefined, r);
-			const config = (s as any).config ?? (b as any)?.config;
-			if (!config) throw new Error(`surprise ${p.id} cannot be replayed here: no service config`);
-			const tmp = mkdtempSync(join(tmpdir(), "pack-identify-"));
-			try {
-				const pack = join(tmp, "pack.llp");
-				writeFileSync(pack, p.pack.endsWith("\n") ? p.pack : p.pack + "\n");
-				const argv = ["--pack", pack, "--member", s.member, "--trace", tracePath(s.trace, r), "--root", r, "--config", resolve(r, config), "--run", join(tmp, "run"),
-					"--identify-only", "--record", ws.path("surprise", { id: p.id }, r)];
-				if (b) argv.push("--composition", dirname(b.composition));
-				const unit = p.unit ?? (s as any).unit;
-				if (unit) {
-					let u = resolve(r, String(unit));
-					if (!existsSync(u)) {
-						const found = findFiles(b ? resolve(r, dirname(b.composition)) : join(r, "domains"), basename(String(unit)));
-						if (found.length !== 1) throw new Error(`unit=${unit}: no such file under ${r}; give the path as surprise_next printed it`);
-						u = found[0];
-					}
-					argv.push("--unit", relative(r, u));
-				}
-				const res = await run(process.env.METIS_LOOP_PROPOSE || join(HERE, "..", "propose.sh"), argv, r);
-				const f = join(tmp, "run", "identification.json");
-				if (!existsSync(f)) throw new Error(`nothing identified (exit ${res.code}): ${(res.err || res.out).trim().slice(-600)}`);
-				const i = JSON.parse(readFileSync(f, "utf8"));
-				ws.journal("pi", "identified", { surprise: p.id, word: i.word }, r);
-				return text(res.out.trim(), { word: i.word });
-			} finally {
 				rmSync(tmp, { recursive: true, force: true });
 			}
 		},
