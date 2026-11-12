@@ -209,7 +209,7 @@ def test_a_refused_ruling_keeps_its_header_and_gets_the_section_only_past_the_re
     assert t.startswith("# Ruling: refused\n") and "What this record identifies" not in t
 
 
-def _main(tmp_path, monkeypatch, *extra, verdict="accepted"):
+def _main(tmp_path, monkeypatch, *extra, verdict="accepted", k=7):
     """propose.main with the judge canned: what it was given, and the evidence it returns."""
     import metis_agent.service as S
     import metis_agent.trace as AT
@@ -228,7 +228,7 @@ def _main(tmp_path, monkeypatch, *extra, verdict="accepted"):
     pack = tmp_path / "p.llp"
     pack.write_text(DROP_BEGIN)
     rec = tmp_path / "rec.json"
-    rec.write_text(json.dumps({"member": "planner", "k": 7, "kind": "structural"}))
+    rec.write_text(json.dumps({"member": "planner", "k": k, "kind": "structural"}))
     run = tmp_path / "run"
     code = P.main(["--pack", str(pack), "--member", "planner", "--trace", str(tmp_path), "--root", str(tmp_path), "--config", "c.yaml", "--run", str(run),
                    "--unit", "grasp_domain.llp", *[str(rec) if x == "REC" else x for x in extra]])
@@ -256,3 +256,31 @@ def test_not_judged_gets_no_identification(tmp_path, monkeypatch):
     pytest.importorskip("metis_agent")
     code, seen, e, t = _main(tmp_path, monkeypatch, "--surprise", "REC", verdict="not judged")
     assert code == 2 and "identification" not in e
+
+
+# the architect's ruling (s-5e34eb35 step 4): an accepted pack that is not identified is refused, as a try
+@pytest.mark.parametrize("word,verdict", [("not identified", "refused"), ("identified in part", "accepted"), ("identified", "accepted")])
+def test_the_target_gate_refuses_only_an_acceptance_not_identified(word, verdict):
+    e = P.target_gate(dict(INERT, reasons=[], identification=ident(word)))
+    assert e["verdict"] == verdict
+    if verdict == "refused":
+        assert e["why"] == "target" and e["inert"] is False and e["reasons"] == [P.TARGET_REFUSAL]
+        assert P.TARGET_REFUSAL == "it does not change the surprise's tick: the rule that fired there still fires"
+    else:
+        assert "why" not in e and e["reasons"] == []
+
+
+def test_the_target_gate_leaves_a_refusal_and_a_ruling_without_the_word_alone():
+    e = P.target_gate(dict(REFUSED, identification=ident("not identified")))
+    assert e["verdict"] == "refused" and e["reasons"] == REFUSED["reasons"] and "why" not in e
+    e = P.target_gate(dict(ACCEPTED))
+    assert e["verdict"] == "accepted" and "why" not in e
+
+
+def test_main_refuses_a_pack_that_leaves_the_surprises_tick_as_it_was(tmp_path, monkeypatch):
+    pytest.importorskip("metis_agent")
+    code, seen, e, t = _main(tmp_path, monkeypatch, "--surprise", "REC", k=9)    # the surprise at tick 9, where nothing differs (the rows: tick 7)
+    assert code == 1 and e["verdict"] == "refused" and e["why"] == "target" and e["identification"]["word"] == "not identified"
+    assert t.startswith("# Ruling: refused\n") and "## What this record identifies: not identified" in t
+    assert "## Why it is refused\n- it does not change the surprise's tick: the rule that fired there still fires" in t
+    assert t.index("What this record identifies") < t.index("## Why it is refused")

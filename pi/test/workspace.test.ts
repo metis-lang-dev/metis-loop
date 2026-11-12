@@ -78,7 +78,7 @@ echo "built lampset v-abc$n"
 `);
 	// propose.sh: the judge's two files, its verdict from STUB_VERDICT, its arguments recorded; STUB_COST: the brain's
 	// per-call log (RUN/cost.jsonl) with that cost; STUB_CRASH: it spends, then dies before any ruling; STUB_IDENT: the
-	// evidence's identification (JSON), as propose.py writes it from --surprise (s-5e34eb35 step 3)
+	// evidence's identification (JSON), as propose.py writes it from --surprise (s-5e34eb35 step 3); STUB_WHY: the evidence's why
 	exe(join(bin, "propose"), `#!/bin/sh
 run=""; prev=""; for a in "$@"; do [ "$prev" = --run ] && run="$a"; prev="$a"; done
 mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/propose.args"
@@ -86,6 +86,7 @@ mkdir -p "$run"; printf '%s\\n' "$@" > "${bin}/propose.args"
 [ -z "$STUB_CRASH" ] || exit 3
 printf '# Ruling: %s\\n\\nThe gate %s it. 0 USD.\\n' "$STUB_VERDICT" "$STUB_VERDICT" > "$run/ruling.md"
 ident=""; [ -z "$STUB_IDENT" ] || ident=", \\"identification\\": $STUB_IDENT"
+[ -z "$STUB_WHY" ] || ident="$ident, \\"why\\": \\"$STUB_WHY\\""
 printf '{"verdict": "%s", "receipt": {"moved": ["lamp"]}, "lint": [], "reads_absent": []%s}' "$STUB_VERDICT" "$ident" > "$run/evidence.json"
 case "$STUB_VERDICT" in accepted) exit 0 ;; "not judged") exit 2 ;; *) exit 1 ;; esac
 `);
@@ -220,6 +221,30 @@ test("metis-workspace: a refusal is a try, the surprise stays taken; the third s
 	assert.equal(ws.surprise(id, r).ruling.verdict, "refused");
 	assert.equal(ws.surprise(id, r).tries.length, 2);
 	await p.emit("session_shutdown", {}, {});
+});
+
+test("metis-workspace: an acceptance the record does not identify comes back refused, and is a try like any refusal (the architect's ruling, s-5e34eb35 step 4)", async () => {
+	const { r } = scratch();
+	const p = fakePi();
+	workspace(p.api);
+	await p.emit("session_start", {}, ctx);
+	try {
+		const id = ws.drop_surprise({ member: "lamp", trace: "traces/s1", k: 3, atoms: ["lit"], config: "service.yaml" }, "backend", r);
+		await p.tools.get("surprise_next").execute("n", {});
+		// propose.py's target gate: the verdict refused, why target, the word kept
+		Object.assign(process.env, { STUB_VERDICT: "refused", STUB_WHY: "target",
+			STUB_IDENT: JSON.stringify({ word: "not identified", target: [], earlier: [], support: null, consumes: [], lines: ["TARGET: NO."] }) });
+		const t = await p.tools.get("pack_propose").execute("j", { id, pack: "% no answer" });
+		assert.equal(t.details.verdict, "refused");
+		assert.equal(t.details.try, 1);                                                      // a try, never the ruling at once (not a kind refusal)
+		assert.equal(ws.surprise(id, r).status, "taken");
+		const kept = JSON.parse(readFileSync(join(r, ".metis", "rulings", "tries", `${id}-1.json`), "utf8"));
+		assert.equal(JSON.stringify(kept).includes('"why":"target"') || JSON.stringify(kept).includes('"why": "target"'), true, JSON.stringify(kept));
+		assert.equal(JSON.stringify(kept).includes("not identified"), true);
+	} finally {
+		for (const k of ["STUB_WHY", "STUB_IDENT"]) delete process.env[k];
+		await p.emit("session_shutdown", {}, {});
+	}
 });
 
 test("metis-workspace: pack_propose amends the surprise's unit when none is given (loop-ui I1)", async () => {

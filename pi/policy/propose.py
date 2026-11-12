@@ -117,6 +117,19 @@ HEADER = {"identified": "", "identified in part": " (identified in part)",
           "not identified": " (not identified: it does not change the surprise's tick)"}
 
 
+TARGET_REFUSAL = "it does not change the surprise's tick: the rule that fired there still fires"
+
+
+def target_gate(e):
+    """The architect's ruling (loop-improvement s-5e34eb35, 2026-11-13): an accepted pack that is NOT IDENTIFIED (it changes nothing at the surprise's tick)
+    is refused, as a try like any refusal (the third stands as the ruling); `identified in part` stays accepted with its label. After the gate's own
+    cascade and on its evidence: the one change to a verdict the loop makes, and only from accepted to refused."""
+    if e.get("verdict") == "accepted" and (e.get("identification") or {}).get("word") == "not identified":
+        e["verdict"], e["why"], e["inert"] = "refused", "target", False
+        e["reasons"] = list(e.get("reasons") or ()) + [TARGET_REFUSAL]
+    return e
+
+
 def unit_text(root, unit):
     """The text of the unit the pack amends (--unit, under the root or as given), "" when none is given or found: identify.consumes_more reads it."""
     if not unit:
@@ -274,6 +287,7 @@ def main(argv=None):
         except (OSError, ValueError) as x:
             sys.exit(f"propose.sh: --surprise {a.surprise}: {x}")
         e["identification"] = I.identification(e, surprise, pack, unit_text(a.root, a.unit))
+        target_gate(e)
     (run / "evidence.json").write_text(json.dumps(e, indent=1, default=str))
     closed = None
     if a.closed_loop and e["verdict"] == "accepted":
